@@ -1,0 +1,48 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import 'variables';
+
+@font-face {
+  font-family: 'GowunDodum';
+  src: url('/fonts/GowunDodum-Regular.ttf') format('truetype');
+}
+
+:root {
+  --background: #{$maintheme};
+  --foreground: #171717;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0a0a0a;
+    --foreground: #ededed;
+  }
+}
+
+body {
+  color: var(--foreground);
+  background: var(--background);
+  font-family: GowunDodum, Arial, Helvetica, sans-serif;
+}
+
+.page-title {
+  font-size: 1.5rem;
+  font-weight: bold;
+  margin: 0.5rem 0;
+  color: darken($maintheme, 60%);
+}
+
+main {
+  height: 100%;
+}
+
+footer {
+  margin-top: 2rem;
+  padding: 1rem;
+  text-align: center;
+  background: var(--background);
+  color: darken($maintheme, 50%);
+  font-size: 0.6rem;
+}
