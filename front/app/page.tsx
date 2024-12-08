@@ -1,11 +1,11 @@
 "use client";
 import { Image, Link } from "@nextui-org/react";
 
-import './styles/links.scss';
+import '@/public/styles/links.scss';
 
 export default function Home() {
   return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-gown-dodum)]">
+    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-gown-dodum)]">
       <header className="row-start-1 flex gap-4 items-center justify-center">
         <p className="page-title">Links</p>
       </header>
@@ -94,7 +94,6 @@ export default function Home() {
         </div>
       </main>
       <footer className="row-start-3 flex gap-6 flex-wrap items-center justify-center">
-        © Rimien Siarte. All rights reserved. No external use permitted.
       </footer>
     </div>
   );
