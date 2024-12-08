@@ -35,7 +35,7 @@ export default function RootLayout({
           `${geistSans.variable} ${geistMono.variable} ${gowunDodum.variable} antialiased
           flex flex-col items-center justify-center min-h-screen`}
       >
-        <main className="md:w-[980px]">
+        <main id="container">
           {children}
         </main>
         <footer className="row-start-3 flex gap-6 flex-wrap items-center justify-center">
