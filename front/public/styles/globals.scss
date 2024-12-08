@@ -32,7 +32,6 @@ body {
   font-size: 1.5rem;
   font-weight: bold;
   margin: 0.5rem 0;
-  //color: darken($maintheme, 60%);
   color: color.adjust($maintheme, $lightness: -60%);
 }
 
@@ -45,6 +44,6 @@ footer {
   padding: 1rem;
   text-align: center;
   background: var(--background);
-  color: darken($maintheme, 50%);
+  color: color.adjust($maintheme, $lightness: -50%);
   font-size: 0.6rem;
 }

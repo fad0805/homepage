@@ -1,3 +1,4 @@
+@use 'sass:color';
 @use 'variables' as *;
 
 .links-header {
@@ -33,8 +34,8 @@
   text-align: center;
   border-end-start-radius: 1rem;
   border-start-end-radius: 1rem;
-  background: darken($maintheme, 10%);
-  color: lighten($maintheme, 90%);
+  background: color.adjust($maintheme, $lightness: -10%);
+  color: color.adjust($maintheme, $lightness: 90%);
   font-size: 0.85rem;
 }
 
