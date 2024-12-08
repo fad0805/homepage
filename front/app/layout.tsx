@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import localFont from "next/font/local";
-import "./styles/globals.scss";
+import "@/public/styles/globals.scss";
 
 const geistSans = localFont({
   src: "./fonts/GeistVF.woff",
@@ -31,9 +31,16 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body
-        className={`${geistSans.variable} ${geistMono.variable} ${gowunDodum.variable} antialiased`}
+        className={
+          `${geistSans.variable} ${geistMono.variable} ${gowunDodum.variable} antialiased
+          flex flex-col items-center justify-center min-h-screen`}
       >
-        {children}
+        <main className="md:w-[980px]">
+          {children}
+        </main>
+        <footer className="row-start-3 flex gap-6 flex-wrap items-center justify-center">
+          © Rimien Siarte. All rights reserved. No external use permitted.
+        </footer>
       </body>
     </html>
   );
