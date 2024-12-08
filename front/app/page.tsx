@@ -1,7 +1,7 @@
 "use client";
 import { Image, Link } from "@nextui-org/react";
 
-import '@/public/styles/links.scss';
+import '/styles/links.scss';
 
 export default function Home() {
   return (
