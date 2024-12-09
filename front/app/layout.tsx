@@ -1,22 +1,5 @@
 import type { Metadata } from "next";
-import localFont from "next/font/local";
 import "@/public/styles/globals.scss";
-
-const geistSans = localFont({
-  src: "../public/fonts/GeistVF.woff",
-  variable: "--font-geist-sans",
-  weight: "100 900",
-});
-const geistMono = localFont({
-  src: "../public/fonts/GeistMonoVF.woff",
-  variable: "--font-geist-mono",
-  weight: "100 900",
-});
-const gowunDodum = localFont({
-  src: "../public/fonts/GowunDodum-Regular.ttf",
-  variable: "--font-gowun-dodum",
-  weight: "100 900",
-});
 
 export const metadata: Metadata = {
   title: "어디에도 없는 섬",
