@@ -5,7 +5,7 @@ import '/styles/links.scss';
 
 export default function Home() {
   return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-gown-dodum)]">
+    <div id="links-page">
       <header className="row-start-1 flex gap-4 items-center justify-center">
         <p className="page-title">Links</p>
       </header>
