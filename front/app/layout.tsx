@@ -30,16 +30,16 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body
-        className={
-          `${geistSans.variable} ${geistMono.variable} ${gowunDodum.variable} antialiased`}
-      >
-        <main id="container">
-          {children}
-        </main>
-        <footer className="row-start-3 flex gap-6 flex-wrap items-center justify-center">
-          © Rimien Siarte. All rights reserved. No external use permitted.
-        </footer>
+      <body>
+        <div id="container">
+          <header></header>
+          <main>
+            {children}
+          </main>
+          <footer className="row-start-3 flex gap-6 flex-wrap items-center justify-center">
+            © Rimien Siarte. All rights reserved. No external use permitted.
+          </footer>
+        </div>
       </body>
     </html>
   );
