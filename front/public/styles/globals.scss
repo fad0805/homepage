@@ -23,14 +23,26 @@
 }
 
 body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-items: center;
+  min-height: 100vh;
+
   color: var(--foreground);
   background: var(--background);
   font-family: GowunDodum, Arial, Helvetica, sans-serif;
+
+  @media (width >= 640) {
+    padding: 5rem;
+  }
 }
 
 body main#container {
   background: $subtheme;
-  border-radius: 2rem;
+  border-radius: 1.7rem;
+  height: 80vh;
+
   @media (width >= 768px) {
     max-width: 850px;
   }
@@ -41,10 +53,6 @@ body main#container {
   font-weight: bold;
   margin: 0.5rem 0;
   color: color.adjust($maintheme, $lightness: -60%);
-}
-
-main {
-  height: 100%;
 }
 
 footer {
