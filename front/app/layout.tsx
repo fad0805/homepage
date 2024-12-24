@@ -1,9 +1,14 @@
 import type { Metadata } from "next";
 import "@/public/styles/globals.scss";
 
+import { Navbar } from "@/components/navbar";
+
 export const metadata: Metadata = {
   title: "어디에도 없는 섬",
   description: "한 소녀가 있었다.",
+  icons: {
+    icon: "/favicon.ico",
+  },
 };
 
 export default function RootLayout({
@@ -12,14 +17,19 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="ko">
       <body>
         <div id="container">
-          <header></header>
+          <header>
+	    <div id="title">어디에도 없는 섬</div>
+	    <Navbar />
+	  </header>
           <main>
-            {children}
+	    <div id="content">
+              {children}
+	    </div>
           </main>
-          <footer className="row-start-3 flex gap-6 flex-wrap items-center justify-center">
+          <footer>
             © Rimien Siarte. All rights reserved. No external use permitted.
           </footer>
         </div>
