@@ -5,8 +5,18 @@
   display: grid;
   justify-content: center;
   align-items: center;
-  gap: 4rem;
+  gap: 2rem;
   padding: 2rem 2rem 7rem 2rem;
+}
+
+#links-page main {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+  grid-row-start: 2;
 }
 
 .links-header {

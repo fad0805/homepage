@@ -5,8 +5,8 @@ import "@/public/styles/navbar.scss";
 
 export const Navbar = () => {
     return <nav id="navbar">
-        <Link href="#">글쓰니</Link>
+        <Link href="#">글쓴이</Link>
         <Link href="#">작품</Link>
-        <Link className="active" href="/">항해하기</Link>
+        <Link className="active" href="/">놀러가기</Link>
     </nav>;
 };

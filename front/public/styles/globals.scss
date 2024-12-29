@@ -11,10 +11,8 @@
 }
 
 @font-face {
-  font-family: 'CookieRun-Regular';
-  src: url('https://fastly.jsdelivr.net/gh/projectnoonnu/noonfonts_2001@1.1/CookieRun-Regular.woff') format('woff');
-  font-weight: normal;
-  font-style: normal;
+  font-family: 'Eulyoo1945-SemiBold';
+  src: url('/fonts/Eulyoo1945-SemiBold.woff') format('truetype');
 }
 
 :root {
@@ -66,7 +64,7 @@ div#container>header {
 div#container>header>div#title {
   color: color.adjust($maintheme, $lightness: -55%);
   font-size: 2.7rem;
-  font-family: CookieRun-Regular, Arial, Helvetica, sans-serif;
+  font-family: Eulyoo1945-SemiBold, Arial, Helvetica, sans-serif;
 }
 
 div#container>main {
@@ -77,7 +75,7 @@ div#container>main {
 div#container>main>div#content {
   background: $subtheme;
   border-radius: 1.7rem;
-  min-height: 70vh;
+  min-height: max-content;
 }
 
 .page-title {
