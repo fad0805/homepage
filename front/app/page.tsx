@@ -90,6 +90,18 @@ export default function Home() {
               />
               <p>ANANAES</p>
             </Link>
+            <Link
+              className="links-banner"
+              href="https://eeruwang.me/"
+              target="_blank"
+            >
+              <Image
+                src="https://objectstorage.ap-seoul-1.oraclecloud.com/n/cnftfbml9zxa/b/bucket-20230907-0739/o/misskey/9119a1c5-c5a3-4ec3-a69d-d17d72e9dcb8.webp"
+                alt="이루왕님"
+                radius="none"
+              />
+              <p>eeruwang</p>
+            </Link>
           </div>
         </div>
       </main>
