@@ -6,9 +6,7 @@ import '@/public/styles/links.scss';
 export default function Home() {
   return (
     <div id="links-page">
-      <header className="row-start-1 flex gap-4 items-center justify-center">
-      </header>
-      <main className="flex flex-col gap-8 row-start-2 items-center">
+      <main>
         <div className="links-header">
           <div className="links-section"><p>어디에도 없는 섬</p></div>
           <div className="links-contents">
