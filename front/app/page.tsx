@@ -7,7 +7,6 @@ export default function Home() {
   return (
     <div id="links-page">
       <header className="row-start-1 flex gap-4 items-center justify-center">
-        <p className="page-title">Links</p>
       </header>
       <main className="flex flex-col gap-8 row-start-2 items-center">
         <div className="links-header">
