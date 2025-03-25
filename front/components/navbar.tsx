@@ -1,16 +1,16 @@
 "use client";
 import { useEffect, useState } from "react";
+import { usePathname } from "next/navigation";
 import { Link } from "@nextui-org/react";
 
 import "@/public/styles/navbar.scss";
 import nextConfig from "@/next.config";
 
 export const Navbar = () => {
-    const [path, setPath] = useState(window.location.pathname);
+    const [path, setPath] = useState(usePathname());
 
     useEffect(() => {
-        const path = window.location.pathname;
-        setPath(path);
+        setPath(usePathname());
     }, []);
 
     interface MenuItem {
