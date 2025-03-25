@@ -11,7 +11,7 @@ export const Navbar = () => {
     useEffect(() => {
         const path = window.location.pathname;
         setPath(path);
-    }, [window.location.pathname]);
+    }, []);
 
     const menuItems = nextConfig.navigation.items;
     const menuList = menuItems.map((item, index) => {
