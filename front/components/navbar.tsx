@@ -13,8 +13,12 @@ export const Navbar = () => {
         setPath(path);
     }, []);
 
+    interface MenuItem {
+        label: string;
+        href: string;
+    };
     const menuItems = nextConfig.navigation.items;
-    const menuList = menuItems.map((item, index) => {
+    const menuList = menuItems.map((item: MenuItem, index: number) => {
         return <Link
             key={index}
             href={item.href}
