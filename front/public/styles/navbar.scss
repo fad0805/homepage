@@ -16,6 +16,7 @@ nav#navbar a {
   text-decoration: none;
   font-size: 1.3rem;
   font-weight: bold;
+  min-width: fit-content;
   height: fit-content;
 
   &.active {
