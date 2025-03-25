@@ -7,11 +7,12 @@ import "@/public/styles/navbar.scss";
 import nextConfig from "@/next.config";
 
 export const Navbar = () => {
-    const [path, setPath] = useState(usePathname());
+    const currentPath = usePathname();
+    const [path, setPath] = useState(currentPath);
 
     useEffect(() => {
-        setPath(usePathname());
-    }, []);
+        setPath(currentPath);
+    }, [currentPath]);
 
     interface MenuItem {
         label: string;
