@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
-import { Link } from "@nextui-org/react";
+import { Link } from "@heroui/react";
 
 import "@/public/styles/navbar.scss";
 import nextConfig from "@/next.config";

@@ -1,4 +1,4 @@
-import {nextui} from '@nextui-org/theme';
+import { usetheme } from '@heroui/use-theme';
 import type { Config } from "tailwindcss";
 
 export default {
@@ -17,5 +17,4 @@ export default {
     },
   },
   darkMode: "class",
-  plugins: [nextui()],
 } satisfies Config;
