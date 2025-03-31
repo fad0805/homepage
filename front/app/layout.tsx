@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "@/public/styles/globals.scss";
 
+import { Link } from "@heroui/react";
 import { Navbar } from "@/components/navbar";
 
 export const metadata: Metadata = {
@@ -21,7 +22,9 @@ export default function RootLayout({
       <body>
         <div id="container">
           <header>
-	    <div id="title">어디에도 없는 섬</div>
+	    <div id="title">
+          <Link href="/">어디에도 없는 섬</Link>
+      </div>
 	    <Navbar />
 	  </header>
           <main>
