@@ -54,10 +54,6 @@ export default function Characters() {
           name: "살구",
           image: "#",
         },
-        {
-          name: "호루하이",
-          image: "#",
-        },
       ]
     },
     { category: "태양의 여정",
