@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
+import Link from "next/link";
+
 import "@/public/styles/globals.scss";
 
-import { Link } from "@heroui/react";
 import { Navbar } from "@/components/navbar";
 
 export const metadata: Metadata = {
