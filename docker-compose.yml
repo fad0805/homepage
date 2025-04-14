@@ -1,0 +1,30 @@
+services:
+  db:
+    restart: always
+    image: postgres:14-alpine
+    healthcheck:
+      test: ['CMD', 'pg_isready', '-U', 'postgres']
+    networks:
+      - internal_network
+    volumes:
+      - ./db:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_HOST_AUTH_METHOD=trust
+
+  web:
+    restart: always
+    build: .
+    networks:
+      - external_network
+      - internal_network
+    ports:
+      - "3000:3000"
+    depends_on:
+      - db
+    volumes:
+      - ./web:/app
+
+networks:
+  external_network:
+  internal_network:
+    internal: true
