@@ -39,6 +39,17 @@ body {
   font-family: GowunDodum, Arial, Helvetica, sans-serif;
 }
 
+a {
+  text-decoration: none;
+  &:visited {
+    color: currentColor;
+  }
+}
+
+p {
+  margin: 0;
+}
+
 div#container {
   display: flex;
   flex-direction: column;

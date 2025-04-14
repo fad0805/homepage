@@ -19,12 +19,6 @@
   grid-row-start: 2;
 }
 
-.links-header {
-}
-
-.links-body {
-}
-
 .links-section {
   display: flex;
   justify-content: center;
@@ -55,6 +49,14 @@
   background: color.adjust($maintheme, $lightness: -10%);
   color: color.adjust($maintheme, $lightness: 90%);
   font-size: 0.85rem;
+
+  &:visited {
+    color: color.adjust($maintheme, $lightness: 90%);
+  }
+
+  & > div {
+    margin: 0 0 -.25rem 0;
+  }
 }
 
 .links-banner img {
