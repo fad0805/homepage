@@ -11,18 +11,25 @@ services:
     environment:
       - POSTGRES_HOST_AUTH_METHOD=trust
 
+  api:
+    restart: always
+    build: ./api
+    networks:
+      - internal_network
+    depends_on:
+      - db
+
   web:
     restart: always
-    build: .
+    build: ./web
     networks:
       - external_network
       - internal_network
     ports:
       - "3000:3000"
     depends_on:
+      - api
       - db
-    volumes:
-      - ./web:/app
 
 networks:
   external_network:
