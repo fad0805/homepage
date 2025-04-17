@@ -1,0 +1,15 @@
+services:
+  api:
+    command: uvicorn main:app --reload
+    volumes:
+      - ./api:/app
+
+  web:
+    command: npm run dev
+    volumes:
+      - ./web:/app
+
+networks:
+  external_network:
+  internal_network:
+    internal: true
