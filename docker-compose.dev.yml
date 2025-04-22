@@ -1,10 +1,13 @@
 services:
   api:
-    command: uvicorn main:app --reload
+    command: uvicorn main:app --host 0.0.0.0 --reload
     volumes:
       - ./api:/app
+    networks:
+      - external_network
+      - internal_network
     ports:
-      - 8000:8000
+      - 127.0.0.1:8000:8000
 
   web:
     build:
