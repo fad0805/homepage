@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 
-import links
+from api import links
 
 app = FastAPI()
 
