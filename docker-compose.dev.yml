@@ -3,6 +3,8 @@ services:
     command: uvicorn main:app --reload
     volumes:
       - ./api:/app
+    ports:
+      - 8000:8000
 
   web:
     build:
