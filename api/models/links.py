@@ -1,7 +1,8 @@
 from sqlalchemy import Column
-from schemas import links
 
-class Links(links.LinkBase):
+from db.base import Base
+
+class Links(Base):
     __tablename__ = "links"
     id = Column(Integer, primary_key=True, autoincrement=True)
     name = Column(String(255), nullable=False)
