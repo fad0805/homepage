@@ -1,11 +1,13 @@
 services:
   api:
     command: uvicorn main:app --host 0.0.0.0 --reload
-    volumes:
-      - ./api:/app
+    env_file:
+      - .env.development
     networks:
       - external_network
       - internal_network
+    volumes:
+      - ./api:/app
     ports:
       - 127.0.0.1:8000:8000
 
