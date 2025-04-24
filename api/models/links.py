@@ -1,13 +1,23 @@
-from sqlalchemy import Column
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey
+from datetime import datetime
 
 from db.base import Base
 
-class Links(Base):
+
+class Category(Base):
+    __tablename__ = "links-categories"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    name = Column(String(255), nullable=False)
+
+
+class Link(Base):
     __tablename__ = "links"
     id = Column(Integer, primary_key=True, autoincrement=True)
+    owner = Column(String(255), nullable=False)
     name = Column(String(255), nullable=False)
     url = Column(String(255), nullable=False)
     banner_url = Column(String(255), nullable=True)
+    category = Column(Integer, ForeignKey("links-categories.id"), nullable=False)
     description = Column(String(255), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

@@ -137,3 +137,6 @@ __pycache__/
 # DB files
 db/*
 .DS_Store
+
+# Alembic
+api/alembic/versions/*

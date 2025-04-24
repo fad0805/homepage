@@ -1,14 +1,27 @@
+from datetime import datetime
 from pydantic import BaseModel
+
+
+class Category(BaseModel):
+    """Model for Link's Category."""
+    name: str
+
 
 class LinkBase(BaseModel):
     """Base model for Link."""
+    owner: str
     name: str
-    category: str
+    category: int
     url: str
-    banner: str | None = None
+    banner_url: str | None = None
     description: str | None = None
 
 
 class LinkCreate(LinkBase):
     """Model for creating a new Link."""
-    pass
+    created_at: datetime = datetime.now()
+
+
+class LinkUpdate(LinkBase):
+    """Model for updating an existing Link."""
+    updated_at: datetime = datetime.now()
