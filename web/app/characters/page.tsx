@@ -4,10 +4,18 @@ import '@/public/styles/characters.scss';
 
 export default function Characters() {
   const characters = [
-    { category: "윤 미르",
+    { category: "꿈의 바깥",
       characters: [
         {
           name: "윤 미르",
+          image: "#",
+        },
+        {
+          name: "윤 시안",
+          image: "#",
+        },
+        {
+          name: "윤 시연",
           image: "#",
         },
       ]
