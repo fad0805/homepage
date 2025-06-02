@@ -4,10 +4,10 @@
 #characters-list {
   padding: 2rem 2rem 7rem 2rem;
 
-  > *:first-child .characters {
-    display: flex;
-    justify-content: center;
-    align-items: center;
+  > *:first-child .characters > *:first-child {
+    grid-row: 1 / 2;
+    grid-column: 1 / span 2;
+    justify-self: center;
   }
 }
 
