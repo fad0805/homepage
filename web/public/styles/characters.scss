@@ -16,7 +16,7 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  width: 100%;
+  width: auto;
 
   h2 {
     font-size: 1.2rem;
@@ -27,5 +27,18 @@
     display: grid;
     grid-template-columns: repeat(2, 1fr);
     gap: 1rem;
+
+    img {
+      width: 20rem;
+      border-radius: 9px;
+    }
+
+    @media (max-width: $breakpoint-md) {
+      display: block;
+
+      img {
+        width: 100%;
+      }
+    }
   }
 }
