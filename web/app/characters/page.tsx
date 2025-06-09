@@ -24,23 +24,23 @@ export default function Characters() {
       characters: [
         {
           name: "루시안",
-          image: "https://objectstorage.ap-seoul-1.oraclecloud.com/n/cnftfbml9zxa/b/bucket-20230907-0739/o/misskey/fc355ca2-5cc9-42a2-b692-00c4d4803f2a.webp",
+          image: "https://objectstorage.ap-seoul-1.oraclecloud.com/n/cnftfbml9zxa/b/bucket-20230907-0739/o/misskey/489b7d7b-dbfc-4959-a54b-c7f5c8d5da55.webp",
         },
         {
           name: "루시엘",
-          image: "https://objectstorage.ap-seoul-1.oraclecloud.com/n/cnftfbml9zxa/b/bucket-20230907-0739/o/misskey/635fd37e-b2f7-4b0f-84ef-1342175b19c3.webp",
+          image: "https://objectstorage.ap-seoul-1.oraclecloud.com/n/cnftfbml9zxa/b/bucket-20230907-0739/o/misskey/5795453c-68da-4d07-84ec-9646e485829b.webp",
         },
         {
           name: "루아란",
-          image: "https://objectstorage.ap-seoul-1.oraclecloud.com/n/cnftfbml9zxa/b/bucket-20230907-0739/o/misskey/2bf3b392-e5c1-46d3-a1a3-74bfe8631a98.webp",
+          image: "https://objectstorage.ap-seoul-1.oraclecloud.com/n/cnftfbml9zxa/b/bucket-20230907-0739/o/misskey/45477d54-deb3-419b-a494-3cde4b86f03a.webp",
         },
         {
           name: "루이린",
-          image: "https://objectstorage.ap-seoul-1.oraclecloud.com/n/cnftfbml9zxa/b/bucket-20230907-0739/o/misskey/3b12d7cc-e84e-495c-a96e-c2ead1b783c7.webp",
+          image: "https://objectstorage.ap-seoul-1.oraclecloud.com/n/cnftfbml9zxa/b/bucket-20230907-0739/o/misskey/1bfdf4f2-1f2c-45df-a2a4-e2298b05c2f6.webp",
         },
         {
           name: "루 시",
-          image: "https://objectstorage.ap-seoul-1.oraclecloud.com/n/cnftfbml9zxa/b/bucket-20230907-0739/o/misskey/1bb40094-96ae-4f71-9d09-c4ebb751b638.webp",
+          image: "https://objectstorage.ap-seoul-1.oraclecloud.com/n/cnftfbml9zxa/b/bucket-20230907-0739/o/misskey/165a89fd-8b0c-46fa-8510-d1da54c4eb18.webp",
         },
       ]
     },
@@ -48,19 +48,19 @@ export default function Characters() {
       characters: [
         {
           name: "호루하이",
-          image: "https://objectstorage.ap-seoul-1.oraclecloud.com/n/cnftfbml9zxa/b/bucket-20230907-0739/o/misskey/318082c7-ae82-4374-b5b7-6a2487d18e69.webp",
+          image: "https://objectstorage.ap-seoul-1.oraclecloud.com/n/cnftfbml9zxa/b/bucket-20230907-0739/o/misskey/2b5c1af9-c0cb-4346-bf73-6bfb7b180b1f.webp",
         },
         {
           name: "노히바즈",
-          image: "https://objectstorage.ap-seoul-1.oraclecloud.com/n/cnftfbml9zxa/b/bucket-20230907-0739/o/misskey/93ba6a43-0797-4c19-93b8-618c4bf4576a.webp",
+          image: "https://objectstorage.ap-seoul-1.oraclecloud.com/n/cnftfbml9zxa/b/bucket-20230907-0739/o/misskey/abfd59b2-f41b-446e-a56f-13e8674163eb.webp",
         },
         {
           name: "버찌",
-          image: "https://objectstorage.ap-seoul-1.oraclecloud.com/n/cnftfbml9zxa/b/bucket-20230907-0739/o/misskey/af370fd8-67d6-408f-a0b9-85ed85ab0c5c.webp",
+          image: "https://objectstorage.ap-seoul-1.oraclecloud.com/n/cnftfbml9zxa/b/bucket-20230907-0739/o/misskey/a917179d-b16e-47af-a5c3-8d23a91b3188.webp",
         },
         {
           name: "살구",
-          image: "https://objectstorage.ap-seoul-1.oraclecloud.com/n/cnftfbml9zxa/b/bucket-20230907-0739/o/misskey/eba9cd1d-795b-4277-b3f4-9d790c40b93a.webp",
+          image: "https://objectstorage.ap-seoul-1.oraclecloud.com/n/cnftfbml9zxa/b/bucket-20230907-0739/o/misskey/5b18c578-a4b8-4d0c-be82-8bda378a6f42.webp",
         },
       ]
     },
