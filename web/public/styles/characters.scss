@@ -31,6 +31,12 @@
     img {
       width: 20rem;
       border-radius: 9px;
+      filter: grayscale(50%);
+
+      &:hover {
+        filter: grayscale(0%);
+        transition: filter 0.3s ease-in-out;
+      }
     }
 
     @media (max-width: $breakpoint-md) {

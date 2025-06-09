@@ -8,15 +8,15 @@ export default function Characters() {
       characters: [
         {
           name: "윤 미르",
-          image: "#",
+          image: "https://objectstorage.ap-seoul-1.oraclecloud.com/n/cnftfbml9zxa/b/bucket-20230907-0739/o/misskey/a1627ac1-3e00-46f8-9f4f-6208ccc6b0f3.webp",
         },
         {
-          name: "윤 시안",
-          image: "#",
+          name: "유 시안",
+          image: "https://objectstorage.ap-seoul-1.oraclecloud.com/n/cnftfbml9zxa/b/bucket-20230907-0739/o/misskey/ce7f0b36-6cad-48be-bb75-888eddc5a373.webp",
         },
         {
-          name: "윤 시연",
-          image: "#",
+          name: "유 시연",
+          image: "https://objectstorage.ap-seoul-1.oraclecloud.com/n/cnftfbml9zxa/b/bucket-20230907-0739/o/misskey/829ed28f-761a-4c66-a422-9a120900705c.webp",
         },
       ]
     },
@@ -40,7 +40,7 @@ export default function Characters() {
         },
         {
           name: "루 시",
-          image: "#",
+          image: "https://objectstorage.ap-seoul-1.oraclecloud.com/n/cnftfbml9zxa/b/bucket-20230907-0739/o/misskey/1bb40094-96ae-4f71-9d09-c4ebb751b638.webp",
         },
       ]
     },
