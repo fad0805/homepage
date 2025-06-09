@@ -40,7 +40,7 @@ export default function Characters() {
         },
         {
           name: "루 시",
-          image: "https://objectstorage.ap-seoul-1.oraclecloud.com/n/cnftfbml9zxa/b/bucket-20230907-0739/o/misskey/165a89fd-8b0c-46fa-8510-d1da54c4eb18.webp",
+          image: "https://objectstorage.ap-seoul-1.oraclecloud.com/n/cnftfbml9zxa/b/bucket-20230907-0739/o/misskey/a3546ef4-f76e-4fd3-b77d-0eb5c6ec4d23.webp",
         },
       ]
     },
@@ -48,7 +48,7 @@ export default function Characters() {
       characters: [
         {
           name: "호루하이",
-          image: "https://objectstorage.ap-seoul-1.oraclecloud.com/n/cnftfbml9zxa/b/bucket-20230907-0739/o/misskey/2b5c1af9-c0cb-4346-bf73-6bfb7b180b1f.webp",
+          image: "https://objectstorage.ap-seoul-1.oraclecloud.com/n/cnftfbml9zxa/b/bucket-20230907-0739/o/misskey/75e054bb-c9f0-454d-bd57-7164387d7930.webp",
         },
         {
           name: "노히바즈",
@@ -56,7 +56,7 @@ export default function Characters() {
         },
         {
           name: "버찌",
-          image: "https://objectstorage.ap-seoul-1.oraclecloud.com/n/cnftfbml9zxa/b/bucket-20230907-0739/o/misskey/a917179d-b16e-47af-a5c3-8d23a91b3188.webp",
+          image: "https://objectstorage.ap-seoul-1.oraclecloud.com/n/cnftfbml9zxa/b/bucket-20230907-0739/o/misskey/4afa42cd-fb65-4ffc-8cb7-3dcef975a316.webp",
         },
         {
           name: "살구",
