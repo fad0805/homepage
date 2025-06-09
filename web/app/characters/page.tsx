@@ -16,7 +16,7 @@ export default function Characters() {
         },
         {
           name: "유 시연",
-          image: "https://objectstorage.ap-seoul-1.oraclecloud.com/n/cnftfbml9zxa/b/bucket-20230907-0739/o/misskey/829ed28f-761a-4c66-a422-9a120900705c.webp",
+          image: "https://objectstorage.ap-seoul-1.oraclecloud.com/n/cnftfbml9zxa/b/bucket-20230907-0739/o/misskey/9d2a8956-9a22-4a98-8a87-7ffd004d8e44.webp",
         },
       ]
     },
