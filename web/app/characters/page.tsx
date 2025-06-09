@@ -48,19 +48,19 @@ export default function Characters() {
       characters: [
         {
           name: "호루하이",
-          image: "#",
+          image: "https://objectstorage.ap-seoul-1.oraclecloud.com/n/cnftfbml9zxa/b/bucket-20230907-0739/o/misskey/318082c7-ae82-4374-b5b7-6a2487d18e69.webp",
         },
         {
           name: "노히바즈",
-          image: "#",
+          image: "https://objectstorage.ap-seoul-1.oraclecloud.com/n/cnftfbml9zxa/b/bucket-20230907-0739/o/misskey/93ba6a43-0797-4c19-93b8-618c4bf4576a.webp",
         },
         {
           name: "버찌",
-          image: "#",
+          image: "https://objectstorage.ap-seoul-1.oraclecloud.com/n/cnftfbml9zxa/b/bucket-20230907-0739/o/misskey/af370fd8-67d6-408f-a0b9-85ed85ab0c5c.webp",
         },
         {
           name: "살구",
-          image: "#",
+          image: "https://objectstorage.ap-seoul-1.oraclecloud.com/n/cnftfbml9zxa/b/bucket-20230907-0739/o/misskey/eba9cd1d-795b-4277-b3f4-9d790c40b93a.webp",
         },
       ]
     },
