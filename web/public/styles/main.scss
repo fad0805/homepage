@@ -11,6 +11,7 @@ div#main {
   display: flex;
   flex-direction: column;
   align-items: center;
+  width: 90%;
 
   div {
     position: relative;
@@ -23,6 +24,5 @@ div#main {
     position: relative;
     top: 17%;
     color: rgba(red($light-text), green($light-text), blue($light-text), 0.7);
-    width: 90%;
   }
 }
