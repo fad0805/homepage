@@ -8,15 +8,15 @@ export default function Characters() {
       characters: [
         {
           name: "윤 미르",
-          image: "https://objectstorage.ap-seoul-1.oraclecloud.com/n/cnftfbml9zxa/b/bucket-20230907-0739/o/misskey/a1627ac1-3e00-46f8-9f4f-6208ccc6b0f3.webp",
+          image: "https://objectstorage.ap-seoul-1.oraclecloud.com/n/cnftfbml9zxa/b/bucket-20230907-0739/o/misskey/66a00078-1943-459a-ad9b-8e9211b11422.webp",
         },
         {
           name: "유 시안",
-          image: "https://objectstorage.ap-seoul-1.oraclecloud.com/n/cnftfbml9zxa/b/bucket-20230907-0739/o/misskey/ce7f0b36-6cad-48be-bb75-888eddc5a373.webp",
+          image: "https://objectstorage.ap-seoul-1.oraclecloud.com/n/cnftfbml9zxa/b/bucket-20230907-0739/o/misskey/ba3f1857-e7b3-48f8-a849-29d1b8901beb.webp",
         },
         {
           name: "유 시연",
-          image: "https://objectstorage.ap-seoul-1.oraclecloud.com/n/cnftfbml9zxa/b/bucket-20230907-0739/o/misskey/9d2a8956-9a22-4a98-8a87-7ffd004d8e44.webp",
+          image: "https://objectstorage.ap-seoul-1.oraclecloud.com/n/cnftfbml9zxa/b/bucket-20230907-0739/o/misskey/2fb5c25d-3087-490b-ab48-4aa5beffab44.webp",
         },
       ]
     },
@@ -24,23 +24,23 @@ export default function Characters() {
       characters: [
         {
           name: "루시안",
-          image: "https://objectstorage.ap-seoul-1.oraclecloud.com/n/cnftfbml9zxa/b/bucket-20230907-0739/o/misskey/489b7d7b-dbfc-4959-a54b-c7f5c8d5da55.webp",
+          image: "https://objectstorage.ap-seoul-1.oraclecloud.com/n/cnftfbml9zxa/b/bucket-20230907-0739/o/misskey/7b7b4164-e6b9-4d8a-91fc-bafecd5ec3ee.webp",
         },
         {
           name: "루시엘",
-          image: "https://objectstorage.ap-seoul-1.oraclecloud.com/n/cnftfbml9zxa/b/bucket-20230907-0739/o/misskey/5795453c-68da-4d07-84ec-9646e485829b.webp",
+          image: "https://objectstorage.ap-seoul-1.oraclecloud.com/n/cnftfbml9zxa/b/bucket-20230907-0739/o/misskey/247e7859-615b-4380-8919-9423258a0832.webp",
         },
         {
           name: "루아란",
-          image: "https://objectstorage.ap-seoul-1.oraclecloud.com/n/cnftfbml9zxa/b/bucket-20230907-0739/o/misskey/45477d54-deb3-419b-a494-3cde4b86f03a.webp",
+          image: "https://objectstorage.ap-seoul-1.oraclecloud.com/n/cnftfbml9zxa/b/bucket-20230907-0739/o/misskey/1ce34586-9ed4-49e9-9dee-26472486a027.webp",
         },
         {
           name: "루이린",
-          image: "https://objectstorage.ap-seoul-1.oraclecloud.com/n/cnftfbml9zxa/b/bucket-20230907-0739/o/misskey/1bfdf4f2-1f2c-45df-a2a4-e2298b05c2f6.webp",
+          image: "https://objectstorage.ap-seoul-1.oraclecloud.com/n/cnftfbml9zxa/b/bucket-20230907-0739/o/misskey/4951e0c8-96a6-47e5-b3e1-0d7c66d83724.webp",
         },
         {
           name: "루 시",
-          image: "https://objectstorage.ap-seoul-1.oraclecloud.com/n/cnftfbml9zxa/b/bucket-20230907-0739/o/misskey/a3546ef4-f76e-4fd3-b77d-0eb5c6ec4d23.webp",
+          image: "https://objectstorage.ap-seoul-1.oraclecloud.com/n/cnftfbml9zxa/b/bucket-20230907-0739/o/misskey/7a912db5-fbbb-4cf8-aaac-8e7a110c4fd9.webp",
         },
       ]
     },
@@ -48,19 +48,19 @@ export default function Characters() {
       characters: [
         {
           name: "호루하이",
-          image: "https://objectstorage.ap-seoul-1.oraclecloud.com/n/cnftfbml9zxa/b/bucket-20230907-0739/o/misskey/75e054bb-c9f0-454d-bd57-7164387d7930.webp",
+          image: "https://objectstorage.ap-seoul-1.oraclecloud.com/n/cnftfbml9zxa/b/bucket-20230907-0739/o/misskey/0737795c-83dc-4d86-bcc0-8f5bc8e64d36.webp",
         },
         {
           name: "노히바즈",
-          image: "https://objectstorage.ap-seoul-1.oraclecloud.com/n/cnftfbml9zxa/b/bucket-20230907-0739/o/misskey/abfd59b2-f41b-446e-a56f-13e8674163eb.webp",
+          image: "https://objectstorage.ap-seoul-1.oraclecloud.com/n/cnftfbml9zxa/b/bucket-20230907-0739/o/misskey/b3916e89-a3f8-4159-b71a-79838b4fce7a.webp",
         },
         {
           name: "버찌",
-          image: "https://objectstorage.ap-seoul-1.oraclecloud.com/n/cnftfbml9zxa/b/bucket-20230907-0739/o/misskey/4afa42cd-fb65-4ffc-8cb7-3dcef975a316.webp",
+          image: "https://objectstorage.ap-seoul-1.oraclecloud.com/n/cnftfbml9zxa/b/bucket-20230907-0739/o/misskey/c0e01347-00a7-48be-93d9-3b95eef2b622.webp",
         },
         {
           name: "살구",
-          image: "https://objectstorage.ap-seoul-1.oraclecloud.com/n/cnftfbml9zxa/b/bucket-20230907-0739/o/misskey/5b18c578-a4b8-4d0c-be82-8bda378a6f42.webp",
+          image: "https://objectstorage.ap-seoul-1.oraclecloud.com/n/cnftfbml9zxa/b/bucket-20230907-0739/o/misskey/ba7bd37b-0ba8-4487-866b-17248281b27e.webp",
         },
       ]
     },
