@@ -68,19 +68,19 @@ export default function Characters() {
       characters: [
         {
           name: "여명",
-          image: "#",
+          image: "https://objectstorage.ap-seoul-1.oraclecloud.com/n/cnftfbml9zxa/b/bucket-20230907-0739/o/misskey/83d4e97f-3351-498b-ac7a-aee53dddf8a8.webp",
         },
         {
           name: "황혼",
-          image: "#",
+          image: "https://objectstorage.ap-seoul-1.oraclecloud.com/n/cnftfbml9zxa/b/bucket-20230907-0739/o/misskey/c617db13-3ef3-4af4-9fdd-427967e9f55e.webp",
         },
         {
           name: "정오",
-          image: "#",
+          image: "https://objectstorage.ap-seoul-1.oraclecloud.com/n/cnftfbml9zxa/b/bucket-20230907-0739/o/misskey/fa8732e2-d4e3-42b2-b66a-ba186bd5f679.webp",
         },
         {
           name: "자정",
-          image: "#",
+          image: "https://objectstorage.ap-seoul-1.oraclecloud.com/n/cnftfbml9zxa/b/bucket-20230907-0739/o/misskey/f1e4924b-d32c-47ef-ac0f-3ffae8937958.webp",
         },
       ]
     },
@@ -88,11 +88,11 @@ export default function Characters() {
       characters: [
         {
           name: "미니",
-          image: "#",
+          image: "https://objectstorage.ap-seoul-1.oraclecloud.com/n/cnftfbml9zxa/b/bucket-20230907-0739/o/misskey/0bacac99-9632-476c-91d0-d6bcfc84577e.webp",
         },
         {
           name: "해진",
-          image: "#",
+          image: "https://objectstorage.ap-seoul-1.oraclecloud.com/n/cnftfbml9zxa/b/bucket-20230907-0739/o/misskey/06775339-0fd5-4bf6-b49f-8af8707b8b06.webp",
         },
       ]
     },
@@ -107,6 +107,7 @@ export default function Characters() {
             { categories.characters && categories.characters.map((character, index) => (
               <div key={index} className="character">
                 <div className="image">
+                  <p>{character.name}</p>
                   <img src={character.image} alt={character.name} />
                 </div>
               </div>
