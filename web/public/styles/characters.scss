@@ -28,14 +28,28 @@
     grid-template-columns: repeat(2, 1fr);
     gap: 1rem;
 
-    img {
-      width: 20rem;
-      border-radius: 9px;
-      filter: grayscale(50%);
+    .image {
+      position: relative;
 
-      &:hover {
-        filter: grayscale(0%);
-        transition: filter 0.3s ease-in-out;
+      p {
+        color: $white;
+        text-shadow: 0 0 5px black;
+
+        position: absolute;
+        z-index: 1;
+        top: 4.5rem;
+        right: 1rem;
+      }
+
+      img {
+        width: 20rem;
+        border-radius: 7px;
+        filter: grayscale(90%);
+
+        &:hover {
+          filter: grayscale(0%);
+          transition: filter 0.5s ease-in-out;
+        }
       }
     }
 
