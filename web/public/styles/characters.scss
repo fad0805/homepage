@@ -46,7 +46,9 @@
         border-radius: 7px;
         filter: grayscale(90%);
 
-        &:hover {
+        &:hover,
+        &:focus,
+        &:active {
           filter: grayscale(0%);
           transition: filter 0.5s ease-in-out;
         }
