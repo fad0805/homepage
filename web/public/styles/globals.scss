@@ -18,12 +18,14 @@
 :root {
   --background: #{$light-bg};
   --foreground: #{$light-text};
+  --subtheme: #{$light-bg-sub};
   --title-color: #{color.adjust($maintheme, $lightness: -55%)};
 }
 
 [data-theme='dark'] {
   --background: #{$dark-bg};
   --foreground: #{$dark-text};
+  --subtheme: #{$dark-bg-sub};
   --title-color: #{color.adjust($maintheme, $lightness: -35%)};
 }
 
@@ -87,7 +89,7 @@ div#container>main {
 }
 
 div#container>main>div#content {
-  background: $subtheme;
+  background: var(--subtheme);
   border-radius: 1.7rem;
   min-height: max-content;
   width: 63vw;

@@ -1,12 +1,16 @@
+@use 'sass:color';
+
 $maintheme: #bedbbb;
 $subtheme: hsla(56, 79%, 96%, 0.9);
 
 $white: #fff;
 
 $light-bg: $maintheme;
-$light-bg-sub: #394938;
+$light-bg-sub: $subtheme;
 $light-text: #171717;
-$dark-bg: #0a0a0a;
-$dark-text: #ededed;
+
+$dark-bg: #090c0a;
+$dark-text: $subtheme;
+$dark-bg-sub: #313830;
 
 $breakpoint-md: 768px;

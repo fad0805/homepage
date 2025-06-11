@@ -1,6 +1,16 @@
 @use 'sass:color';
 @use 'variables' as *;
 
+:root {
+  --links-banner-bg: #{color.adjust($maintheme, $lightness: -10%)};
+  --links-banner-color: #{color.adjust($maintheme, $lightness: 90%)};
+}
+
+[data-theme='dark'] {
+  --links-banner-bg: #{color.adjust($maintheme, $lightness: -40%, $saturation: -10%)};
+  --links-banner-color: #{color.adjust($maintheme, $lightness: -10%)};
+}
+
 #links-page {
   display: grid;
   justify-content: center;
@@ -24,7 +34,7 @@
   justify-content: center;
   align-items: center;
   width: 100%;
-  color: color.adjust($maintheme, $lightness: -90%);
+  color: var(--foreground);
   font-size: 1.2rem;
   font-weight: bold;
   margin: 0.5rem 0;
@@ -46,12 +56,13 @@
   text-align: center;
   border-end-start-radius: 1rem;
   border-start-end-radius: 1rem;
-  background: color.adjust($maintheme, $lightness: -10%);
-  color: color.adjust($maintheme, $lightness: 90%);
+  background: var(--links-banner-bg);
+  color: var(--links-banner-color);
   font-size: 0.85rem;
 
   &:visited {
-    color: color.adjust($maintheme, $lightness: 90%);
+    background: var(--links-banner-bg);
+    color: var(--links-banner-color);
   }
 
   & > div {
