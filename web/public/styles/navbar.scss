@@ -12,7 +12,7 @@ nav {
 }
 
 nav#navbar a {
-  color: color.adjust($maintheme, $lightness: -50%);
+  color: var(--title-color);
   text-decoration: none;
   font-size: 1.3rem;
   font-weight: bold;

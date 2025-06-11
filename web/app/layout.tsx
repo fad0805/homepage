@@ -4,6 +4,7 @@ import Link from "next/link";
 import "@/public/styles/globals.scss";
 
 import { Navbar } from "@/components/navbar";
+import { ThemeProvider } from "@/components/theme-provider";
 
 export const metadata: Metadata = {
   title: "어디에도 없는 섬",
@@ -21,22 +22,24 @@ export default function RootLayout({
   return (
     <html lang="ko">
       <body>
-        <div id="container">
-          <header>
-            <div id="title">
-              <Link href="/">어디에도 없는 섬</Link>
-            </div>
-            <Navbar />
-          </header>
-          <main>
-            <div id="content">
-              {children}
-            </div>
-          </main>
-          <footer>
-            © Rimien Siarte. All rights reserved. No external use permitted.
-          </footer>
-        </div>
+        <ThemeProvider>
+          <div id="container">
+            <header>
+              <div id="title">
+                <Link href="/">어디에도 없는 섬</Link>
+              </div>
+              <Navbar />
+            </header>
+            <main>
+              <div id="content">
+                {children}
+              </div>
+            </main>
+            <footer>
+              © Rimien Siarte. All rights reserved. No external use permitted.
+            </footer>
+          </div>
+        </ThemeProvider>
       </body>
     </html>
   );

@@ -16,15 +16,15 @@
 }
 
 :root {
-  --background: #{$maintheme};
+  --background: #{$light-bg};
   --foreground: #{$light-text};
+  --title-color: #{color.adjust($maintheme, $lightness: -55%)};
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #{$dark-bg};
-    --foreground: #{$dark-text};
-  }
+[data-theme='dark'] {
+  --background: #{$dark-bg};
+  --foreground: #{$dark-text};
+  --title-color: #{color.adjust($maintheme, $lightness: -35%)};
 }
 
 body {
@@ -74,7 +74,7 @@ div#container>header {
 }
 
 div#container>header>div#title {
-  color: color.adjust($maintheme, $lightness: -55%);
+  color: var(--title-color);
   font-size: 2.7rem;
   font-family: Eulyoo1945-SemiBold, Arial, Helvetica, sans-serif;
 }
