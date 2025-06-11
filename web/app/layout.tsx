@@ -23,15 +23,15 @@ export default function RootLayout({
       <body>
         <div id="container">
           <header>
-	    <div id="title">
-          <Link href="/">어디에도 없는 섬</Link>
-      </div>
-	    <Navbar />
-	  </header>
+            <div id="title">
+              <Link href="/">어디에도 없는 섬</Link>
+            </div>
+            <Navbar />
+          </header>
           <main>
-	    <div id="content">
+            <div id="content">
               {children}
-	    </div>
+            </div>
           </main>
           <footer>
             © Rimien Siarte. All rights reserved. No external use permitted.

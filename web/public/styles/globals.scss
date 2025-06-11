@@ -37,6 +37,7 @@ body {
   color: var(--foreground);
   background: var(--background);
   font-family: GowunDodum, Arial, Helvetica, sans-serif;
+  word-break: keep-all;
 }
 
 a {
@@ -81,12 +82,20 @@ div#container>header>div#title {
 div#container>main {
   display: flex;
   flex-direction: column;
+  align-items: center;
+  justify-items: center;
 }
 
 div#container>main>div#content {
   background: $subtheme;
   border-radius: 1.7rem;
   min-height: max-content;
+  width: 63vw;
+  max-width: 850px;
+
+  @media (width <= 768px) {
+    width: 90vw;
+  }
 }
 
 .page-title {
