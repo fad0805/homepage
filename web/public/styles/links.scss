@@ -8,7 +8,7 @@
 
 [data-theme='dark'] {
   --links-banner-bg: #{color.adjust($maintheme, $lightness: -40%, $saturation: -10%)};
-  --links-banner-color: #{color.adjust($maintheme, $lightness: -10%)};
+  --links-banner-color: #{color.adjust($maintheme, $lightness: 10%)};
 }
 
 #links-page {
