@@ -1,6 +1,14 @@
 @use 'sass:color';
 @use 'variables' as *;
 
+:root {
+  --text-color: #{rgba(red($light-text), green($light-text), blue($light-text), 0.7)};
+}
+
+[data-theme='dark'] {
+  --text-color: #{rgba(red($dark-text), green($dark-text), blue($dark-text), 0.7)};
+}
+
 div#content {
   display: flex;
   justify-content: center;
@@ -17,12 +25,12 @@ div#main {
     position: relative;
     top: 35%;
     left: 10%;
-    color: rgba(red($light-text), green($light-text), blue($light-text), 0.3);
+    color: var(--text-color);
   }
 
   h1 {
     position: relative;
     top: 17%;
-    color: rgba(red($light-text), green($light-text), blue($light-text), 0.7);
+    color: var(--text-color);
   }
 }

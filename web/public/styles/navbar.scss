@@ -1,6 +1,14 @@
 @use 'sass:color';
 @use 'variables' as *;
 
+:root {
+  --navbar-active-color: #{$light-active-text};
+}
+
+[data-theme='dark'] {
+  --navbar-active-color: #{$dark-active-text};
+}
+
 nav {
   display: flex;
   width: 80%;
@@ -21,6 +29,6 @@ nav#navbar a {
 
   &.active {
     font-size: 1.5rem;
-    color: var(--foreground);
+    color: var(--navbar-active-color);
   }
 }
