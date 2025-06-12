@@ -1,0 +1,7 @@
+@mixin theme-transition($duration: 0.3s, $timing-function: ease-in-out) {
+  transition: 
+    background-color $duration $timing-function,
+    color $duration $timing-function,
+    border-color $duration $timing-function,
+    box-shadow $duration $timing-function;
+}

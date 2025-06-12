@@ -1,5 +1,6 @@
 @use 'sass:color';
 @use 'variables' as *;
+@use './_mixins';
 
 @tailwind base;
 @tailwind components;
@@ -30,6 +31,7 @@
 }
 
 body {
+  @include mixins.theme-transition();
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -89,6 +91,7 @@ div#container>main {
 }
 
 div#container>main>div#content {
+  @include mixins.theme-transition();
   background: var(--subtheme);
   border-radius: 1.7rem;
   min-height: max-content;
@@ -115,6 +118,7 @@ main {
 }
 
 footer {
+  @include mixins.theme-transition();
   margin-top: 2rem;
   padding: 1rem;
   text-align: center;
