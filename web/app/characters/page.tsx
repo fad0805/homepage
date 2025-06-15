@@ -13,12 +13,12 @@ export default function Characters() {
         },
         {
           name: "유 시안",
-          image: "https://objectstorage.ap-seoul-1.oraclecloud.com/n/cnftfbml9zxa/b/bucket-20230907-0739/o/misskey/ba3f1857-e7b3-48f8-a849-29d1b8901beb.webp",
+          image: "https://objectstorage.ap-seoul-1.oraclecloud.com/n/cnftfbml9zxa/b/bucket-20230907-0739/o/misskey/f4761290-a1b2-4c9f-b1b2-b521f4b63992.webp",
           link: "유-시안",
         },
         {
           name: "유 시연",
-          image: "https://objectstorage.ap-seoul-1.oraclecloud.com/n/cnftfbml9zxa/b/bucket-20230907-0739/o/misskey/2fb5c25d-3087-490b-ab48-4aa5beffab44.webp",
+          image: "https://objectstorage.ap-seoul-1.oraclecloud.com/n/cnftfbml9zxa/b/bucket-20230907-0739/o/misskey/545a4295-872e-4272-bf9f-08891e691280.webp",
           link: "유-시연",
         },
       ]
