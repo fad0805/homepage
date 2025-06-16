@@ -21,6 +21,9 @@
   --foreground: #{$light-text};
   --subtheme: #{$light-bg-sub};
   --title-color: #{color.adjust($maintheme, $lightness: -55%)};
+  a, a:visited {
+    color: var(--title-color);
+  }
 }
 
 [data-theme='dark'] {
@@ -28,6 +31,9 @@
   --foreground: #{$dark-text};
   --subtheme: #{$dark-bg-sub};
   --title-color: #{color.adjust($maintheme, $lightness: -35%)};
+  a, a:visited {
+    color: var(--title-color);
+  }
 }
 
 body {
