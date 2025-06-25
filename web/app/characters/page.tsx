@@ -8,7 +8,7 @@ export default function Characters() {
       characters: [
         {
           name: "윤 미르",
-          image: "https://objectstorage.ap-seoul-1.oraclecloud.com/n/cnftfbml9zxa/b/bucket-20230907-0739/o/misskey/66a00078-1943-459a-ad9b-8e9211b11422.webp",
+          image: "https://objectstorage.ap-seoul-1.oraclecloud.com/n/cnftfbml9zxa/b/bucket-20230907-0739/o/misskey/7fec14b4-a93f-4607-9206-feda8e8403d3.webp",
           link: "윤-미르",
         },
         {
