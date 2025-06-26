@@ -1,0 +1,46 @@
+@use "sass:color";
+@use "variables" as *;
+
+form {
+  display: flex;
+  flex-direction: column;
+  min-height: 45vh;
+  margin: 2rem auto 4rem auto;
+  min-width: 200px;
+  max-width: 300px;
+
+  @media (max-width: 768px) {
+    max-width: 80%;
+  }
+}
+
+.inputs {
+  display: flex;
+  flex-direction: column;
+  margin: 0 0 1rem 0;
+  width: 100%;
+  border: 1px solid $maintheme;
+  border-radius: 10px;
+  background-color: $white;
+
+  input {
+    margin: 0;
+    height: 3rem;
+    padding: 0 10px;
+    border: 0;
+    background-color: transparent;
+
+    &:first-child {
+      border-bottom: 1px solid $maintheme;
+    }
+  }
+}
+
+button[type="submit"] {
+  height: 3rem;
+  border: 0;
+  border-radius: 10px;
+  font-size: 1.2rem;
+  background-color: $maintheme;
+  color: $white;
+}
