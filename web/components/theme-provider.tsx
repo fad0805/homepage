@@ -18,6 +18,14 @@ children: React.ReactNode;
         document.documentElement.setAttribute('data-theme', currentTheme === 'dark' ? 'dark' : 'light');
 
         const handleKeyDown = (event: KeyboardEvent) => {
+            const activeElement = document.activeElement;
+            const isInputField = 
+                activeElement.tagName === 'INPUT' ||
+                activeElement.tagName === 'TEXTAREA' ||
+                activeElement.tagName === 'SELECT';
+
+            if (isInputField) return;
+
             if (event.key === 'd' || event.key === 'D') {
                 setCurrentTheme(prevTheme => {
                     const newTheme = prevTheme === 'dark' ? 'light' : 'dark';
