@@ -22,7 +22,6 @@ children: React.ReactNode;
 
             if (event.key === 'q' || event.key === 'Q') {
                 if(pathname !== '/signin') {
-                    console.log('q')
                     router.push('/signin');
                 }
             }
