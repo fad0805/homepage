@@ -5,6 +5,7 @@ import "@/public/styles/globals.scss";
 
 import { Navbar } from "@/components/navbar";
 import { ThemeProvider } from "@/components/theme-provider";
+import { Shortcuts } from "@/components/shortcuts";
 
 export const metadata: Metadata = {
   title: "어디에도 없는 섬",
@@ -23,22 +24,24 @@ export default function RootLayout({
     <html lang="ko">
       <body>
         <ThemeProvider>
-          <div id="container">
-            <header>
-              <div id="title">
-                <Link href="/">어디에도 없는 섬</Link>
-              </div>
-              <Navbar />
-            </header>
-            <main>
-              <div id="content">
-                {children}
-              </div>
-            </main>
-            <footer>
-              © Rimien Siarte. All rights reserved. No external use permitted.
-            </footer>
-          </div>
+          <Shortcuts>
+            <div id="container">
+              <header>
+                <div id="title">
+                  <Link href="/">어디에도 없는 섬</Link>
+                </div>
+                <Navbar />
+              </header>
+              <main>
+                <div id="content">
+                  {children}
+                </div>
+              </main>
+              <footer>
+                © Rimien Siarte. All rights reserved. No external use permitted.
+              </footer>
+            </div>
+          </Shortcuts>
         </ThemeProvider>
       </body>
     </html>
