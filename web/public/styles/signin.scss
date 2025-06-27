@@ -6,8 +6,7 @@ form {
   flex-direction: column;
   min-height: 45vh;
   margin: 2rem auto 4rem auto;
-  min-width: 200px;
-  max-width: 300px;
+  width: 300px;
 
   @media (max-width: 768px) {
     max-width: 80%;
