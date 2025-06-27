@@ -21,6 +21,9 @@
   --foreground: #{$light-text};
   --subtheme: #{$light-bg-sub};
   --title-color: #{color.adjust($maintheme, $lightness: -55%)};
+  --input-background: #{$white};
+  --input-text: var(--foreground);
+
   a, a:visited {
     color: var(--title-color);
   }
@@ -31,6 +34,9 @@
   --foreground: #{$dark-text};
   --subtheme: #{$dark-bg-sub};
   --title-color: #{color.adjust($maintheme, $lightness: -35%)};
+  --input-background: #{$dark-text};
+  --input-text: #{$dark-bg};
+
   a, a:visited {
     color: var(--title-color);
   }
