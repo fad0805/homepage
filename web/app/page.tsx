@@ -5,7 +5,7 @@ import '@/public/styles/main.scss';
 export default function Home() {
   return (
     <div id="main">
-      <div>
+      <div className="main-content">
         <p>어서오세요.</p>
         <p>이 곳은 어디에나 있지만 어디에도 없는 섬.</p>
       </div>
