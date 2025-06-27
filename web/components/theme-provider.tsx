@@ -20,9 +20,9 @@ children: React.ReactNode;
         const handleKeyDown = (event: KeyboardEvent) => {
             const activeElement = document.activeElement;
             const isInputField = 
-                activeElement.tagName === 'INPUT' ||
-                activeElement.tagName === 'TEXTAREA' ||
-                activeElement.tagName === 'SELECT';
+                activeElement?.tagName === 'INPUT' ||
+                activeElement?.tagName === 'TEXTAREA' ||
+                activeElement?.tagName === 'SELECT';
 
             if (isInputField) return;
 
