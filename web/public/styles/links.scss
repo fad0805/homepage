@@ -59,6 +59,7 @@
   background: var(--links-banner-bg);
   color: var(--links-banner-color);
   font-size: 0.85rem;
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.15);
 
   &:visited {
     background: var(--links-banner-bg);
