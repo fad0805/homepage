@@ -6,8 +6,11 @@ from db.session import get_db
 router = APIRouter()
 
 @router.post("/")
-async def login(username: str, password: str, db: Session = Depends(get_db)):
+@router.post("")
+async def signin(username: str, password: str, db: Session = Depends(get_db)):
     """
     Endpoint to handle user login.
     This is a placeholder implementation.
     """
+    print(f"Login attempt with username: {username} and password: {password}")
+    return {"message": "Login successful", "username": username}

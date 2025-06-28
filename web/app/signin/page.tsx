@@ -8,7 +8,16 @@ export default function Home() {
     event.preventDefault();
 
     const formData = new FormData(event.currentTarget);
-    console.log(formData);
+    const response = fetch('/api/signin/', {
+      method: 'POST',
+      body: formData,
+    }).then((res) => {
+      if (res.ok) {
+        return res.json();
+      } else {
+        throw new Error('로그인 실패');
+      }
+    });
   };
 
   return (
