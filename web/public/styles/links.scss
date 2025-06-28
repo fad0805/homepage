@@ -57,13 +57,13 @@
   border-end-start-radius: 1rem;
   border-start-end-radius: 1rem;
   background: var(--links-banner-bg);
-  color: var(--links-banner-color);
+  color: var(--links-banner-color) !important;
   font-size: 0.85rem;
   box-shadow: 0 0 10px rgba(0, 0, 0, 0.15);
 
   &:visited {
     background: var(--links-banner-bg);
-    color: var(--links-banner-color);
+    color: var(--links-banner-color) !important;
   }
 
   & > div {
