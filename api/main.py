@@ -6,7 +6,7 @@ from api import links, signin
 app = FastAPI()
 
 origins = [
-    "http://web:2222",
+    "http://web:3000",
 ]
 
 app.add_middleware(
