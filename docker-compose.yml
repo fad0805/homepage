@@ -18,6 +18,8 @@ services:
       - internal_network
     depends_on:
       - db
+    env_file:
+      - .env.production
 
   web:
     restart: always
