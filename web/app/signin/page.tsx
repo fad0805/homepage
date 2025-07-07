@@ -8,7 +8,7 @@ export default function Home() {
     event.preventDefault();
 
     const formData = new FormData(event.currentTarget);
-    fetch('/api/signin/', {
+    fetch('/api/users/signin', {
       method: 'POST',
       body: formData,
     }).then((res) => {
