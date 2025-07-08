@@ -2,11 +2,11 @@
 @use 'variables' as *;
 
 :root {
-  --text-color: #{rgba(red($light-text), green($light-text), blue($light-text), 0.7)};
+  --text-color: #{color.change($light-text, $alpha: 0.7)};
 }
 
 [data-theme='dark'] {
-  --text-color: #{rgba(red($dark-text), green($dark-text), blue($dark-text), 0.7)};
+  --text-color: #{color.change($dark-text, $alpha: 0.7)};
 }
 
 div#content {
