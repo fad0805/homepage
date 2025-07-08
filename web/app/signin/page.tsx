@@ -13,6 +13,7 @@ export default function Home() {
       body: formData,
     }).then((res) => {
       if (res.ok) {
+        console.log(res);
         return res.json();
       } else {
         throw new Error('로그인 실패');
