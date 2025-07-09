@@ -11,6 +11,7 @@ class User(Base):
     hashed_password = Column(String(128), nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    refresh_token = Column(String(255), nullable=True)
 
 
 class UserSigninHistory(Base):
