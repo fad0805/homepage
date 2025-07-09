@@ -13,11 +13,15 @@ export default function Home() {
       body: formData,
     }).then((res) => {
       if (res.ok) {
-        console.log(res);
         return res.json();
       } else {
         throw new Error('로그인 실패');
       }
+    }).then((data) => {
+      console.log('로그인 성공:', data);
+    }).catch((error) => {
+      console.error('로그인 에러:', error);
+      alert('로그인에 실패했습니다. 다시 시도해주세요.');
     });
   };
 

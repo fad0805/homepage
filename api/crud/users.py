@@ -24,3 +24,15 @@ def create_user(db: Session, user: UserCreate):
     db.commit()
     db.refresh(db_user)
     return get_user(db, user.username)
+
+
+def update_user(db: Session, username: str, user_update: UserUpdate):
+    """
+    Update an existing user in the database
+    """
+    user = get_user(db, username)
+    for key, value in user_update.dict(exclude_unset=True).items():
+        setattr(user, key, value)
+    db.commit()
+    db.refresh(user)
+    return True if user else False

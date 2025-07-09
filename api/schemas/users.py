@@ -29,6 +29,14 @@ class UserUpdate(UserBase):
         from_attributes = True
 
 
+class UserRefreshToken(BaseModel):
+    """Model for refreshing user token"""
+    refresh_token: str
+
+    class Config:
+        from_attributes = True
+
+
 class UserSigninHistory(UserBase):
     """Model for user sign-in history"""
     user_id: int
