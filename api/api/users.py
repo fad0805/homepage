@@ -1,11 +1,9 @@
-from datetime import datetime, timedelta
-
 from fastapi import APIRouter, Depends, HTTPException, Response, Request
 from fastapi import Form
 from sqlalchemy.orm import Session
 
 from api.utils import hash_password, verify_password, \
-    create_access_token, create_refresh_token, decode_access_token, decode_refresh_token
+    create_access_token, create_refresh_token
 from crud.users import get_user, create_user, update_user
 from db.session import get_db
 from schemas.users import UserCreate, UserRefreshToken
