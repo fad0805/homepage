@@ -8,8 +8,7 @@ services:
       - internal_network
     volumes:
       - ./db:/var/lib/postgresql/data
-    env_file:
-      - .env.production
+    env_file: .env.production
 
   api:
     restart: always
@@ -18,8 +17,7 @@ services:
       - internal_network
     depends_on:
       - db
-    env_file:
-      - .env.production
+    env_file: .env.production
 
   web:
     restart: always

@@ -1,8 +1,18 @@
 services:
+  db:
+    env_file:
+      - path: .env.development
+        required: true
+      - path: .env.production
+        required: false
+
   api:
     command: uvicorn main:app --host 0.0.0.0 --reload
     env_file:
-      - .env.development
+      - path: .env.development
+        required: true
+      - path: .env.production
+        required: false
     networks:
       - external_network
       - internal_network
