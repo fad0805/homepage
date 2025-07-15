@@ -41,7 +41,7 @@ children: React.ReactNode;
                     });
                 };
 
-                if(pathname !== '/admin' || pathname !== '/signin') {
+                if(pathname !== '/admin' && pathname !== '/signin') {
                     isAuthenticated();
                 }
             }
