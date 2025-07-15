@@ -32,10 +32,8 @@ children: React.ReactNode;
                             throw new Error('로그인 상태 확인 실패');
                         }
                     }).then((data) => {
-                        if (data.success) {
-                            router.push('/admin');
-                        }
-                        router.push('/signin');
+                        if (data.success) router.push('/admin');
+                        else router.push('/signin');
                     }).catch(() => {
                         router.push('/signin');
                     });
