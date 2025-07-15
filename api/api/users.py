@@ -3,7 +3,7 @@ from fastapi import Form
 from sqlalchemy.orm import Session
 
 from api.utils import hash_password, verify_password, \
-    create_access_token, create_refresh_token
+    create_access_token, create_refresh_token, get_current_user_from_token
 from crud.users import get_user, create_user, update_user
 from db.session import get_db
 from schemas.users import UserCreate, UserRefreshToken
@@ -53,7 +53,7 @@ async def signin(
         samesite="Strict"
     )
 
-    return {"message": "Login successful"}
+    return {"success": True, "message": "Login successful"}
 
 
 @router.post("/signup")
@@ -75,3 +75,24 @@ def signup(username: str = Form(...), password: str = Form(...), db: Session = D
     user = create_user(db, new_user)
 
     return {"message": "User created successfully", "user": user.username}
+
+
+@router.get("/me")
+def get_current_user(
+    response: Response,
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    """
+    Endpoint to get the current logged-in user's information.
+    This is a placeholder implementation.
+    """
+    access_token = request.cookies.get("access_token")
+    
+    if not access_token:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    user = get_current_user_from_token(db, response, token=access_token)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    return {"success": True, "user": user.username}
