@@ -21,8 +21,28 @@ children: React.ReactNode;
             if (isInputField) return;
 
             if (event.key === 'q' || event.key === 'Q') {
-                if(pathname !== '/signin') {
-                    router.push('/signin');
+                const isAuthenticated = () => {
+                    fetch('/api/users/me', {
+                        method: 'GET',
+                        credentials: 'include',
+                    }).then((res) => {
+                        if (res.ok) {
+                            return res.json();
+                        } else {
+                            throw new Error('로그인 상태 확인 실패');
+                        }
+                    }).then((data) => {
+                        if (data.success) {
+                            router.push('/admin');
+                        }
+                        router.push('/signin');
+                    }).catch(() => {
+                        router.push('/signin');
+                    });
+                };
+
+                if(pathname !== '/admin' || pathname !== '/signin') {
+                    isAuthenticated();
                 }
             }
         };

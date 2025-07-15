@@ -1,27 +1,9 @@
 "use client";
-import { useEffect } from 'react';
 import { FormEvent } from 'react';
 
 import '@/public/styles/signin.scss';
 
 export default function Signin() {
-  useEffect(() => {
-    fetch('/api/users/me', {
-      method: 'GET',
-      credentials: 'include',
-    }).then((res) => {
-      if (res.ok) {
-        return res.json();
-      } else {
-        throw new Error('로그인 상태 확인 실패');
-      }
-    }).then((data) => {
-      if (data.success && data.user) {
-        window.location.href = '/admin';
-      }
-    });
-  }, []);
-
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
