@@ -8,8 +8,8 @@ services:
       - internal_network
     volumes:
       - ./db:/var/lib/postgresql/data
-    environment:
-      - POSTGRES_HOST_AUTH_METHOD=trust
+    env_file:
+      - .env.production
 
   api:
     restart: always
