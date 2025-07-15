@@ -19,7 +19,7 @@ export default function Signin() {
       if (data.success && data.user) {
         window.location.href = '/admin';
       }
-    }).catch((error) => {});
+    });
   }, []);
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
