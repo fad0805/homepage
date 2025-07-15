@@ -1,5 +1,6 @@
 import os
 from typing import Optional
+from sqlalchemy.orm import Session
 
 from fastapi import Request, Response, Depends, HTTPException, status
 
@@ -35,7 +36,7 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     else:
         expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     to_encode.update({"exp": expire})
-    encoded_jwt = jwt.encode(to_encode, "your_secret_key", algorithm="HS256")
+    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
 
 
@@ -121,6 +122,7 @@ def refresh_access_token(
 
 
 def get_current_user_from_token(
+    db: Session,
     response: Response,
     token: str = Depends(get_access_token_from_cookie)
 ):
@@ -148,11 +150,11 @@ def get_current_user_from_token(
                 samesite="Strict"
             )
 
-        user_id = payload.get("sub")
-        if not user_id:
+        username = payload.get("sub")
+        if not username:
             raise credentials_exception
 
-        user = get_user(user_id)
+        user = get_user(db, username)
         if not user:
             raise credentials_exception
         return user
