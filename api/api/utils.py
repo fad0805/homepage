@@ -41,13 +41,8 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
 
 
 def decode_access_token(token: str):
-    try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        return payload
-    except jwt.ExpiredSignatureError:
-        raise ValueError("Token has expired")
-    except jwt.InvalidTokenError:
-        raise ValueError("Invalid token")
+    payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+    return payload
 
 
 def create_refresh_token(data: dict, expires_delta: Optional[timedelta] = None):
@@ -62,13 +57,8 @@ def create_refresh_token(data: dict, expires_delta: Optional[timedelta] = None):
 
 
 def decode_refresh_token(token: str):
-    try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        return payload
-    except jwt.ExpiredSignatureError:
-        raise ValueError("Token has expired")
-    except jwt.InvalidTokenError:
-        raise ValueError("Invalid token")
+    payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+    return payload
 
 
 def get_access_token_from_cookie(request: Request) -> Optional[str]:
@@ -85,6 +75,7 @@ def get_refresh_token_from_cookie(request: Request) -> Optional[str]:
 
 
 def refresh_access_token(
+    db: Session,
     refresh_token: str = Depends(get_refresh_token_from_cookie)
 ):
     """
@@ -99,30 +90,38 @@ def refresh_access_token(
     if not refresh_token:
         raise credentials_exception
     try:
-        payload = decode_refresh_token(refresh_token)
-        if payload.get("exp") < datetime.utcnow().timestamp():
+        payload = None
+        try:
+            payload = decode_refresh_token(refresh_token)
+        except jwt.ExpiredSignatureError:
+            raise credentials_exception
+        except jwt.InvalidTokenError:
             raise credentials_exception
 
-        user_id = payload.get("sub")
-        if not user_id:
+        if not payload:
             raise credentials_exception
 
-        user = get_user(user_id)
+        username = payload.get("sub")
+        if not username:
+            raise credentials_exception
+
+        user = get_user(db, username)
         if not user:
             raise credentials_exception
 
-        new_access_token = create_access_token(data={"sub": user_id})
-        return new_access_token
+        new_access_token = create_access_token(data={"sub": username})
+        return username, new_access_token
     except HTTPException as e:
         raise e
     except jwt.exceptions.InvalidTokenError as e:
-        raise ValueError("Invalid refresh token") from e
+        raise credentials_exception
     except Exception as e:
         raise e
 
 
 def get_current_user_from_token(
     db: Session,
+    request: Request,
     response: Response,
     token: str = Depends(get_access_token_from_cookie)
 ):
@@ -138,9 +137,16 @@ def get_current_user_from_token(
     if not token:
         raise credentials_exception
     try:
-        payload = decode_access_token(token)
-        if payload.get("exp") < datetime.utcnow().timestamp():
-            new_access_token = refresh_access_token()
+        username = None
+        try:
+            payload = decode_access_token(token)
+            username = payload.get("sub")
+        except jwt.ExpiredSignatureError:
+            refresh_token = get_refresh_token_from_cookie(request)
+            if not refresh_token:
+                raise credentials_exception
+
+            username, new_access_token = refresh_access_token(db, refresh_token=refresh_token)
             response.delete_cookie("access_token")
             response.set_cookie(
                 key="access_token",
@@ -149,8 +155,9 @@ def get_current_user_from_token(
                 secure=True,
                 samesite="Strict"
             )
+        except jwt.InvalidTokenError:
+            raise credentials_exception
 
-        username = payload.get("sub")
         if not username:
             raise credentials_exception
 
@@ -160,7 +167,7 @@ def get_current_user_from_token(
         return user
     except HTTPException as e:
         raise e
-    except jwt.exceptions.InvalidTokenError as e:
-        raise ValueError("Invalid access token") from e
+    except jwt.InvalidTokenError:
+        raise credentials_exception
     except Exception as e:
         raise e

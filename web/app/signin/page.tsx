@@ -19,9 +19,7 @@ export default function Signin() {
       if (data.success && data.user) {
         window.location.href = '/admin';
       }
-    }).catch((error) => {
-      console.error('로그인 상태 확인 에러:', error);
-    });
+    }).catch((error) => {});
   }, []);
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
