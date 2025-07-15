@@ -92,7 +92,7 @@ def get_current_user(
     if not access_token:
         raise HTTPException(status_code=401, detail="Not authenticated")
 
-    user = get_current_user_from_token(db, response, token=access_token)
+    user = get_current_user_from_token(db, request, response, token=access_token)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     return {"success": True, "user": user.username}
