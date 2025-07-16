@@ -1,4 +1,4 @@
-import { AppRouterInstance } from 'next/dist/shared/lib/app-router-context';
+import type { AppRouterInstance } from 'next/dist/shared/lib/app-router-context.shared-runtime';
 
 const isAuthenticated = (router: AppRouterInstance) => {
     return fetch('/api/users/me', {
