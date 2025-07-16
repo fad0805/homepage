@@ -1,9 +1,21 @@
 "use client";
-import { FormEvent } from 'react';
+import { useEffect, FormEvent } from 'react';
+import { useRouter } from 'next/navigation';
 
 import '@/public/styles/signin.scss';
+import { isAuthenticated } from '@/components/authentication.tsx';
 
 export default function Signin() {
+  const router = useRouter();
+
+  useEffect(() => {
+    isAuthenticated(router).then(isAuth => {
+      if (isAuth) {
+        router.push('/admin');
+      }
+    });
+  }, []);
+
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
