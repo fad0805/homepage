@@ -1,4 +1,6 @@
-const isAuthenticated = (router) => {
+import { AppRouterInstance } from 'next/dist/shared/lib/app-router-context';
+
+const isAuthenticated = (router: AppRouterInstance) => {
     return fetch('/api/users/me', {
         method: 'GET',
         credentials: 'include',
