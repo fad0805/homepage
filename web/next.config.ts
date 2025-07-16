@@ -6,7 +6,7 @@ const nextConfig: NextConfig = {
     items: [
       { href: "#", label: "작가소개" },
       { href: "/characters", label: "등장인물" },
-      { href: "#", label: "책장" },
+      { href: "#", label: "목차" },
       { href: "/links", label: "놀러가기" },
     ],
   },
