@@ -3,7 +3,7 @@ import { useEffect, FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 
 import '@/public/styles/signin.scss';
-import { isAuthenticated } from '@/components/authentication.tsx';
+import { isAuthenticated } from '@/components/authentication';
 
 export default function Signin() {
   const router = useRouter();
