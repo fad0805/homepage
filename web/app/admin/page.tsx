@@ -1,6 +1,6 @@
 "use client";
 
-// import '@/public/styles/admin.scss';
+import '@/public/styles/admin/main.scss';
 
 export default function AdminHome() {
   return (
