@@ -1,0 +1,34 @@
+@use 'sass:color';
+@use '../variables' as *;
+
+:root {
+  --navbar-active-color: #{$light-bold-text};
+}
+
+[data-theme='dark'] {
+  --navbar-active-color: #{$dark-bold-text};
+}
+
+nav {
+  display: flex;
+  width: 80%;
+  height: fit-content;
+  justify-content: center;
+  align-items: flex-end;
+  margin: 2rem 0 1.5rem 0;
+  gap: 1.5rem;
+}
+
+nav#admin-navbar a {
+  color: var(--title-color);
+  text-decoration: none;
+  font-size: 1rem;
+  font-weight: bold;
+  min-width: fit-content;
+  height: fit-content;
+
+  &.active {
+    font-size: 1.2rem;
+    color: var(--navbar-active-color);
+  }
+}
