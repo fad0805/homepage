@@ -15,7 +15,6 @@ export default function RootLayout({
   const router = useRouter();
   const pathname = usePathname();
   useEffect(() => {
-    console.log("Checking authentication for path:", pathname);
     isAuthenticated(router).then((isAuth) => {
       if (!isAuth) {
         router.push('/signin');
