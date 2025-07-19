@@ -1,7 +1,9 @@
 @use 'sass:color';
 @use '../variables' as *;
 
-div#main {
+div#admin-main {
   display: flex;
   justify-content: center;
+
+  min-height: 50vh;
 }

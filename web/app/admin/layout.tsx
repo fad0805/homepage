@@ -1,8 +1,11 @@
 "use client";
 import React, { useEffect } from "react";
 import { useRouter, usePathname } from "next/navigation";
+import { AdminNavbar } from '@/components/admin-navbar';
 
 import { isAuthenticated } from "@/components/authentication";
+
+import '@/public/styles/admin/globals.scss';
 
 export default function RootLayout({
   children,
@@ -22,6 +25,7 @@ export default function RootLayout({
 
   return (
     <div>
+      <AdminNavbar />
       {children}
     </div>
   );
