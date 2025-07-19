@@ -5,14 +5,18 @@ $subtheme: hsla(56, 79%, 96%, 0.9);
 
 $white: #fff;
 
+// light theme
 $light-bg: $maintheme;
 $light-bg-sub: $subtheme;
 $light-text: #171717;
 $light-active-text: $white;
+$light-bold-text: #2f803c;
 
+// dark theme
 $dark-bg: #090c0a;
 $dark-text: $subtheme;
 $dark-bg-sub: #313830;
 $dark-active-text: $dark-text;
+$dark-bold-text: $white;
 
 $breakpoint-md: 768px;
