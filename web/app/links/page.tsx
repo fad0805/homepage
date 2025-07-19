@@ -41,18 +41,6 @@ export default function Links() {
             </Link>
             <Link
               className="links-banner"
-              href="https://zze.kr"
-              target="_blank"
-            >
-              <Image
-                src="https://zze.kr/img/J_banner.png"
-                alt="네비비님"
-                radius="none"
-              />
-              <p>쩨의 스윗홈</p>
-            </Link>
-            <Link
-              className="links-banner"
               href="https://lemo.noxexcelsis.today/"
               target="_blank"
             >
