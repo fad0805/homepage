@@ -23,7 +23,10 @@ children: React.ReactNode;
             if (isInputField) return;
 
             if (event.key === 'q' || event.key === 'Q') {
-                if(pathname !== '/admin' && pathname !== '/signin') {
+                if(
+                    pathname.slice(0, 6) !== '/admin'
+                    && pathname !== '/signin'
+                ) {
                     isAuthenticated(router).then(isAuth => {
                         if(isAuth) router.push('/admin');
                         else router.push('/signin');
