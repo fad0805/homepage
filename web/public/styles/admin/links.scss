@@ -1,0 +1,77 @@
+@use 'sass:color';
+@use '../variables' as *;
+
+:root {
+  --links-banner-bg: #{color.adjust($maintheme, $lightness: -10%)};
+  --links-banner-color: #{color.adjust($maintheme, $lightness: 90%)};
+}
+
+[data-theme='dark'] {
+  --links-banner-bg: #{color.adjust($maintheme, $lightness: -40%, $saturation: -10%)};
+  --links-banner-color: #{color.adjust($maintheme, $lightness: 10%)};
+}
+
+#links-page {
+  display: grid;
+  justify-content: center;
+  align-items: center;
+  width: 80%;
+  gap: 2rem;
+  padding: 2rem 2rem 7rem 2rem;
+}
+
+#links-page main {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+  grid-row-start: 2;
+}
+
+.links-section {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+  color: var(--foreground);
+  font-size: 1.2rem;
+  font-weight: bold;
+  margin: 0.5rem 0;
+}
+
+.links-contents {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 1rem;
+  justify-content: center;
+  align-items: center;
+}
+
+.links-banner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  border-end-start-radius: 1rem;
+  border-start-end-radius: 1rem;
+  background: var(--links-banner-bg);
+  color: var(--links-banner-color) !important;
+  font-size: 0.85rem;
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.15);
+
+  &:visited {
+    background: var(--links-banner-bg);
+    color: var(--links-banner-color) !important;
+  }
+
+  & > div {
+    margin: 0 0 -.25rem 0;
+  }
+}
+
+.links-banner img {
+  border-start-end-radius: 1rem;
+}
