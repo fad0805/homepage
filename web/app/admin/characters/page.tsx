@@ -1,6 +1,6 @@
 "use client";
 
-// import '@/public/styles/admin/main.scss';
+// import '@/public/styles/admin/characters.scss';
 
 export default function AdminCharacters() {
   return (
