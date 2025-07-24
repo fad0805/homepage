@@ -23,7 +23,7 @@ export const AdminNavbar = () => {
         return <Link
             key={index}
             href={item.href}
-            className={ path === item.href ? "active" : "" }
+            className={ path.includes(item.href) ? "active" : "" }
         >{item.label}</Link>;
     });
 
