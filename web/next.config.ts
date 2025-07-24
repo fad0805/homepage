@@ -17,7 +17,7 @@ const nextConfig: NextConfig = {
       { href: "/admin/author", label: "프로필 관리" },
       { href: "/admin/characters", label: "등장인물 관리" },
       { href: "/admin/books", label: "책장 관리" },
-      { href: "/admin/links", label: "링크 관리" },
+      { href: "/admin/links", label: "놀러가기 관리" },
     ],
   },
   async rewrites() {
