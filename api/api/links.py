@@ -9,6 +9,7 @@ from schemas.links import LinkCreate, LinkUpdate, Category
 router = APIRouter()
 
 @router.get("/")
+@router.get("")
 def get_links(db: Session = Depends(get_db)):
     """
     Get all links.
@@ -17,6 +18,7 @@ def get_links(db: Session = Depends(get_db)):
 
 
 @router.post("/")
+@router.post("")
 def post_link(link: LinkCreate, db: Session = Depends(get_db)):
     """
     Create a new link.
@@ -40,7 +42,7 @@ def remove_link(link_id: int, db: Session = Depends(get_db)):
     return delete_link(db, link_id)
 
 
-@router.post("/categories/")
+@router.post("/categories")
 def post_link_category(category: Category, db: Session = Depends(get_db)):
     """
     Create a new link category.
