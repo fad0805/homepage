@@ -9,7 +9,7 @@
   --navbar-active-color: #{$dark-bold-text};
 }
 
-nav {
+div#content>div>nav {
   display: flex;
   width: 80%;
   height: fit-content;
@@ -17,6 +17,10 @@ nav {
   align-items: flex-end;
   margin: 2rem 0 1.5rem 0;
   gap: 1.5rem;
+
+  @media (width < 600px) {
+    flex-wrap: wrap;
+  }
 }
 
 nav#admin-navbar a {
