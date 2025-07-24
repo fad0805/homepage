@@ -9,7 +9,20 @@ def get_all_links(db: Session):
     """
     Get all links from the database.
     """
-    links = db.query(Link).all()
+    results = db.query(Link, Category).join(Category, Link.category == Category.id).all()
+    links = [
+        {
+            "id": link.id,
+            "name": link.name,
+            "url": link.url,
+            "order": link.order,
+            "category": {
+                "id": category.id,
+                "name": category.name,
+                "order": category.order
+            }
+        } for link, category in results
+    ]
     return links
 
 
