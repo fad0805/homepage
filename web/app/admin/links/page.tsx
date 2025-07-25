@@ -4,8 +4,20 @@ import { Image, Link } from "@heroui/react";
 
 import '@/public/styles/admin/links.scss';
 
+interface LinkData {
+  id: string;
+  name: string;
+  url: string;
+  order: number;
+  category: {
+    id: string;
+    name: string;
+    order: number;
+  };
+}
+
 export default function AdminLinks() {
-  const [links, setLinks] = useState([]);
+  const [links, setLinks] = useState<LinkData[]>([]);
 
   useEffect(() => {
     fetch('/api/links').then(response => {
@@ -14,8 +26,8 @@ export default function AdminLinks() {
       }
       return response.json();
     }).then(data => {
-      data.sort((a, b) => a.category.order - b.category.order);
-      data.sort((a, b) => a.order - b.order);
+      data.sort((a: LinkData, b: LinkData) => a.category.order - b.category.order);
+      data.sort((a: LinkData, b: LinkData) => a.order - b.order);
       const linkslist = categorisingLinks(data);
       setLinks(linkslist);
     }).catch(error => {
@@ -23,7 +35,7 @@ export default function AdminLinks() {
     });
   }, []);
 
-  const categorisingLinks = (linkslist) => {
+  const categorisingLinks = (linkslist: LinkData[]) => {
     const categories = Array.from(new Set(linkslist.map(link => link.category.id)));
     const categorisedLinks = categories.map(categoryId => {
       return {
@@ -31,7 +43,6 @@ export default function AdminLinks() {
         links: linkslist.filter(link => link.category.id === categoryId)
       };
     });
-    console.log(categorisedLinks);
     return categorisedLinks;
   };
 
