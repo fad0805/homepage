@@ -73,7 +73,7 @@ export default function AdminLinks() {
                       alt={link.name}
                       radius="none"
                     />
-                    <p>{links.name}</p>
+                    <p>{link.name}</p>
                   </Link>
                 )) }
               </div>
