@@ -56,13 +56,13 @@ export default function AdminLinks() {
     <div id="links-page">
       <main>
         {
-          links.map(categories: LinkData.category => (
+          links.map((category: CategorisedLinks) => (
             <div className="links-category" key={categories.categoryId}>
               <div className="links-section">
-                <p>{categories.links[0].category.name}</p>
+                <p>{category.links[0].category.name}</p>
               </div>
               <div className="links-contents">
-                { categories.links.map(link => (
+                { category.links.map((link: LinkData) => (
                   <Link
                     key={link.id}
                     className="links-banner"
