@@ -16,8 +16,13 @@ interface LinkData {
   };
 }
 
+interface CategorisedLinks {
+  categoryId: string;
+  links: LinkData[];
+}
+
 export default function AdminLinks() {
-  const [links, setLinks] = useState([]);
+  const [links, setLinks] = useState<CategorisedLinks[]>([]);
 
   useEffect(() => {
     fetch('/api/links').then(response => {
