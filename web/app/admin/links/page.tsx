@@ -8,6 +8,7 @@ interface LinkData {
   id: string;
   name: string;
   url: string;
+  banner_url: string;
   order: number;
   category: {
     id: string;
@@ -55,7 +56,7 @@ export default function AdminLinks() {
     <div id="links-page">
       <main>
         {
-          links.map(categories => (
+          links.map(categories: LinkData.category => (
             <div className="links-category" key={categories.categoryId}>
               <div className="links-section">
                 <p>{categories.links[0].category.name}</p>
@@ -68,7 +69,7 @@ export default function AdminLinks() {
                     href={`/admin/links/${link.id}`}
                   >
                     <Image
-                      src={link.image}
+                      src={link.banner_url}
                       alt={link.name}
                       radius="none"
                     />

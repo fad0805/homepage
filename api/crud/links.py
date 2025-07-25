@@ -14,6 +14,7 @@ def get_all_links(db: Session):
         {
             "id": link.id,
             "name": link.name,
+            "banner_url": link.banner_url,
             "url": link.url,
             "order": link.order,
             "category": {
