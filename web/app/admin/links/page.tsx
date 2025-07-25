@@ -17,7 +17,7 @@ interface LinkData {
 }
 
 export default function AdminLinks() {
-  const [links, setLinks] = useState<LinkData[]>([]);
+  const [links, setLinks] = useState([]);
 
   useEffect(() => {
     fetch('/api/links').then(response => {
