@@ -11,4 +11,4 @@ COPY . /app
 
 EXPOSE 8000
 
-CMD ["uvicorn", "main:app", "--host", "api"]
+CMD ["sh", "-c", "db_migrate.sh", "&&", "uvicorn", "main:app", "--host", "api"]
