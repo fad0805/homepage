@@ -1,9 +1,15 @@
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from api import links, users
 
-app = FastAPI()
+@asynccontextmanager
+async def lifespan(app:FastAPI):
+    users.create_admin_for_dev()
+    yield
+
+app = FastAPI(lifespan=lifespan)
 
 origins = [
     "http://web:3000",
