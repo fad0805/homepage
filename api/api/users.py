@@ -1,3 +1,6 @@
+import os
+
+from contextlib import closing
 from fastapi import APIRouter, Depends, HTTPException, Response, Request
 from fastapi import Form
 from sqlalchemy.orm import Session
@@ -9,6 +12,19 @@ from db.session import get_db
 from schemas.users import UserCreate, UserRefreshToken
 
 router = APIRouter()
+
+def create_admin_for_dev():
+    if os.getenv('DB_NAME') != 'homepage_dev':
+        return
+
+    with closing(next(get_db())) as db:
+        try:
+            signup(username='admin', password='admin', db=db)
+        except HTTPException as e:
+            if e.status_code == 400:
+                pass
+            else:
+                raise e
 
 @router.post("/signin")
 async def signin(
