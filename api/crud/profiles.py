@@ -1,0 +1,50 @@
+from sqlalchemy.orm import Session
+
+from models.profiles import Profile
+from schemas.profiles import ProfileCreate, ProfileUpdate
+
+
+# Profile CRUD Operations
+def get_all_profiles(db: Session):
+    """
+    Get all profiles from database.
+    """
+    
+    results = db.query(Profile).all()
+    profiles = [
+        {
+            "id": profile.id,
+            "title": profile.title,
+            "profile": profile.profile
+        } for profile in results
+    ]
+    return profiles
+
+
+def create_profile(db:Session, profile: ProfileCreate):
+    """
+    Create a new profile in the database
+    """
+    db_profile = Profile(**profile.dict())
+    db.add(db_profile)
+    db.commit()
+    db.refresh(db_profile)
+    return profile
+
+
+def update_profile(db:Session, profile_id: int, updated_profile: ProfileUpdate):
+    """
+        Update an existing profile in the database
+    """
+    db.query(Profile).filter(Profile.id == profile_id).update(update_profile)
+    db.commit()
+    return db.query(Profile).filter(Profile.id == profile).first()
+
+
+def delete_profile(db: Session, profile_id: int):
+    """
+    Delete a profile from database.
+    """
+    db.query(Profile).filter(profile.link == profile_id).delete()
+    db.commit()
+    return True
