@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from db.session import get_db
-from crud.profiles import get_all_profiles, create_profile, update_profile, delete_profile
+from crud.profiles import get_all_profiles, get_profile, create_profile, update_profile, delete_profile
 from schemas.profiles import ProfileCreate, ProfileUpdate
 
 router = APIRouter()
@@ -14,6 +14,14 @@ def get_profiles(db:Session = Depends(get_db)):
     Get all profiles.
     """
     return get_all_profiles(db)
+
+
+@router.get("/{profile_id}")
+def get_profiles(profile_id: int, db:Session = Depends(get_db)):
+    """
+    Get profile.
+    """
+    return get_profile(db, profile_id)
 
 
 @router.post("/")
