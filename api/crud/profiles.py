@@ -1,3 +1,4 @@
+from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
 from models.profiles import Profile
@@ -21,6 +22,18 @@ def get_all_profiles(db: Session):
     return profiles
 
 
+def get_profile(db: Session, profile_id: int):
+    """
+    Get profile from database.
+    """
+    
+    query = db.query(Profile).filter(Profile.id == profile_id)
+    profile = query.first()
+    if not profile:
+        raise ValueError("Profile not found")
+    return profile
+
+
 def create_profile(db:Session, profile: ProfileCreate):
     """
     Create a new profile in the database
@@ -36,15 +49,20 @@ def update_profile(db:Session, profile_id: int, updated_profile: ProfileUpdate):
     """
         Update an existing profile in the database
     """
-    db.query(Profile).filter(Profile.id == profile_id).update(update_profile)
+    db.query(Profile).filter(Profile.id == profile_id).update(updated_profile.dict())
     db.commit()
-    return db.query(Profile).filter(Profile.id == profile).first()
+    return db.query(Profile).filter(Profile.id == profile_id).first()
 
 
 def delete_profile(db: Session, profile_id: int):
     """
     Delete a profile from database.
     """
-    db.query(Profile).filter(profile.link == profile_id).delete()
+    result = db.query(Profile).filter(Profile.id == profile_id).delete()
     db.commit()
+    if result == 0:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Does not exist profile"
+        )
     return True
