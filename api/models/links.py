@@ -1,6 +1,5 @@
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, func
 from sqlalchemy.orm import relationship
-from datetime import datetime
 
 from db.base import Base
 
@@ -22,8 +21,8 @@ class Link(Base):
     banner_url = Column(String(255), nullable=True)
     category = Column(Integer, ForeignKey("links-categories.id"), nullable=False)
     description = Column(String(255), nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=func.now())
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
     order = Column(Integer, nullable=False, default=0, server_default="0")
 
     category_relation = relationship("Category", back_populates="links")
