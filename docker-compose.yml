@@ -2,13 +2,13 @@ services:
   db:
     restart: always
     image: postgres:14-alpine
+    env_file: .env.production
     healthcheck:
-      test: ['CMD', 'pg_isready', '-U', '${POSTGRES_USER}', '-d', '${POSTGRES_DB}']
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
     networks:
       - internal_network
     volumes:
       - ./db:/var/lib/postgresql/data
-    env_file: .env.production
 
   api:
     restart: always
