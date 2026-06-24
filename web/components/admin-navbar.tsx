@@ -12,7 +12,7 @@ export const AdminNavbar = () => {
       label: string;
       href: string;
   };
-  const menuList = (now) => {
+  const menuList = (now: currentPath) => {
     const menuItems = nextConfig.admin_navigation.items;
     return menuItems.map((item: MenuItem, index: number) => {
       return <Link
