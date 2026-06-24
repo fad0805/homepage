@@ -1,3 +1,4 @@
+from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
 from models.links import Link, Category
@@ -51,8 +52,13 @@ def delete_link(db: Session, link_id: int):
     """
     Delete a link from the database.
     """
-    db.query(Link).filter(Link.id == link_id).delete()
+    result = db.query(Link).filter(Link.id == link_id).delete()
     db.commit()
+    if result == 0:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Does not exist link"
+        )
     return True
 
 
@@ -82,6 +88,11 @@ def delete_link_category(db: Session, category_id: int):
     """
     Delete a category from the database.
     """
-    db.query(Category).filter(Category.id == category_id).delete()
+    result = db.query(Category).filter(Category.id == category_id).delete()
     db.commit()
+    if result == 0:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Does not exist link's category"
+        )
     return True
