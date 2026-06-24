@@ -29,4 +29,4 @@ app.include_router(users.router, prefix="/users", tags=["signin"])
 
 @app.get("/")
 async def root():
-    return {"message": "Hello World"}
+    return {"message": "Welcome to Missing Island!"}
