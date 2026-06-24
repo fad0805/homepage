@@ -11,4 +11,4 @@ echo "Applying migrations..."
 alembic upgrade head
 
 echo "Starting FastAPI server..."
-exec uvicorn app.main:app --host api
+exec uvicorn main:app --host api
