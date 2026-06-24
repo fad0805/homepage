@@ -1,2 +1,2 @@
 from db.base import Base
-from models import links, users
+from models import links, profiles, users
