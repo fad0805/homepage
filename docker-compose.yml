@@ -3,7 +3,7 @@ services:
     restart: always
     image: postgres:14-alpine
     healthcheck:
-      test: ['CMD', 'pg_isready', '-U', 'postgres']
+      test: ['CMD', 'pg_isready']
     networks:
       - internal_network
     volumes:
