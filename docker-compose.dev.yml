@@ -13,6 +13,8 @@ services:
         required: true
       - path: .env.production
         required: false
+    environment:
+      - ENVIRONMENT=development
     networks:
       - external_network
       - internal_network
