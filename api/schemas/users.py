@@ -4,7 +4,7 @@ from pydantic import BaseModel, Field
 class UserBase(BaseModel):
     """Basic user model"""
     username: str
-    hashed_password: str
+    password: str
     created_at: datetime
     updated_at: datetime
 
@@ -12,7 +12,6 @@ class UserBase(BaseModel):
 class UserCreate(UserBase):
     """Model for creating a new user"""
     username: str
-    hashed_password: str
     created_at: datetime = Field(default_factory=datetime.now)
     updated_at: datetime = Field(default_factory=datetime.now)
 
@@ -23,16 +22,15 @@ class UserCreate(UserBase):
 class UserUpdate(UserBase):
     """Model for updating an existing user"""
     username: str | None = None
-    hashed_password: str | None = None
+    password: str | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None
-    password: str | None = None
 
     class Config:
         from_attributes = True
 
 
-class UserSigninHistory(UserBase):
+class UserSigninHistory(BaseModel):
     """Model for user sign-in history"""
     user_id: int
     signin_time: datetime
