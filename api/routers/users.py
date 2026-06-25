@@ -1,3 +1,10 @@
+# rate limit
+from collections import defaultdict
+from datetime import datetime, timedelta
+
+_signin_attempts: dict[str, list[datetime]] = defaultdict(list)
+
+# import
 import os
 
 from contextlib import closing
@@ -12,7 +19,6 @@ from db.session import get_db
 from schemas.users import UserCreate, UserRefreshToken
 
 router = APIRouter()
-
 
 ENVIRONMENT = os.getenv('ENVIRONMENT')
 
@@ -30,8 +36,19 @@ def create_admin_for_dev():
             else:
                 raise e
 
+def rate_limit(request: Request):
+    now = datetime.now()
+    ip = request.client.host
+    _signin_attempts[ip] = [t for t in _signin_attempts[ip] if now - t < timedelta(minutes=1)]
+
+    if len(_signin_attempts[ip]) >= 5:
+        raise HTTPException(status_code=429, detail="Too many requests")
+    _signin_attempts[ip].append(now)
+
+
 @router.post("/signin")
 async def signin(
+    request: Request,
     response: Response,
     username: str = Form(...),
     password: str = Form(...),
@@ -41,6 +58,7 @@ async def signin(
     Endpoint to handle user login.
     This is a placeholder implementation.
     """
+    rate_limit(request)
 
     hashed_password = get_user(db, username).hashed_password
     verified = verify_password(password, hashed_password)
