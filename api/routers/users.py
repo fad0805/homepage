@@ -13,6 +13,10 @@ from schemas.users import UserCreate, UserRefreshToken
 
 router = APIRouter()
 
+
+ENVIRONMENT = os.getenv('ENVIRONMENT')
+
+
 def create_admin_for_dev():
     if os.getenv('DB_NAME') != 'homepage_dev':
         return
@@ -51,13 +55,13 @@ async def signin(
     result = update_user(db, username, new_user)
 
     if not result:
-        raise HTTPException(status_code=500, detail="Failed to update user refresh token")
+        raise HTTPException(status_code=401, detail="Failed to update user refresh token")
 
     response.set_cookie(
         key="refresh_token",
         value=refresh_token,
         httponly=True,
-        secure=True,
+        secure=True if ENVIRONMENT == 'production' else False,
         samesite="Strict"
     )
 
@@ -65,7 +69,7 @@ async def signin(
         key="access_token",
         value=access_token,
         httponly=True,
-        secure=True,
+        secure=True if ENVIRONMENT == 'production' else False,
         samesite="Strict"
     )
 

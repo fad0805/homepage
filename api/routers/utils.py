@@ -156,7 +156,7 @@ def get_current_user_from_token(
                 key="access_token",
                 value=new_access_token,
                 httponly=True,
-                secure=True,
+                secure=True if ENVIRONMENT == 'production' else False,
                 samesite="Strict"
             )
         except jwt.InvalidTokenError:

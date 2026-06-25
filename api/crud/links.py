@@ -43,7 +43,7 @@ def update_link(db: Session, link_id: int, updated_link: LinkUpdate):
     """
     Update an existing link in the database.
     """
-    db.query(Link).filter(Link.id == link_id).update(updated_link.dict())
+    db.query(Link).filter(Link.id == link_id).update(updated_link.dict(exclude_unset=True))
     db.commit()
     return db.query(Link).filter(Link.id == link_id).first()
 

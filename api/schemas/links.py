@@ -1,5 +1,5 @@
 from datetime import datetime
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class Category(BaseModel):
@@ -19,9 +19,15 @@ class LinkBase(BaseModel):
 
 class LinkCreate(LinkBase):
     """Model for creating a new Link."""
-    created_at: datetime = datetime.now()
+    created_at: datetime = Field(default_factory=datetime.now)
 
 
 class LinkUpdate(LinkBase):
     """Model for updating an existing Link."""
-    updated_at: datetime = datetime.now()
+    owner: str | None = None
+    name: str | None = None
+    category: int | None = None
+    url: str | None = None
+    banner_url: str | None = None
+    description: str | None = None
+    updated_at: datetime = Field(default_factory=datetime.now)

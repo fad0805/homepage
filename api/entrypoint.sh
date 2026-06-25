@@ -4,9 +4,6 @@ while ! nc -z db 5432; do
 done
 echo "PostgreSQL started!"
 
-echo "Checking for database changes..."
-alembic revision --autogenerate -m "auto_migration" || true
-
 echo "Applying migrations..."
 alembic upgrade head
 

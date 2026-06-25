@@ -49,7 +49,7 @@ def update_profile(db:Session, profile_id: int, updated_profile: ProfileUpdate):
     """
         Update an existing profile in the database
     """
-    db.query(Profile).filter(Profile.id == profile_id).update(updated_profile.dict())
+    db.query(Profile).filter(Profile.id == profile_id).update(updated_profile.dict(exclude_unset=True))
     db.commit()
     return db.query(Profile).filter(Profile.id == profile_id).first()
 
