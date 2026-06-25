@@ -97,7 +97,6 @@ async def signin(
 def signup(username: str = Form(...), password: str = Form(...), db: Session = Depends(get_db)):
     """
     Endpoint to handle user registration.
-    This is a placeholder implementation.
     """
     hashed_password = hash_password(password)
 
@@ -122,7 +121,6 @@ def get_current_user(
 ):
     """
     Endpoint to get the current logged-in user's information.
-    This is a placeholder implementation.
     """
     access_token = request.cookies.get("access_token")
     
