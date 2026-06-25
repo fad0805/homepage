@@ -9,12 +9,12 @@ class Character(Base):
 
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
     thumbnail = Column(String, nullable=True)
-    location_id = Column(Integer, ForeignKey("locations.id"), nullable=True)
+    location_id = Column(Integer, ForeignKey("locations.id"), nullable=True, index=True)
     name = Column(String, nullable=False)
     alt_name = Column(String, nullable=True)
     nickname = Column(String, nullable=True)
-    head = Column(Integer, ForeignKey("dolls.id"), nullable=True)
-    body = Column(Integer, ForeignKey("dolls.id"), nullable=True)
+    head = Column(Integer, ForeignKey("dolls.id"), nullable=True, index=True)
+    body = Column(Integer, ForeignKey("dolls.id"), nullable=True, index=True)
     comming_day = Column(DateTime, nullable=True)
     age = Column(String, nullable=True)
     serif = Column(Text, nullable=True)
@@ -34,8 +34,8 @@ class CharacterRelationship(Base):
     __tablename__ = "character_relationships"
 
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
-    character_id = Column(Integer, ForeignKey("characters.id"), nullable=False)
-    related_character_id = Column(Integer, ForeignKey("characters.id"), nullable=False)
+    character_id = Column(Integer, ForeignKey("characters.id"), nullable=False, index=True)
+    related_character_id = Column(Integer, ForeignKey("characters.id"), nullable=False, index=True)
     relationship_type = Column(String, nullable=False)
     established = Column(DateTime, nullable=True)
 

@@ -16,7 +16,7 @@ class User(Base):
 class UserSigninHistory(Base):
     __tablename__ = "user_signin_history"
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     signin_time = Column(DateTime, default=func.now(), nullable=False)
     ip_address = Column(String(45), nullable=False)
     success = Column(Integer, nullable=False, default=1)
