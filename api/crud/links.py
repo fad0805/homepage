@@ -36,7 +36,7 @@ def create_link(db: Session, link: LinkCreate):
     db.add(db_link)
     db.commit()
     db.refresh(db_link)
-    return link
+    return db_link
 
 
 def update_link(db: Session, link_id: int, updated_link: LinkUpdate):
@@ -72,7 +72,7 @@ def create_link_category(db: Session, category: Category):
     db.add(db_category)
     db.commit()
     db.refresh(db_category)
-    return category
+    return db_category
 
 
 def update_link_category(db: Session, category_id: int, updated_category: CategorySchema):

@@ -42,7 +42,7 @@ def create_profile(db:Session, profile: ProfileCreate):
     db.add(db_profile)
     db.commit()
     db.refresh(db_profile)
-    return profile
+    return db_profile
 
 
 def update_profile(db:Session, profile_id: int, updated_profile: ProfileUpdate):
