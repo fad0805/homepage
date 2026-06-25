@@ -13,15 +13,14 @@ from fastapi import Form
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
 
-from routers.utils import hash_password, verify_password, \
-    create_access_token, create_refresh_token, get_current_user_from_token
-from crud.users import get_user, create_user, update_user, update_refresh_token
+from core.config import ENVIRONMENT
+from core.security import verify_password, create_access_token, create_refresh_token
+from routers.utils import get_current_user_from_token
+from crud.users import get_user, create_user, update_refresh_token
 from db.session import get_db
 from schemas.users import UserCreate
 
 router = APIRouter()
-
-ENVIRONMENT = os.getenv('ENVIRONMENT')
 
 
 def create_admin_for_dev():
@@ -102,8 +101,6 @@ def signup(username: str = Form(...), password: str = Form(...), db: Session = D
     """
     Endpoint to handle user registration.
     """
-    hashed_password = hash_password(password)
-
     try:
         existing_user = get_user(db, username)
     except ValueError:
@@ -111,7 +108,7 @@ def signup(username: str = Form(...), password: str = Form(...), db: Session = D
     if existing_user:
         raise HTTPException(status_code=400, detail="Username already exists")
 
-    new_user = UserCreate(username=username, hashed_password=hashed_password)
+    new_user = UserCreate(username=username, password=password)
     user = create_user(db, new_user)
 
     return {"message": "User created successfully", "user": user.username}
