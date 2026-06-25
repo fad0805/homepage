@@ -23,7 +23,7 @@ COPY --from=builder /app/.next ./.next
 COPY --from=builder /app/public ./public
 COPY --from=builder /app/app ./app
 COPY --from=builder /app/components ./components
-copy --from=builder /app/next.config.ts ./next.config.ts
+COPY --from=builder /app/next.config.ts ./next.config.ts
 
 EXPOSE 3000
 
