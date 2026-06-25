@@ -19,7 +19,7 @@ class Link(Base):
     name = Column(String(255), nullable=False)
     url = Column(String(255), nullable=False)
     banner_url = Column(String(255), nullable=True)
-    category = Column(Integer, ForeignKey("links-categories.id"), nullable=False)
+    category = Column(Integer, ForeignKey("links-categories.id"), nullable=False, index=True)
     description = Column(String(255), nullable=True)
     created_at = Column(DateTime, default=func.now())
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
