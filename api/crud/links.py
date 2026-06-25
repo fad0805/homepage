@@ -45,7 +45,13 @@ def update_link(db: Session, link_id: int, updated_link: LinkUpdate):
     """
     db.query(Link).filter(Link.id == link_id).update(updated_link.dict(exclude_unset=True))
     db.commit()
-    return db.query(Link).filter(Link.id == link_id).first()
+    link = db.query(Link).filter(Link.id == link_id).first()
+    if not link:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Does not exist link"
+        )
+    return link
 
 
 def delete_link(db: Session, link_id: int):
@@ -81,7 +87,13 @@ def update_link_category(db: Session, category_id: int, updated_category: Catego
     """
     db.query(Category).filter(Category.id == category_id).update(updated_category.dict())
     db.commit()
-    return db.query(Category).filter(Category.id == category_id).first()
+    category = db.query(Category).filter(Category.id == category_id).first()
+    if not category:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Does not exist link's category"
+        )
+    return category
 
 
 def delete_link_category(db: Session, category_id: int):
