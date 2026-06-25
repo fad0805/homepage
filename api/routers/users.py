@@ -57,7 +57,6 @@ async def signin(
 ):
     """
     Endpoint to handle user login.
-    This is a placeholder implementation.
     """
     rate_limit(request)
 
