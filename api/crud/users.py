@@ -36,3 +36,12 @@ def update_user(db: Session, username: str, user_update: UserUpdate):
     db.commit()
     db.refresh(user)
     return True if user else False
+
+
+def update_refresh_token(db:Session, username: str, token: str):
+    """
+    Update refresh token when rotate access token
+    """
+    user = get_user(db, username)
+    user.refresh_token = token
+    db.commit()

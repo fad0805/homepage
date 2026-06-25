@@ -11,12 +11,13 @@ from contextlib import closing
 from fastapi import APIRouter, Depends, HTTPException, Response, Request
 from fastapi import Form
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import SQLAlchemyError
 
 from routers.utils import hash_password, verify_password, \
     create_access_token, create_refresh_token, get_current_user_from_token
-from crud.users import get_user, create_user, update_user
+from crud.users import get_user, create_user, update_user, update_refresh_token
 from db.session import get_db
-from schemas.users import UserCreate, UserRefreshToken
+from schemas.users import UserCreate
 
 router = APIRouter()
 
@@ -69,11 +70,10 @@ async def signin(
     access_token = create_access_token(data={"sub": username})
     refresh_token = create_refresh_token(data={"sub": username})
 
-    new_user = UserRefreshToken(refresh_token=refresh_token)
-    result = update_user(db, username, new_user)
-
-    if not result:
-        raise HTTPException(status_code=401, detail="Failed to update user refresh token")
+    try:
+        update_refresh_token(db, username, refresh_token)
+    except SQLAlchemyError:
+        raise HTTPException(status_code=500, detail="Failed to save refresh token")
 
     response.set_cookie(
         key="refresh_token",

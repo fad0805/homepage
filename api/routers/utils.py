@@ -8,7 +8,7 @@ from datetime import datetime, timedelta
 import jwt
 from passlib.context import CryptContext
 
-from crud.users import get_user
+from crud.users import get_user, update_user, update_refresh_token
 
 ENVIRONMENT = os.getenv('ENVIRONMENT')
 SECRET_KEY = os.getenv('SECRET_KEY')
@@ -114,6 +114,10 @@ def refresh_access_token(
             raise credentials_exception
 
         new_access_token = create_access_token(data={"sub": username})
+
+        # Rotate refresh token when refresh access token
+        new_refresh_token = create_refresh_token(data={"sub": username})
+        update_refresh_token(db, username, new_refresh_token)
         return username, new_access_token
     except HTTPException as e:
         raise e
