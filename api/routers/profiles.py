@@ -17,7 +17,7 @@ def get_profiles(db:Session = Depends(get_db)):
 
 
 @router.get("/{profile_id}")
-def get_profiles(profile_id: int, db:Session = Depends(get_db)):
+def get_profile(profile_id: int, db:Session = Depends(get_db)):
     """
     Get profile.
     """

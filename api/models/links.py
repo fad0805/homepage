@@ -28,17 +28,4 @@ class Link(Base):
     category_relation = relationship("Category", back_populates="links")
 
     def __repr__(self):
-        return f"""
-            <Link
-                className="links-banner"
-                href={self.url}
-                target="_blank"
-            >
-                <Image
-                    src={self.banner_url}
-                    alt={self.description}
-                    radius="none"
-                />
-                <p>{self.name}</p>
-            </Link>
-        """
+        return f"<Link(id={self.id}, name='{self.name}', url='{self.url}')>"
