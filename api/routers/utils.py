@@ -8,7 +8,8 @@ from datetime import datetime, timedelta
 import jwt
 from passlib.context import CryptContext
 
-from crud.users import get_user, update_user, update_refresh_token
+from crud.users import get_user, update_refresh_token
+from db.session import get_db
 
 ENVIRONMENT = os.getenv('ENVIRONMENT')
 SECRET_KEY = os.getenv('SECRET_KEY')
@@ -179,3 +180,28 @@ def get_current_user_from_token(
         raise credentials_exception
     except Exception as e:
         raise e
+
+
+async def require_auth(
+    request: Request,
+    response: Response,
+    db: Session = Depends(get_db),
+    token: str = Depends(get_access_token_from_cookie)
+):
+    """
+    Dependency to require authentication for a route.
+    """
+    if not token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Not authenticated",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    user = get_current_user_from_token(db, request, response, token)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Not authenticated",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    return user

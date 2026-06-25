@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from db.session import get_db
 from crud.profiles import get_all_profiles, get_profile, create_profile, update_profile, delete_profile
 from schemas.profiles import ProfileCreate, ProfileUpdate
+from .utils import require_auth
 
 router = APIRouter()
 
@@ -26,7 +27,7 @@ def get_profile(profile_id: int, db:Session = Depends(get_db)):
 
 @router.post("/")
 @router.post("")
-def post_profiles(profile: ProfileCreate, db:Session = Depends(get_db)):
+def post_profiles(profile: ProfileCreate, db:Session = Depends(get_db), _ = Depends(require_auth)):
     """
     Create all profiles.
     """
@@ -34,7 +35,12 @@ def post_profiles(profile: ProfileCreate, db:Session = Depends(get_db)):
 
 
 @router.put("/{profile_id}")
-def modify_profile(profile_id: int, profile: ProfileUpdate, db: Session = Depends(get_db)):
+def modify_profile(
+    profile_id: int,
+    profile: ProfileUpdate,
+    db: Session = Depends(get_db),
+    _ = Depends(require_auth)
+):
     """
     Update an existing profile.
     """
@@ -42,7 +48,7 @@ def modify_profile(profile_id: int, profile: ProfileUpdate, db: Session = Depend
 
 
 @router.delete("/{profile_id}")
-def remove_profile(profile_id: int, db: Session = Depends(get_db)):
+def remove_profile(profile_id: int, db: Session = Depends(get_db), _ = Depends(require_auth)):
     """
     Delete a link.
     """

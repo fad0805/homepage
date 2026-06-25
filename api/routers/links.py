@@ -5,6 +5,7 @@ from db.session import get_db
 from crud.links import get_all_links, create_link, update_link, delete_link, \
     create_link_category, update_link_category, delete_link_category
 from schemas.links import LinkCreate, LinkUpdate, Category
+from .utils import require_auth
 
 router = APIRouter()
 
@@ -19,7 +20,7 @@ def get_links(db: Session = Depends(get_db)):
 
 @router.post("/")
 @router.post("")
-def post_link(link: LinkCreate, db: Session = Depends(get_db)):
+def post_link(link: LinkCreate, db: Session = Depends(get_db), _ = Depends(require_auth)):
     """
     Create a new link.
     """
@@ -27,7 +28,7 @@ def post_link(link: LinkCreate, db: Session = Depends(get_db)):
 
 
 @router.put("/{link_id}")
-def modify_link(link_id: int, link: LinkUpdate, db: Session = Depends(get_db)):
+def modify_link(link_id: int, link: LinkUpdate, db: Session = Depends(get_db), _ = Depends(require_auth)):
     """
     Update an existing link.
     """
@@ -35,7 +36,7 @@ def modify_link(link_id: int, link: LinkUpdate, db: Session = Depends(get_db)):
 
 
 @router.delete("/{link_id}")
-def remove_link(link_id: int, db: Session = Depends(get_db)):
+def remove_link(link_id: int, db: Session = Depends(get_db), _ = Depends(require_auth)):
     """
     Delete a link.
     """
@@ -43,7 +44,7 @@ def remove_link(link_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/categories")
-def post_link_category(category: Category, db: Session = Depends(get_db)):
+def post_link_category(category: Category, db: Session = Depends(get_db), _ = Depends(require_auth)):
     """
     Create a new link category.
     """
@@ -51,7 +52,12 @@ def post_link_category(category: Category, db: Session = Depends(get_db)):
 
 
 @router.put("/categories/{category_id}")
-def modify_link_category(category_id: int, category: Category, db: Session = Depends(get_db)):
+def modify_link_category(
+    category_id: int,
+    category: Category,
+    db: Session = Depends(get_db),
+    _ = Depends(require_auth)
+):
     """
     Update an existing link category.
     """
@@ -59,7 +65,7 @@ def modify_link_category(category_id: int, category: Category, db: Session = Dep
 
 
 @router.delete("/categories/{category_id}")
-def remove_link_category(category_id: int, db: Session = Depends(get_db)):
+def remove_link_category(category_id: int, db: Session = Depends(get_db), _ = Depends(require_auth)):
     """
     Delete a link category.
     """

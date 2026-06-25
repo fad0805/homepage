@@ -25,7 +25,7 @@ ENVIRONMENT = os.getenv('ENVIRONMENT')
 
 
 def create_admin_for_dev():
-    if os.getenv('DB_NAME') != 'homepage_dev':
+    if ENVIRONMENT == 'production':
         return
 
     with closing(next(get_db())) as db:
@@ -60,7 +60,12 @@ async def signin(
     """
     rate_limit(request)
 
-    hashed_password = get_user(db, username).hashed_password
+    try:
+        user = get_user(db, username)
+    except ValueError:
+        raise HTTPException(status_code=401, detail="Invalid username or password")
+
+    hashed_password = user.hashed_password
     verified = verify_password(password, hashed_password)
 
     if not verified:
@@ -93,7 +98,6 @@ async def signin(
     return {"success": True, "message": "Login successful"}
 
 
-@router.post("/signup")
 def signup(username: str = Form(...), password: str = Form(...), db: Session = Depends(get_db)):
     """
     Endpoint to handle user registration.
