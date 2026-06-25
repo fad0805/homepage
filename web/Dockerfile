@@ -6,8 +6,10 @@ RUN apt update && \
 
 WORKDIR /app
 
-COPY . .
+COPY package.json package-lock.json ./
 RUN npm install
+COPY . .
+
 RUN npm run build
 
 # Set runner image
