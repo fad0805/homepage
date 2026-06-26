@@ -4,7 +4,7 @@ import { usePathname } from "next/navigation";
 import { Link } from "@heroui/react";
 
 import "@/public/styles/admin/navbar.scss";
-import nextConfig from "@/next.config";
+import navigation from "@/config/navigation";
 
 
 export const AdminNavbar = () => {
@@ -13,7 +13,7 @@ export const AdminNavbar = () => {
       href: string;
   };
   const menuList = (now: string) => {
-    const menuItems = nextConfig.admin_navigation.items;
+    const menuItems = navigation.admin.items;
     return menuItems.map((item: MenuItem, index: number) => {
       return <Link
           key={index}

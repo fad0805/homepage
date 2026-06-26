@@ -4,7 +4,7 @@ import { usePathname } from "next/navigation";
 import { Link } from "@heroui/react";
 
 import "@/public/styles/navbar.scss";
-import nextConfig from "@/next.config";
+import navigation from "@/config/navigation";
 
 export const Navbar = () => {
     const currentPath = usePathname();
@@ -18,7 +18,7 @@ export const Navbar = () => {
         label: string;
         href: string;
     };
-    const menuItems = nextConfig.navigation.items;
+    const menuItems = navigation.main.items;
     const menuList = menuItems.map((item: MenuItem, index: number) => {
         return <Link
             key={index}
