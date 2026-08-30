@@ -22,9 +22,7 @@ def create_user(db: Session, user: UserCreate):
     """
     db_user = User(
         username=user.username,
-        hashed_password=hash_password(user.password),
-        created_at=user.created_at,
-        updated_at=user.updated_at
+        hashed_password=hash_password(user.password)
     )
     db.add(db_user)
     db.commit()
@@ -37,7 +35,7 @@ def update_user(db: Session, username: str, user_update: UserUpdate):
     Update an existing user in the database
     """
     user = get_user(db, username)
-    for key, value in user_update.dict(exclude_unset=True).items():
+    for key, value in user_update.model_dump(exclude_unset=True).items():
         if key == "password":
             key = "hashed_password"
             value = hash_password(value)

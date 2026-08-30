@@ -1,30 +1,30 @@
 from datetime import datetime
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
+
 
 class UserBase(BaseModel):
-    """Basic user model"""
+    """Basic user model (public fields only)"""
     username: str
-    password: str
-    created_at: datetime
-    updated_at: datetime
 
 
 class UserCreate(UserBase):
     """Model for creating a new user"""
-    username: str
-    created_at: datetime = Field(default_factory=datetime.now)
-    updated_at: datetime = Field(default_factory=datetime.now)
-
-    class Config:
-        from_attributes = True
+    password: str
 
 
-class UserUpdate(UserBase):
+class UserUpdate(BaseModel):
     """Model for updating an existing user"""
     username: str | None = None
     password: str | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None
+
+
+class UserRead(UserBase):
+    """Model for user response"""
+    id: int
+    created_at: datetime
+    updated_at: datetime
 
     class Config:
         from_attributes = True

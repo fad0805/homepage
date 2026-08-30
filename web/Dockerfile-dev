@@ -7,7 +7,9 @@ RUN apt update && \
 WORKDIR /app
 
 COPY . .
-RUN npm install
+RUN npm install && chown -R node:node /app
+
+USER node
 
 EXPOSE 3000
 
