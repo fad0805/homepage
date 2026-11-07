@@ -33,14 +33,6 @@ const navigation: Navigation = {
       { href: "/admin/links", label: "놀러가기 관리" },
     ],
   },
-  async rewrites() {
-    return [
-      {
-        source: "/api/:path*",
-        destination: "http://api:8000/:path*",
-      },
-    ];
-  },
 };
 
 export default navigation;
