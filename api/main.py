@@ -1,7 +1,9 @@
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
+from core.uploads import UPLOAD_DIR, ensure_upload_dir
 from routers import links, profiles, users
 
 @asynccontextmanager
@@ -22,6 +24,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+ensure_upload_dir()
+app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
 
 app.include_router(links.router, prefix="/links", tags=["links"])
 app.include_router(profiles.router, prefix="/profiles", tags=["profiles"])

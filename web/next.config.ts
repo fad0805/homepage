@@ -7,6 +7,10 @@ const nextConfig: NextConfig = {
         source: "/api/:path*",
         destination: "http://api:8000/:path*",
       },
+      {
+        source: "/uploads/:path*",
+        destination: "http://api:8000/uploads/:path*",
+      },
     ];
   },
 };

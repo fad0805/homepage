@@ -137,5 +137,8 @@ __pycache__/
 db/*
 .DS_Store
 
+# Uploaded banners
+api/uploads/
+
 # Alembic
 api/alembic/versions/*
