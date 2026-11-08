@@ -55,6 +55,7 @@ function ChapterDetail({
 export default function Books() {
   const [books, setBooks] = useState<Book[]>([]);
   const [chapters, setChapters] = useState<Chapter[]>([]);
+  const [activeBookId, setActiveBookId] = useState<number | null>(null);
   const [activeChapterId, setActiveChapterId] = useState<number | null>(null);
   const [now, setNow] = useState(() => Date.now());
   const [loading, setLoading] = useState(true);
@@ -98,68 +99,79 @@ export default function Books() {
     return () => clearInterval(timer);
   }, []);
 
-  const visibleChapters = useMemo(() => {
-    return chapters
-      .filter(
-        (chapter) =>
-          chapter.visible !== false &&
-          (!chapter.published_at ||
-            new Date(chapter.published_at).getTime() <= now),
-      )
-      .sort(
-        (a, b) =>
-          a.order - b.order ||
-          a.title.localeCompare(b.title, "ko") ||
-          a.id - b.id,
-      );
-  }, [chapters, now]);
-
-  const groups = useMemo(
-    () =>
-      books
-        .filter((book) => book.visible !== false)
-        .sort((a, b) => a.order - b.order || a.id - b.id)
-        .map((book) => ({
-          book,
-          chapters: visibleChapters.filter(
-            (chapter) => chapter.book_id === book.id,
-          ),
-        }))
-        .filter((group) => group.chapters.length > 0),
-    [books, visibleChapters],
-  );
-
   useEffect(() => {
     if (typeof window === "undefined") return;
-    const requested = Number(
-      new URLSearchParams(window.location.search).get("chapter"),
-    );
-    if (Number.isFinite(requested) && requested > 0) {
-      setActiveChapterId(requested);
+    const params = new URLSearchParams(window.location.search);
+    const bookParam = Number(params.get("book"));
+    const chapterParam = Number(params.get("chapter"));
+    if (Number.isFinite(bookParam) && bookParam > 0) {
+      setActiveBookId(bookParam);
+    }
+    if (Number.isFinite(chapterParam) && chapterParam > 0) {
+      setActiveChapterId(chapterParam);
     }
   }, []);
 
+  const visibleBooks = useMemo(
+    () =>
+      books
+        .filter((book) => book.visible !== false)
+        .sort((a, b) => a.order - b.order || a.id - b.id),
+    [books],
+  );
+
+  const visibleChapters = useMemo(
+    () =>
+      chapters
+        .filter(
+          (chapter) =>
+            chapter.visible !== false &&
+            (!chapter.published_at ||
+              new Date(chapter.published_at).getTime() <= now),
+        )
+        .sort(
+          (a, b) =>
+            a.order - b.order ||
+            a.title.localeCompare(b.title, "ko") ||
+            a.id - b.id,
+        ),
+    [chapters, now],
+  );
+
+  const chapterCounts = useMemo(() => {
+    const counts = new Map<number, number>();
+    for (const chapter of visibleChapters) {
+      counts.set(chapter.book_id, (counts.get(chapter.book_id) ?? 0) + 1);
+    }
+    return counts;
+  }, [visibleChapters]);
+
   useEffect(() => {
-    if (activeChapterId !== null) return;
-    if (typeof window === "undefined") return;
-    if (!window.matchMedia("(min-width: 900px)").matches) return;
-    const first = visibleChapters[0];
-    if (first) setActiveChapterId(first.id);
-  }, [activeChapterId, visibleChapters]);
-
-  const activeChapter =
-    visibleChapters.find((chapter) => chapter.id === activeChapterId) ?? null;
-  const activeBook = activeChapter
-    ? groups.find((group) => group.book.id === activeChapter.book_id)
-    : null;
-
-  const handleSelect = (chapterId: number) => {
-    const isMobile = window.matchMedia("(max-width: 899px)").matches;
-    if (isMobile && activeChapterId === chapterId) {
-      setActiveChapterId(null);
+    if (visibleBooks.length === 0) return;
+    if (
+      activeBookId !== null &&
+      visibleBooks.some((book) => book.id === activeBookId)
+    ) {
       return;
     }
-    setActiveChapterId(chapterId);
+    setActiveBookId(visibleBooks[0].id);
+    setActiveChapterId(null);
+  }, [activeBookId, visibleBooks]);
+
+  const activeBook =
+    visibleBooks.find((book) => book.id === activeBookId) ?? null;
+  const activeChapters = activeBook
+    ? visibleChapters.filter((chapter) => chapter.book_id === activeBook.id)
+    : [];
+  const activeChapter =
+    activeBook && activeChapterId !== null
+      ? activeChapters.find((chapter) => chapter.id === activeChapterId) ??
+        null
+      : null;
+
+  const selectBook = (bookId: number) => {
+    setActiveBookId(bookId);
+    setActiveChapterId(null);
   };
 
   return (
@@ -172,78 +184,91 @@ export default function Books() {
         <p className="books-state">불러오는 중...</p>
       ) : error ? (
         <p className="books-state">{error}</p>
-      ) : groups.length === 0 ? (
+      ) : visibleBooks.length === 0 ? (
         <p className="books-state">등록된 책이 없습니다.</p>
       ) : (
         <div className="books-layout">
-          <div className="books-list">
-            {groups.map(({ book, chapters: bookChapters }) => (
-              <section className="books-section" key={book.id}>
-                <header className="books-section__header">
-                  <div className="books-section__heading">
-                    <h2>{book.title}</h2>
-                    <RssSubscribe
-                      path={`/books/${book.id}/rss.xml`}
-                      label="RSS"
-                    />
-                  </div>
-                  {book.description ? <p>{book.description}</p> : null}
-                </header>
-                <div className="books-items">
-                  {bookChapters.map((chapter) => {
-                    const isActive = chapter.id === activeChapterId;
-                    return (
-                      <div
-                        className={`books-item${isActive ? " is-active" : ""}`}
-                        id={`chapter-${chapter.id}`}
-                        key={chapter.id}
-                      >
-                        <button
-                          type="button"
-                          className="books-item__button"
-                          onClick={() => handleSelect(chapter.id)}
-                          aria-expanded={isActive}
-                        >
-                          <span className="books-item__title">
-                            {chapter.title}
-                          </span>
-                          {chapter.subtitle ? (
-                            <span className="books-item__subtitle">
-                              {chapter.subtitle}
-                            </span>
-                          ) : null}
-                          <span className="books-item__chevron" aria-hidden="true">
-                            {isActive ? "−" : "+"}
-                          </span>
-                        </button>
-                        <div className="books-item__inline">
-                          {isActive ? (
-                            <ChapterDetail
-                              chapter={chapter}
-                              bookTitle={book.title}
-                            />
-                          ) : null}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </section>
+          <div className="books-books">
+            <p className="books-list-label">책</p>
+            {visibleBooks.map((book) => (
+              <button
+                type="button"
+                className={`books-book-button${
+                  book.id === activeBookId ? " is-active" : ""
+                }`}
+                onClick={() => selectBook(book.id)}
+                aria-pressed={book.id === activeBookId}
+                key={book.id}
+              >
+                <span className="books-book-button__title">
+                  {book.title}
+                </span>
+                <span className="books-book-button__count">
+                  {chapterCounts.get(book.id) ?? 0}
+                </span>
+              </button>
             ))}
           </div>
 
           <aside className="books-panel">
-            {activeChapter ? (
-              <ChapterDetail
-                chapter={activeChapter}
-                bookTitle={
-                  activeBook?.book.title ??
-                  activeChapter.book?.title ??
-                  ""
-                }
-              />
+            {activeBook && activeChapter ? (
+              <div className="books-panel__detail">
+                <button
+                  type="button"
+                  className="books-panel__back"
+                  onClick={() => setActiveChapterId(null)}
+                >
+                  ← 게시글 목록
+                </button>
+                <ChapterDetail
+                  chapter={activeChapter}
+                  bookTitle={activeBook.title}
+                />
+              </div>
+            ) : activeBook ? (
+              <>
+                <header className="books-panel__header">
+                  <div>
+                    <h2>{activeBook.title}</h2>
+                    {activeBook.description ? (
+                      <p>{activeBook.description}</p>
+                    ) : null}
+                  </div>
+                  <RssSubscribe
+                    path={`/books/${activeBook.id}/rss.xml`}
+                    label="RSS"
+                  />
+                </header>
+
+                {activeChapters.length === 0 ? (
+                  <p className="books-panel__empty">
+                    등록된 게시글이 없습니다.
+                  </p>
+                ) : (
+                  <div className="books-chapters">
+                    {activeChapters.map((chapter) => (
+                      <button
+                        type="button"
+                        className="books-chapter-link"
+                        onClick={() => setActiveChapterId(chapter.id)}
+                        key={chapter.id}
+                      >
+                        <span className="books-chapter-link__title">
+                          {chapter.title}
+                        </span>
+                        <span
+                          className="books-chapter-link__arrow"
+                          aria-hidden="true"
+                        >
+                          →
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </>
             ) : (
-              <p className="books-panel__empty">챕터를 선택해주세요.</p>
+              <p className="books-panel__empty">책을 선택해주세요.</p>
             )}
           </aside>
         </div>

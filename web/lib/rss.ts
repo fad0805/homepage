@@ -140,7 +140,7 @@ export function rssItemForChapter(
   siteUrl: string,
   includeBookTitle: boolean,
 ): RssItem {
-  const link = `${siteUrl}/books?chapter=${chapter.id}`;
+  const link = `${siteUrl}/books?book=${chapter.book_id}&chapter=${chapter.id}`;
   const title =
     includeBookTitle && book
       ? `${book.title} — ${chapter.title}`
