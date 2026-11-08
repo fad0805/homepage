@@ -4,11 +4,8 @@
 :root {
   --home-text: #{color.change($light-text, $alpha: 0.72)};
   --home-muted: #{color.change($light-text, $alpha: 0.48)};
-  --home-line: #{color.change($light-text, $alpha: 0.12)};
   --home-highlight: #{color.adjust($maintheme, $lightness: -42%)};
   --home-highlight-bg: #{color.change($maintheme, $alpha: 0.45)};
-  --home-card-hover: #{color.change($white, $alpha: 0.5)};
-  --home-button-text: #{$white};
   --home-glow-1: #{color.change($maintheme, $alpha: 0.32)};
   --home-glow-2: #{color.change($subtheme, $alpha: 0.6)};
 }
@@ -16,11 +13,8 @@
 [data-theme='dark'] {
   --home-text: #{color.change($dark-text, $alpha: 0.72)};
   --home-muted: #{color.change($dark-text, $alpha: 0.45)};
-  --home-line: #{color.change($dark-text, $alpha: 0.16)};
   --home-highlight: #{color.adjust($maintheme, $lightness: -8%)};
   --home-highlight-bg: #{color.change($maintheme, $alpha: 0.18)};
-  --home-card-hover: #{color.change($dark-bg-sub, $alpha: 0.65)};
-  --home-button-text: #{$dark-bg};
   --home-glow-1: #{color.change($maintheme, $alpha: 0.1)};
   --home-glow-2: #{color.change($dark-bg-sub, $alpha: 0.5)};
 }
@@ -38,7 +32,7 @@
   grid-template-columns: minmax(0, 1fr);
   align-items: center;
   gap: 1.5rem;
-  padding: 3.5rem 2.5rem 2.5rem;
+  padding: 3.5rem 2.5rem 18rem;
   overflow: hidden;
 
   &::before {
@@ -93,58 +87,17 @@
   line-height: 1.9;
 }
 
-.hero__actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.6rem;
-  margin-top: 1.9rem;
-}
-
-a.hero__button,
-a.hero__button:visited {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0.7rem 1.15rem;
-  border: 1px solid var(--home-line);
-  border-radius: 999px;
-  color: var(--title-color);
-  font-size: 0.82rem;
-  transition:
-    transform 0.2s ease,
-    background-color 0.2s ease,
-    border-color 0.2s ease;
-}
-
-a.hero__button:hover {
-  transform: translateY(-2px);
-  border-color: var(--home-highlight);
-  background: var(--home-card-hover);
-}
-
-a.hero__button--primary,
-a.hero__button--primary:visited {
-  background: var(--home-highlight);
-  border-color: var(--home-highlight);
-  color: var(--home-button-text);
-}
-
-a.hero__button--primary:hover {
-  background: var(--home-highlight);
-  filter: brightness(1.06);
-}
-
 @media (max-width: $breakpoint-md) {
   .hero {
     grid-template-columns: 1fr;
     gap: 1.2rem;
-    padding: 2.6rem 1.6rem 1.5rem;
+    padding: 2.6rem 1.6rem 12rem;
   }
 }
 
 @media (max-width: 480px) {
   .hero {
-    padding: 2.1rem 1.15rem 1.2rem;
+    padding: 2.1rem 1.15rem 9rem;
   }
 
   .hero__title {

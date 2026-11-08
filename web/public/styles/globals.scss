@@ -23,6 +23,7 @@
   --title-color: #{color.adjust($maintheme, $lightness: -55%)};
   --input-background: #{$white};
   --input-text: var(--foreground);
+  --empty-banner-bg: #{color.adjust($maintheme, $lightness: -10%)};
 
   a, a:visited {
     color: var(--title-color);
@@ -36,6 +37,7 @@
   --title-color: #{color.adjust($maintheme, $lightness: -35%)};
   --input-background: #{$dark-text};
   --input-text: #{$dark-bg};
+  --empty-banner-bg: #{color.adjust($maintheme, $lightness: -40%, $saturation: -10%)};
 
   a, a:visited {
     color: var(--title-color);

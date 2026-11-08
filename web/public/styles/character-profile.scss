@@ -1,4 +1,3 @@
-@use 'sass:color';
 @use 'variables' as *;
 
 #character-profile {
@@ -206,11 +205,7 @@
   aspect-ratio: 3 / 1;
   overflow: hidden;
   border-radius: 7px;
-  background: color.adjust(
-    $maintheme,
-    $lightness: -60%,
-    $saturation: -12%
-  );
+  background: var(--empty-banner-bg);
   box-shadow: 0 0 10px rgba(0, 0, 0, 0.15);
 
   p {

@@ -2,12 +2,12 @@
 @use 'variables' as *;
 
 :root {
-  --links-banner-bg: #{color.adjust($maintheme, $lightness: -10%)};
+  --links-banner-bg: var(--empty-banner-bg);
   --links-banner-color: #{color.adjust($maintheme, $lightness: 90%)};
 }
 
 [data-theme='dark'] {
-  --links-banner-bg: #{color.adjust($maintheme, $lightness: -40%, $saturation: -10%)};
+  --links-banner-bg: var(--empty-banner-bg);
   --links-banner-color: #{color.adjust($maintheme, $lightness: 10%)};
 }
 

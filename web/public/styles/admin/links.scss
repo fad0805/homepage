@@ -91,6 +91,16 @@
   }
 }
 
+a.admin-button,
+a.admin-button:visited {
+  color: var(--foreground);
+}
+
+a.admin-button.primary,
+a.admin-button.primary:visited {
+  color: var(--admin-primary-ink);
+}
+
 [data-theme='dark'] .admin-button.danger {
   color: #f08a80;
 }

@@ -1,13 +1,8 @@
 "use client";
 
-import Link from "next/link";
-
-import navigation from "@/config/navigation";
-
 import "@/public/styles/main.scss";
 
 export default function Home() {
-  const menuItems = navigation.main.items;
   return (
     <div id="main">
       <section className="hero">
@@ -27,22 +22,6 @@ export default function Home() {
             <br />
             이 곳은 어디에나 있지만, 어디에도 없는 섬.
           </p>
-
-          <div className="hero__actions">
-            {menuItems.map((item) => (
-              <Link
-                key={item.href}
-                className={`hero__button${
-                  item.href === "/characters"
-                    ? " hero__button--primary"
-                    : ""
-                }`}
-                href={item.href}
-              >
-                {item.label}
-              </Link>
-            ))}
-          </div>
         </div>
       </section>
     </div>
