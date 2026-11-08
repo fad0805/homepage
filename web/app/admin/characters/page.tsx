@@ -533,6 +533,9 @@ function SortableLocationSection({
 export default function AdminCharacters() {
   const [locations, setLocations] = useState<Location[]>([]);
   const [characters, setCharacters] = useState<DraftCharacter[]>([]);
+  const [locationFilter, setLocationFilter] = useState<number | "all">(
+    "all",
+  );
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState<Notice | null>(null);
@@ -654,6 +657,23 @@ export default function AdminCharacters() {
     }
     return map;
   }, [characters, locations]);
+
+  const displayLocations = useMemo(
+    () =>
+      locationFilter === "all"
+        ? locations
+        : locations.filter((location) => location.id === locationFilter),
+    [locationFilter, locations],
+  );
+
+  useEffect(() => {
+    if (
+      locationFilter !== "all" &&
+      !locations.some((location) => location.id === locationFilter)
+    ) {
+      setLocationFilter("all");
+    }
+  }, [locationFilter, locations]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
@@ -1501,6 +1521,26 @@ export default function AdminCharacters() {
           </p>
         </div>
         <div className="admin-characters-toolbar-actions">
+          <label className="admin-filter">
+            <span>위치</span>
+            <select
+              value={locationFilter}
+              onChange={(event) =>
+                setLocationFilter(
+                  event.target.value === "all"
+                    ? "all"
+                    : Number(event.target.value),
+                )
+              }
+            >
+              <option value="all">전체 위치</option>
+              {locations.map((location) => (
+                <option key={location.id} value={location.id}>
+                  {location.name}
+                </option>
+              ))}
+            </select>
+          </label>
           <button
             type="button"
             className="admin-button"
@@ -1554,13 +1594,13 @@ export default function AdminCharacters() {
           onDragEnd={handleDragEnd}
         >
           <SortableContext
-            items={locations.map(
+            items={displayLocations.map(
               (location) => `${LOCATION_TYPE}-${location.id}`,
             )}
             strategy={verticalListSortingStrategy}
           >
             <div className="admin-characters-groups">
-              {locations.map((location) => (
+              {displayLocations.map((location) => (
                 <SortableLocationSection
                   key={location.id}
                   location={location}

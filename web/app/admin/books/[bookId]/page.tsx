@@ -17,11 +17,19 @@ import { formatDateTime } from "@/lib/datetime";
 
 import "@/public/styles/admin/books.scss";
 
+interface BookCategory {
+  id: number;
+  name: string;
+  order: number;
+}
+
 interface Book {
   id: number;
   title: string;
   description: string | null;
   tags: string[];
+  category_id: number | null;
+  category: BookCategory | null;
   order: number;
   visible: boolean;
   created_at: string | null;
@@ -70,10 +78,12 @@ export default function AdminBookDetail() {
 
   const [book, setBook] = useState<Book | null>(null);
   const [chapters, setChapters] = useState<ChapterItem[]>([]);
+  const [categories, setCategories] = useState<BookCategory[]>([]);
   const [page, setPage] = useState(1);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [tagsInput, setTagsInput] = useState("");
+  const [categoryId, setCategoryId] = useState<number | null>(null);
   const [visible, setVisible] = useState(true);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -102,15 +112,18 @@ export default function AdminBookDetail() {
     }
     setLoading(true);
     try {
-      const [bookData, chapterData] = await Promise.all([
+      const [bookData, chapterData, categoryData] = await Promise.all([
         apiFetch<Book>(`/api/books/${bookId}`),
         apiFetch<ChapterItem[]>("/api/chapters"),
+        apiFetch<BookCategory[]>("/api/books/categories"),
       ]);
       setBook(bookData);
       setTitle(bookData.title);
       setDescription(bookData.description ?? "");
       setTagsInput((bookData.tags ?? []).join(", "));
+      setCategoryId(bookData.category_id);
       setVisible(bookData.visible !== false);
+      setCategories(categoryData);
       setChapters(
         sortChapters(
           chapterData.filter((chapter) => chapter.book_id === bookId),
@@ -169,6 +182,7 @@ export default function AdminBookDetail() {
     setTitle(book.title);
     setDescription(book.description ?? "");
     setTagsInput((book.tags ?? []).join(", "));
+    setCategoryId(book.category_id);
     setVisible(book.visible !== false);
     setBookInfoOpen(true);
   };
@@ -190,6 +204,7 @@ export default function AdminBookDetail() {
           title: nextTitle,
           description: description.trim() || null,
           tags: parseTags(tagsInput),
+          category_id: categoryId,
           visible,
         }),
       });
@@ -197,6 +212,7 @@ export default function AdminBookDetail() {
       setTitle(updated.title);
       setDescription(updated.description ?? "");
       setTagsInput((updated.tags ?? []).join(", "));
+      setCategoryId(updated.category_id);
       setBookInfoOpen(false);
       notify("success", "책 정보를 저장했습니다.");
     } catch (error) {
@@ -266,9 +282,14 @@ export default function AdminBookDetail() {
             <div className="admin-books-page-title">
               <h1>{book.title}</h1>
               {book.description ? <p>{book.description}</p> : null}
-              {book.tags?.length ? (
+              {book.category || book.tags?.length ? (
                 <span className="tag-list admin-books-page-tags">
-                  {book.tags.map((tag) => (
+                  {book.category ? (
+                    <span className="tag is-category">
+                      {book.category.name}
+                    </span>
+                  ) : null}
+                  {book.tags?.map((tag) => (
                     <span className="tag" key={tag}>
                       {tag}
                     </span>
@@ -400,6 +421,26 @@ export default function AdminBookDetail() {
                   onChange={(event) => setTagsInput(event.target.value)}
                   placeholder="쉼표로 구분 (선택)"
                 />
+              </label>
+              <label className="admin-field">
+                <span>카테고리</span>
+                <select
+                  value={categoryId ?? ""}
+                  onChange={(event) =>
+                    setCategoryId(
+                      event.target.value
+                        ? Number(event.target.value)
+                        : null,
+                    )
+                  }
+                >
+                  <option value="">카테고리 없음</option>
+                  {categories.map((category) => (
+                    <option key={category.id} value={category.id}>
+                      {category.name}
+                    </option>
+                  ))}
+                </select>
               </label>
               <label className="admin-books-checkbox">
                 <input

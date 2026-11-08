@@ -15,6 +15,16 @@ from sqlalchemy.orm import relationship
 from db.base import Base
 
 
+class BookCategory(Base):
+    __tablename__ = "book_categories"
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    name = Column(String, nullable=False)
+    order = Column(Integer, nullable=False, default=0, server_default="0")
+
+    books = relationship("Book", back_populates="category_relation")
+
+
 class Book(Base):
     __tablename__ = "books"
 
@@ -22,10 +32,18 @@ class Book(Base):
     title = Column(String, nullable=False)
     description = Column(Text, nullable=True)
     tags = Column(JSON, nullable=False, default=list)
+    category_id = Column(
+        Integer,
+        ForeignKey("book_categories.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     order = Column(Integer, nullable=False, default=0)
     visible = Column(Boolean, nullable=False, default=True)
     created_at = Column(DateTime, default=func.now())
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
+
+    category_relation = relationship("BookCategory", back_populates="books")
 
     chapters = relationship(
         "Chapter",

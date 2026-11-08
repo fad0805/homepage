@@ -53,6 +53,31 @@
   gap: 0.4rem;
 }
 
+.admin-filter {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: var(--admin-muted);
+  font-size: 0.72rem;
+  white-space: nowrap;
+
+  select {
+    padding: 0.4rem 0.6rem;
+    border: 1px solid var(--admin-border);
+    border-radius: 0.5rem;
+    background: var(--admin-card-bg);
+    color: var(--foreground);
+    font-family: inherit;
+    font-size: 0.78rem;
+    cursor: pointer;
+
+    &:focus {
+      outline: 2px solid var(--admin-primary);
+      outline-offset: 1px;
+    }
+  }
+}
+
 /* Buttons */
 .admin-button {
   font-family: inherit;

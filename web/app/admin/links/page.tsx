@@ -376,6 +376,9 @@ function SortableCategorySection({
 export default function AdminLinks() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [links, setLinks] = useState<DraftLink[]>([]);
+  const [categoryFilter, setCategoryFilter] = useState<number | "all">(
+    "all",
+  );
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState<Notice | null>(null);
@@ -458,6 +461,25 @@ export default function AdminLinks() {
     }
     return map;
   }, [categories, links]);
+
+  const displayCategories = useMemo(
+    () =>
+      categoryFilter === "all"
+        ? categories
+        : categories.filter(
+            (category) => category.id === categoryFilter,
+          ),
+    [categories, categoryFilter],
+  );
+
+  useEffect(() => {
+    if (
+      categoryFilter !== "all" &&
+      !categories.some((category) => category.id === categoryFilter)
+    ) {
+      setCategoryFilter("all");
+    }
+  }, [categories, categoryFilter]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
@@ -928,6 +950,26 @@ export default function AdminLinks() {
           </p>
         </div>
         <div className="admin-links-toolbar-actions">
+          <label className="admin-filter">
+            <span>카테고리</span>
+            <select
+              value={categoryFilter}
+              onChange={(event) =>
+                setCategoryFilter(
+                  event.target.value === "all"
+                    ? "all"
+                    : Number(event.target.value),
+                )
+              }
+            >
+              <option value="all">전체 카테고리</option>
+              {categories.map((category) => (
+                <option key={category.id} value={category.id}>
+                  {category.name}
+                </option>
+              ))}
+            </select>
+          </label>
           <button
             type="button"
             className="admin-button"
@@ -981,13 +1023,13 @@ export default function AdminLinks() {
           onDragEnd={handleDragEnd}
         >
           <SortableContext
-            items={categories.map(
+            items={displayCategories.map(
               (category) => `${CATEGORY_TYPE}-${category.id}`,
             )}
             strategy={verticalListSortingStrategy}
           >
             <div className="admin-links-categories">
-              {categories.map((category) => (
+              {displayCategories.map((category) => (
                 <SortableCategorySection
                   key={category.id}
                   category={category}

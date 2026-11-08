@@ -16,6 +16,7 @@ import {
   closestCenter,
   useSensor,
   useSensors,
+  type CollisionDetection,
   type DragEndEvent,
 } from "@dnd-kit/core";
 import {
@@ -27,17 +28,24 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 
-import { Pagination } from "@/components/pagination";
 import { apiFetch } from "@/lib/api";
 import { formatDateTime } from "@/lib/datetime";
 
 import "@/public/styles/admin/books.scss";
+
+interface BookCategory {
+  id: number;
+  name: string;
+  order: number;
+}
 
 interface Book {
   id: number;
   title: string;
   description: string | null;
   tags: string[];
+  category_id: number | null;
+  category: BookCategory | null;
   order: number;
   visible: boolean;
   created_at: string | null;
@@ -52,7 +60,8 @@ interface ChapterItem {
 
 type Notice = { type: "success" | "error"; text: string };
 
-const BOOKS_PER_PAGE = 10;
+const BOOK_TYPE = "book";
+const BOOK_CATEGORY_TYPE = "book-category";
 
 function parseTags(value: string) {
   return value
@@ -89,7 +98,14 @@ function SortableBookRow({
     transform,
     transition,
     isDragging,
-  } = useSortable({ id: book.id });
+  } = useSortable({
+    id: `${BOOK_TYPE}-${book.id}`,
+    data: {
+      type: BOOK_TYPE,
+      bookId: book.id,
+      categoryId: book.category_id,
+    },
+  });
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -139,10 +155,119 @@ function SortableBookRow({
   );
 }
 
+function SortableBookGroup({
+  category,
+  books,
+  chapterCounts,
+  latestChapterUpdates,
+  onEditCategory,
+  onDeleteCategory,
+}: {
+  category: BookCategory | null;
+  books: Book[];
+  chapterCounts: Map<number, number>;
+  latestChapterUpdates: Map<number, string>;
+  onEditCategory: (category: BookCategory) => void;
+  onDeleteCategory: (category: BookCategory) => void;
+}) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({
+    id: category
+      ? `${BOOK_CATEGORY_TYPE}-${category.id}`
+      : "book-category-none",
+    data: {
+      type: BOOK_CATEGORY_TYPE,
+      categoryId: category?.id ?? null,
+    },
+    disabled: !category,
+  });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.45 : 1,
+    zIndex: isDragging ? 2 : undefined,
+  };
+
+  return (
+    <section
+      ref={setNodeRef}
+      style={style}
+      className={`admin-books-group${isDragging ? " is-dragging" : ""}`}
+    >
+      <header className="admin-books-group-header">
+        {category ? (
+          <button
+            type="button"
+            className="admin-drag-handle"
+            aria-label={`${category.name} 카테고리 순서 변경`}
+            {...attributes}
+            {...listeners}
+          >
+            ⠿
+          </button>
+        ) : null}
+        <h2>{category ? category.name : "카테고리 없음"}</h2>
+        <span className="admin-books-group-count">{books.length}권</span>
+        {category ? (
+          <div className="admin-books-group-actions">
+            <button
+              type="button"
+              onClick={() => onEditCategory(category)}
+            >
+              이름 변경
+            </button>
+            <button
+              type="button"
+              className="danger"
+              disabled={books.length > 0}
+              title={
+                books.length > 0
+                  ? "책이 남아 있는 카테고리는 삭제할 수 없습니다."
+                  : undefined
+              }
+              onClick={() => onDeleteCategory(category)}
+            >
+              삭제
+            </button>
+          </div>
+        ) : null}
+      </header>
+
+      {books.length === 0 ? (
+        <p className="admin-books-empty">책이 없습니다.</p>
+      ) : (
+        <SortableContext
+          items={books.map((book) => `${BOOK_TYPE}-${book.id}`)}
+          strategy={verticalListSortingStrategy}
+        >
+          <div className="admin-books-grid">
+            {books.map((book) => (
+              <SortableBookRow
+                key={book.id}
+                book={book}
+                chapterCount={chapterCounts.get(book.id) ?? 0}
+                latestChapterUpdated={
+                  latestChapterUpdates.get(book.id) ?? null
+                }
+              />
+            ))}
+          </div>
+        </SortableContext>
+      )}
+    </section>
+  );
+}
+
 export default function AdminBooks() {
   const [books, setBooks] = useState<Book[]>([]);
   const [chapters, setChapters] = useState<ChapterItem[]>([]);
-  const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [savingOrder, setSavingOrder] = useState(false);
@@ -153,7 +278,17 @@ export default function AdminBooks() {
   const [bookTitle, setBookTitle] = useState("");
   const [bookDescription, setBookDescription] = useState("");
   const [bookTags, setBookTags] = useState("");
+  const [bookCategoryId, setBookCategoryId] = useState<number | null>(null);
   const [bookVisible, setBookVisible] = useState(true);
+
+  const [categories, setCategories] = useState<BookCategory[]>([]);
+  const [categoryFilter, setCategoryFilter] = useState<string>("all");
+  const [categoryModalOpen, setCategoryModalOpen] = useState(false);
+  const [categoryName, setCategoryName] = useState("");
+  const [editingCategoryId, setEditingCategoryId] = useState<number | null>(
+    null,
+  );
+  const [categorySaving, setCategorySaving] = useState(false);
 
   const noticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -180,12 +315,14 @@ export default function AdminBooks() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [bookData, chapterData] = await Promise.all([
+      const [bookData, chapterData, categoryData] = await Promise.all([
         apiFetch<Book[]>("/api/books"),
         apiFetch<ChapterItem[]>("/api/chapters"),
+        apiFetch<BookCategory[]>("/api/books/categories"),
       ]);
       setBooks(sortBooks(bookData));
       setChapters(chapterData);
+      setCategories(categoryData);
       setOrderDirty(false);
     } catch (error) {
       notify(
@@ -217,16 +354,71 @@ export default function AdminBooks() {
     };
   }, [bookModalOpen]);
 
+  useEffect(() => {
+    if (!categoryModalOpen) return;
+    const previousOverflow = document.body.style.overflow;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setCategoryModalOpen(false);
+    };
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [categoryModalOpen]);
+
   const sortedBooks = useMemo(() => sortBooks(books), [books]);
 
-  const totalPages = Math.max(
-    1,
-    Math.ceil(sortedBooks.length / BOOKS_PER_PAGE),
+  const sortedCategories = useMemo(
+    () =>
+      [...categories].sort(
+        (a, b) => a.order - b.order || a.id - b.id,
+      ),
+    [categories],
   );
 
+  const groups = useMemo(() => {
+    const uncategorized = sortedBooks.filter(
+      (book) => book.category_id === null || !book.category,
+    );
+    const result: { category: BookCategory | null; books: Book[] }[] = [];
+    if (uncategorized.length > 0) {
+      result.push({ category: null, books: uncategorized });
+    }
+    for (const category of sortedCategories) {
+      result.push({
+        category,
+        books: sortedBooks.filter(
+          (book) => book.category_id === category.id,
+        ),
+      });
+    }
+    return result;
+  }, [sortedBooks, sortedCategories]);
+
+  const displayGroups = useMemo(() => {
+    if (categoryFilter === "all") return groups;
+    if (categoryFilter === "none") {
+      return groups.filter((group) => group.category === null);
+    }
+    const categoryId = Number(categoryFilter);
+    return groups.filter((group) => group.category?.id === categoryId);
+  }, [categoryFilter, groups]);
+
   useEffect(() => {
-    if (page > totalPages) setPage(totalPages);
-  }, [page, totalPages]);
+    if (categoryFilter === "all") return;
+    if (categoryFilter === "none") {
+      if (!groups.some((group) => group.category === null)) {
+        setCategoryFilter("all");
+      }
+      return;
+    }
+    const categoryId = Number(categoryFilter);
+    if (!sortedCategories.some((category) => category.id === categoryId)) {
+      setCategoryFilter("all");
+    }
+  }, [categoryFilter, groups, sortedCategories]);
 
   useEffect(() => {
     if (!orderDirty) return;
@@ -239,15 +431,6 @@ export default function AdminBooks() {
       window.removeEventListener("beforeunload", handleBeforeUnload);
     };
   }, [orderDirty]);
-
-  const pageBooks = useMemo(
-    () =>
-      sortedBooks.slice(
-        (page - 1) * BOOKS_PER_PAGE,
-        page * BOOKS_PER_PAGE,
-      ),
-    [page, sortedBooks],
-  );
 
   const chapterStats = useMemo(() => {
     const counts = new Map<number, number>();
@@ -270,6 +453,7 @@ export default function AdminBooks() {
     setBookTitle("");
     setBookDescription("");
     setBookTags("");
+    setBookCategoryId(null);
     setBookVisible(true);
     setBookModalOpen(true);
   };
@@ -290,13 +474,13 @@ export default function AdminBooks() {
           title,
           description: bookDescription.trim() || null,
           tags: parseTags(bookTags),
+          category_id: bookCategoryId,
           order: sortedBooks.length,
           visible: bookVisible,
         }),
       });
       setBookModalOpen(false);
       await load();
-      setPage(1);
       notify("success", "책을 만들었습니다.");
     } catch (error) {
       notify(
@@ -310,31 +494,191 @@ export default function AdminBooks() {
     }
   };
 
-  const handleDragEnd = async (event: DragEndEvent) => {
+  const openCategoryModal = () => {
+    setCategoryName("");
+    setEditingCategoryId(null);
+    setCategoryModalOpen(true);
+  };
+
+  const resetCategoryForm = () => {
+    setCategoryName("");
+    setEditingCategoryId(null);
+  };
+
+  const handleCategorySubmit = async (
+    event: FormEvent<HTMLFormElement>,
+  ) => {
+    event.preventDefault();
+    const name = categoryName.trim();
+    if (!name) {
+      notify("error", "카테고리 이름을 입력해주세요.");
+      return;
+    }
+
+    const isEditing = editingCategoryId !== null;
+    setCategorySaving(true);
+    try {
+      if (isEditing) {
+        const updated = await apiFetch<BookCategory>(
+          `/api/books/categories/${editingCategoryId}`,
+          {
+            method: "PUT",
+            body: JSON.stringify({ name }),
+          },
+        );
+        setCategories((prev) =>
+          prev.map((category) =>
+            category.id === updated.id
+              ? { ...category, name: updated.name }
+              : category,
+          ),
+        );
+        setBooks((prev) =>
+          prev.map((book) =>
+            book.category?.id === updated.id
+              ? {
+                  ...book,
+                  category: {
+                    ...book.category,
+                    name: updated.name,
+                  },
+                }
+              : book,
+          ),
+        );
+        notify("success", "카테고리 이름을 변경했습니다.");
+      } else {
+        const created = await apiFetch<BookCategory>(
+          "/api/books/categories",
+          {
+            method: "POST",
+            body: JSON.stringify({ name }),
+          },
+        );
+        setCategories((prev) => [...prev, created]);
+        notify("success", "카테고리를 추가했습니다.");
+      }
+      resetCategoryForm();
+      setCategoryModalOpen(false);
+    } catch (error) {
+      notify(
+        "error",
+        error instanceof Error
+          ? error.message
+          : "카테고리를 저장하지 못했습니다.",
+      );
+    } finally {
+      setCategorySaving(false);
+    }
+  };
+
+  const openEditCategory = (category: BookCategory) => {
+    setEditingCategoryId(category.id);
+    setCategoryName(category.name);
+    setCategoryModalOpen(true);
+  };
+
+  const handleDeleteCategory = async (category: BookCategory) => {
+    if (!window.confirm(`'${category.name}' 카테고리를 삭제할까요?`)) {
+      return;
+    }
+    try {
+      await apiFetch(`/api/books/categories/${category.id}`, {
+        method: "DELETE",
+      });
+      setCategories((prev) =>
+        prev.filter((item) => item.id !== category.id),
+      );
+      if (bookCategoryId === category.id) setBookCategoryId(null);
+      if (editingCategoryId === category.id) resetCategoryForm();
+      notify("success", "카테고리를 삭제했습니다.");
+    } catch (error) {
+      notify(
+        "error",
+        error instanceof Error
+          ? error.message
+          : "카테고리를 삭제하지 못했습니다.",
+      );
+    }
+  };
+
+  const collisionDetection = useCallback<CollisionDetection>((args) => {
+    const activeType = args.active.data.current?.type;
+    const activeCategoryId =
+      args.active.data.current?.categoryId ?? null;
+
+    const droppableContainers = args.droppableContainers.filter(
+      (container) => {
+        const data = container.data.current;
+        if (!data || data.type !== activeType) {
+          return false;
+        }
+        if (activeType === BOOK_TYPE) {
+          return (data.categoryId ?? null) === activeCategoryId;
+        }
+        return true;
+      },
+    );
+
+    return closestCenter({ ...args, droppableContainers });
+  }, []);
+
+  const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
     if (!over || active.id === over.id) return;
 
-    const pageStart = (page - 1) * BOOKS_PER_PAGE;
-    const pageItems = sortedBooks.slice(
-      pageStart,
-      pageStart + BOOKS_PER_PAGE,
+    const activeData = active.data.current;
+
+    if (activeData?.type === BOOK_CATEGORY_TYPE) {
+      const oldIndex = categories.findIndex(
+        (category) =>
+          `${BOOK_CATEGORY_TYPE}-${category.id}` === active.id,
+      );
+      const newIndex = categories.findIndex(
+        (category) =>
+          `${BOOK_CATEGORY_TYPE}-${category.id}` === over.id,
+      );
+      if (oldIndex < 0 || newIndex < 0) return;
+
+      setCategories(
+        arrayMove(categories, oldIndex, newIndex).map(
+          (category, index) => ({ ...category, order: index }),
+        ),
+      );
+      setOrderDirty(true);
+      return;
+    }
+
+    if (activeData?.type !== BOOK_TYPE) return;
+
+    const categoryId = activeData.categoryId ?? null;
+    const group = groups.find(
+      (item) => (item.category?.id ?? null) === categoryId,
     );
-    const oldIndex = pageItems.findIndex((book) => book.id === active.id);
-    const newIndex = pageItems.findIndex((book) => book.id === over.id);
+    if (!group) return;
+
+    const oldIndex = group.books.findIndex(
+      (book) => `${BOOK_TYPE}-${book.id}` === active.id,
+    );
+    const newIndex = group.books.findIndex(
+      (book) => `${BOOK_TYPE}-${book.id}` === over.id,
+    );
     if (oldIndex < 0 || newIndex < 0) return;
 
-    const moved = arrayMove(pageItems, oldIndex, newIndex);
-    const next = [...sortedBooks];
-    next.splice(pageStart, pageItems.length, ...moved);
+    const moved = arrayMove(group.books, oldIndex, newIndex);
 
-    // Private books always stay at the end of the entire list.
-    const publicBooks = next.filter((book) => book.visible !== false);
-    const privateBooks = next.filter((book) => book.visible === false);
+    // Private books always stay at the end of their category.
+    const publicBooks = moved.filter((book) => book.visible !== false);
+    const privateBooks = moved.filter((book) => book.visible === false);
     const reordered = [...publicBooks, ...privateBooks].map(
       (book, order) => ({ ...book, order }),
     );
 
-    setBooks(reordered);
+    const reorderedIds = new Set(reordered.map((book) => book.id));
+    setBooks((prev) => [
+      ...prev.filter((book) => !reorderedIds.has(book.id)),
+      ...reordered,
+    ]);
     setOrderDirty(true);
   };
 
@@ -342,23 +686,35 @@ export default function AdminBooks() {
     if (!orderDirty || savingOrder) return;
     setSavingOrder(true);
     try {
+      await apiFetch("/api/books/categories/reorder", {
+        method: "PUT",
+        body: JSON.stringify({
+          items: sortedCategories.map((category, order) => ({
+            id: category.id,
+            order,
+          })),
+        }),
+      });
+
+      const orderedBooks = groups.flatMap((group) => group.books);
       await apiFetch("/api/books/reorder", {
         method: "PUT",
         body: JSON.stringify({
-          items: sortedBooks.map((book, order) => ({
+          items: orderedBooks.map((book, order) => ({
             id: book.id,
             order,
           })),
         }),
       });
+
       setOrderDirty(false);
-      notify("success", "책 순서를 저장했습니다.");
+      notify("success", "순서를 저장했습니다.");
     } catch (error) {
       notify(
         "error",
         error instanceof Error
           ? error.message
-          : "책 순서를 저장하지 못했습니다.",
+          : "순서를 저장하지 못했습니다.",
       );
     } finally {
       setSavingOrder(false);
@@ -369,7 +725,7 @@ export default function AdminBooks() {
     if (
       orderDirty &&
       !window.confirm(
-        "저장하지 않은 책 순서 변경이 있습니다. 새로고침할까요?",
+        "저장하지 않은 순서 변경이 있습니다. 새로고침할까요?",
       )
     ) {
       return;
@@ -384,15 +740,35 @@ export default function AdminBooks() {
           <h1>책장 관리</h1>
           <p className="admin-books-hint">
             책을 선택해 상세 페이지에서 책 정보와 챕터를 관리합니다. 드래그로
-            책 순서를 바꾼 뒤 저장해주세요.
+            카테고리와 책 순서를 바꾼 뒤 저장해주세요. 카테고리를 만들어 책을
+            분류할 수 있습니다.
           </p>
           {orderDirty ? (
             <p className="admin-books-dirty">
-              저장하지 않은 책 순서가 있습니다.
+              저장하지 않은 순서 변경이 있습니다.
             </p>
           ) : null}
         </div>
         <div className="admin-books-actions">
+          <label className="admin-filter">
+            <span>카테고리</span>
+            <select
+              value={categoryFilter}
+              onChange={(event) =>
+                setCategoryFilter(event.target.value)
+              }
+            >
+              <option value="all">전체 카테고리</option>
+              {groups.some((group) => group.category === null) ? (
+                <option value="none">카테고리 없음</option>
+              ) : null}
+              {sortedCategories.map((category) => (
+                <option key={category.id} value={category.id}>
+                  {category.name}
+                </option>
+              ))}
+            </select>
+          </label>
           <button
             type="button"
             className="admin-button"
@@ -400,6 +776,13 @@ export default function AdminBooks() {
             disabled={loading}
           >
             새로고침
+          </button>
+          <button
+            type="button"
+            className="admin-button"
+            onClick={openCategoryModal}
+          >
+            카테고리 추가
           </button>
           {orderDirty ? (
             <button
@@ -433,41 +816,41 @@ export default function AdminBooks() {
 
       {loading ? (
         <p className="admin-books-empty">불러오는 중...</p>
-      ) : sortedBooks.length === 0 ? (
+      ) : displayGroups.length === 0 ? (
         <p className="admin-books-empty">
-          책이 없습니다. 새 책을 추가해주세요.
+          {groups.length === 0
+            ? "책이 없습니다. 새 책을 추가해주세요."
+            : "선택한 카테고리에 책이 없습니다."}
         </p>
       ) : (
-        <>
-          <DndContext
-            sensors={sensors}
-            collisionDetection={closestCenter}
-            onDragEnd={handleDragEnd}
+        <DndContext
+          sensors={sensors}
+          collisionDetection={collisionDetection}
+          onDragEnd={handleDragEnd}
+        >
+          <SortableContext
+            items={displayGroups.flatMap((group) =>
+              group.category
+                ? [`${BOOK_CATEGORY_TYPE}-${group.category.id}`]
+                : [],
+            )}
+            strategy={verticalListSortingStrategy}
           >
-            <SortableContext
-              items={pageBooks.map((book) => book.id)}
-              strategy={verticalListSortingStrategy}
-            >
-              <div className="admin-books-grid">
-                {pageBooks.map((book) => (
-                  <SortableBookRow
-                    key={book.id}
-                    book={book}
-                    chapterCount={chapterStats.counts.get(book.id) ?? 0}
-                    latestChapterUpdated={
-                      chapterStats.latest.get(book.id) ?? null
-                    }
-                  />
-                ))}
-              </div>
-            </SortableContext>
-          </DndContext>
-          <Pagination
-            page={page}
-            totalPages={totalPages}
-            onChange={setPage}
-          />
-        </>
+            <div className="admin-books-groups">
+              {displayGroups.map((group) => (
+                <SortableBookGroup
+                  key={group.category?.id ?? "none"}
+                  category={group.category}
+                  books={group.books}
+                  chapterCounts={chapterStats.counts}
+                  latestChapterUpdates={chapterStats.latest}
+                  onEditCategory={openEditCategory}
+                  onDeleteCategory={handleDeleteCategory}
+                />
+              ))}
+            </div>
+          </SortableContext>
+        </DndContext>
       )}
 
       {bookModalOpen ? (
@@ -524,6 +907,26 @@ export default function AdminBooks() {
                   placeholder="쉼표로 구분 (선택)"
                 />
               </label>
+              <label className="admin-field">
+                <span>카테고리</span>
+                <select
+                  value={bookCategoryId ?? ""}
+                  onChange={(event) =>
+                    setBookCategoryId(
+                      event.target.value
+                        ? Number(event.target.value)
+                        : null,
+                    )
+                  }
+                >
+                  <option value="">카테고리 없음</option>
+                  {sortedCategories.map((category) => (
+                    <option key={category.id} value={category.id}>
+                      {category.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
               <label className="admin-books-checkbox">
                 <input
                   type="checkbox"
@@ -551,6 +954,84 @@ export default function AdminBooks() {
                 disabled={saving}
               >
                 {saving ? "저장 중..." : "저장"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {categoryModalOpen ? (
+        <div
+          className="admin-modal-backdrop"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) {
+              setCategoryModalOpen(false);
+            }
+          }}
+        >
+          <div
+            className="admin-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-label={
+              editingCategoryId !== null
+                ? "카테고리 이름 변경"
+                : "카테고리 추가"
+            }
+          >
+            <div className="admin-modal-header">
+              <h2>
+                {editingCategoryId !== null
+                  ? "카테고리 이름 변경"
+                  : "카테고리 추가"}
+              </h2>
+              <button
+                type="button"
+                className="admin-modal-close"
+                onClick={() => setCategoryModalOpen(false)}
+                aria-label="닫기"
+              >
+                ×
+              </button>
+            </div>
+            <form
+              id="category-form"
+              className="admin-modal-body admin-books-modal-form"
+              onSubmit={handleCategorySubmit}
+            >
+              <label className="admin-field">
+                <span>카테고리 이름</span>
+                <input
+                  value={categoryName}
+                  onChange={(event) =>
+                    setCategoryName(event.target.value)
+                  }
+                  placeholder="예: 단편"
+                  required
+                  autoFocus
+                />
+              </label>
+            </form>
+            <div className="admin-modal-footer">
+              <button
+                type="button"
+                className="admin-button"
+                onClick={() => setCategoryModalOpen(false)}
+                disabled={categorySaving}
+              >
+                취소
+              </button>
+              <button
+                type="submit"
+                form="category-form"
+                className="admin-button primary"
+                disabled={categorySaving}
+              >
+                {categorySaving
+                  ? "저장 중..."
+                  : editingCategoryId !== null
+                    ? "이름 변경"
+                    : "추가"}
               </button>
             </div>
           </div>

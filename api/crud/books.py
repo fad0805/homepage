@@ -2,10 +2,14 @@ import os
 from datetime import datetime, timedelta, timezone
 
 from fastapi import HTTPException, status
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from models.books import Book, Chapter, ChapterView
+from models.books import Book, BookCategory, Chapter, ChapterView
 from schemas.books import (
+    BookCategoryCreate,
+    BookCategoryReorderRequest,
+    BookCategoryUpdate,
     BookCreate,
     BookReorderRequest,
     BookUpdate,
@@ -38,16 +42,151 @@ def _iso_utc(value):
 
 
 def _serialize_book(book: Book) -> dict:
+    category = book.category_relation
     return {
         "id": book.id,
         "title": book.title,
         "description": book.description,
         "tags": book.tags or [],
+        "category_id": book.category_id,
+        "category": (
+            {
+                "id": category.id,
+                "name": category.name,
+                "order": category.order,
+            }
+            if category
+            else None
+        ),
         "order": book.order,
         "visible": book.visible,
         "created_at": _iso_utc(book.created_at),
         "updated_at": _iso_utc(book.updated_at),
     }
+
+
+def _serialize_book_category(category: BookCategory) -> dict:
+    return {
+        "id": category.id,
+        "name": category.name,
+        "order": category.order,
+    }
+
+
+def _get_book_category_or_404(
+    db: Session, category_id: int
+) -> BookCategory:
+    category = (
+        db.query(BookCategory)
+        .filter(BookCategory.id == category_id)
+        .first()
+    )
+    if not category:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Does not exist book category",
+        )
+    return category
+
+
+def _next_book_category_order(db: Session) -> int:
+    max_order = db.query(func.max(BookCategory.order)).scalar()
+    return 0 if max_order is None else max_order + 1
+
+
+# Book Categories CRUD
+def get_all_book_categories(db: Session):
+    categories = (
+        db.query(BookCategory)
+        .order_by(BookCategory.order, BookCategory.id)
+        .all()
+    )
+    return [
+        _serialize_book_category(category) for category in categories
+    ]
+
+
+def create_book_category(db: Session, payload: BookCategoryCreate):
+    name = payload.name.strip()
+    if not name:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="카테고리 이름을 입력해주세요.",
+        )
+
+    order = (
+        payload.order
+        if payload.order is not None
+        else _next_book_category_order(db)
+    )
+    category = BookCategory(name=name, order=order)
+    db.add(category)
+    db.commit()
+    db.refresh(category)
+    return _serialize_book_category(category)
+
+
+def update_book_category(
+    db: Session, category_id: int, payload: BookCategoryUpdate
+):
+    category = _get_book_category_or_404(db, category_id)
+    data = payload.model_dump(exclude_unset=True)
+    if "name" in data:
+        name = (data["name"] or "").strip()
+        if not name:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="카테고리 이름을 입력해주세요.",
+            )
+        data["name"] = name
+
+    for key, value in data.items():
+        setattr(category, key, value)
+    db.commit()
+    db.refresh(category)
+    return _serialize_book_category(category)
+
+
+def delete_book_category(db: Session, category_id: int):
+    category = _get_book_category_or_404(db, category_id)
+    book_count = (
+        db.query(Book).filter(Book.category_id == category_id).count()
+    )
+    if book_count > 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "이 카테고리에 책이 남아 있어 삭제할 수 없습니다. "
+                "책의 카테고리를 먼저 변경해주세요."
+            ),
+        )
+
+    db.delete(category)
+    db.commit()
+    return True
+
+
+def reorder_book_categories(
+    db: Session, payload: BookCategoryReorderRequest
+):
+    ids = [item.id for item in payload.items]
+    categories = {
+        category.id: category
+        for category in db.query(BookCategory)
+        .filter(BookCategory.id.in_(ids))
+        .all()
+    }
+    missing = set(ids) - set(categories)
+    if missing:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Does not exist book category: {sorted(missing)}",
+        )
+
+    for item in payload.items:
+        categories[item.id].order = item.order
+    db.commit()
+    return True
 
 
 def _serialize_chapter(chapter: Chapter) -> dict:
@@ -95,6 +234,8 @@ def get_book(db: Session, book_id: int):
 def create_book(db: Session, payload: BookCreate):
     data = payload.model_dump()
     data["tags"] = _clean_tags(data.get("tags"))
+    if data.get("category_id") is not None:
+        _get_book_category_or_404(db, data["category_id"])
     book = Book(**data)
     db.add(book)
     db.commit()
@@ -113,6 +254,8 @@ def update_book(db: Session, book_id: int, payload: BookUpdate):
     data = payload.model_dump(exclude_unset=True)
     if "tags" in data:
         data["tags"] = _clean_tags(data["tags"])
+    if data.get("category_id") is not None:
+        _get_book_category_or_404(db, data["category_id"])
     for key, value in data.items():
         setattr(book, key, value)
     db.commit()

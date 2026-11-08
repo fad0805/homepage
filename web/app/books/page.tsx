@@ -10,11 +10,19 @@ import "@/public/styles/books.scss";
 
 const CHAPTERS_PER_PAGE = 15;
 
+interface BookCategory {
+  id: number;
+  name: string;
+  order: number;
+}
+
 interface Book {
   id: number;
   title: string;
   description: string | null;
   tags: string[];
+  category_id: number | null;
+  category: BookCategory | null;
   order: number;
   visible: boolean;
 }
@@ -104,6 +112,9 @@ export default function Books() {
   const [chapters, setChapters] = useState<Chapter[]>([]);
   const [activeBookId, setActiveBookId] = useState<number | null>(null);
   const [activeChapterId, setActiveChapterId] = useState<number | null>(null);
+  const [activeCategoryId, setActiveCategoryId] = useState<number | null>(
+    null,
+  );
   const [searchQuery, setSearchQuery] = useState("");
   const [chapterPage, setChapterPage] = useState(1);
   const [isMobile, setIsMobile] = useState(false);
@@ -187,6 +198,36 @@ export default function Books() {
     [books],
   );
 
+  const categoryList = useMemo(() => {
+    const found = new Map<number, BookCategory>();
+    for (const book of visibleBooks) {
+      if (!book.category) continue;
+      found.set(book.category.id, book.category);
+    }
+    return [...found.values()].sort(
+      (a, b) => a.order - b.order || a.id - b.id,
+    );
+  }, [visibleBooks]);
+
+  const categoryBooks = useMemo(
+    () =>
+      activeCategoryId === null
+        ? visibleBooks
+        : visibleBooks.filter(
+            (book) => book.category_id === activeCategoryId,
+          ),
+    [activeCategoryId, visibleBooks],
+  );
+
+  useEffect(() => {
+    if (
+      activeCategoryId !== null &&
+      !categoryList.some((category) => category.id === activeCategoryId)
+    ) {
+      setActiveCategoryId(null);
+    }
+  }, [activeCategoryId, categoryList]);
+
   const visibleChapters = useMemo(
     () =>
       chapters
@@ -215,7 +256,7 @@ export default function Books() {
 
   const filteredBooks = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
-    if (!query) return visibleBooks;
+    if (!query) return categoryBooks;
 
     const matches = (value: string | null | undefined) =>
       (value ?? "").toLowerCase().includes(query);
@@ -224,17 +265,35 @@ export default function Books() {
       matches(chapter.subtitle) ||
       chapter.tags.some(matches);
 
-    return visibleBooks.filter(
+    return categoryBooks.filter(
       (book) =>
         matches(book.title) ||
         matches(book.description) ||
+        matches(book.category?.name) ||
         book.tags.some(matches) ||
         visibleChapters.some(
           (chapter) =>
             chapter.book_id === book.id && chapterMatches(chapter),
         ),
     );
-  }, [searchQuery, visibleBooks, visibleChapters]);
+  }, [categoryBooks, searchQuery, visibleChapters]);
+
+  const groupedBooks = useMemo(() => {
+    const result: { category: BookCategory | null; books: Book[] }[] = [];
+    const uncategorized = filteredBooks.filter((book) => !book.category);
+    if (uncategorized.length > 0) {
+      result.push({ category: null, books: uncategorized });
+    }
+    for (const category of categoryList) {
+      const items = filteredBooks.filter(
+        (book) => book.category_id === category.id,
+      );
+      if (items.length > 0) {
+        result.push({ category, books: items });
+      }
+    }
+    return result;
+  }, [categoryList, filteredBooks]);
 
   useEffect(() => {
     if (isMobile) return;
@@ -300,6 +359,12 @@ export default function Books() {
     setActiveChapterId(null);
   };
 
+  const selectCategory = (categoryId: number | null) => {
+    setActiveCategoryId(categoryId);
+    setActiveChapterId(null);
+    setChapterPage(1);
+  };
+
   const activateTag = (tag: string) => {
     setSearchQuery(tag);
     setActiveChapterId(null);
@@ -321,8 +386,8 @@ export default function Books() {
           type="search"
           value={searchQuery}
           onChange={(event) => handleSearchChange(event.target.value)}
-          placeholder="책, 게시글, 태그 검색"
-          aria-label="책, 게시글, 태그 검색"
+          placeholder="검색"
+          aria-label="책, 게시글, 카테고리, 태그 검색"
         />
         {searchQuery ? (
           <button
@@ -334,28 +399,72 @@ export default function Books() {
           </button>
         ) : null}
       </div>
-      <div className="books-books">
-        <p className="books-list-label">책</p>
-        {filteredBooks.length === 0 ? (
-          <p className="books-list-empty">검색 결과가 없습니다.</p>
-        ) : (
-          filteredBooks.map((book) => (
+      {categoryList.length > 0 ? (
+        <div
+          className="books-categories"
+          role="group"
+          aria-label="카테고리 필터"
+        >
+          <button
+            type="button"
+            className={`books-category-chip${
+              activeCategoryId === null ? " is-active" : ""
+            }`}
+            onClick={() => selectCategory(null)}
+            aria-pressed={activeCategoryId === null}
+          >
+            전체
+          </button>
+          {categoryList.map((category) => (
             <button
               type="button"
-              className={`books-book-button${
-                book.id === activeBookId ? " is-active" : ""
+              className={`books-category-chip${
+                activeCategoryId === category.id ? " is-active" : ""
               }`}
-              onClick={() => selectBook(book.id)}
-              aria-pressed={book.id === activeBookId}
-              key={book.id}
+              onClick={() => selectCategory(category.id)}
+              aria-pressed={activeCategoryId === category.id}
+              key={category.id}
             >
-              <span className="books-book-button__main">
-                <span className="books-book-button__title">{book.title}</span>
-              </span>
-              <span className="books-book-button__count">
-                {chapterCounts.get(book.id) ?? 0}
-              </span>
+              {category.name}
             </button>
+          ))}
+        </div>
+      ) : null}
+      <div className="books-books">
+        {groupedBooks.length === 0 ? (
+          <p className="books-list-empty">검색 결과가 없습니다.</p>
+        ) : (
+          groupedBooks.map((group) => (
+            <div
+              className="books-group"
+              key={group.category?.id ?? "uncategorized"}
+            >
+              {group.category ? (
+                <p className="books-group__label">
+                  {group.category.name}
+                </p>
+              ) : null}
+              {group.books.map((book) => (
+                <button
+                  type="button"
+                  className={`books-book-button${
+                    book.id === activeBookId ? " is-active" : ""
+                  }`}
+                  onClick={() => selectBook(book.id)}
+                  aria-pressed={book.id === activeBookId}
+                  key={book.id}
+                >
+                  <span className="books-book-button__main">
+                    <span className="books-book-button__title">
+                      {book.title}
+                    </span>
+                  </span>
+                  <span className="books-book-button__count">
+                    {chapterCounts.get(book.id) ?? 0}
+                  </span>
+                </button>
+              ))}
+            </div>
           ))
         )}
       </div>
@@ -382,9 +491,14 @@ export default function Books() {
           {activeBook.description ? (
             <p>{activeBook.description}</p>
           ) : null}
-          {activeBook.tags?.length ? (
+          {activeBook.category || activeBook.tags?.length ? (
             <div className="tag-list books-panel__tags">
-              {activeBook.tags.map((tag) => (
+              {activeBook.category ? (
+                <span className="tag is-category">
+                  {activeBook.category.name}
+                </span>
+              ) : null}
+              {activeBook.tags?.map((tag) => (
                 <TagChip tag={tag} onActivate={activateTag} key={tag} />
               ))}
             </div>

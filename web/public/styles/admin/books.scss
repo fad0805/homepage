@@ -293,6 +293,12 @@
   font-size: 0.62rem;
   line-height: 1.4;
   white-space: nowrap;
+
+  &.is-category {
+    border-color: var(--title-color);
+    color: var(--title-color);
+    opacity: 0.85;
+  }
 }
 
 [data-theme='dark'] .admin-books-chapter-link {
@@ -410,6 +416,122 @@
   flex-direction: column;
   gap: 0.9rem;
   width: min(900px, 100%);
+}
+
+.admin-books-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.admin-books-group {
+  border: 1px solid var(--admin-border);
+  border-radius: 1rem;
+  background: rgba(255, 255, 255, 0.3);
+  overflow: hidden;
+
+  &.is-dragging {
+    box-shadow: 0 0.6rem 1.4rem rgba(0, 0, 0, 0.18);
+  }
+
+  > .admin-books-grid {
+    padding: 0 0.9rem;
+
+    > .admin-book-card:first-child {
+      border-top: none;
+    }
+  }
+}
+
+[data-theme='dark'] .admin-books-group {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.admin-books-group-header {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  padding: 0.7rem 0.9rem;
+  border-bottom: 1px solid var(--admin-border);
+
+  h2 {
+    margin: 0;
+    color: var(--title-color);
+    font-family: Eulyoo1945-SemiBold, Arial, Helvetica, sans-serif;
+    font-size: 1rem;
+  }
+
+  .admin-drag-handle {
+    padding: 0.15rem 0.35rem;
+    border: none;
+    border-radius: 0.35rem;
+    background: transparent;
+    color: var(--admin-muted);
+    font-size: 1rem;
+    line-height: 1;
+    cursor: grab;
+    touch-action: none;
+    user-select: none;
+
+    &:hover {
+      background: rgba(0, 0, 0, 0.07);
+    }
+
+    &:active {
+      cursor: grabbing;
+    }
+  }
+}
+
+[data-theme='dark'] .admin-books-group-header .admin-drag-handle:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.admin-books-group-count {
+  color: var(--admin-muted);
+  font-size: 0.7rem;
+}
+
+.admin-books-group-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-left: auto;
+
+  button {
+    padding: 0.3rem 0.55rem;
+    border: 1px solid var(--admin-border);
+    border-radius: 0.45rem;
+    background: transparent;
+    color: var(--foreground);
+    font-family: inherit;
+    font-size: 0.72rem;
+    cursor: pointer;
+
+    &:hover:not(:disabled) {
+      background: rgba(0, 0, 0, 0.06);
+    }
+
+    &:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+
+    &.danger {
+      color: #c0392b;
+    }
+  }
+}
+
+[data-theme='dark'] .admin-books-group-actions button {
+  &:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.08);
+  }
+
+  &.danger {
+    color: #f08a80;
+  }
 }
 
 @media (max-width: 900px) {

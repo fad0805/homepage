@@ -72,6 +72,40 @@
   opacity: 0.6;
 }
 
+.books-categories {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+
+.books-category-chip {
+  padding: 0.15rem 0.5rem;
+  border: 1px solid rgba(0, 0, 0, 0.16);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--title-color);
+  font-family: inherit;
+  font-size: 0.66rem;
+  line-height: 1.5;
+  cursor: pointer;
+  opacity: 0.7;
+  transition:
+    opacity 0.15s ease,
+    background-color 0.15s ease;
+
+  &:hover,
+  &:focus-visible {
+    opacity: 1;
+  }
+
+  &.is-active {
+    border-color: var(--title-color);
+    background: var(--title-color);
+    color: var(--subtheme);
+    opacity: 1;
+  }
+}
+
 .books-search-active {
   display: flex;
   align-items: center;
@@ -152,6 +186,11 @@
   left: auto;
 }
 
+.books-panel__header .rss-subscribe__panel {
+  right: 0;
+  left: auto;
+}
+
 .rss-subscribe__actions {
   display: flex;
   flex-wrap: wrap;
@@ -219,13 +258,22 @@
   scrollbar-gutter: stable;
 }
 
-.books-list-label {
-  margin: 0 0 0.45rem;
-  color: var(--foreground);
-  font-size: 0.64rem;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-  opacity: 0.55;
+.books-group {
+  display: flex;
+  flex-direction: column;
+
+  & + & {
+    margin-top: 0.6rem;
+  }
+}
+
+.books-group__label {
+  margin: 0 0 0.3rem 0.15rem;
+  color: var(--title-color);
+  font-size: 0.68rem;
+  font-weight: bold;
+  letter-spacing: 0.04em;
+  opacity: 0.7;
 }
 
 .books-book-button {
@@ -410,6 +458,12 @@
       border-color: var(--title-color);
       opacity: 1;
     }
+  }
+
+  &.is-category {
+    border-color: var(--title-color);
+    font-weight: bold;
+    opacity: 1;
   }
 }
 
@@ -686,6 +740,10 @@
     background: rgba(255, 255, 255, 0.09);
   }
 
+  .books-category-chip {
+    border-color: rgba(255, 255, 255, 0.18);
+  }
+
   .books-panel {
     border-left-color: rgba(255, 255, 255, 0.16);
   }
@@ -722,6 +780,16 @@
   .books-search input,
   .books-search > button {
     border-color: rgba(255, 255, 255, 0.18);
+  }
+
+  .books-search input {
+    background: var(--subtheme);
+    color: var(--foreground);
+
+    &::placeholder {
+      color: var(--foreground);
+      opacity: 0.5;
+    }
   }
 }
 
