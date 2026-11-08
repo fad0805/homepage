@@ -137,111 +137,11 @@ a.hero__button--primary:hover {
   filter: brightness(1.06);
 }
 
-/* Index */
-.island-index {
-  position: relative;
-  padding: 1.6rem 2.5rem 3.2rem;
-  border-top: 1px solid var(--home-line);
-}
-
-.island-index__heading {
-  display: flex;
-  align-items: baseline;
-  gap: 0.7rem;
-  margin-bottom: 1.1rem;
-}
-
-.island-index__eyebrow {
-  margin: 0;
-  color: var(--home-muted);
-  font-size: 0.6rem;
-  letter-spacing: 0.24em;
-  text-transform: uppercase;
-}
-
-.island-index__heading h2 {
-  margin: 0;
-  color: var(--title-color);
-  font-family: Eulyoo1945-SemiBold, Arial, Helvetica, sans-serif;
-  font-size: 1rem;
-}
-
-.island-index__grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.6rem;
-}
-
-a.island-index__card,
-a.island-index__card:visited {
-  display: grid;
-  grid-template-columns: auto 1fr auto;
-  grid-template-rows: auto auto;
-  align-items: center;
-  column-gap: 0.85rem;
-  row-gap: 0.15rem;
-  padding: 0.85rem 1rem;
-  border: 1px solid var(--home-line);
-  border-radius: 0.9rem;
-  color: var(--title-color);
-  transition:
-    transform 0.2s ease,
-    background-color 0.2s ease,
-    border-color 0.2s ease;
-}
-
-a.island-index__card:hover {
-  transform: translateY(-2px);
-  border-color: var(--home-highlight);
-  background: var(--home-card-hover);
-}
-
-.island-index__number {
-  grid-row: 1 / span 2;
-  align-self: center;
-  color: var(--home-muted);
-  font-size: 0.62rem;
-  letter-spacing: 0.1em;
-}
-
-.island-index__label {
-  grid-column: 2;
-  font-size: 0.95rem;
-  font-weight: bold;
-}
-
-.island-index__description {
-  grid-column: 2;
-  color: var(--home-text);
-  font-size: 0.72rem;
-}
-
-.island-index__arrow {
-  grid-column: 3;
-  grid-row: 1 / span 2;
-  align-self: center;
-  color: var(--home-highlight);
-  font-size: 0.9rem;
-  transition: transform 0.2s ease;
-}
-
-a.island-index__card:hover .island-index__arrow {
-  transform: translate(2px, -2px);
-}
-
 @media (max-width: $breakpoint-md) {
   .hero {
     grid-template-columns: 1fr;
     gap: 1.2rem;
     padding: 2.6rem 1.6rem 1.5rem;
-  }
-
-  .island-index {
-    padding: 1.5rem 1.6rem 3rem;
-  }
-
-  .island-index__grid {
-    grid-template-columns: 1fr;
   }
 }
 
@@ -252,9 +152,5 @@ a.island-index__card:hover .island-index__arrow {
 
   .hero__title {
     font-size: 2rem;
-  }
-
-  .island-index {
-    padding: 1.3rem 1.15rem 2.6rem;
   }
 }
