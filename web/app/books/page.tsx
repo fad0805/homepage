@@ -2,9 +2,12 @@
 
 import { useEffect, useMemo, useState } from "react";
 
+import { Pagination } from "@/components/pagination";
 import { RssSubscribe } from "@/components/rss-subscribe";
 
 import "@/public/styles/books.scss";
+
+const CHAPTERS_PER_PAGE = 15;
 
 interface Book {
   id: number;
@@ -57,6 +60,7 @@ export default function Books() {
   const [chapters, setChapters] = useState<Chapter[]>([]);
   const [activeBookId, setActiveBookId] = useState<number | null>(null);
   const [activeChapterId, setActiveChapterId] = useState<number | null>(null);
+  const [chapterPage, setChapterPage] = useState(1);
   const [isMobile, setIsMobile] = useState(false);
   const [now, setNow] = useState(() => Date.now());
   const [loading, setLoading] = useState(true);
@@ -179,6 +183,25 @@ export default function Books() {
         null
       : null;
 
+  const totalChapterPages = Math.max(
+    1,
+    Math.ceil(activeChapters.length / CHAPTERS_PER_PAGE),
+  );
+  const pagedChapters = activeChapters.slice(
+    (chapterPage - 1) * CHAPTERS_PER_PAGE,
+    chapterPage * CHAPTERS_PER_PAGE,
+  );
+
+  useEffect(() => {
+    setChapterPage(1);
+  }, [activeBookId]);
+
+  useEffect(() => {
+    if (chapterPage > totalChapterPages) {
+      setChapterPage(totalChapterPages);
+    }
+  }, [chapterPage, totalChapterPages]);
+
   const selectBook = (bookId: number) => {
     setActiveBookId(bookId);
     setActiveChapterId(null);
@@ -236,23 +259,33 @@ export default function Books() {
       {activeChapters.length === 0 ? (
         <p className="books-panel__empty">등록된 게시글이 없습니다.</p>
       ) : (
-        <div className="books-chapters">
-          {activeChapters.map((chapter) => (
-            <button
-              type="button"
-              className="books-chapter-link"
-              onClick={() => setActiveChapterId(chapter.id)}
-              key={chapter.id}
-            >
-              <span className="books-chapter-link__title">
-                {chapter.title}
-              </span>
-              <span className="books-chapter-link__arrow" aria-hidden="true">
-                →
-              </span>
-            </button>
-          ))}
-        </div>
+        <>
+          <div className="books-chapters">
+            {pagedChapters.map((chapter) => (
+              <button
+                type="button"
+                className="books-chapter-link"
+                onClick={() => setActiveChapterId(chapter.id)}
+                key={chapter.id}
+              >
+                <span className="books-chapter-link__title">
+                  {chapter.title}
+                </span>
+                <span
+                  className="books-chapter-link__arrow"
+                  aria-hidden="true"
+                >
+                  →
+                </span>
+              </button>
+            ))}
+          </div>
+          <Pagination
+            page={chapterPage}
+            totalPages={totalChapterPages}
+            onChange={setChapterPage}
+          />
+        </>
       )}
     </>
   ) : null;
