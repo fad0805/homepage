@@ -34,12 +34,44 @@ interface Chapter {
   book: { id: number; title: string } | null;
 }
 
+function TagChip({
+  tag,
+  onActivate,
+}: {
+  tag: string;
+  onActivate: (tag: string) => void;
+}) {
+  return (
+    <span
+      className="tag is-clickable"
+      role="button"
+      tabIndex={0}
+      onClick={(event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        onActivate(tag);
+      }}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          event.stopPropagation();
+          onActivate(tag);
+        }
+      }}
+    >
+      {tag}
+    </span>
+  );
+}
+
 function ChapterDetail({
   chapter,
   bookTitle,
+  onTagClick,
 }: {
   chapter: Chapter;
   bookTitle: string;
+  onTagClick: (tag: string) => void;
 }) {
   return (
     <article className="chapter-detail">
@@ -47,15 +79,6 @@ function ChapterDetail({
       <h2 className="chapter-detail__title">{chapter.title}</h2>
       {chapter.subtitle ? (
         <p className="chapter-detail__subtitle">{chapter.subtitle}</p>
-      ) : null}
-      {chapter.tags?.length ? (
-        <div className="tag-list chapter-detail__tags">
-          {chapter.tags.map((tag) => (
-            <span className="tag" key={tag}>
-              {tag}
-            </span>
-          ))}
-        </div>
       ) : null}
       {chapter.body ? (
         <div
@@ -65,6 +88,13 @@ function ChapterDetail({
       ) : (
         <p className="chapter-detail__empty">내용이 아직 없습니다.</p>
       )}
+      {chapter.tags?.length ? (
+        <div className="tag-list chapter-detail__tags">
+          {chapter.tags.map((tag) => (
+            <TagChip tag={tag} onActivate={onTagClick} key={tag} />
+          ))}
+        </div>
+      ) : null}
     </article>
   );
 }
@@ -74,6 +104,7 @@ export default function Books() {
   const [chapters, setChapters] = useState<Chapter[]>([]);
   const [activeBookId, setActiveBookId] = useState<number | null>(null);
   const [activeChapterId, setActiveChapterId] = useState<number | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
   const [chapterPage, setChapterPage] = useState(1);
   const [isMobile, setIsMobile] = useState(false);
   const [now, setNow] = useState(() => Date.now());
@@ -182,24 +213,63 @@ export default function Books() {
     return counts;
   }, [visibleChapters]);
 
+  const filteredBooks = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    if (!query) return visibleBooks;
+
+    const matches = (value: string | null | undefined) =>
+      (value ?? "").toLowerCase().includes(query);
+    const chapterMatches = (chapter: Chapter) =>
+      matches(chapter.title) ||
+      matches(chapter.subtitle) ||
+      chapter.tags.some(matches);
+
+    return visibleBooks.filter(
+      (book) =>
+        matches(book.title) ||
+        matches(book.description) ||
+        book.tags.some(matches) ||
+        visibleChapters.some(
+          (chapter) =>
+            chapter.book_id === book.id && chapterMatches(chapter),
+        ),
+    );
+  }, [searchQuery, visibleBooks, visibleChapters]);
+
   useEffect(() => {
     if (isMobile) return;
-    if (visibleBooks.length === 0) return;
+    if (filteredBooks.length === 0) return;
     if (
       activeBookId !== null &&
-      visibleBooks.some((book) => book.id === activeBookId)
+      filteredBooks.some((book) => book.id === activeBookId)
     ) {
       return;
     }
-    setActiveBookId(visibleBooks[0].id);
+    setActiveBookId(filteredBooks[0].id);
     setActiveChapterId(null);
-  }, [activeBookId, isMobile, visibleBooks]);
+  }, [activeBookId, filteredBooks, isMobile]);
 
   const activeBook =
-    visibleBooks.find((book) => book.id === activeBookId) ?? null;
-  const activeChapters = activeBook
-    ? visibleChapters.filter((chapter) => chapter.book_id === activeBook.id)
-    : [];
+    filteredBooks.find((book) => book.id === activeBookId) ?? null;
+
+  const activeChapters = useMemo(() => {
+    if (!activeBook) return [];
+    const bookChapters = visibleChapters.filter(
+      (chapter) => chapter.book_id === activeBook.id,
+    );
+    const query = searchQuery.trim().toLowerCase();
+    if (!query) return bookChapters;
+
+    const matches = (value: string | null | undefined) =>
+      (value ?? "").toLowerCase().includes(query);
+    return bookChapters.filter(
+      (chapter) =>
+        matches(chapter.title) ||
+        matches(chapter.subtitle) ||
+        chapter.tags.some(matches),
+    );
+  }, [activeBook, searchQuery, visibleChapters]);
+
   const activeChapter =
     activeBook && activeChapterId !== null
       ? activeChapters.find((chapter) => chapter.id === activeChapterId) ??
@@ -217,7 +287,7 @@ export default function Books() {
 
   useEffect(() => {
     setChapterPage(1);
-  }, [activeBookId]);
+  }, [activeBookId, searchQuery]);
 
   useEffect(() => {
     if (chapterPage > totalChapterPages) {
@@ -230,40 +300,64 @@ export default function Books() {
     setActiveChapterId(null);
   };
 
+  const activateTag = (tag: string) => {
+    setSearchQuery(tag);
+    setActiveChapterId(null);
+    setChapterPage(1);
+  };
+
+  const handleSearchChange = (value: string) => {
+    setSearchQuery(value);
+    setActiveChapterId(null);
+  };
+
   const bookList = (
     <div className="books-books-column">
       <div className="books-books__rss">
         <RssSubscribe path="/books/rss.xml" label="전체 RSS 구독" />
       </div>
-      <div className="books-books">
-        <p className="books-list-label">책</p>
-        {visibleBooks.map((book) => (
+      <div className="books-search">
+        <input
+          type="search"
+          value={searchQuery}
+          onChange={(event) => handleSearchChange(event.target.value)}
+          placeholder="책, 게시글, 태그 검색"
+          aria-label="책, 게시글, 태그 검색"
+        />
+        {searchQuery ? (
           <button
             type="button"
-            className={`books-book-button${
-              book.id === activeBookId ? " is-active" : ""
-            }`}
-            onClick={() => selectBook(book.id)}
-            aria-pressed={book.id === activeBookId}
-            key={book.id}
+            onClick={() => handleSearchChange("")}
+            aria-label="검색 초기화"
           >
-            <span className="books-book-button__main">
-              <span className="books-book-button__title">{book.title}</span>
-              {book.tags?.length ? (
-                <span className="tag-list">
-                  {book.tags.map((tag) => (
-                    <span className="tag" key={tag}>
-                      {tag}
-                    </span>
-                  ))}
-                </span>
-              ) : null}
-            </span>
-            <span className="books-book-button__count">
-              {chapterCounts.get(book.id) ?? 0}
-            </span>
+            ×
           </button>
-        ))}
+        ) : null}
+      </div>
+      <div className="books-books">
+        <p className="books-list-label">책</p>
+        {filteredBooks.length === 0 ? (
+          <p className="books-list-empty">검색 결과가 없습니다.</p>
+        ) : (
+          filteredBooks.map((book) => (
+            <button
+              type="button"
+              className={`books-book-button${
+                book.id === activeBookId ? " is-active" : ""
+              }`}
+              onClick={() => selectBook(book.id)}
+              aria-pressed={book.id === activeBookId}
+              key={book.id}
+            >
+              <span className="books-book-button__main">
+                <span className="books-book-button__title">{book.title}</span>
+              </span>
+              <span className="books-book-button__count">
+                {chapterCounts.get(book.id) ?? 0}
+              </span>
+            </button>
+          ))
+        )}
       </div>
     </div>
   );
@@ -291,9 +385,7 @@ export default function Books() {
           {activeBook.tags?.length ? (
             <div className="tag-list books-panel__tags">
               {activeBook.tags.map((tag) => (
-                <span className="tag" key={tag}>
-                  {tag}
-                </span>
+                <TagChip tag={tag} onActivate={activateTag} key={tag} />
               ))}
             </div>
           ) : null}
@@ -304,8 +396,21 @@ export default function Books() {
         />
       </header>
 
+      {searchQuery ? (
+        <p className="books-search-active">
+          검색: <strong>{searchQuery}</strong>
+          <button type="button" onClick={() => handleSearchChange("")}>
+            초기화
+          </button>
+        </p>
+      ) : null}
+
       {activeChapters.length === 0 ? (
-        <p className="books-panel__empty">등록된 게시글이 없습니다.</p>
+        <p className="books-panel__empty">
+          {searchQuery
+            ? "검색 결과가 없습니다."
+            : "등록된 게시글이 없습니다."}
+        </p>
       ) : (
         <>
           <div className="books-chapters">
@@ -320,15 +425,6 @@ export default function Books() {
                   <span className="books-chapter-link__title">
                     {chapter.title}
                   </span>
-                  {chapter.tags?.length ? (
-                    <span className="tag-list">
-                      {chapter.tags.map((tag) => (
-                        <span className="tag" key={tag}>
-                          {tag}
-                        </span>
-                      ))}
-                    </span>
-                  ) : null}
                 </span>
                 <span className="books-chapter-link__time">
                   {formatDateTime(chapter.created_at)}
@@ -365,6 +461,7 @@ export default function Books() {
         <ChapterDetail
           chapter={activeChapter}
           bookTitle={activeBook.title}
+          onTagClick={activateTag}
         />
       </div>
     ) : null;

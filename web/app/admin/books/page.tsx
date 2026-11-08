@@ -122,15 +122,6 @@ function SortableBookRow({
               ? `최근 게시글 ${formatDateTime(latestChapterUpdated)}`
               : "게시글 없음"}
           </p>
-          {book.tags?.length ? (
-            <span className="tag-list admin-book-card__tags">
-              {book.tags.map((tag) => (
-                <span className="tag" key={tag}>
-                  {tag}
-                </span>
-              ))}
-            </span>
-          ) : null}
         </div>
         <div className="admin-book-card__meta">
           {book.visible === false ? (

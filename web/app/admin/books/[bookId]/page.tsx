@@ -321,15 +321,6 @@ export default function AdminBookDetail() {
                         <span className="admin-books-chapter-title">
                           {chapter.title}
                         </span>
-                        {chapter.tags?.length ? (
-                          <span className="tag-list">
-                            {chapter.tags.map((tag) => (
-                              <span className="tag" key={tag}>
-                                {tag}
-                              </span>
-                            ))}
-                          </span>
-                        ) : null}
                       </span>
                       <span className="admin-books-chapter-views">
                         조회 {chapter.view_count ?? 0}

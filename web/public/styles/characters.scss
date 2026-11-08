@@ -50,7 +50,11 @@
         width: 20rem;
         aspect-ratio: 3 / 1;
         border-radius: 7px;
-        background: var(--background);
+        background: color.adjust(
+          $maintheme,
+          $lightness: -60%,
+          $saturation: -12%
+        );
         box-shadow: 0 0 10px rgba(0, 0, 0, 0.15);
       }
 

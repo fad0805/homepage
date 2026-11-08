@@ -126,6 +126,44 @@ def get_current_user_from_token(
     return user
 
 
+def get_optional_user(
+    request: Request,
+    db: Session = Depends(get_db),
+    token: str = Depends(get_access_token_from_cookie),
+):
+    """
+    Return the authenticated user when possible, otherwise None.
+
+    Used by public endpoints that need to know whether the request comes from
+    an administrator without rejecting anonymous visitors.
+    """
+    username = None
+
+    if token:
+        try:
+            payload = decode_access_token(token)
+            username = payload.get("sub")
+        except (jwt.ExpiredSignatureError, jwt.InvalidTokenError):
+            username = None
+
+    if not username:
+        refresh_token = get_refresh_token_from_cookie(request)
+        if refresh_token:
+            try:
+                payload = decode_refresh_token(refresh_token)
+                username = payload.get("sub")
+            except (jwt.ExpiredSignatureError, jwt.InvalidTokenError):
+                username = None
+
+    if not username:
+        return None
+
+    try:
+        return get_user(db, username)
+    except ValueError:
+        return None
+
+
 async def require_auth(
     request: Request,
     response: Response,

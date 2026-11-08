@@ -19,7 +19,7 @@ from schemas.books import (
     ChapterReorderRequest,
     ChapterUpdate,
 )
-from .utils import require_auth
+from .utils import get_optional_user, require_auth
 
 router = APIRouter()
 
@@ -74,9 +74,15 @@ def post_chapter_view(
     chapter_id: int,
     request: Request,
     db: Session = Depends(get_db),
+    current_user=Depends(get_optional_user),
 ):
     ip_hash = hashlib.sha256(_client_ip(request).encode()).hexdigest()
-    return register_chapter_view(db, chapter_id, ip_hash)
+    return register_chapter_view(
+        db,
+        chapter_id,
+        ip_hash,
+        count=current_user is None,
+    )
 
 
 @router.get("/{chapter_id}")

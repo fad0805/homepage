@@ -219,7 +219,12 @@ def update_chapter(db: Session, chapter_id: int, payload: ChapterUpdate):
     return _serialize_chapter(chapter)
 
 
-def register_chapter_view(db: Session, chapter_id: int, ip_hash: str):
+def register_chapter_view(
+    db: Session,
+    chapter_id: int,
+    ip_hash: str,
+    count: bool = True,
+):
     chapter = db.query(Chapter).filter(Chapter.id == chapter_id).first()
     if not chapter:
         raise HTTPException(
@@ -235,6 +240,9 @@ def register_chapter_view(db: Session, chapter_id: int, ip_hash: str):
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Does not exist chapter",
         )
+
+    if not count:
+        return {"view_count": chapter.view_count or 0}
 
     view = (
         db.query(ChapterView)
