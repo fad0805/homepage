@@ -37,6 +37,7 @@ interface Book {
   id: number;
   title: string;
   description: string | null;
+  tags: string[];
   order: number;
   visible: boolean;
   created_at: string | null;
@@ -52,6 +53,13 @@ interface ChapterItem {
 type Notice = { type: "success" | "error"; text: string };
 
 const BOOKS_PER_PAGE = 10;
+
+function parseTags(value: string) {
+  return value
+    .split(",")
+    .map((tag) => tag.trim())
+    .filter(Boolean);
+}
 
 function sortBooks(books: Book[]) {
   return [...books].sort((a, b) => {
@@ -114,6 +122,15 @@ function SortableBookRow({
               ? `최근 게시글 ${formatDateTime(latestChapterUpdated)}`
               : "게시글 없음"}
           </p>
+          {book.tags?.length ? (
+            <span className="tag-list admin-book-card__tags">
+              {book.tags.map((tag) => (
+                <span className="tag" key={tag}>
+                  {tag}
+                </span>
+              ))}
+            </span>
+          ) : null}
         </div>
         <div className="admin-book-card__meta">
           {book.visible === false ? (
@@ -144,6 +161,7 @@ export default function AdminBooks() {
   const [bookModalOpen, setBookModalOpen] = useState(false);
   const [bookTitle, setBookTitle] = useState("");
   const [bookDescription, setBookDescription] = useState("");
+  const [bookTags, setBookTags] = useState("");
   const [bookVisible, setBookVisible] = useState(true);
 
   const noticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -260,6 +278,7 @@ export default function AdminBooks() {
   const openCreateBook = () => {
     setBookTitle("");
     setBookDescription("");
+    setBookTags("");
     setBookVisible(true);
     setBookModalOpen(true);
   };
@@ -279,6 +298,7 @@ export default function AdminBooks() {
         body: JSON.stringify({
           title,
           description: bookDescription.trim() || null,
+          tags: parseTags(bookTags),
           order: sortedBooks.length,
           visible: bookVisible,
         }),
@@ -503,6 +523,14 @@ export default function AdminBooks() {
                   }
                   rows={3}
                   placeholder="책 설명 (선택)"
+                />
+              </label>
+              <label className="admin-field">
+                <span>태그</span>
+                <input
+                  value={bookTags}
+                  onChange={(event) => setBookTags(event.target.value)}
+                  placeholder="쉼표로 구분 (선택)"
                 />
               </label>
               <label className="admin-books-checkbox">

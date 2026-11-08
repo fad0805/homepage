@@ -1,9 +1,10 @@
-from datetime import timezone
+import os
+from datetime import datetime, timedelta, timezone
 
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
-from models.books import Book, Chapter
+from models.books import Book, Chapter, ChapterView
 from schemas.books import (
     BookCreate,
     BookReorderRequest,
@@ -12,6 +13,20 @@ from schemas.books import (
     ChapterReorderRequest,
     ChapterUpdate,
 )
+
+
+CHAPTER_VIEW_DEDUP_MINUTES = int(
+    os.getenv("CHAPTER_VIEW_DEDUP_MINUTES", "60")
+)
+
+
+def _clean_tags(tags: list[str] | None) -> list[str]:
+    cleaned: list[str] = []
+    for tag in tags or []:
+        value = tag.strip()
+        if value and value not in cleaned:
+            cleaned.append(value)
+    return cleaned[:20]
 
 
 def _iso_utc(value):
@@ -27,6 +42,7 @@ def _serialize_book(book: Book) -> dict:
         "id": book.id,
         "title": book.title,
         "description": book.description,
+        "tags": book.tags or [],
         "order": book.order,
         "visible": book.visible,
         "created_at": _iso_utc(book.created_at),
@@ -42,8 +58,10 @@ def _serialize_chapter(chapter: Chapter) -> dict:
         "title": chapter.title,
         "subtitle": chapter.subtitle,
         "body": chapter.body,
+        "tags": chapter.tags or [],
         "order": chapter.order,
         "visible": chapter.visible,
+        "view_count": chapter.view_count or 0,
         "published_at": _iso_utc(chapter.published_at),
         "created_at": _iso_utc(chapter.created_at),
         "updated_at": _iso_utc(chapter.updated_at),
@@ -75,7 +93,9 @@ def get_book(db: Session, book_id: int):
 
 
 def create_book(db: Session, payload: BookCreate):
-    book = Book(**payload.model_dump())
+    data = payload.model_dump()
+    data["tags"] = _clean_tags(data.get("tags"))
+    book = Book(**data)
     db.add(book)
     db.commit()
     db.refresh(book)
@@ -90,7 +110,10 @@ def update_book(db: Session, book_id: int, payload: BookUpdate):
             detail="Does not exist book",
         )
 
-    for key, value in payload.model_dump(exclude_unset=True).items():
+    data = payload.model_dump(exclude_unset=True)
+    if "tags" in data:
+        data["tags"] = _clean_tags(data["tags"])
+    for key, value in data.items():
         setattr(book, key, value)
     db.commit()
     db.refresh(book)
@@ -166,7 +189,9 @@ def _get_book_or_404(db: Session, book_id: int) -> Book:
 
 def create_chapter(db: Session, payload: ChapterCreate):
     _get_book_or_404(db, payload.book_id)
-    chapter = Chapter(**payload.model_dump())
+    data = payload.model_dump()
+    data["tags"] = _clean_tags(data.get("tags"))
+    chapter = Chapter(**data)
     db.add(chapter)
     db.commit()
     db.refresh(chapter)
@@ -184,12 +209,64 @@ def update_chapter(db: Session, chapter_id: int, payload: ChapterUpdate):
     data = payload.model_dump(exclude_unset=True)
     if "book_id" in data and data["book_id"] is not None:
         _get_book_or_404(db, data["book_id"])
+    if "tags" in data:
+        data["tags"] = _clean_tags(data["tags"])
 
     for key, value in data.items():
         setattr(chapter, key, value)
     db.commit()
     db.refresh(chapter)
     return _serialize_chapter(chapter)
+
+
+def register_chapter_view(db: Session, chapter_id: int, ip_hash: str):
+    chapter = db.query(Chapter).filter(Chapter.id == chapter_id).first()
+    if not chapter:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Does not exist chapter",
+        )
+
+    now = datetime.utcnow()
+    if chapter.visible is False or (
+        chapter.published_at is not None and chapter.published_at > now
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Does not exist chapter",
+        )
+
+    view = (
+        db.query(ChapterView)
+        .filter(
+            ChapterView.chapter_id == chapter_id,
+            ChapterView.ip_hash == ip_hash,
+        )
+        .first()
+    )
+
+    counted = False
+    if view is None:
+        db.add(
+            ChapterView(
+                chapter_id=chapter_id,
+                ip_hash=ip_hash,
+                last_viewed_at=now,
+            )
+        )
+        counted = True
+    elif now - view.last_viewed_at >= timedelta(
+        minutes=CHAPTER_VIEW_DEDUP_MINUTES
+    ):
+        view.last_viewed_at = now
+        counted = True
+
+    if counted:
+        chapter.view_count = (chapter.view_count or 0) + 1
+        db.commit()
+        db.refresh(chapter)
+
+    return {"view_count": chapter.view_count or 0}
 
 
 def delete_chapter(db: Session, chapter_id: int):

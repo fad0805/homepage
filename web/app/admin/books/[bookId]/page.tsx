@@ -21,6 +21,7 @@ interface Book {
   id: number;
   title: string;
   description: string | null;
+  tags: string[];
   order: number;
   visible: boolean;
   created_at: string | null;
@@ -33,14 +34,23 @@ interface ChapterItem {
   title: string;
   subtitle: string | null;
   body: string | null;
+  tags: string[];
   order: number;
   visible: boolean;
+  view_count: number;
   created_at: string | null;
   updated_at: string | null;
   book: { id: number; title: string } | null;
 }
 
 type Notice = { type: "success" | "error"; text: string };
+
+function parseTags(value: string) {
+  return value
+    .split(",")
+    .map((tag) => tag.trim())
+    .filter(Boolean);
+}
 
 const CHAPTERS_PER_PAGE = 10;
 
@@ -63,6 +73,7 @@ export default function AdminBookDetail() {
   const [page, setPage] = useState(1);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
+  const [tagsInput, setTagsInput] = useState("");
   const [visible, setVisible] = useState(true);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -98,6 +109,7 @@ export default function AdminBookDetail() {
       setBook(bookData);
       setTitle(bookData.title);
       setDescription(bookData.description ?? "");
+      setTagsInput((bookData.tags ?? []).join(", "));
       setVisible(bookData.visible !== false);
       setChapters(
         sortChapters(
@@ -156,6 +168,7 @@ export default function AdminBookDetail() {
     if (!book) return;
     setTitle(book.title);
     setDescription(book.description ?? "");
+    setTagsInput((book.tags ?? []).join(", "));
     setVisible(book.visible !== false);
     setBookInfoOpen(true);
   };
@@ -176,12 +189,14 @@ export default function AdminBookDetail() {
         body: JSON.stringify({
           title: nextTitle,
           description: description.trim() || null,
+          tags: parseTags(tagsInput),
           visible,
         }),
       });
       setBook(updated);
       setTitle(updated.title);
       setDescription(updated.description ?? "");
+      setTagsInput((updated.tags ?? []).join(", "));
       setBookInfoOpen(false);
       notify("success", "책 정보를 저장했습니다.");
     } catch (error) {
@@ -251,6 +266,15 @@ export default function AdminBookDetail() {
             <div className="admin-books-page-title">
               <h1>{book.title}</h1>
               {book.description ? <p>{book.description}</p> : null}
+              {book.tags?.length ? (
+                <span className="tag-list admin-books-page-tags">
+                  {book.tags.map((tag) => (
+                    <span className="tag" key={tag}>
+                      {tag}
+                    </span>
+                  ))}
+                </span>
+              ) : null}
               <p>
                 생성 {formatDateTime(book.created_at)} · 수정{" "}
                 {formatDateTime(book.updated_at)}
@@ -293,8 +317,22 @@ export default function AdminBookDetail() {
                       href={`/admin/books/${book.id}/chapters/${chapter.id}`}
                       key={chapter.id}
                     >
-                      <span className="admin-books-chapter-title">
-                        {chapter.title}
+                      <span className="admin-books-chapter-main">
+                        <span className="admin-books-chapter-title">
+                          {chapter.title}
+                        </span>
+                        {chapter.tags?.length ? (
+                          <span className="tag-list">
+                            {chapter.tags.map((tag) => (
+                              <span className="tag" key={tag}>
+                                {tag}
+                              </span>
+                            ))}
+                          </span>
+                        ) : null}
+                      </span>
+                      <span className="admin-books-chapter-views">
+                        조회 {chapter.view_count ?? 0}
                       </span>
                       <span className="admin-books-chapter-updated">
                         {formatDateTime(chapter.updated_at)}
@@ -362,6 +400,14 @@ export default function AdminBookDetail() {
                   }
                   rows={5}
                   placeholder="책 설명 (선택)"
+                />
+              </label>
+              <label className="admin-field">
+                <span>태그</span>
+                <input
+                  value={tagsInput}
+                  onChange={(event) => setTagsInput(event.target.value)}
+                  placeholder="쉼표로 구분 (선택)"
                 />
               </label>
               <label className="admin-books-checkbox">

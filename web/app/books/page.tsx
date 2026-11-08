@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import { Pagination } from "@/components/pagination";
 import { RssSubscribe } from "@/components/rss-subscribe";
+import { formatDateTime } from "@/lib/datetime";
 
 import "@/public/styles/books.scss";
 
@@ -13,6 +14,7 @@ interface Book {
   id: number;
   title: string;
   description: string | null;
+  tags: string[];
   order: number;
   visible: boolean;
 }
@@ -23,8 +25,11 @@ interface Chapter {
   title: string;
   subtitle: string | null;
   body: string | null;
+  tags: string[];
   order: number;
   visible: boolean;
+  view_count: number;
+  created_at: string | null;
   published_at: string | null;
   book: { id: number; title: string } | null;
 }
@@ -42,6 +47,15 @@ function ChapterDetail({
       <h2 className="chapter-detail__title">{chapter.title}</h2>
       {chapter.subtitle ? (
         <p className="chapter-detail__subtitle">{chapter.subtitle}</p>
+      ) : null}
+      {chapter.tags?.length ? (
+        <div className="tag-list chapter-detail__tags">
+          {chapter.tags.map((tag) => (
+            <span className="tag" key={tag}>
+              {tag}
+            </span>
+          ))}
+        </div>
       ) : null}
       {chapter.body ? (
         <div
@@ -124,6 +138,15 @@ export default function Books() {
       setActiveChapterId(chapterParam);
     }
   }, []);
+
+  useEffect(() => {
+    if (activeChapterId === null) return;
+    fetch(`/api/chapters/${activeChapterId}/view`, {
+      method: "POST",
+    }).catch(() => {
+      // View counting must never break the reading experience.
+    });
+  }, [activeChapterId]);
 
   const visibleBooks = useMemo(
     () =>
@@ -208,24 +231,40 @@ export default function Books() {
   };
 
   const bookList = (
-    <div className="books-books">
-      <p className="books-list-label">책</p>
-      {visibleBooks.map((book) => (
-        <button
-          type="button"
-          className={`books-book-button${
-            book.id === activeBookId ? " is-active" : ""
-          }`}
-          onClick={() => selectBook(book.id)}
-          aria-pressed={book.id === activeBookId}
-          key={book.id}
-        >
-          <span className="books-book-button__title">{book.title}</span>
-          <span className="books-book-button__count">
-            {chapterCounts.get(book.id) ?? 0}
-          </span>
-        </button>
-      ))}
+    <div className="books-books-column">
+      <div className="books-books__rss">
+        <RssSubscribe path="/books/rss.xml" label="전체 RSS 구독" />
+      </div>
+      <div className="books-books">
+        <p className="books-list-label">책</p>
+        {visibleBooks.map((book) => (
+          <button
+            type="button"
+            className={`books-book-button${
+              book.id === activeBookId ? " is-active" : ""
+            }`}
+            onClick={() => selectBook(book.id)}
+            aria-pressed={book.id === activeBookId}
+            key={book.id}
+          >
+            <span className="books-book-button__main">
+              <span className="books-book-button__title">{book.title}</span>
+              {book.tags?.length ? (
+                <span className="tag-list">
+                  {book.tags.map((tag) => (
+                    <span className="tag" key={tag}>
+                      {tag}
+                    </span>
+                  ))}
+                </span>
+              ) : null}
+            </span>
+            <span className="books-book-button__count">
+              {chapterCounts.get(book.id) ?? 0}
+            </span>
+          </button>
+        ))}
+      </div>
     </div>
   );
 
@@ -249,6 +288,15 @@ export default function Books() {
           {activeBook.description ? (
             <p>{activeBook.description}</p>
           ) : null}
+          {activeBook.tags?.length ? (
+            <div className="tag-list books-panel__tags">
+              {activeBook.tags.map((tag) => (
+                <span className="tag" key={tag}>
+                  {tag}
+                </span>
+              ))}
+            </div>
+          ) : null}
         </div>
         <RssSubscribe
           path={`/books/${activeBook.id}/rss.xml`}
@@ -268,8 +316,22 @@ export default function Books() {
                 onClick={() => setActiveChapterId(chapter.id)}
                 key={chapter.id}
               >
-                <span className="books-chapter-link__title">
-                  {chapter.title}
+                <span className="books-chapter-link__main">
+                  <span className="books-chapter-link__title">
+                    {chapter.title}
+                  </span>
+                  {chapter.tags?.length ? (
+                    <span className="tag-list">
+                      {chapter.tags.map((tag) => (
+                        <span className="tag" key={tag}>
+                          {tag}
+                        </span>
+                      ))}
+                    </span>
+                  ) : null}
+                </span>
+                <span className="books-chapter-link__time">
+                  {formatDateTime(chapter.created_at)}
                 </span>
                 <span
                   className="books-chapter-link__arrow"
@@ -309,10 +371,6 @@ export default function Books() {
 
   return (
     <div id="books-page">
-      <div className="books-rss-bar">
-        <RssSubscribe path="/books/rss.xml" label="전체 RSS 구독" />
-      </div>
-
       {loading ? (
         <p className="books-state">불러오는 중...</p>
       ) : error ? (

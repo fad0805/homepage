@@ -27,8 +27,10 @@ interface ChapterItem {
   title: string;
   subtitle: string | null;
   body: string | null;
+  tags: string[];
   order: number;
   visible: boolean;
+  view_count: number;
   published_at: string | null;
   created_at: string | null;
   updated_at: string | null;
@@ -36,6 +38,13 @@ interface ChapterItem {
 }
 
 type Notice = { type: "success" | "error"; text: string };
+
+function parseTags(value: string) {
+  return value
+    .split(",")
+    .map((tag) => tag.trim())
+    .filter(Boolean);
+}
 
 function toDatetimeLocal(value: string | null) {
   if (!value) return "";
@@ -60,6 +69,7 @@ export default function AdminChapterEdit() {
   const [title, setTitle] = useState("");
   const [subtitle, setSubtitle] = useState("");
   const [body, setBody] = useState("");
+  const [tagsInput, setTagsInput] = useState("");
   const [visible, setVisible] = useState(true);
   const [publishedAt, setPublishedAt] = useState("");
   const [nextOrder, setNextOrder] = useState(0);
@@ -116,9 +126,11 @@ export default function AdminChapterEdit() {
         setTitle(current.title);
         setSubtitle(current.subtitle ?? "");
         setBody(current.body ?? "");
+        setTagsInput((current.tags ?? []).join(", "));
         setVisible(current.visible !== false);
         setPublishedAt(toDatetimeLocal(current.published_at));
       } else {
+        setTagsInput("");
         setPublishedAt("");
       }
     } catch (error) {
@@ -166,6 +178,7 @@ export default function AdminChapterEdit() {
             title: nextTitle,
             subtitle: subtitle.trim() || null,
             body: nextBody,
+            tags: parseTags(tagsInput),
             order: nextOrder,
             visible,
             published_at: publishedAtValue,
@@ -179,6 +192,7 @@ export default function AdminChapterEdit() {
             title: nextTitle,
             subtitle: subtitle.trim() || null,
             body: nextBody,
+            tags: parseTags(tagsInput),
             order: chapter.order,
             visible,
             published_at: publishedAtValue,
@@ -253,6 +267,7 @@ export default function AdminChapterEdit() {
                   {chapter.published_at
                     ? ` · 발행 ${formatDateTime(chapter.published_at)}`
                     : ""}
+                  {` · 조회 ${chapter.view_count ?? 0}`}
                 </p>
               ) : (
                 <p>새 챕터를 작성합니다.</p>
@@ -290,6 +305,14 @@ export default function AdminChapterEdit() {
                   placeholder="챕터 본문을 입력해주세요."
                 />
               </div>
+              <label className="admin-field">
+                <span>태그</span>
+                <input
+                  value={tagsInput}
+                  onChange={(event) => setTagsInput(event.target.value)}
+                  placeholder="쉼표로 구분 (선택)"
+                />
+              </label>
               <label className="admin-field">
                 <span>발행 시각</span>
                 <input

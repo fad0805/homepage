@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field
 class BookBase(BaseModel):
     title: str
     description: str | None = None
+    tags: list[str] = Field(default_factory=list)
     order: int = 0
     visible: bool = True
 
@@ -17,6 +18,7 @@ class BookCreate(BookBase):
 class BookUpdate(BaseModel):
     title: str | None = None
     description: str | None = None
+    tags: list[str] | None = None
     order: int | None = None
     visible: bool | None = None
 
@@ -35,6 +37,7 @@ class ChapterBase(BaseModel):
     title: str
     subtitle: str | None = None
     body: str | None = None
+    tags: list[str] = Field(default_factory=list)
     order: int = 0
     visible: bool = True
     published_at: datetime | None = None
@@ -49,6 +52,7 @@ class ChapterUpdate(BaseModel):
     title: str | None = None
     subtitle: str | None = None
     body: str | None = None
+    tags: list[str] | None = None
     order: int | None = None
     visible: bool | None = None
     published_at: datetime | None = None

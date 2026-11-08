@@ -14,10 +14,16 @@
   opacity: 0.68;
 }
 
-.books-rss-bar {
+.books-books-column {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+.books-books__rss {
   display: flex;
   justify-content: flex-end;
-  margin-bottom: 0.5rem;
 }
 
 .rss-subscribe {
@@ -74,7 +80,7 @@
   }
 }
 
-.books-rss-bar .rss-subscribe__panel {
+.books-books__rss .rss-subscribe__panel {
   right: 0;
   left: auto;
 }
@@ -138,7 +144,7 @@
   flex-direction: column;
   gap: 0.15rem;
   min-width: 0;
-  max-height: calc(100vh - 12rem);
+  max-height: calc(100vh - 14rem);
   padding-top: 0.75rem;
   padding-right: 0.35rem;
   border-top: 1px solid rgba(0, 0, 0, 0.14);
@@ -180,8 +186,16 @@
   }
 }
 
-.books-book-button__title {
+.books-book-button__main {
   flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.books-book-button__title {
+  display: block;
   min-width: 0;
   color: var(--title-color);
   font-family: Eulyoo1945-SemiBold, Arial, Helvetica, sans-serif;
@@ -272,8 +286,16 @@
   }
 }
 
-.books-chapter-link__title {
+.books-chapter-link__main {
   flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.books-chapter-link__title {
+  display: block;
   min-width: 0;
   color: var(--title-color);
   font-size: 0.92rem;
@@ -282,11 +304,44 @@
   word-break: break-word;
 }
 
+.books-chapter-link__time {
+  flex-shrink: 0;
+  color: var(--foreground);
+  font-size: 0.68rem;
+  opacity: 0.55;
+  white-space: nowrap;
+}
+
 .books-chapter-link__arrow {
   flex-shrink: 0;
   color: var(--title-color);
   font-size: 0.8rem;
   opacity: 0.5;
+}
+
+.tag-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.2rem;
+}
+
+.tag {
+  padding: 0.05rem 0.4rem;
+  border: 1px solid rgba(0, 0, 0, 0.16);
+  border-radius: 999px;
+  color: var(--title-color);
+  font-size: 0.62rem;
+  line-height: 1.4;
+  opacity: 0.8;
+  white-space: nowrap;
+}
+
+.books-panel__tags {
+  margin-top: 0.35rem;
+}
+
+.chapter-detail__tags {
+  margin-top: 0.5rem;
 }
 
 .books-panel__detail {
@@ -577,6 +632,10 @@
 
   .chapter-detail__body code {
     background: rgba(255, 255, 255, 0.08);
+  }
+
+  .tag {
+    border-color: rgba(255, 255, 255, 0.2);
   }
 }
 
