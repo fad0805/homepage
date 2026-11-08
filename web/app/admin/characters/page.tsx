@@ -51,6 +51,26 @@ interface DollInfo {
 
 type CharacterLayout = "auto" | "left" | "center" | "right";
 
+interface RelatedCharacterSummary {
+  id: number;
+  name: string;
+  thumbnail: string | null;
+  layout?: CharacterLayout | null;
+  visible?: boolean | null;
+  is_my_doll?: boolean | null;
+}
+
+interface CharacterRelationshipItem {
+  id: number;
+  relationship_type: string;
+  character: RelatedCharacterSummary;
+}
+
+interface CharacterRelationshipDraft {
+  related_character_id: number;
+  relationship_type: string;
+}
+
 interface CharacterItem {
   id: number;
   name: string;
@@ -66,16 +86,18 @@ interface CharacterItem {
   is_my_doll: boolean;
   order_in_location: number | null;
   layout: CharacterLayout | null;
+  relationships: CharacterRelationshipItem[] | null;
   location: Location | null;
   head_doll: DollInfo | null;
   body_doll: DollInfo | null;
 }
 
-interface DraftCharacter extends CharacterItem {
+interface DraftCharacter extends Omit<CharacterItem, "relationships"> {
   /** Staged thumbnail file that will be uploaded on save. */
   file?: File | null;
   /** Local object URL preview for the staged file. */
   preview_url?: string | null;
+  relationships: CharacterRelationshipDraft[];
 }
 
 type Notice = { type: "success" | "error"; text: string };
@@ -345,7 +367,7 @@ function SortableCharacterCard({
           <span className="admin-character-meta">나이: {character.age}</span>
         ) : null}
         <div className="admin-character-badges">
-          {character.visible === false ? (
+          {character.visible === false || character.is_my_doll !== true ? (
             <span className="admin-character-badge">비공개</span>
           ) : null}
           {character.is_my_doll ? (
@@ -502,6 +524,9 @@ export default function AdminCharacters() {
   const [thumbnailFileName, setThumbnailFileName] = useState<string>("");
   const [thumbnailUrlInput, setThumbnailUrlInput] = useState<string>("");
   const [thumbnailFile, setThumbnailFile] = useState<File | null>(null);
+  const [relationshipDraft, setRelationshipDraft] = useState<
+    CharacterRelationshipDraft[]
+  >([]);
 
   const [cropModalOpen, setCropModalOpen] = useState(false);
   const [cropSource, setCropSource] = useState<string | null>(null);
@@ -555,7 +580,17 @@ export default function AdminCharacters() {
       ]);
       revokeObjectUrls();
       setLocations(sortLocations(locationData));
-      setCharacters(characterData);
+      setCharacters(
+        characterData.map((character) => ({
+          ...character,
+          relationships: (character.relationships ?? []).map(
+            (relationship) => ({
+              related_character_id: relationship.character.id,
+              relationship_type: relationship.relationship_type,
+            }),
+          ),
+        })),
+      );
       setDeletedCharacterIds([]);
       setDeletedLocationIds([]);
       setIsDirty(false);
@@ -776,8 +811,33 @@ export default function AdminCharacters() {
             is_my_doll: character.is_my_doll,
             order_in_location: character.order_in_location,
             layout: character.layout ?? "auto",
+            relationships: character.relationships.map((relationship) => ({
+              related_character_id:
+                characterIdMap.get(relationship.related_character_id) ??
+                relationship.related_character_id,
+              relationship_type: relationship.relationship_type,
+            })),
             head_doll: character.head_doll,
             body_doll: character.body_doll,
+          }),
+        });
+      }
+
+      // New characters can only be linked after every new character has an id.
+      for (const character of characters.filter((item) => item.id < 0)) {
+        const realId = characterIdMap.get(character.id);
+        if (!realId || character.relationships.length === 0) {
+          continue;
+        }
+        await apiFetch(`/api/characters/${realId}`, {
+          method: "PUT",
+          body: JSON.stringify({
+            relationships: character.relationships.map((relationship) => ({
+              related_character_id:
+                characterIdMap.get(relationship.related_character_id) ??
+                relationship.related_character_id,
+              relationship_type: relationship.relationship_type,
+            })),
           }),
         });
       }
@@ -878,6 +938,7 @@ export default function AdminCharacters() {
     setThumbnailFileName("");
     setThumbnailUrlInput("");
     setThumbnailFile(null);
+    setRelationshipDraft([]);
     setFormLocationId(locationId ?? locations[0]?.id ?? null);
     setCharacterModalOpen(true);
   };
@@ -888,6 +949,9 @@ export default function AdminCharacters() {
     setThumbnailFileName(character.file?.name ?? "");
     setThumbnailUrlInput(character.thumbnail ?? "");
     setThumbnailFile(null);
+    setRelationshipDraft(
+      character.relationships.map((relationship) => ({ ...relationship })),
+    );
     setFormLocationId(
       character.location_id ?? locations[0]?.id ?? null,
     );
@@ -921,6 +985,7 @@ export default function AdminCharacters() {
     setThumbnailFileName("");
     setThumbnailUrlInput("");
     setThumbnailFile(null);
+    setRelationshipDraft([]);
     closeCropModal();
   }, [closeCropModal]);
 
@@ -1099,6 +1164,16 @@ export default function AdminCharacters() {
       rawLayout === "left" || rawLayout === "right" || rawLayout === "center"
         ? rawLayout
         : "auto";
+    const relationships = relationshipDraft
+      .filter(
+        (relationship) =>
+          relationship.related_character_id !== 0 &&
+          relationship.related_character_id !== editingCharacter?.id,
+      )
+      .map((relationship) => ({
+        related_character_id: relationship.related_character_id,
+        relationship_type: relationship.relationship_type.trim(),
+      }));
     const rawLocation = form.get("location");
     const locationId =
       rawLocation === null || rawLocation === "" ? null : Number(rawLocation);
@@ -1161,6 +1236,7 @@ export default function AdminCharacters() {
       is_my_doll: form.get("is_my_doll") === "on",
       order_in_location: order,
       layout,
+      relationships,
       location: targetLocation,
       head_doll: headName
         ? {
@@ -1196,7 +1272,15 @@ export default function AdminCharacters() {
       return;
     }
     setCharacters((prev) =>
-      prev.filter((item) => item.id !== character.id),
+      prev
+        .filter((item) => item.id !== character.id)
+        .map((item) => ({
+          ...item,
+          relationships: item.relationships.filter(
+            (relationship) =>
+              relationship.related_character_id !== character.id,
+          ),
+        })),
     );
     if (character.id > 0) {
       setDeletedCharacterIds((prev) => [...prev, character.id]);
@@ -1276,11 +1360,22 @@ export default function AdminCharacters() {
     setLocations((prev) =>
       prev.filter((item) => item.id !== location.id),
     );
-    setCharacters((prev) =>
-      prev.filter(
-        (character) => character.location_id !== location.id,
-      ),
-    );
+    setCharacters((prev) => {
+      const removedIds = new Set(
+        prev
+          .filter((character) => character.location_id === location.id)
+          .map((character) => character.id),
+      );
+      return prev
+        .filter((character) => character.location_id !== location.id)
+        .map((character) => ({
+          ...character,
+          relationships: character.relationships.filter(
+            (relationship) =>
+              !removedIds.has(relationship.related_character_id),
+          ),
+        }));
+    });
     if (location.id > 0) {
       setDeletedLocationIds((prev) => [...prev, location.id]);
     }
@@ -1455,6 +1550,75 @@ export default function AdminCharacters() {
                 <option value="right">오른쪽</option>
               </select>
             </label>
+
+            <div className="admin-field admin-relationships-field">
+              <span>관계 인물</span>
+              <div className="admin-relationships">
+                {relationshipDraft.map((relationship, index) => (
+                  <div className="admin-relationship-row" key={index}>
+                    <select
+                      value={relationship.related_character_id}
+                      onChange={(event) => {
+                        const value = Number(event.target.value);
+                        setRelationshipDraft((prev) =>
+                          prev.map((item, itemIndex) =>
+                            itemIndex === index
+                              ? { ...item, related_character_id: value }
+                              : item,
+                          ),
+                        );
+                      }}
+                    >
+                      <option value={0}>등장인물 선택</option>
+                      {characters
+                        .filter((item) => item.id !== editingCharacter?.id)
+                        .map((item) => (
+                          <option key={item.id} value={item.id}>
+                            {item.name}
+                          </option>
+                        ))}
+                    </select>
+                    <input
+                      value={relationship.relationship_type}
+                      onChange={(event) => {
+                        const value = event.target.value;
+                        setRelationshipDraft((prev) =>
+                          prev.map((item, itemIndex) =>
+                            itemIndex === index
+                              ? { ...item, relationship_type: value }
+                              : item,
+                          ),
+                        );
+                      }}
+                      placeholder="관계 (예: 언니)"
+                    />
+                    <button
+                      type="button"
+                      className="admin-button"
+                      onClick={() =>
+                        setRelationshipDraft((prev) =>
+                          prev.filter((_, itemIndex) => itemIndex !== index),
+                        )
+                      }
+                    >
+                      삭제
+                    </button>
+                  </div>
+                ))}
+                <button
+                  type="button"
+                  className="admin-button"
+                  onClick={() =>
+                    setRelationshipDraft((prev) => [
+                      ...prev,
+                      { related_character_id: 0, relationship_type: "" },
+                    ])
+                  }
+                >
+                  관계 추가
+                </button>
+              </div>
+            </div>
 
             <label className="admin-field">
               <span>다른 이름</span>

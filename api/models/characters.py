@@ -34,6 +34,11 @@ class Character(Base):
     location_relationship = relationship("Location", foreign_keys=[location_id])
     head_relationship = relationship("Doll", foreign_keys=[head])
     body_relationship = relationship("Doll", foreign_keys=[body])
+    outgoing_relationships = relationship(
+        "CharacterRelationship",
+        foreign_keys="CharacterRelationship.character_id",
+        order_by="CharacterRelationship.id",
+    )
 
 
 class CharacterRelationship(Base):
@@ -45,7 +50,11 @@ class CharacterRelationship(Base):
     relationship_type = Column(String, nullable=False)
     established = Column(DateTime, nullable=True)
 
-    character = relationship("Character", foreign_keys=[character_id])
+    character = relationship(
+        "Character",
+        foreign_keys=[character_id],
+        back_populates="outgoing_relationships",
+    )
     related_character = relationship("Character", foreign_keys=[related_character_id])
 
 

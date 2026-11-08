@@ -47,6 +47,13 @@ class DollInput(BaseModel):
     skin_tone: str | None = None
 
 
+class CharacterRelationshipInput(BaseModel):
+    """A character linked from another character's profile."""
+
+    related_character_id: int
+    relationship_type: str | None = None
+
+
 class CharacterBase(BaseModel):
     """Base model for a character."""
 
@@ -63,6 +70,7 @@ class CharacterBase(BaseModel):
     is_my_doll: bool = True
     order_in_location: int | None = None
     layout: CharacterLayout = "auto"
+    relationships: list[CharacterRelationshipInput] = Field(default_factory=list)
     head_doll: DollInput | None = None
     body_doll: DollInput | None = None
 
@@ -87,6 +95,7 @@ class CharacterUpdate(BaseModel):
     is_my_doll: bool | None = None
     order_in_location: int | None = None
     layout: CharacterLayout | None = None
+    relationships: list[CharacterRelationshipInput] | None = None
     head_doll: DollInput | None = None
     body_doll: DollInput | None = None
 

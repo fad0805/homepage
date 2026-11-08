@@ -30,6 +30,33 @@
   color: var(--admin-muted);
 }
 
+.admin-relationships-field {
+  gap: 0.5rem;
+}
+
+.admin-relationships {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+
+  > .admin-button {
+    align-self: flex-start;
+  }
+}
+
+.admin-relationship-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  gap: 0.4rem;
+  align-items: center;
+}
+
+@media (max-width: 600px) {
+  .admin-relationship-row {
+    grid-template-columns: 1fr;
+  }
+}
+
 .admin-characters-toolbar-actions {
   display: flex;
   flex-wrap: wrap;

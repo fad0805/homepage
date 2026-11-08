@@ -21,6 +21,21 @@ interface DollInfo {
   skin_tone: string | null;
 }
 
+interface RelatedCharacter {
+  id: number;
+  name: string;
+  thumbnail: string | null;
+  layout: string | null;
+  visible: boolean | null;
+  is_my_doll: boolean | null;
+}
+
+interface CharacterRelationship {
+  id: number;
+  relationship_type: string;
+  character: RelatedCharacter;
+}
+
 interface CharacterDetail {
   id: number;
   name: string;
@@ -36,6 +51,7 @@ interface CharacterDetail {
   location: CharacterLocation | null;
   head_doll: DollInfo | null;
   body_doll: DollInfo | null;
+  relationships: CharacterRelationship[] | null;
 }
 
 function isHexColor(value: string | null) {
@@ -114,14 +130,19 @@ function CharacterProfileContent() {
       })
       .then((data) => {
         if (cancelled) return;
-        if (data.visible === false) {
+        if (data.visible === false || data.is_my_doll !== true) {
           setError("등장인물을 찾을 수 없습니다.");
           return;
         }
         setCharacter(data);
       })
       .catch((reason) => {
-        console.error(reason);
+        const isNotFound =
+          reason instanceof Error &&
+          reason.message === "등장인물을 찾을 수 없습니다.";
+        if (!isNotFound) {
+          console.error(reason);
+        }
         if (!cancelled) {
           setError(
             reason instanceof Error
@@ -161,6 +182,9 @@ function CharacterProfileContent() {
   const subName = [character.alt_name, character.nickname]
     .filter(Boolean)
     .join(" · ");
+  const visibleRelationships = (character.relationships ?? []).filter(
+    (relationship) => relationship.character.visible !== false,
+  );
 
   return (
     <div id="character-profile">
@@ -216,6 +240,59 @@ function CharacterProfileContent() {
           <p className="character-profile__description">
             {character.description}
           </p>
+        </section>
+      ) : null}
+
+      {visibleRelationships.length > 0 ? (
+        <section className="character-profile__section">
+          <h2>관계 인물</h2>
+          <div className="character-profile__relations">
+            {visibleRelationships.map((relationship) => {
+              const canOpenProfile =
+                relationship.character.is_my_doll === true;
+              const content = (
+                <>
+                  <div
+                    className={`character-profile__relation-banner${
+                      relationship.character.thumbnail ? "" : " is-empty"
+                    }`}
+                  >
+                    <p>{relationship.character.name}</p>
+                    {relationship.character.thumbnail ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={relationship.character.thumbnail}
+                        alt={relationship.character.name}
+                      />
+                    ) : null}
+                  </div>
+                  {relationship.relationship_type ? (
+                    <span className="character-profile__relation-type">
+                      {relationship.relationship_type}
+                    </span>
+                  ) : null}
+                </>
+              );
+
+              return canOpenProfile ? (
+                <Link
+                  key={relationship.id}
+                  className="character-profile__relation"
+                  href={`/characters/profile?character=${relationship.character.id}`}
+                >
+                  {content}
+                </Link>
+              ) : (
+                <div
+                  key={relationship.id}
+                  className="character-profile__relation"
+                  aria-disabled="true"
+                >
+                  {content}
+                </div>
+              );
+            })}
+          </div>
         </section>
       ) : null}
 

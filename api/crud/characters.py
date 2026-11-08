@@ -1,11 +1,12 @@
 from fastapi import HTTPException, status
 from sqlalchemy import func, or_
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from core.uploads import delete_replaced_upload, delete_uploaded_file
 from models.characters import Character, CharacterRelationship, Doll, Location
 from schemas.characters import (
     CharacterCreate,
+    CharacterRelationshipInput,
     CharacterReorderRequest,
     CharacterUpdate,
     DollInput,
@@ -36,6 +37,26 @@ def _serialize_doll(doll: Doll | None) -> dict | None:
     }
 
 
+def _serialize_relationship(relationship: CharacterRelationship) -> dict:
+    related = relationship.related_character
+    return {
+        "id": relationship.id,
+        "relationship_type": relationship.relationship_type,
+        "character": (
+            {
+                "id": related.id,
+                "name": related.name,
+                "thumbnail": related.thumbnail,
+                "layout": related.layout or "auto",
+                "visible": related.visible,
+                "is_my_doll": related.is_my_doll,
+            }
+            if related
+            else None
+        ),
+    }
+
+
 def _serialize_character(character: Character) -> dict:
     location = character.location_relationship
     return {
@@ -58,6 +79,11 @@ def _serialize_character(character: Character) -> dict:
         "location": _serialize_location(location) if location else None,
         "head_doll": _serialize_doll(character.head_relationship),
         "body_doll": _serialize_doll(character.body_relationship),
+        "relationships": [
+            _serialize_relationship(relationship)
+            for relationship in character.outgoing_relationships
+            if relationship.related_character
+        ],
     }
 
 
@@ -119,6 +145,41 @@ def _sync_doll(
     setattr(character, part, doll.id)
 
 
+def _sync_relationships(
+    db: Session,
+    character: Character,
+    items: list[CharacterRelationshipInput],
+) -> None:
+    """Replace the character's outgoing relationship links."""
+    db.query(CharacterRelationship).filter(
+        CharacterRelationship.character_id == character.id
+    ).delete(synchronize_session=False)
+
+    seen: set[int] = set()
+    for item in items:
+        related_id = item.related_character_id
+        if related_id == character.id or related_id in seen:
+            continue
+
+        related = (
+            db.query(Character).filter(Character.id == related_id).first()
+        )
+        if not related:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="존재하지 않는 등장인물입니다.",
+            )
+
+        seen.add(related_id)
+        db.add(
+            CharacterRelationship(
+                character_id=character.id,
+                related_character_id=related_id,
+                relationship_type=(item.relationship_type or "").strip(),
+            )
+        )
+
+
 def _get_location_or_404(db: Session, location_id: int) -> Location:
     location = db.query(Location).filter(Location.id == location_id).first()
     if not location:
@@ -150,6 +211,11 @@ def get_all_characters(db: Session):
     """
     characters = (
         db.query(Character)
+        .options(
+            selectinload(Character.outgoing_relationships).selectinload(
+                CharacterRelationship.related_character
+            )
+        )
         .outerjoin(Location, Character.location_id == Location.id)
         .order_by(
             Location.order,
@@ -166,8 +232,23 @@ def get_character(db: Session, character_id: int):
     """
     Get a single character.
     """
-    character = db.query(Character).filter(Character.id == character_id).first()
+    character = (
+        db.query(Character)
+        .options(
+            selectinload(Character.outgoing_relationships).selectinload(
+                CharacterRelationship.related_character
+            )
+        )
+        .filter(Character.id == character_id)
+        .first()
+    )
     if not character:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Does not exist character",
+        )
+    # Characters without the "my doll" mark are private profiles.
+    if character.is_my_doll is not True or character.visible is False:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Does not exist character",
@@ -180,7 +261,12 @@ def create_character(db: Session, character: CharacterCreate):
     Create a new character.
     """
     data = character.model_dump(
-        exclude={"order_in_location", "head_doll", "body_doll"}
+        exclude={
+            "order_in_location",
+            "relationships",
+            "head_doll",
+            "body_doll",
+        }
     )
 
     if data.get("location_id") is not None:
@@ -197,6 +283,7 @@ def create_character(db: Session, character: CharacterCreate):
     db.flush()
     _sync_doll(db, db_character, "head", character.head_doll)
     _sync_doll(db, db_character, "body", character.body_doll)
+    _sync_relationships(db, db_character, character.relationships)
     db.commit()
     db.refresh(db_character)
     return _serialize_character(db_character)
@@ -216,7 +303,8 @@ def update_character(db: Session, character_id: int, updated: CharacterUpdate):
     old_thumbnail = character.thumbnail
 
     data = updated.model_dump(
-        exclude_unset=True, exclude={"head_doll", "body_doll"}
+        exclude_unset=True,
+        exclude={"relationships", "head_doll", "body_doll"},
     )
 
     # ``layout`` is NOT NULL; an explicit null should leave it unchanged.
@@ -240,6 +328,8 @@ def update_character(db: Session, character_id: int, updated: CharacterUpdate):
         _sync_doll(db, character, "head", updated.head_doll)
     if "body_doll" in updated.model_fields_set:
         _sync_doll(db, character, "body", updated.body_doll)
+    if "relationships" in updated.model_fields_set:
+        _sync_relationships(db, character, updated.relationships or [])
 
     db.commit()
     db.refresh(character)

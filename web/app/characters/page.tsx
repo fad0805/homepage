@@ -19,6 +19,7 @@ interface CharacterItem {
   thumbnail: string | null;
   location_id: number | null;
   visible: boolean;
+  is_my_doll: boolean | null;
   order_in_location: number | null;
   layout: CharacterLayout | null;
   location: CharacterLocation | null;
@@ -75,6 +76,7 @@ export default function Characters() {
           .filter(
             (character) =>
               character.visible !== false &&
+              character.is_my_doll === true &&
               character.location_id === location.id,
           )
           .sort(
