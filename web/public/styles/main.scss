@@ -2,35 +2,259 @@
 @use 'variables' as *;
 
 :root {
-  --text-color: #{color.change($light-text, $alpha: 0.7)};
+  --home-text: #{color.change($light-text, $alpha: 0.72)};
+  --home-muted: #{color.change($light-text, $alpha: 0.48)};
+  --home-line: #{color.change($light-text, $alpha: 0.12)};
+  --home-highlight: #{color.adjust($maintheme, $lightness: -42%)};
+  --home-highlight-bg: #{color.change($maintheme, $alpha: 0.45)};
+  --home-card-hover: #{color.change($white, $alpha: 0.5)};
+  --home-button-text: #{$white};
+  --home-glow-1: #{color.change($maintheme, $alpha: 0.32)};
+  --home-glow-2: #{color.change($subtheme, $alpha: 0.6)};
 }
 
 [data-theme='dark'] {
-  --text-color: #{color.change($dark-text, $alpha: 0.7)};
+  --home-text: #{color.change($dark-text, $alpha: 0.72)};
+  --home-muted: #{color.change($dark-text, $alpha: 0.45)};
+  --home-line: #{color.change($dark-text, $alpha: 0.16)};
+  --home-highlight: #{color.adjust($maintheme, $lightness: -8%)};
+  --home-highlight-bg: #{color.change($maintheme, $alpha: 0.18)};
+  --home-card-hover: #{color.change($dark-bg-sub, $alpha: 0.65)};
+  --home-button-text: #{$dark-bg};
+  --home-glow-1: #{color.change($maintheme, $alpha: 0.1)};
+  --home-glow-2: #{color.change($dark-bg-sub, $alpha: 0.5)};
 }
 
-div#content {
-  display: flex;
-  justify-content: center;
-  height: 60vh;
-}
-
-div#main {
+#main {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  width: 90%;
+  width: 100%;
+}
 
-  div.main-content {
-    position: relative;
-    top: 35%;
-    left: 10%;
-    color: var(--text-color);
+/* Hero */
+.hero {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: center;
+  gap: 1.5rem;
+  padding: 3.5rem 2.5rem 2.5rem;
+  overflow: hidden;
+
+  &::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background:
+      radial-gradient(circle at 84% 26%, var(--home-glow-1), transparent 42%),
+      radial-gradient(circle at 6% 92%, var(--home-glow-2), transparent 46%);
+    pointer-events: none;
   }
 
-  h1 {
+  > * {
     position: relative;
-    top: 17%;
-    color: var(--text-color);
+    z-index: 1;
+  }
+}
+
+.hero__copy {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.hero__eyebrow {
+  margin: 0 0 1.1rem;
+  color: var(--home-muted);
+  font-size: 0.64rem;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+}
+
+.hero__title {
+  margin: 0;
+  color: var(--title-color);
+  font-family: Eulyoo1945-SemiBold, Arial, Helvetica, sans-serif;
+  font-size: clamp(2.1rem, 4.2vw, 3rem);
+  line-height: 1.36;
+  letter-spacing: -0.015em;
+}
+
+.hero__title-accent {
+  color: var(--home-highlight);
+  background: linear-gradient(
+    180deg,
+    transparent 62%,
+    var(--home-highlight-bg) 62%
+  );
+}
+
+.hero__lead {
+  margin: 1.4rem 0 0;
+  color: var(--home-text);
+  font-size: 0.95rem;
+  line-height: 1.9;
+}
+
+.hero__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  margin-top: 1.9rem;
+}
+
+a.hero__button,
+a.hero__button:visited {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.7rem 1.15rem;
+  border: 1px solid var(--home-line);
+  border-radius: 999px;
+  color: var(--title-color);
+  font-size: 0.82rem;
+  transition:
+    transform 0.2s ease,
+    background-color 0.2s ease,
+    border-color 0.2s ease;
+}
+
+a.hero__button:hover {
+  transform: translateY(-2px);
+  border-color: var(--home-highlight);
+  background: var(--home-card-hover);
+}
+
+a.hero__button--primary,
+a.hero__button--primary:visited {
+  background: var(--home-highlight);
+  border-color: var(--home-highlight);
+  color: var(--home-button-text);
+}
+
+a.hero__button--primary:hover {
+  background: var(--home-highlight);
+  filter: brightness(1.06);
+}
+
+/* Index */
+.island-index {
+  position: relative;
+  padding: 1.6rem 2.5rem 3.2rem;
+  border-top: 1px solid var(--home-line);
+}
+
+.island-index__heading {
+  display: flex;
+  align-items: baseline;
+  gap: 0.7rem;
+  margin-bottom: 1.1rem;
+}
+
+.island-index__eyebrow {
+  margin: 0;
+  color: var(--home-muted);
+  font-size: 0.6rem;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+}
+
+.island-index__heading h2 {
+  margin: 0;
+  color: var(--title-color);
+  font-family: Eulyoo1945-SemiBold, Arial, Helvetica, sans-serif;
+  font-size: 1rem;
+}
+
+.island-index__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.6rem;
+}
+
+a.island-index__card,
+a.island-index__card:visited {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  grid-template-rows: auto auto;
+  align-items: center;
+  column-gap: 0.85rem;
+  row-gap: 0.15rem;
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--home-line);
+  border-radius: 0.9rem;
+  color: var(--title-color);
+  transition:
+    transform 0.2s ease,
+    background-color 0.2s ease,
+    border-color 0.2s ease;
+}
+
+a.island-index__card:hover {
+  transform: translateY(-2px);
+  border-color: var(--home-highlight);
+  background: var(--home-card-hover);
+}
+
+.island-index__number {
+  grid-row: 1 / span 2;
+  align-self: center;
+  color: var(--home-muted);
+  font-size: 0.62rem;
+  letter-spacing: 0.1em;
+}
+
+.island-index__label {
+  grid-column: 2;
+  font-size: 0.95rem;
+  font-weight: bold;
+}
+
+.island-index__description {
+  grid-column: 2;
+  color: var(--home-text);
+  font-size: 0.72rem;
+}
+
+.island-index__arrow {
+  grid-column: 3;
+  grid-row: 1 / span 2;
+  align-self: center;
+  color: var(--home-highlight);
+  font-size: 0.9rem;
+  transition: transform 0.2s ease;
+}
+
+a.island-index__card:hover .island-index__arrow {
+  transform: translate(2px, -2px);
+}
+
+@media (max-width: $breakpoint-md) {
+  .hero {
+    grid-template-columns: 1fr;
+    gap: 1.2rem;
+    padding: 2.6rem 1.6rem 1.5rem;
+  }
+
+  .island-index {
+    padding: 1.5rem 1.6rem 3rem;
+  }
+
+  .island-index__grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 480px) {
+  .hero {
+    padding: 2.1rem 1.15rem 1.2rem;
+  }
+
+  .hero__title {
+    font-size: 2rem;
+  }
+
+  .island-index {
+    padding: 1.3rem 1.15rem 2.6rem;
   }
 }

@@ -116,12 +116,17 @@
 
   h2 {
     margin: 0;
+    padding-left: 1rem;
     color: var(--title-color);
     font-size: 1.1rem;
   }
 }
 
 .character-profile__description {
+  padding: 1rem;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  border-radius: 0.8rem;
+  background: rgba(255, 255, 255, 0.35);
   white-space: pre-line;
   font-size: 0.9rem;
   line-height: 1.7;
@@ -188,7 +193,8 @@
     background: rgba(255, 255, 255, 0.06);
   }
 
-  .character-profile__part {
+  .character-profile__part,
+  .character-profile__description {
     border-color: rgba(255, 255, 255, 0.14);
     background: rgba(255, 255, 255, 0.05);
   }
