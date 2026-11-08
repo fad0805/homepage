@@ -112,9 +112,6 @@ export default function Books() {
   const [chapters, setChapters] = useState<Chapter[]>([]);
   const [activeBookId, setActiveBookId] = useState<number | null>(null);
   const [activeChapterId, setActiveChapterId] = useState<number | null>(null);
-  const [activeCategoryId, setActiveCategoryId] = useState<number | null>(
-    null,
-  );
   const [expandedCategories, setExpandedCategories] = useState<Set<number>>(
     () => new Set(),
   );
@@ -212,25 +209,6 @@ export default function Books() {
     );
   }, [visibleBooks]);
 
-  const categoryBooks = useMemo(
-    () =>
-      activeCategoryId === null
-        ? visibleBooks
-        : visibleBooks.filter(
-            (book) => book.category_id === activeCategoryId,
-          ),
-    [activeCategoryId, visibleBooks],
-  );
-
-  useEffect(() => {
-    if (
-      activeCategoryId !== null &&
-      !categoryList.some((category) => category.id === activeCategoryId)
-    ) {
-      setActiveCategoryId(null);
-    }
-  }, [activeCategoryId, categoryList]);
-
   const visibleChapters = useMemo(
     () =>
       chapters
@@ -259,7 +237,7 @@ export default function Books() {
 
   const filteredBooks = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
-    if (!query) return categoryBooks;
+    if (!query) return visibleBooks;
 
     const matches = (value: string | null | undefined) =>
       (value ?? "").toLowerCase().includes(query);
@@ -268,7 +246,7 @@ export default function Books() {
       matches(chapter.subtitle) ||
       chapter.tags.some(matches);
 
-    return categoryBooks.filter(
+    return visibleBooks.filter(
       (book) =>
         matches(book.title) ||
         matches(book.description) ||
@@ -279,7 +257,7 @@ export default function Books() {
             chapter.book_id === book.id && chapterMatches(chapter),
         ),
     );
-  }, [categoryBooks, searchQuery, visibleChapters]);
+  }, [visibleBooks, searchQuery, visibleChapters]);
 
   const groupedBooks = useMemo(() => {
     const result: { category: BookCategory | null; books: Book[] }[] = [];
@@ -362,20 +340,6 @@ export default function Books() {
     setActiveChapterId(null);
   };
 
-  const selectCategory = (categoryId: number | null) => {
-    setActiveCategoryId(categoryId);
-    if (categoryId !== null) {
-      setExpandedCategories((prev) => {
-        if (prev.has(categoryId)) return prev;
-        const next = new Set(prev);
-        next.add(categoryId);
-        return next;
-      });
-    }
-    setActiveChapterId(null);
-    setChapterPage(1);
-  };
-
   const toggleCategory = (categoryId: number) => {
     setExpandedCategories((prev) => {
       const next = new Set(prev);
@@ -410,7 +374,7 @@ export default function Books() {
           value={searchQuery}
           onChange={(event) => handleSearchChange(event.target.value)}
           placeholder="검색"
-          aria-label="책, 게시글, 카테고리, 태그 검색"
+          aria-label="책, 게시글, 태그 검색"
         />
         {searchQuery ? (
           <button
@@ -422,37 +386,6 @@ export default function Books() {
           </button>
         ) : null}
       </div>
-      {categoryList.length > 0 ? (
-        <div
-          className="books-categories"
-          role="group"
-          aria-label="카테고리 필터"
-        >
-          <button
-            type="button"
-            className={`books-category-chip${
-              activeCategoryId === null ? " is-active" : ""
-            }`}
-            onClick={() => selectCategory(null)}
-            aria-pressed={activeCategoryId === null}
-          >
-            전체
-          </button>
-          {categoryList.map((category) => (
-            <button
-              type="button"
-              className={`books-category-chip${
-                activeCategoryId === category.id ? " is-active" : ""
-              }`}
-              onClick={() => selectCategory(category.id)}
-              aria-pressed={activeCategoryId === category.id}
-              key={category.id}
-            >
-              {category.name}
-            </button>
-          ))}
-        </div>
-      ) : null}
       <div className="books-books">
         {groupedBooks.length === 0 ? (
           <p className="books-list-empty">검색 결과가 없습니다.</p>
