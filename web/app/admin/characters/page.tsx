@@ -150,7 +150,7 @@ function toDateValue(value: string | null | undefined) {
 }
 
 const CROP_ASPECT = 3;
-const CROP_OUTPUT_WIDTH = 320;
+const CROP_OUTPUT_WIDTH = 1280;
 
 function loadImage(src: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
@@ -507,6 +507,7 @@ export default function AdminCharacters() {
   const [cropZoom, setCropZoom] = useState(1);
   const [croppedAreaPixels, setCroppedAreaPixels] = useState<Area | null>(null);
   const [cropping, setCropping] = useState(false);
+  const [urlCropLoading, setUrlCropLoading] = useState(false);
 
   const [locationModalOpen, setLocationModalOpen] = useState(false);
   const [editingLocation, setEditingLocation] = useState<Location | null>(null);
@@ -954,6 +955,70 @@ export default function AdminCharacters() {
     setCroppedAreaPixels(null);
     setCropModalOpen(true);
   };
+
+  const openCropFromUrl = useCallback(async () => {
+    const value = thumbnailUrlInput.trim();
+    if (!value) {
+      notify("error", "이미지 URL을 입력해주세요.");
+      return;
+    }
+    if (urlCropLoading) {
+      return;
+    }
+
+    setUrlCropLoading(true);
+    try {
+      const absoluteUrl = new URL(value, window.location.origin).toString();
+      const response = await fetch(
+        `/api/characters/image-proxy?url=${encodeURIComponent(absoluteUrl)}`,
+        { credentials: "include" },
+      );
+
+      if (response.status === 401) {
+        window.location.href = "/signin";
+        throw new Error("로그인이 필요합니다.");
+      }
+
+      if (!response.ok) {
+        let detail = "이미지를 불러오지 못했습니다.";
+        try {
+          const data = await response.json();
+          if (typeof data?.detail === "string") {
+            detail = data.detail;
+          }
+        } catch {
+          // Ignore malformed error bodies.
+        }
+        throw new Error(detail);
+      }
+
+      const blob = await response.blob();
+      if (!blob.type.startsWith("image/")) {
+        throw new Error("이미지 URL이 아닙니다.");
+      }
+
+      const objectUrl = URL.createObjectURL(blob);
+      objectUrls.current.add(objectUrl);
+      setCropSource(objectUrl);
+      setCropFileName(
+        value.split("/").pop()?.split("?")[0] || "thumbnail",
+      );
+      setCrop({ x: 0, y: 0 });
+      setCropZoom(1);
+      setCroppedAreaPixels(null);
+      setCropModalOpen(true);
+    } catch (error) {
+      console.error(error);
+      notify(
+        "error",
+        error instanceof Error
+          ? error.message
+          : "이미지를 불러오지 못했습니다.",
+      );
+    } finally {
+      setUrlCropLoading(false);
+    }
+  }, [notify, thumbnailUrlInput, urlCropLoading]);
 
   const applyCrop = useCallback(async () => {
     if (!cropSource || !croppedAreaPixels) {
@@ -1491,9 +1556,23 @@ export default function AdminCharacters() {
                 inputMode="url"
                 value={thumbnailUrlInput}
                 onChange={handleThumbnailUrlChange}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    openCropFromUrl();
+                  }
+                }}
                 placeholder="이미지 URL (선택)"
                 spellCheck={false}
               />
+              <button
+                type="button"
+                className="admin-button admin-url-crop-button"
+                onClick={openCropFromUrl}
+                disabled={urlCropLoading || !thumbnailUrlInput.trim()}
+              >
+                {urlCropLoading ? "불러오는 중..." : "URL 이미지 자르기"}
+              </button>
               <div className="admin-banner-preview-wrap">
                 {thumbnailPreview ? (
                   // eslint-disable-next-line @next/next/no-img-element
@@ -1521,8 +1600,9 @@ export default function AdminCharacters() {
                 </span>
               ) : null}
               <span className="admin-banner-help">
-                이미지 URL 또는 PNG / JPEG / WEBP / GIF 파일(5MB 이하).
-                파일을 선택하면 3:1 비율로 자른 뒤 너비 320px로 저장됩니다.
+                이미지 URL을 입력한 뒤 &apos;URL 이미지 자르기&apos;를 누르면
+                3:1로 자를 수 있습니다. 파일을 선택해도 3:1 크롭 후
+                고해상도(너비 1280px)로 저장됩니다.
               </span>
             </div>
 
@@ -1601,8 +1681,8 @@ export default function AdminCharacters() {
               />
             </label>
             <p className="admin-crop-hint">
-              가로:세로 3:1 비율로 자릅니다. 적용하면 너비 320px로
-              리사이징됩니다.
+              가로:세로 3:1 비율로 자릅니다. 적용하면 고해상도(너비
+              1280px)로 저장됩니다.
             </p>
           </div>
         </ModalShell>
