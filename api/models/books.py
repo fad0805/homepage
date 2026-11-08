@@ -4,8 +4,8 @@ from sqlalchemy.orm import relationship
 from db.base import Base
 
 
-class Bookshelf(Base):
-    __tablename__ = "bookshelves"
+class Book(Base):
+    __tablename__ = "books"
 
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
     title = Column(String, nullable=False)
@@ -15,21 +15,21 @@ class Bookshelf(Base):
     created_at = Column(DateTime, default=func.now())
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
 
-    books = relationship(
-        "Book",
-        back_populates="bookshelf",
+    chapters = relationship(
+        "Chapter",
+        back_populates="book",
         cascade="all, delete-orphan",
-        order_by="Book.order, Book.id",
+        order_by="Chapter.order, Chapter.id",
     )
 
 
-class Book(Base):
-    __tablename__ = "books"
+class Chapter(Base):
+    __tablename__ = "chapters"
 
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
-    bookshelf_id = Column(
+    book_id = Column(
         Integer,
-        ForeignKey("bookshelves.id", ondelete="CASCADE"),
+        ForeignKey("books.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
     )
@@ -41,4 +41,4 @@ class Book(Base):
     created_at = Column(DateTime, default=func.now())
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
 
-    bookshelf = relationship("Bookshelf", back_populates="books")
+    book = relationship("Book", back_populates="chapters")

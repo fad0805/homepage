@@ -1,141 +1,51 @@
 from fastapi import HTTPException, status
-from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from models.books import Book, Bookshelf
+from models.books import Book, Chapter
 from schemas.books import (
     BookCreate,
     BookReorderRequest,
     BookUpdate,
-    BookshelfCreate,
-    BookshelfReorderRequest,
-    BookshelfUpdate,
+    ChapterCreate,
+    ChapterReorderRequest,
+    ChapterUpdate,
 )
 
 
-def _serialize_bookshelf(bookshelf: Bookshelf) -> dict:
+def _serialize_book(book: Book) -> dict:
     return {
-        "id": bookshelf.id,
-        "title": bookshelf.title,
-        "description": bookshelf.description,
-        "order": bookshelf.order,
-        "visible": bookshelf.visible,
+        "id": book.id,
+        "title": book.title,
+        "description": book.description,
+        "order": book.order,
+        "visible": book.visible,
     }
 
 
-def _serialize_book(book: Book) -> dict:
-    bookshelf = book.bookshelf
+def _serialize_chapter(chapter: Chapter) -> dict:
+    book = chapter.book
     return {
-        "id": book.id,
-        "bookshelf_id": book.bookshelf_id,
-        "title": book.title,
-        "subtitle": book.subtitle,
-        "body": book.body,
-        "order": book.order,
-        "visible": book.visible,
-        "bookshelf": (
+        "id": chapter.id,
+        "book_id": chapter.book_id,
+        "title": chapter.title,
+        "subtitle": chapter.subtitle,
+        "body": chapter.body,
+        "order": chapter.order,
+        "visible": chapter.visible,
+        "book": (
             {
-                "id": bookshelf.id,
-                "title": bookshelf.title,
+                "id": book.id,
+                "title": book.title,
             }
-            if bookshelf
+            if book
             else None
         ),
     }
 
 
-# Bookshelf CRUD
-def get_all_bookshelves(db: Session):
-    bookshelves = (
-        db.query(Bookshelf)
-        .order_by(Bookshelf.order, Bookshelf.id)
-        .all()
-    )
-    return [_serialize_bookshelf(bookshelf) for bookshelf in bookshelves]
-
-
-def create_bookshelf(db: Session, payload: BookshelfCreate):
-    bookshelf = Bookshelf(**payload.model_dump())
-    db.add(bookshelf)
-    db.commit()
-    db.refresh(bookshelf)
-    return _serialize_bookshelf(bookshelf)
-
-
-def update_bookshelf(
-    db: Session,
-    bookshelf_id: int,
-    payload: BookshelfUpdate,
-):
-    bookshelf = (
-        db.query(Bookshelf).filter(Bookshelf.id == bookshelf_id).first()
-    )
-    if not bookshelf:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Does not exist bookshelf",
-        )
-
-    for key, value in payload.model_dump(exclude_unset=True).items():
-        setattr(bookshelf, key, value)
-
-    db.commit()
-    db.refresh(bookshelf)
-    return _serialize_bookshelf(bookshelf)
-
-
-def delete_bookshelf(db: Session, bookshelf_id: int):
-    bookshelf = (
-        db.query(Bookshelf).filter(Bookshelf.id == bookshelf_id).first()
-    )
-    if not bookshelf:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Does not exist bookshelf",
-        )
-
-    db.delete(bookshelf)
-    db.commit()
-    return True
-
-
-def reorder_bookshelves(
-    db: Session,
-    payload: BookshelfReorderRequest,
-):
-    ids = [item.id for item in payload.items]
-    bookshelves = {
-        bookshelf.id: bookshelf
-        for bookshelf in db.query(Bookshelf)
-        .filter(Bookshelf.id.in_(ids))
-        .all()
-    }
-    missing = set(ids) - set(bookshelves)
-    if missing:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Does not exist bookshelf: {sorted(missing)}",
-        )
-
-    for item in payload.items:
-        bookshelves[item.id].order = item.order
-    db.commit()
-    return True
-
-
 # Book CRUD
 def get_all_books(db: Session):
-    books = (
-        db.query(Book)
-        .join(Bookshelf, Book.bookshelf_id == Bookshelf.id)
-        .order_by(
-            Bookshelf.order,
-            Bookshelf.id,
-            Book.order,
-            Book.id,
-        )
-        .all()
-    )
+    books = db.query(Book).order_by(Book.order, Book.id).all()
     return [_serialize_book(book) for book in books]
 
 
@@ -149,29 +59,7 @@ def get_book(db: Session, book_id: int):
     return _serialize_book(book)
 
 
-def _get_bookshelf_or_404(db: Session, bookshelf_id: int) -> Bookshelf:
-    bookshelf = (
-        db.query(Bookshelf).filter(Bookshelf.id == bookshelf_id).first()
-    )
-    if not bookshelf:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="존재하지 않는 책장입니다.",
-        )
-    return bookshelf
-
-
-def _next_book_order(db: Session, bookshelf_id: int) -> int:
-    max_order = (
-        db.query(func.max(Book.order))
-        .filter(Book.bookshelf_id == bookshelf_id)
-        .scalar()
-    )
-    return 0 if max_order is None else max_order + 1
-
-
 def create_book(db: Session, payload: BookCreate):
-    _get_bookshelf_or_404(db, payload.bookshelf_id)
     book = Book(**payload.model_dump())
     db.add(book)
     db.commit()
@@ -187,13 +75,8 @@ def update_book(db: Session, book_id: int, payload: BookUpdate):
             detail="Does not exist book",
         )
 
-    data = payload.model_dump(exclude_unset=True)
-    if "bookshelf_id" in data and data["bookshelf_id"] is not None:
-        _get_bookshelf_or_404(db, data["bookshelf_id"])
-
-    for key, value in data.items():
+    for key, value in payload.model_dump(exclude_unset=True).items():
         setattr(book, key, value)
-
     db.commit()
     db.refresh(book)
     return _serialize_book(book)
@@ -206,7 +89,6 @@ def delete_book(db: Session, book_id: int):
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Does not exist book",
         )
-
     db.delete(book)
     db.commit()
     return True
@@ -225,27 +107,118 @@ def reorder_books(db: Session, payload: BookReorderRequest):
             detail=f"Does not exist book: {sorted(missing)}",
         )
 
-    shelf_ids = {
-        item.bookshelf_id for item in payload.items if item.bookshelf_id
+    for item in payload.items:
+        books[item.id].order = item.order
+    db.commit()
+    return True
+
+
+# Chapter CRUD
+def get_all_chapters(db: Session):
+    chapters = (
+        db.query(Chapter)
+        .join(Book, Chapter.book_id == Book.id)
+        .order_by(
+            Book.order,
+            Book.id,
+            Chapter.order,
+            Chapter.id,
+        )
+        .all()
+    )
+    return [_serialize_chapter(chapter) for chapter in chapters]
+
+
+def get_chapter(db: Session, chapter_id: int):
+    chapter = db.query(Chapter).filter(Chapter.id == chapter_id).first()
+    if not chapter:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Does not exist chapter",
+        )
+    return _serialize_chapter(chapter)
+
+
+def _get_book_or_404(db: Session, book_id: int) -> Book:
+    book = db.query(Book).filter(Book.id == book_id).first()
+    if not book:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="존재하지 않는 책입니다.",
+        )
+    return book
+
+
+def create_chapter(db: Session, payload: ChapterCreate):
+    _get_book_or_404(db, payload.book_id)
+    chapter = Chapter(**payload.model_dump())
+    db.add(chapter)
+    db.commit()
+    db.refresh(chapter)
+    return _serialize_chapter(chapter)
+
+
+def update_chapter(db: Session, chapter_id: int, payload: ChapterUpdate):
+    chapter = db.query(Chapter).filter(Chapter.id == chapter_id).first()
+    if not chapter:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Does not exist chapter",
+        )
+
+    data = payload.model_dump(exclude_unset=True)
+    if "book_id" in data and data["book_id"] is not None:
+        _get_book_or_404(db, data["book_id"])
+
+    for key, value in data.items():
+        setattr(chapter, key, value)
+    db.commit()
+    db.refresh(chapter)
+    return _serialize_chapter(chapter)
+
+
+def delete_chapter(db: Session, chapter_id: int):
+    chapter = db.query(Chapter).filter(Chapter.id == chapter_id).first()
+    if not chapter:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Does not exist chapter",
+        )
+    db.delete(chapter)
+    db.commit()
+    return True
+
+
+def reorder_chapters(db: Session, payload: ChapterReorderRequest):
+    ids = [item.id for item in payload.items]
+    chapters = {
+        chapter.id: chapter
+        for chapter in db.query(Chapter).filter(Chapter.id.in_(ids)).all()
     }
-    if shelf_ids:
-        existing_shelves = {
-            shelf.id
-            for shelf in db.query(Bookshelf)
-            .filter(Bookshelf.id.in_(shelf_ids))
-            .all()
+    missing = set(ids) - set(chapters)
+    if missing:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Does not exist chapter: {sorted(missing)}",
+        )
+
+    book_ids = {item.book_id for item in payload.items if item.book_id}
+    if book_ids:
+        existing_books = {
+            book.id
+            for book in db.query(Book).filter(Book.id.in_(book_ids)).all()
         }
-        missing_shelves = shelf_ids - existing_shelves
-        if missing_shelves:
+        missing_books = book_ids - existing_books
+        if missing_books:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Does not exist bookshelf: {sorted(missing_shelves)}",
+                detail=f"Does not exist book: {sorted(missing_books)}",
             )
 
     for item in payload.items:
-        book = books[item.id]
-        book.order = item.order
-        if item.bookshelf_id is not None:
-            book.bookshelf_id = item.bookshelf_id
+        chapter = chapters[item.id]
+        chapter.order = item.order
+        if item.book_id is not None:
+            chapter.book_id = item.book_id
     db.commit()
     return True

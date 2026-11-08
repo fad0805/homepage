@@ -123,7 +123,7 @@
   opacity: 0.58;
 }
 
-.book-detail__shelf {
+.chapter-detail__book {
   margin: 0 0 0.35rem;
   color: var(--foreground);
   font-size: 0.64rem;
@@ -132,7 +132,7 @@
   opacity: 0.55;
 }
 
-.book-detail__title {
+.chapter-detail__title {
   margin: 0;
   color: var(--title-color);
   font-family: Eulyoo1945-SemiBold, Arial, Helvetica, sans-serif;
@@ -141,14 +141,14 @@
   letter-spacing: -0.01em;
 }
 
-.book-detail__subtitle {
+.chapter-detail__subtitle {
   margin: 0.25rem 0 0;
   color: var(--foreground);
   font-size: 0.85rem;
   opacity: 0.65;
 }
 
-.book-detail__body {
+.chapter-detail__body {
   margin-top: 1.2rem;
   color: var(--foreground);
 
@@ -271,7 +271,7 @@
   }
 }
 
-.book-detail__empty {
+.chapter-detail__empty {
   margin: 1rem 0 0;
   color: var(--foreground);
   font-size: 0.85rem;
@@ -296,15 +296,15 @@
     border-left-color: rgba(255, 255, 255, 0.16);
   }
 
-  .book-detail__body blockquote {
+  .chapter-detail__body blockquote {
     background: rgba(255, 255, 255, 0.06);
   }
 
-  .book-detail__body hr {
+  .chapter-detail__body hr {
     border-top-color: rgba(255, 255, 255, 0.18);
   }
 
-  .book-detail__body code {
+  .chapter-detail__body code {
     background: rgba(255, 255, 255, 0.08);
   }
 }
@@ -331,19 +331,19 @@
     background: rgba(255, 255, 255, 0.28);
   }
 
-  .books-item__inline .book-detail {
+  .books-item__inline .chapter-detail {
     padding: 0.2rem 0.65rem 1rem;
   }
 
-  .books-item__inline .book-detail__shelf {
+  .books-item__inline .chapter-detail__book {
     display: none;
   }
 
-  .books-item__inline .book-detail__title {
+  .books-item__inline .chapter-detail__title {
     font-size: 1.4rem;
   }
 
-  .books-item__inline .book-detail__body {
+  .books-item__inline .chapter-detail__body {
     margin-top: 0.8rem;
   }
 

@@ -13,7 +13,7 @@ import { RichTextEditor } from "@/components/rich-text-editor";
 
 import "@/public/styles/admin/books.scss";
 
-interface Bookshelf {
+interface Book {
   id: number;
   title: string;
   description: string | null;
@@ -21,15 +21,15 @@ interface Bookshelf {
   visible: boolean;
 }
 
-interface BookItem {
+interface ChapterItem {
   id: number;
-  bookshelf_id: number;
+  book_id: number;
   title: string;
   subtitle: string | null;
   body: string | null;
   order: number;
   visible: boolean;
-  bookshelf: { id: number; title: string } | null;
+  book: { id: number; title: string } | null;
 }
 
 type Notice = { type: "success" | "error"; text: string };
@@ -75,12 +75,12 @@ async function apiFetch<T>(url: string, init: RequestInit = {}): Promise<T> {
   return response.json() as Promise<T>;
 }
 
-function sortShelves(shelves: Bookshelf[]) {
-  return [...shelves].sort((a, b) => a.order - b.order || a.id - b.id);
+function sortBooks(books: Book[]) {
+  return [...books].sort((a, b) => a.order - b.order || a.id - b.id);
 }
 
-function sortBooks(books: BookItem[]) {
-  return [...books].sort(
+function sortChapters(chapters: ChapterItem[]) {
+  return [...chapters].sort(
     (a, b) =>
       a.order - b.order ||
       a.title.localeCompare(b.title, "ko") ||
@@ -89,25 +89,26 @@ function sortBooks(books: BookItem[]) {
 }
 
 export default function AdminBooks() {
-  const [shelves, setShelves] = useState<Bookshelf[]>([]);
-  const [books, setBooks] = useState<BookItem[]>([]);
+  const [books, setBooks] = useState<Book[]>([]);
+  const [chapters, setChapters] = useState<ChapterItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState<Notice | null>(null);
 
-  const [shelfModalOpen, setShelfModalOpen] = useState(false);
-  const [editingShelf, setEditingShelf] = useState<Bookshelf | null>(null);
-  const [shelfTitle, setShelfTitle] = useState("");
-  const [shelfDescription, setShelfDescription] = useState("");
-  const [shelfVisible, setShelfVisible] = useState(true);
-
   const [bookModalOpen, setBookModalOpen] = useState(false);
-  const [editingBook, setEditingBook] = useState<BookItem | null>(null);
-  const [bookShelfId, setBookShelfId] = useState(0);
+  const [editingBook, setEditingBook] = useState<Book | null>(null);
   const [bookTitle, setBookTitle] = useState("");
-  const [bookSubtitle, setBookSubtitle] = useState("");
-  const [bookBody, setBookBody] = useState("");
+  const [bookDescription, setBookDescription] = useState("");
   const [bookVisible, setBookVisible] = useState(true);
+
+  const [chapterModalOpen, setChapterModalOpen] = useState(false);
+  const [editingChapter, setEditingChapter] =
+    useState<ChapterItem | null>(null);
+  const [chapterBookId, setChapterBookId] = useState(0);
+  const [chapterTitle, setChapterTitle] = useState("");
+  const [chapterSubtitle, setChapterSubtitle] = useState("");
+  const [chapterBody, setChapterBody] = useState("");
+  const [chapterVisible, setChapterVisible] = useState(true);
 
   const noticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -129,12 +130,12 @@ export default function AdminBooks() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [shelfData, bookData] = await Promise.all([
-        apiFetch<Bookshelf[]>("/api/books/shelves"),
-        apiFetch<BookItem[]>("/api/books"),
+      const [bookData, chapterData] = await Promise.all([
+        apiFetch<Book[]>("/api/books"),
+        apiFetch<ChapterItem[]>("/api/chapters"),
       ]);
-      setShelves(sortShelves(shelfData));
       setBooks(sortBooks(bookData));
+      setChapters(sortChapters(chapterData));
     } catch (error) {
       notify(
         "error",
@@ -151,101 +152,33 @@ export default function AdminBooks() {
     load();
   }, [load]);
 
-  const sortedShelves = useMemo(() => sortShelves(shelves), [shelves]);
+  const sortedBooks = useMemo(() => sortBooks(books), [books]);
 
-  const booksByShelf = useMemo(() => {
-    const map = new Map<number, BookItem[]>();
-    for (const shelf of sortedShelves) {
+  const chaptersByBook = useMemo(() => {
+    const map = new Map<number, ChapterItem[]>();
+    for (const book of sortedBooks) {
       map.set(
-        shelf.id,
-        sortBooks(books.filter((book) => book.bookshelf_id === shelf.id)),
+        book.id,
+        sortChapters(
+          chapters.filter((chapter) => chapter.book_id === book.id),
+        ),
       );
     }
     return map;
-  }, [books, sortedShelves]);
+  }, [chapters, sortedBooks]);
 
-  const openCreateShelf = () => {
-    setEditingShelf(null);
-    setShelfTitle("");
-    setShelfDescription("");
-    setShelfVisible(true);
-    setShelfModalOpen(true);
-  };
-
-  const openEditShelf = (shelf: Bookshelf) => {
-    setEditingShelf(shelf);
-    setShelfTitle(shelf.title);
-    setShelfDescription(shelf.description ?? "");
-    setShelfVisible(shelf.visible !== false);
-    setShelfModalOpen(true);
-  };
-
-  const closeShelfModal = useCallback(() => {
-    setShelfModalOpen(false);
-    setEditingShelf(null);
-  }, []);
-
-  const handleShelfSubmit = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    const title = shelfTitle.trim();
-    if (!title) {
-      notify("error", "책장 이름을 입력해주세요.");
-      return;
-    }
-
-    setSaving(true);
-    try {
-      if (editingShelf) {
-        await apiFetch(`/api/books/shelves/${editingShelf.id}`, {
-          method: "PUT",
-          body: JSON.stringify({
-            title,
-            description: shelfDescription.trim() || null,
-            visible: shelfVisible,
-          }),
-        });
-      } else {
-        await apiFetch("/api/books/shelves", {
-          method: "POST",
-          body: JSON.stringify({
-            title,
-            description: shelfDescription.trim() || null,
-            order: sortedShelves.length,
-            visible: shelfVisible,
-          }),
-        });
-      }
-      closeShelfModal();
-      await load();
-      notify("success", "책장을 저장했습니다.");
-    } catch (error) {
-      notify(
-        "error",
-        error instanceof Error
-          ? error.message
-          : "책장을 저장하지 못했습니다.",
-      );
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const openCreateBook = (shelfId: number) => {
+  const openCreateBook = () => {
     setEditingBook(null);
-    setBookShelfId(shelfId);
     setBookTitle("");
-    setBookSubtitle("");
-    setBookBody("");
+    setBookDescription("");
     setBookVisible(true);
     setBookModalOpen(true);
   };
 
-  const openEditBook = (book: BookItem) => {
+  const openEditBook = (book: Book) => {
     setEditingBook(book);
-    setBookShelfId(book.bookshelf_id);
     setBookTitle(book.title);
-    setBookSubtitle(book.subtitle ?? "");
-    setBookBody(book.body ?? "");
+    setBookDescription(book.description ?? "");
     setBookVisible(book.visible !== false);
     setBookModalOpen(true);
   };
@@ -255,23 +188,6 @@ export default function AdminBooks() {
     setEditingBook(null);
   }, []);
 
-  useEffect(() => {
-    if (!shelfModalOpen && !bookModalOpen) return;
-    const previousOverflow = document.body.style.overflow;
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        closeShelfModal();
-        closeBookModal();
-      }
-    };
-    document.body.style.overflow = "hidden";
-    window.addEventListener("keydown", handleKeyDown);
-    return () => {
-      document.body.style.overflow = previousOverflow;
-      window.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [shelfModalOpen, bookModalOpen, closeShelfModal, closeBookModal]);
-
   const handleBookSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const title = bookTitle.trim();
@@ -279,18 +195,6 @@ export default function AdminBooks() {
       notify("error", "책 제목을 입력해주세요.");
       return;
     }
-    if (!bookShelfId) {
-      notify("error", "책장을 선택해주세요.");
-      return;
-    }
-
-    const shelfBooks = booksByShelf.get(bookShelfId) ?? [];
-    const order =
-      editingBook && editingBook.bookshelf_id === bookShelfId
-        ? editingBook.order
-        : shelfBooks.length;
-    const plainBody = bookBody.replace(/<[^>]*>/g, "").trim();
-    const body = plainBody ? bookBody : null;
 
     setSaving(true);
     try {
@@ -298,11 +202,8 @@ export default function AdminBooks() {
         await apiFetch(`/api/books/${editingBook.id}`, {
           method: "PUT",
           body: JSON.stringify({
-            bookshelf_id: bookShelfId,
             title,
-            subtitle: bookSubtitle.trim() || null,
-            body,
-            order,
+            description: bookDescription.trim() || null,
             visible: bookVisible,
           }),
         });
@@ -310,11 +211,9 @@ export default function AdminBooks() {
         await apiFetch("/api/books", {
           method: "POST",
           body: JSON.stringify({
-            bookshelf_id: bookShelfId,
             title,
-            subtitle: bookSubtitle.trim() || null,
-            body,
-            order,
+            description: bookDescription.trim() || null,
+            order: sortedBooks.length,
             visible: bookVisible,
           }),
         });
@@ -334,33 +233,117 @@ export default function AdminBooks() {
     }
   };
 
-  const handleDeleteShelf = async (shelf: Bookshelf) => {
-    const count = booksByShelf.get(shelf.id)?.length ?? 0;
-    if (
-      !window.confirm(
-        `'${shelf.title}' 책장과 책 ${count}권을 모두 삭제할까요?`,
-      )
-    ) {
+  const openCreateChapter = (bookId: number) => {
+    setEditingChapter(null);
+    setChapterBookId(bookId);
+    setChapterTitle("");
+    setChapterSubtitle("");
+    setChapterBody("");
+    setChapterVisible(true);
+    setChapterModalOpen(true);
+  };
+
+  const openEditChapter = (chapter: ChapterItem) => {
+    setEditingChapter(chapter);
+    setChapterBookId(chapter.book_id);
+    setChapterTitle(chapter.title);
+    setChapterSubtitle(chapter.subtitle ?? "");
+    setChapterBody(chapter.body ?? "");
+    setChapterVisible(chapter.visible !== false);
+    setChapterModalOpen(true);
+  };
+
+  const closeChapterModal = useCallback(() => {
+    setChapterModalOpen(false);
+    setEditingChapter(null);
+  }, []);
+
+  useEffect(() => {
+    if (!bookModalOpen && !chapterModalOpen) return;
+    const previousOverflow = document.body.style.overflow;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        closeBookModal();
+        closeChapterModal();
+      }
+    };
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [bookModalOpen, chapterModalOpen, closeBookModal, closeChapterModal]);
+
+  const handleChapterSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const title = chapterTitle.trim();
+    if (!title) {
+      notify("error", "챕터 제목을 입력해주세요.");
       return;
     }
+    if (!chapterBookId) {
+      notify("error", "책을 선택해주세요.");
+      return;
+    }
+
+    const bookChapters = chaptersByBook.get(chapterBookId) ?? [];
+    const order =
+      editingChapter && editingChapter.book_id === chapterBookId
+        ? editingChapter.order
+        : bookChapters.length;
+    const plainBody = chapterBody.replace(/<[^>]*>/g, "").trim();
+    const body = plainBody ? chapterBody : null;
+
+    setSaving(true);
     try {
-      await apiFetch(`/api/books/shelves/${shelf.id}`, {
-        method: "DELETE",
-      });
+      if (editingChapter) {
+        await apiFetch(`/api/chapters/${editingChapter.id}`, {
+          method: "PUT",
+          body: JSON.stringify({
+            book_id: chapterBookId,
+            title,
+            subtitle: chapterSubtitle.trim() || null,
+            body,
+            order,
+            visible: chapterVisible,
+          }),
+        });
+      } else {
+        await apiFetch("/api/chapters", {
+          method: "POST",
+          body: JSON.stringify({
+            book_id: chapterBookId,
+            title,
+            subtitle: chapterSubtitle.trim() || null,
+            body,
+            order,
+            visible: chapterVisible,
+          }),
+        });
+      }
+      closeChapterModal();
       await load();
-      notify("success", "책장을 삭제했습니다.");
+      notify("success", "챕터를 저장했습니다.");
     } catch (error) {
       notify(
         "error",
         error instanceof Error
           ? error.message
-          : "책장을 삭제하지 못했습니다.",
+          : "챕터를 저장하지 못했습니다.",
       );
+    } finally {
+      setSaving(false);
     }
   };
 
-  const handleDeleteBook = async (book: BookItem) => {
-    if (!window.confirm(`'${book.title}' 책을 삭제할까요?`)) {
+  const handleDeleteBook = async (book: Book) => {
+    const count = chaptersByBook.get(book.id)?.length ?? 0;
+    if (
+      !window.confirm(
+        `'${book.title}' 책과 챕터 ${count}개를 모두 삭제할까요?`,
+      )
+    ) {
       return;
     }
     try {
@@ -377,18 +360,36 @@ export default function AdminBooks() {
     }
   };
 
-  const moveShelf = async (shelf: Bookshelf, direction: -1 | 1) => {
-    const index = sortedShelves.findIndex((item) => item.id === shelf.id);
-    const target = index + direction;
-    if (index < 0 || target < 0 || target >= sortedShelves.length) return;
+  const handleDeleteChapter = async (chapter: ChapterItem) => {
+    if (!window.confirm(`'${chapter.title}' 챕터를 삭제할까요?`)) {
+      return;
+    }
+    try {
+      await apiFetch(`/api/chapters/${chapter.id}`, { method: "DELETE" });
+      await load();
+      notify("success", "챕터를 삭제했습니다.");
+    } catch (error) {
+      notify(
+        "error",
+        error instanceof Error
+          ? error.message
+          : "챕터를 삭제하지 못했습니다.",
+      );
+    }
+  };
 
-    const next = [...sortedShelves];
+  const moveBook = async (book: Book, direction: -1 | 1) => {
+    const index = sortedBooks.findIndex((item) => item.id === book.id);
+    const target = index + direction;
+    if (index < 0 || target < 0 || target >= sortedBooks.length) return;
+
+    const next = [...sortedBooks];
     [next[index], next[target]] = [next[target], next[index]];
     const reordered = next.map((item, order) => ({ ...item, order }));
-    setShelves(reordered);
+    setBooks(reordered);
 
     try {
-      await apiFetch("/api/books/shelves/reorder", {
+      await apiFetch("/api/books/reorder", {
         method: "PUT",
         body: JSON.stringify({
           items: reordered.map((item) => ({
@@ -402,26 +403,29 @@ export default function AdminBooks() {
         "error",
         error instanceof Error
           ? error.message
-          : "책장 순서를 저장하지 못했습니다.",
+          : "책 순서를 저장하지 못했습니다.",
       );
       await load();
     }
   };
 
-  const moveBook = async (book: BookItem, direction: -1 | 1) => {
-    const shelfBooks = booksByShelf.get(book.bookshelf_id) ?? [];
-    const index = shelfBooks.findIndex((item) => item.id === book.id);
+  const moveChapter = async (
+    chapter: ChapterItem,
+    direction: -1 | 1,
+  ) => {
+    const bookChapters = chaptersByBook.get(chapter.book_id) ?? [];
+    const index = bookChapters.findIndex((item) => item.id === chapter.id);
     const target = index + direction;
-    if (index < 0 || target < 0 || target >= shelfBooks.length) return;
+    if (index < 0 || target < 0 || target >= bookChapters.length) return;
 
-    const next = [...shelfBooks];
+    const next = [...bookChapters];
     [next[index], next[target]] = [next[target], next[index]];
     const items = next.map((item, order) => ({
       id: item.id,
       order,
-      bookshelf_id: book.bookshelf_id,
+      book_id: chapter.book_id,
     }));
-    setBooks((prev) =>
+    setChapters((prev) =>
       prev.map((item) => {
         const changed = items.find((entry) => entry.id === item.id);
         return changed ? { ...item, order: changed.order } : item;
@@ -429,7 +433,7 @@ export default function AdminBooks() {
     );
 
     try {
-      await apiFetch("/api/books/reorder", {
+      await apiFetch("/api/chapters/reorder", {
         method: "PUT",
         body: JSON.stringify({ items }),
       });
@@ -438,7 +442,7 @@ export default function AdminBooks() {
         "error",
         error instanceof Error
           ? error.message
-          : "책 순서를 저장하지 못했습니다.",
+          : "챕터 순서를 저장하지 못했습니다.",
       );
       await load();
     }
@@ -450,7 +454,7 @@ export default function AdminBooks() {
         <div>
           <h1>책장 관리</h1>
           <p className="admin-books-hint">
-            책장과 책을 관리합니다. 책 본문은 리치 텍스트로 작성할 수
+            책과 챕터를 관리합니다. 챕터 본문은 리치 텍스트로 작성할 수
             있습니다.
           </p>
         </div>
@@ -466,9 +470,9 @@ export default function AdminBooks() {
           <button
             type="button"
             className="admin-button primary"
-            onClick={openCreateShelf}
+            onClick={openCreateBook}
           >
-            새 책장
+            새 책
           </button>
         </div>
       </header>
@@ -481,88 +485,88 @@ export default function AdminBooks() {
 
       {loading ? (
         <p className="admin-books-empty">불러오는 중...</p>
-      ) : sortedShelves.length === 0 ? (
+      ) : sortedBooks.length === 0 ? (
         <p className="admin-books-empty">
-          책장이 없습니다. 새 책장을 추가해주세요.
+          책이 없습니다. 새 책을 추가해주세요.
         </p>
       ) : (
         <div className="admin-books-list">
-          {sortedShelves.map((shelf, shelfIndex) => {
-            const shelfBooks = booksByShelf.get(shelf.id) ?? [];
+          {sortedBooks.map((book, bookIndex) => {
+            const bookChapters = chaptersByBook.get(book.id) ?? [];
             return (
-              <section className="admin-books-shelf" key={shelf.id}>
+              <section className="admin-books-shelf" key={book.id}>
                 <div className="admin-books-shelf-header">
                   <div className="admin-books-shelf-title">
-                    <h2>{shelf.title}</h2>
-                    {shelf.description ? <p>{shelf.description}</p> : null}
+                    <h2>{book.title}</h2>
+                    {book.description ? <p>{book.description}</p> : null}
                   </div>
                   <div className="admin-books-badges">
-                    {shelf.visible === false ? (
+                    {book.visible === false ? (
                       <span className="admin-book-badge">비공개</span>
                     ) : null}
                     <span className="admin-book-badge">
-                      {shelfBooks.length}권
+                      {bookChapters.length}챕터
                     </span>
                   </div>
                   <div className="admin-books-row-actions">
                     <button
                       type="button"
                       className="admin-button"
-                      onClick={() => moveShelf(shelf, -1)}
-                      disabled={shelfIndex === 0}
-                      aria-label="책장 위로"
+                      onClick={() => moveBook(book, -1)}
+                      disabled={bookIndex === 0}
+                      aria-label="책 위로"
                     >
                       ↑
                     </button>
                     <button
                       type="button"
                       className="admin-button"
-                      onClick={() => moveShelf(shelf, 1)}
-                      disabled={shelfIndex === sortedShelves.length - 1}
-                      aria-label="책장 아래로"
+                      onClick={() => moveBook(book, 1)}
+                      disabled={bookIndex === sortedBooks.length - 1}
+                      aria-label="책 아래로"
                     >
                       ↓
                     </button>
                     <button
                       type="button"
                       className="admin-button"
-                      onClick={() => openEditShelf(shelf)}
+                      onClick={() => openEditBook(book)}
                     >
                       수정
                     </button>
                     <button
                       type="button"
                       className="admin-button danger"
-                      onClick={() => handleDeleteShelf(shelf)}
+                      onClick={() => handleDeleteBook(book)}
                     >
                       삭제
                     </button>
                     <button
                       type="button"
                       className="admin-button"
-                      onClick={() => openCreateBook(shelf.id)}
+                      onClick={() => openCreateChapter(book.id)}
                     >
-                      책 추가
+                      챕터 추가
                     </button>
                   </div>
                 </div>
 
                 <div className="admin-books-books">
-                  {shelfBooks.length === 0 ? (
+                  {bookChapters.length === 0 ? (
                     <p className="admin-books-empty">
-                      등록된 책이 없습니다.
+                      등록된 챕터가 없습니다.
                     </p>
                   ) : (
-                    shelfBooks.map((book, bookIndex) => (
-                      <div className="admin-books-book" key={book.id}>
+                    bookChapters.map((chapter, chapterIndex) => (
+                      <div className="admin-books-book" key={chapter.id}>
                         <div className="admin-books-book-info">
-                          <strong>{book.title}</strong>
-                          {book.subtitle ? (
-                            <span>{book.subtitle}</span>
+                          <strong>{chapter.title}</strong>
+                          {chapter.subtitle ? (
+                            <span>{chapter.subtitle}</span>
                           ) : null}
                         </div>
                         <div className="admin-books-badges">
-                          {book.visible === false ? (
+                          {chapter.visible === false ? (
                             <span className="admin-book-badge">비공개</span>
                           ) : null}
                         </div>
@@ -570,32 +574,34 @@ export default function AdminBooks() {
                           <button
                             type="button"
                             className="admin-button"
-                            onClick={() => moveBook(book, -1)}
-                            disabled={bookIndex === 0}
-                            aria-label="책 위로"
+                            onClick={() => moveChapter(chapter, -1)}
+                            disabled={chapterIndex === 0}
+                            aria-label="챕터 위로"
                           >
                             ↑
                           </button>
                           <button
                             type="button"
                             className="admin-button"
-                            onClick={() => moveBook(book, 1)}
-                            disabled={bookIndex === shelfBooks.length - 1}
-                            aria-label="책 아래로"
+                            onClick={() => moveChapter(chapter, 1)}
+                            disabled={
+                              chapterIndex === bookChapters.length - 1
+                            }
+                            aria-label="챕터 아래로"
                           >
                             ↓
                           </button>
                           <button
                             type="button"
                             className="admin-button"
-                            onClick={() => openEditBook(book)}
+                            onClick={() => openEditChapter(chapter)}
                           >
                             수정
                           </button>
                           <button
                             type="button"
                             className="admin-button danger"
-                            onClick={() => handleDeleteBook(book)}
+                            onClick={() => handleDeleteChapter(chapter)}
                           >
                             삭제
                           </button>
@@ -609,83 +615,6 @@ export default function AdminBooks() {
           })}
         </div>
       )}
-
-      {shelfModalOpen ? (
-        <div
-          className="admin-modal-backdrop"
-          onMouseDown={(event) => {
-            if (event.target === event.currentTarget) closeShelfModal();
-          }}
-        >
-          <div className="admin-modal" role="dialog" aria-modal="true">
-            <div className="admin-modal-header">
-              <h2>{editingShelf ? "책장 수정" : "새 책장"}</h2>
-              <button
-                type="button"
-                className="admin-modal-close"
-                onClick={closeShelfModal}
-                aria-label="닫기"
-              >
-                ×
-              </button>
-            </div>
-            <form
-              id="shelf-form"
-              className="admin-modal-body admin-books-modal-form"
-              onSubmit={handleShelfSubmit}
-            >
-              <label className="admin-field">
-                <span>책장 이름</span>
-                <input
-                  value={shelfTitle}
-                  onChange={(event) => setShelfTitle(event.target.value)}
-                  placeholder="예: 단편선"
-                  required
-                />
-              </label>
-              <label className="admin-field">
-                <span>설명</span>
-                <textarea
-                  value={shelfDescription}
-                  onChange={(event) =>
-                    setShelfDescription(event.target.value)
-                  }
-                  rows={3}
-                  placeholder="책장 설명 (선택)"
-                />
-              </label>
-              <label className="admin-books-checkbox">
-                <input
-                  type="checkbox"
-                  checked={shelfVisible}
-                  onChange={(event) =>
-                    setShelfVisible(event.target.checked)
-                  }
-                />
-                <span>공개</span>
-              </label>
-            </form>
-            <div className="admin-modal-footer">
-              <button
-                type="button"
-                className="admin-button"
-                onClick={closeShelfModal}
-                disabled={saving}
-              >
-                취소
-              </button>
-              <button
-                type="submit"
-                form="shelf-form"
-                className="admin-button primary"
-                disabled={saving}
-              >
-                {saving ? "저장 중..." : "저장"}
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
 
       {bookModalOpen ? (
         <div
@@ -711,58 +640,36 @@ export default function AdminBooks() {
               className="admin-modal-body admin-books-modal-form"
               onSubmit={handleBookSubmit}
             >
-              <div className="admin-books-modal-meta">
-                <label className="admin-field">
-                  <span>책장</span>
-                  <select
-                    value={bookShelfId}
-                    onChange={(event) =>
-                      setBookShelfId(Number(event.target.value))
-                    }
-                  >
-                    {sortedShelves.map((shelf) => (
-                      <option key={shelf.id} value={shelf.id}>
-                        {shelf.title}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="admin-books-checkbox">
-                  <input
-                    type="checkbox"
-                    checked={bookVisible}
-                    onChange={(event) =>
-                      setBookVisible(event.target.checked)
-                    }
-                  />
-                  <span>공개</span>
-                </label>
-              </div>
               <label className="admin-field">
-                <span>제목</span>
+                <span>책 제목</span>
                 <input
                   value={bookTitle}
                   onChange={(event) => setBookTitle(event.target.value)}
-                  placeholder="책 제목"
+                  placeholder="예: 단편선"
                   required
                 />
               </label>
               <label className="admin-field">
-                <span>부제</span>
-                <input
-                  value={bookSubtitle}
-                  onChange={(event) => setBookSubtitle(event.target.value)}
-                  placeholder="부제 (선택)"
+                <span>책 설명</span>
+                <textarea
+                  value={bookDescription}
+                  onChange={(event) =>
+                    setBookDescription(event.target.value)
+                  }
+                  rows={3}
+                  placeholder="책 설명 (선택)"
                 />
               </label>
-              <div className="admin-field">
-                <span>본문</span>
-                <RichTextEditor
-                  value={bookBody}
-                  onChange={setBookBody}
-                  placeholder="책 본문을 입력해주세요."
+              <label className="admin-books-checkbox">
+                <input
+                  type="checkbox"
+                  checked={bookVisible}
+                  onChange={(event) =>
+                    setBookVisible(event.target.checked)
+                  }
                 />
-              </div>
+                <span>공개</span>
+              </label>
             </form>
             <div className="admin-modal-footer">
               <button
@@ -776,6 +683,107 @@ export default function AdminBooks() {
               <button
                 type="submit"
                 form="book-form"
+                className="admin-button primary"
+                disabled={saving}
+              >
+                {saving ? "저장 중..." : "저장"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {chapterModalOpen ? (
+        <div
+          className="admin-modal-backdrop"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) closeChapterModal();
+          }}
+        >
+          <div className="admin-modal" role="dialog" aria-modal="true">
+            <div className="admin-modal-header">
+              <h2>{editingChapter ? "챕터 수정" : "새 챕터"}</h2>
+              <button
+                type="button"
+                className="admin-modal-close"
+                onClick={closeChapterModal}
+                aria-label="닫기"
+              >
+                ×
+              </button>
+            </div>
+            <form
+              id="chapter-form"
+              className="admin-modal-body admin-books-modal-form"
+              onSubmit={handleChapterSubmit}
+            >
+              <div className="admin-books-modal-meta">
+                <label className="admin-field">
+                  <span>책</span>
+                  <select
+                    value={chapterBookId}
+                    onChange={(event) =>
+                      setChapterBookId(Number(event.target.value))
+                    }
+                  >
+                    {sortedBooks.map((book) => (
+                      <option key={book.id} value={book.id}>
+                        {book.title}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="admin-books-checkbox">
+                  <input
+                    type="checkbox"
+                    checked={chapterVisible}
+                    onChange={(event) =>
+                      setChapterVisible(event.target.checked)
+                    }
+                  />
+                  <span>공개</span>
+                </label>
+              </div>
+              <label className="admin-field">
+                <span>챕터 제목</span>
+                <input
+                  value={chapterTitle}
+                  onChange={(event) => setChapterTitle(event.target.value)}
+                  placeholder="챕터 제목"
+                  required
+                />
+              </label>
+              <label className="admin-field">
+                <span>부제</span>
+                <input
+                  value={chapterSubtitle}
+                  onChange={(event) =>
+                    setChapterSubtitle(event.target.value)
+                  }
+                  placeholder="부제 (선택)"
+                />
+              </label>
+              <div className="admin-field">
+                <span>본문</span>
+                <RichTextEditor
+                  value={chapterBody}
+                  onChange={setChapterBody}
+                  placeholder="챕터 본문을 입력해주세요."
+                />
+              </div>
+            </form>
+            <div className="admin-modal-footer">
+              <button
+                type="button"
+                className="admin-button"
+                onClick={closeChapterModal}
+                disabled={saving}
+              >
+                취소
+              </button>
+              <button
+                type="submit"
+                form="chapter-form"
                 className="admin-button primary"
                 disabled={saving}
               >

@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import "@/public/styles/books.scss";
 
-interface Bookshelf {
+interface Book {
   id: number;
   title: string;
   description: string | null;
@@ -12,47 +12,47 @@ interface Bookshelf {
   visible: boolean;
 }
 
-interface Book {
+interface Chapter {
   id: number;
-  bookshelf_id: number;
+  book_id: number;
   title: string;
   subtitle: string | null;
   body: string | null;
   order: number;
   visible: boolean;
-  bookshelf: { id: number; title: string } | null;
+  book: { id: number; title: string } | null;
 }
 
-function BookDetail({
-  book,
-  shelfTitle,
+function ChapterDetail({
+  chapter,
+  bookTitle,
 }: {
-  book: Book;
-  shelfTitle: string;
+  chapter: Chapter;
+  bookTitle: string;
 }) {
   return (
-    <article className="book-detail">
-      <p className="book-detail__shelf">{shelfTitle}</p>
-      <h2 className="book-detail__title">{book.title}</h2>
-      {book.subtitle ? (
-        <p className="book-detail__subtitle">{book.subtitle}</p>
+    <article className="chapter-detail">
+      <p className="chapter-detail__book">{bookTitle}</p>
+      <h2 className="chapter-detail__title">{chapter.title}</h2>
+      {chapter.subtitle ? (
+        <p className="chapter-detail__subtitle">{chapter.subtitle}</p>
       ) : null}
-      {book.body ? (
+      {chapter.body ? (
         <div
-          className="book-detail__body"
-          dangerouslySetInnerHTML={{ __html: book.body }}
+          className="chapter-detail__body"
+          dangerouslySetInnerHTML={{ __html: chapter.body }}
         />
       ) : (
-        <p className="book-detail__empty">내용이 아직 없습니다.</p>
+        <p className="chapter-detail__empty">내용이 아직 없습니다.</p>
       )}
     </article>
   );
 }
 
 export default function Books() {
-  const [shelves, setShelves] = useState<Bookshelf[]>([]);
   const [books, setBooks] = useState<Book[]>([]);
-  const [activeBookId, setActiveBookId] = useState<number | null>(null);
+  const [chapters, setChapters] = useState<Chapter[]>([]);
+  const [activeChapterId, setActiveChapterId] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -60,19 +60,19 @@ export default function Books() {
     let cancelled = false;
 
     Promise.all([
-      fetch("/api/books/shelves").then((response) => {
-        if (!response.ok) throw new Error("책장을 불러오지 못했습니다.");
-        return response.json() as Promise<Bookshelf[]>;
-      }),
       fetch("/api/books").then((response) => {
         if (!response.ok) throw new Error("책 목록을 불러오지 못했습니다.");
         return response.json() as Promise<Book[]>;
       }),
+      fetch("/api/chapters").then((response) => {
+        if (!response.ok) throw new Error("챕터를 불러오지 못했습니다.");
+        return response.json() as Promise<Chapter[]>;
+      }),
     ])
-      .then(([shelfData, bookData]) => {
+      .then(([bookData, chapterData]) => {
         if (cancelled) return;
-        setShelves(shelfData);
         setBooks(bookData);
+        setChapters(chapterData);
       })
       .catch((reason) => {
         console.error(reason);
@@ -89,54 +89,55 @@ export default function Books() {
     };
   }, []);
 
-  const visibleBooks = useMemo(
+  const visibleChapters = useMemo(
     () =>
-      books
-        .filter((book) => book.visible !== false)
+      chapters
+        .filter((chapter) => chapter.visible !== false)
         .sort(
           (a, b) =>
             a.order - b.order ||
-            a.title.localeCompare(b.title, "ko"),
+            a.title.localeCompare(b.title, "ko") ||
+            a.id - b.id,
         ),
-    [books],
+    [chapters],
   );
 
   const groups = useMemo(
     () =>
-      shelves
-        .filter((shelf) => shelf.visible !== false)
+      books
+        .filter((book) => book.visible !== false)
         .sort((a, b) => a.order - b.order || a.id - b.id)
-        .map((shelf) => ({
-          shelf,
-          books: visibleBooks.filter(
-            (book) => book.bookshelf_id === shelf.id,
+        .map((book) => ({
+          book,
+          chapters: visibleChapters.filter(
+            (chapter) => chapter.book_id === book.id,
           ),
         }))
-        .filter((group) => group.books.length > 0),
-    [shelves, visibleBooks],
+        .filter((group) => group.chapters.length > 0),
+    [books, visibleChapters],
   );
 
   useEffect(() => {
-    if (activeBookId !== null) return;
+    if (activeChapterId !== null) return;
     if (typeof window === "undefined") return;
     if (!window.matchMedia("(min-width: 900px)").matches) return;
-    const first = visibleBooks[0];
-    if (first) setActiveBookId(first.id);
-  }, [activeBookId, visibleBooks]);
+    const first = visibleChapters[0];
+    if (first) setActiveChapterId(first.id);
+  }, [activeChapterId, visibleChapters]);
 
-  const activeBook =
-    visibleBooks.find((book) => book.id === activeBookId) ?? null;
-  const activeShelf = activeBook
-    ? groups.find((group) => group.shelf.id === activeBook.bookshelf_id)
+  const activeChapter =
+    visibleChapters.find((chapter) => chapter.id === activeChapterId) ?? null;
+  const activeBook = activeChapter
+    ? groups.find((group) => group.book.id === activeChapter.book_id)
     : null;
 
-  const handleSelect = (bookId: number) => {
+  const handleSelect = (chapterId: number) => {
     const isMobile = window.matchMedia("(max-width: 899px)").matches;
-    if (isMobile && activeBookId === bookId) {
-      setActiveBookId(null);
+    if (isMobile && activeChapterId === chapterId) {
+      setActiveChapterId(null);
       return;
     }
-    setActiveBookId(bookId);
+    setActiveChapterId(chapterId);
   };
 
   return (
@@ -150,34 +151,32 @@ export default function Books() {
       ) : (
         <div className="books-layout">
           <div className="books-list">
-            {groups.map(({ shelf, books: shelfBooks }) => (
-              <section className="books-section" key={shelf.id}>
+            {groups.map(({ book, chapters: bookChapters }) => (
+              <section className="books-section" key={book.id}>
                 <header className="books-section__header">
-                  <h2>{shelf.title}</h2>
-                  {shelf.description ? (
-                    <p>{shelf.description}</p>
-                  ) : null}
+                  <h2>{book.title}</h2>
+                  {book.description ? <p>{book.description}</p> : null}
                 </header>
                 <div className="books-items">
-                  {shelfBooks.map((book) => {
-                    const isActive = book.id === activeBookId;
+                  {bookChapters.map((chapter) => {
+                    const isActive = chapter.id === activeChapterId;
                     return (
                       <div
                         className={`books-item${isActive ? " is-active" : ""}`}
-                        key={book.id}
+                        key={chapter.id}
                       >
                         <button
                           type="button"
                           className="books-item__button"
-                          onClick={() => handleSelect(book.id)}
+                          onClick={() => handleSelect(chapter.id)}
                           aria-expanded={isActive}
                         >
                           <span className="books-item__title">
-                            {book.title}
+                            {chapter.title}
                           </span>
-                          {book.subtitle ? (
+                          {chapter.subtitle ? (
                             <span className="books-item__subtitle">
-                              {book.subtitle}
+                              {chapter.subtitle}
                             </span>
                           ) : null}
                           <span className="books-item__chevron" aria-hidden="true">
@@ -186,7 +185,10 @@ export default function Books() {
                         </button>
                         <div className="books-item__inline">
                           {isActive ? (
-                            <BookDetail book={book} shelfTitle={shelf.title} />
+                            <ChapterDetail
+                              chapter={chapter}
+                              bookTitle={book.title}
+                            />
                           ) : null}
                         </div>
                       </div>
@@ -198,17 +200,17 @@ export default function Books() {
           </div>
 
           <aside className="books-panel">
-            {activeBook ? (
-              <BookDetail
-                book={activeBook}
-                shelfTitle={
-                  activeShelf?.shelf.title ??
-                  activeBook.bookshelf?.title ??
+            {activeChapter ? (
+              <ChapterDetail
+                chapter={activeChapter}
+                bookTitle={
+                  activeBook?.book.title ??
+                  activeChapter.book?.title ??
                   ""
                 }
               />
             ) : (
-              <p className="books-panel__empty">책을 선택해주세요.</p>
+              <p className="books-panel__empty">챕터를 선택해주세요.</p>
             )}
           </aside>
         </div>
