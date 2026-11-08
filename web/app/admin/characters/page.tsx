@@ -39,6 +39,14 @@ interface Location {
   order: number;
 }
 
+interface DollInfo {
+  id?: number;
+  company?: string;
+  name: string | null;
+  size?: string | null;
+  skin_tone: string | null;
+}
+
 interface CharacterItem {
   id: number;
   name: string;
@@ -54,6 +62,8 @@ interface CharacterItem {
   is_my_doll: boolean;
   order_in_location: number | null;
   location: Location | null;
+  head_doll: DollInfo | null;
+  body_doll: DollInfo | null;
 }
 
 interface DraftCharacter extends CharacterItem {
@@ -665,6 +675,8 @@ export default function AdminCharacters() {
             visible: character.visible,
             is_my_doll: character.is_my_doll,
             order_in_location: character.order_in_location,
+            head_doll: character.head_doll,
+            body_doll: character.body_doll,
           }),
         });
         characterIdMap.set(character.id, created.id);
@@ -689,6 +701,8 @@ export default function AdminCharacters() {
             visible: character.visible,
             is_my_doll: character.is_my_doll,
             order_in_location: character.order_in_location,
+            head_doll: character.head_doll,
+            body_doll: character.body_doll,
           }),
         });
       }
@@ -867,6 +881,12 @@ export default function AdminCharacters() {
     const serif = String(form.get("serif") ?? "").trim();
     const description = String(form.get("description") ?? "").trim();
     const commingDay = String(form.get("comming_day") ?? "").trim();
+    const headName = String(form.get("head_name") ?? "").trim();
+    const headCompany = String(form.get("head_company") ?? "").trim();
+    const headSkinTone = String(form.get("head_skin_tone") ?? "").trim();
+    const bodyName = String(form.get("body_name") ?? "").trim();
+    const bodyCompany = String(form.get("body_company") ?? "").trim();
+    const bodySkinTone = String(form.get("body_skin_tone") ?? "").trim();
     const rawLocation = form.get("location");
     const locationId =
       rawLocation === null || rawLocation === "" ? null : Number(rawLocation);
@@ -930,6 +950,20 @@ export default function AdminCharacters() {
       is_my_doll: form.get("is_my_doll") === "on",
       order_in_location: order,
       location: targetLocation,
+      head_doll: headName
+        ? {
+            company: headCompany,
+            name: headName,
+            skin_tone: headSkinTone || null,
+          }
+        : null,
+      body_doll: bodyName
+        ? {
+            company: bodyCompany,
+            name: bodyName,
+            skin_tone: bodySkinTone || null,
+          }
+        : null,
       file: nextFile,
       preview_url: nextPreview,
     };
@@ -1251,6 +1285,66 @@ export default function AdminCharacters() {
                 placeholder="등장인물 설명 (선택)"
               />
             </label>
+
+            <div className="admin-character-parts">
+              <fieldset className="admin-character-part">
+                <legend>헤드</legend>
+                <label className="admin-field">
+                  <span>회사명</span>
+                  <input
+                    name="head_company"
+                    defaultValue={editingCharacter?.head_doll?.company ?? ""}
+                    placeholder="회사명 (선택)"
+                  />
+                </label>
+                <label className="admin-field">
+                  <span>이름</span>
+                  <input
+                    name="head_name"
+                    defaultValue={editingCharacter?.head_doll?.name ?? ""}
+                    placeholder="헤드 이름 (선택)"
+                  />
+                </label>
+                <label className="admin-field">
+                  <span>스킨색</span>
+                  <input
+                    type="text"
+                    name="head_skin_tone"
+                    defaultValue={editingCharacter?.head_doll?.skin_tone ?? ""}
+                    placeholder="예: #F2D6C0 또는 노멀"
+                  />
+                </label>
+              </fieldset>
+
+              <fieldset className="admin-character-part">
+                <legend>바디</legend>
+                <label className="admin-field">
+                  <span>회사명</span>
+                  <input
+                    name="body_company"
+                    defaultValue={editingCharacter?.body_doll?.company ?? ""}
+                    placeholder="회사명 (선택)"
+                  />
+                </label>
+                <label className="admin-field">
+                  <span>이름</span>
+                  <input
+                    name="body_name"
+                    defaultValue={editingCharacter?.body_doll?.name ?? ""}
+                    placeholder="바디 이름 (선택)"
+                  />
+                </label>
+                <label className="admin-field">
+                  <span>스킨색</span>
+                  <input
+                    type="text"
+                    name="body_skin_tone"
+                    defaultValue={editingCharacter?.body_doll?.skin_tone ?? ""}
+                    placeholder="예: #F2D6C0 또는 노멀"
+                  />
+                </label>
+              </fieldset>
+            </div>
 
             <div className="admin-field">
               <span>썸네일 이미지</span>

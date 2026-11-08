@@ -1,12 +1,13 @@
 from fastapi import HTTPException, status
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
-from models.characters import Character, CharacterRelationship, Location
+from models.characters import Character, CharacterRelationship, Doll, Location
 from schemas.characters import (
     CharacterCreate,
     CharacterReorderRequest,
     CharacterUpdate,
+    DollInput,
     LocationCreate,
     LocationReorderRequest,
     LocationUpdate,
@@ -19,6 +20,18 @@ def _serialize_location(location: Location) -> dict:
         "name": location.name,
         "description": location.description,
         "order": location.order,
+    }
+
+
+def _serialize_doll(doll: Doll | None) -> dict | None:
+    if doll is None:
+        return None
+    return {
+        "id": doll.id,
+        "company": doll.company,
+        "name": doll.name,
+        "size": doll.size,
+        "skin_tone": doll.skin_tone,
     }
 
 
@@ -41,7 +54,67 @@ def _serialize_character(character: Character) -> dict:
         "created_at": character.created_at,
         "updated_at": character.updated_at,
         "location": _serialize_location(location) if location else None,
+        "head_doll": _serialize_doll(character.head_relationship),
+        "body_doll": _serialize_doll(character.body_relationship),
     }
+
+
+def _doll_is_referenced(
+    db: Session,
+    doll_id: int,
+    character_id: int | None,
+    other_part_id: int | None,
+) -> bool:
+    if other_part_id == doll_id:
+        return True
+
+    query = db.query(Character).filter(
+        or_(Character.head == doll_id, Character.body == doll_id)
+    )
+    if character_id is not None:
+        query = query.filter(Character.id != character_id)
+    return query.first() is not None
+
+
+def _sync_doll(
+    db: Session,
+    character: Character,
+    part: str,
+    doll_input: DollInput | None,
+):
+    """Create or update the doll record linked to a head or body field."""
+    other_part = "body" if part == "head" else "head"
+    current_id = getattr(character, part)
+    current = (
+        db.query(Doll).filter(Doll.id == current_id).first()
+        if current_id
+        else None
+    )
+    name = (doll_input.name or "").strip() if doll_input else ""
+    company = (doll_input.company or "").strip() if doll_input else ""
+    skin_tone = (doll_input.skin_tone or "").strip() or None if doll_input else None
+    other_part_id = getattr(character, other_part)
+
+    if not name:
+        setattr(character, part, None)
+        if current and not _doll_is_referenced(
+            db, current.id, character.id, other_part_id
+        ):
+            db.delete(current)
+        return
+
+    if current and not _doll_is_referenced(
+        db, current.id, character.id, other_part_id
+    ):
+        current.company = company
+        current.name = name
+        current.skin_tone = skin_tone
+        return
+
+    doll = Doll(company=company, name=name, skin_tone=skin_tone)
+    db.add(doll)
+    db.flush()
+    setattr(character, part, doll.id)
 
 
 def _get_location_or_404(db: Session, location_id: int) -> Location:
@@ -104,7 +177,9 @@ def create_character(db: Session, character: CharacterCreate):
     """
     Create a new character.
     """
-    data = character.model_dump(exclude={"order_in_location"})
+    data = character.model_dump(
+        exclude={"order_in_location", "head_doll", "body_doll"}
+    )
 
     if data.get("location_id") is not None:
         _get_location_or_404(db, data["location_id"])
@@ -117,6 +192,9 @@ def create_character(db: Session, character: CharacterCreate):
 
     db_character = Character(**data)
     db.add(db_character)
+    db.flush()
+    _sync_doll(db, db_character, "head", character.head_doll)
+    _sync_doll(db, db_character, "body", character.body_doll)
     db.commit()
     db.refresh(db_character)
     return _serialize_character(db_character)
@@ -133,7 +211,9 @@ def update_character(db: Session, character_id: int, updated: CharacterUpdate):
             detail="Does not exist character",
         )
 
-    data = updated.model_dump(exclude_unset=True)
+    data = updated.model_dump(
+        exclude_unset=True, exclude={"head_doll", "body_doll"}
+    )
 
     if "location_id" in data and data["location_id"] is not None:
         _get_location_or_404(db, data["location_id"])
@@ -147,6 +227,11 @@ def update_character(db: Session, character_id: int, updated: CharacterUpdate):
 
     for key, value in data.items():
         setattr(character, key, value)
+
+    if "head_doll" in updated.model_fields_set:
+        _sync_doll(db, character, "head", updated.head_doll)
+    if "body_doll" in updated.model_fields_set:
+        _sync_doll(db, character, "body", updated.body_doll)
 
     db.commit()
     db.refresh(character)
@@ -168,7 +253,27 @@ def delete_character(db: Session, character_id: int):
         (CharacterRelationship.character_id == character_id)
         | (CharacterRelationship.related_character_id == character_id)
     ).delete(synchronize_session=False)
+
+    doll_ids = {
+        doll_id for doll_id in (character.head, character.body) if doll_id
+    }
     db.delete(character)
+    db.flush()
+
+    for doll_id in doll_ids:
+        is_referenced = (
+            db.query(Character)
+            .filter(
+                or_(Character.head == doll_id, Character.body == doll_id)
+            )
+            .first()
+        )
+        if is_referenced:
+            continue
+        doll = db.query(Doll).filter(Doll.id == doll_id).first()
+        if doll:
+            db.delete(doll)
+
     db.commit()
     return True
 

@@ -246,6 +246,29 @@
   color: #f08a80;
 }
 
+.admin-character-parts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.9rem;
+}
+
+.admin-character-part {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  margin: 0;
+  padding: 0.8rem;
+  border: 1px solid var(--admin-border);
+  border-radius: 0.6rem;
+
+  legend {
+    padding: 0 0.35rem;
+    font-size: 0.85rem;
+    font-weight: bold;
+    color: var(--title-color);
+  }
+}
+
 .admin-checkbox-field {
   flex-direction: row;
   align-items: center;
@@ -273,5 +296,9 @@
   .admin-characters-group-actions {
     width: 100%;
     margin-left: 0;
+  }
+
+  .admin-character-parts {
+    grid-template-columns: 1fr;
   }
 }

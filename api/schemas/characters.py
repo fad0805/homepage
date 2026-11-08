@@ -36,6 +36,14 @@ class LocationReorderRequest(BaseModel):
     items: list[LocationReorderItem] = Field(default_factory=list)
 
 
+class DollInput(BaseModel):
+    """Head or body doll information entered from the character form."""
+
+    company: str | None = None
+    name: str | None = None
+    skin_tone: str | None = None
+
+
 class CharacterBase(BaseModel):
     """Base model for a character."""
 
@@ -51,6 +59,8 @@ class CharacterBase(BaseModel):
     visible: bool = True
     is_my_doll: bool = True
     order_in_location: int | None = None
+    head_doll: DollInput | None = None
+    body_doll: DollInput | None = None
 
 
 class CharacterCreate(CharacterBase):
@@ -72,6 +82,8 @@ class CharacterUpdate(BaseModel):
     visible: bool | None = None
     is_my_doll: bool | None = None
     order_in_location: int | None = None
+    head_doll: DollInput | None = None
+    body_doll: DollInput | None = None
 
 
 class CharacterReorderItem(BaseModel):
