@@ -314,7 +314,7 @@
   min-width: 0;
   color: var(--title-color);
   font-family: Eulyoo1945-SemiBold, Arial, Helvetica, sans-serif;
-  font-size: 0.98rem;
+  font-size: 0.9rem;
   line-height: 1.35;
   overflow-wrap: anywhere;
   word-break: break-word;
@@ -780,16 +780,6 @@
   .books-search input,
   .books-search > button {
     border-color: rgba(255, 255, 255, 0.18);
-  }
-
-  .books-search input {
-    background: var(--subtheme);
-    color: var(--foreground);
-
-    &::placeholder {
-      color: var(--foreground);
-      opacity: 0.5;
-    }
   }
 }
 

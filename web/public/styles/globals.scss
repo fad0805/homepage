@@ -35,13 +35,19 @@
   --foreground: #{$dark-text};
   --subtheme: #{$dark-bg-sub};
   --title-color: #{color.adjust($maintheme, $lightness: -35%)};
-  --input-background: #{$dark-text};
-  --input-text: #{$dark-bg};
+  --input-background: #{$dark-bg-sub};
+  --input-text: #{$dark-text};
   --empty-banner-bg: #{color.adjust($maintheme, $lightness: -40%, $saturation: -10%)};
 
   a, a:visited {
     color: var(--title-color);
   }
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--input-text);
+  opacity: 0.5;
 }
 
 body {
