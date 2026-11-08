@@ -4,6 +4,8 @@ import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 
+import { toRichTextHtml } from "@/lib/rich-text";
+
 import "@/public/styles/character-profile.scss";
 
 interface CharacterLocation {
@@ -239,9 +241,12 @@ function CharacterProfileContent() {
       {character.description ? (
         <section className="character-profile__section">
           <h2>소개</h2>
-          <p className="character-profile__description">
-            {character.description}
-          </p>
+          <div
+            className="character-profile__description"
+            dangerouslySetInnerHTML={{
+              __html: toRichTextHtml(character.description),
+            }}
+          />
         </section>
       ) : null}
 

@@ -131,9 +131,118 @@
   border: 1px solid rgba(0, 0, 0, 0.12);
   border-radius: 0.8rem;
   background: rgba(255, 255, 255, 0.35);
-  white-space: pre-line;
   font-size: 0.9rem;
   line-height: 1.7;
+
+  > *:first-child {
+    margin-top: 0;
+  }
+
+  > *:last-child {
+    margin-bottom: 0;
+  }
+
+  p {
+    margin: 0 0 0.7rem;
+
+    &:empty {
+      min-height: 1.7em;
+    }
+  }
+
+  h2,
+  h3 {
+    margin: 1.2rem 0 0.5rem;
+    color: var(--title-color);
+    font-family: Eulyoo1945-SemiBold, Arial, Helvetica, sans-serif;
+    line-height: 1.4;
+  }
+
+  h2 {
+    font-size: 1.1rem;
+  }
+
+  h3 {
+    font-size: 0.98rem;
+  }
+
+  ul,
+  ol {
+    margin: 0 0 0.7rem;
+    padding-left: 1.4rem;
+  }
+
+  li {
+    margin-bottom: 0.2rem;
+  }
+
+  blockquote {
+    margin: 0.9rem 0;
+    padding: 0.7rem 1rem;
+    border-left: 3px solid var(--title-color);
+    border-radius: 0 0.5rem 0.5rem 0;
+    background: rgba(255, 255, 255, 0.45);
+  }
+
+  strong {
+    color: var(--title-color);
+  }
+
+  a {
+    color: var(--title-color);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+
+  code {
+    padding: 0.1rem 0.35rem;
+    border-radius: 0.3rem;
+    background: rgba(0, 0, 0, 0.07);
+    font-size: 0.88em;
+  }
+
+  hr {
+    margin: 1.1rem 0;
+    border: none;
+    border-top: 1px solid rgba(0, 0, 0, 0.15);
+  }
+
+  img {
+    max-width: 100%;
+    height: auto;
+    max-height: 15.7rem;
+    border-radius: 0.7rem;
+
+    &[data-align='center'] {
+      display: block;
+      margin: 1rem auto;
+      clear: both;
+    }
+
+    &[data-align='left'] {
+      display: block;
+      margin: 1rem auto 1rem 0;
+      clear: both;
+    }
+
+    &[data-align='right'] {
+      display: block;
+      margin: 1rem 0 1rem auto;
+      clear: both;
+    }
+
+    &[data-wrap='true'][data-align='left'] {
+      float: left;
+      margin: 0.3rem 1rem 0.8rem 0;
+      clear: none;
+    }
+
+    &[data-wrap='true'][data-align='right'] {
+      float: right;
+      margin: 0.3rem 0 0.8rem 1rem;
+      clear: none;
+    }
+  }
 }
 
 .character-profile__parts {
@@ -252,6 +361,10 @@
   }
 
   .character-profile__quote {
+    background: rgba(255, 255, 255, 0.06);
+  }
+
+  .character-profile__description blockquote {
     background: rgba(255, 255, 255, 0.06);
   }
 

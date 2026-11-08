@@ -159,7 +159,7 @@ export default function AdminChapterEdit() {
     }
 
     const plainBody = body.replace(/<[^>]*>/g, "").trim();
-    const nextBody = plainBody ? body : null;
+    const nextBody = plainBody || /<img\b/i.test(body) ? body : null;
 
     let publishedAtValue: string | null = null;
     if (publishedAt.trim()) {
@@ -315,6 +315,8 @@ export default function AdminChapterEdit() {
                   value={body}
                   onChange={setBody}
                   placeholder="챕터 본문을 입력해주세요."
+                  uploadUrl="/api/chapters/upload"
+                  onNotice={(notice) => notify(notice.type, notice.text)}
                 />
               </div>
               <label className="admin-field">

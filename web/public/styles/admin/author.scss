@@ -44,6 +44,16 @@
   background: var(--input-background);
 }
 
+.admin-editor--compact {
+  .admin-editor__content {
+    min-height: 9rem;
+
+    .tiptap {
+      min-height: 7rem;
+    }
+  }
+}
+
 .admin-editor__toolbar {
   display: flex;
   flex-wrap: wrap;

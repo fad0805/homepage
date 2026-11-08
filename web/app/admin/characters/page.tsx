@@ -31,6 +31,9 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import Cropper, { type Area } from "react-easy-crop";
 
+import { RichTextEditor } from "@/components/rich-text-editor";
+import { isRichTextEmpty, toRichTextHtml } from "@/lib/rich-text";
+
 import "react-easy-crop/react-easy-crop.css";
 import "@/public/styles/admin/characters.scss";
 
@@ -553,6 +556,7 @@ export default function AdminCharacters() {
   const [characterModalOpen, setCharacterModalOpen] = useState(false);
   const [editingCharacter, setEditingCharacter] =
     useState<DraftCharacter | null>(null);
+  const [characterDescription, setCharacterDescription] = useState("");
   const [formLocationId, setFormLocationId] = useState<number | null>(null);
   const [thumbnailPreview, setThumbnailPreview] = useState<string | null>(null);
   const [thumbnailFileName, setThumbnailFileName] = useState<string>("");
@@ -1002,6 +1006,7 @@ export default function AdminCharacters() {
 
   const openCreateCharacter = (locationId?: number) => {
     setEditingCharacter(null);
+    setCharacterDescription("");
     setThumbnailPreview(null);
     setThumbnailFileName("");
     setThumbnailUrlInput("");
@@ -1016,6 +1021,7 @@ export default function AdminCharacters() {
 
   const openEditCharacter = (character: DraftCharacter) => {
     setEditingCharacter(character);
+    setCharacterDescription(toRichTextHtml(character.description));
     setThumbnailPreview(character.preview_url ?? character.thumbnail);
     setThumbnailFileName(character.file?.name ?? "");
     setThumbnailUrlInput(character.thumbnail ?? "");
@@ -1072,6 +1078,7 @@ export default function AdminCharacters() {
   const closeCharacterModal = useCallback(() => {
     setCharacterModalOpen(false);
     setEditingCharacter(null);
+    setCharacterDescription("");
     setThumbnailPreview(null);
     setThumbnailFileName("");
     setThumbnailUrlInput("");
@@ -1265,7 +1272,9 @@ export default function AdminCharacters() {
     const nickname = String(form.get("nickname") ?? "").trim();
     const age = String(form.get("age") ?? "").trim();
     const serif = String(form.get("serif") ?? "").trim();
-    const description = String(form.get("description") ?? "").trim();
+    const description = isRichTextEmpty(characterDescription)
+      ? null
+      : characterDescription;
     const commingDay = String(form.get("comming_day") ?? "").trim();
     const headName = String(form.get("head_name") ?? "").trim();
     const headCompany = String(form.get("head_company") ?? "").trim();
@@ -1354,7 +1363,7 @@ export default function AdminCharacters() {
       nickname: nickname || null,
       age: age || null,
       serif: serif || null,
-      description: description || null,
+      description: description,
       comming_day: commingDay || null,
       visible: form.get("visible") === "on",
       is_my_doll: form.get("is_my_doll") === "on",
@@ -1812,15 +1821,17 @@ export default function AdminCharacters() {
               />
             </label>
 
-            <label className="admin-field">
+            <div className="admin-field">
               <span>설명</span>
-              <textarea
-                name="description"
-                rows={3}
-                defaultValue={editingCharacter?.description ?? ""}
+              <RichTextEditor
+                value={characterDescription}
+                onChange={setCharacterDescription}
                 placeholder="등장인물 설명 (선택)"
+                uploadUrl="/api/characters/upload"
+                onNotice={(notice) => notify(notice.type, notice.text)}
+                compact
               />
-            </label>
+            </div>
 
             <div className="admin-character-parts">
               <fieldset className="admin-character-part">
