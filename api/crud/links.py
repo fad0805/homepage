@@ -2,6 +2,7 @@ from fastapi import HTTPException, status
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+from core.uploads import delete_replaced_upload, delete_uploaded_file
 from models.links import Link, Category
 from schemas.links import (
     LinkCreate,
@@ -110,6 +111,8 @@ def update_link(db: Session, link_id: int, updated_link: LinkUpdate):
             detail="Does not exist link",
         )
 
+    old_banner_url = link.banner_url
+
     data = updated_link.model_dump(exclude_unset=True)
     if (
         "category" in data
@@ -123,6 +126,18 @@ def update_link(db: Session, link_id: int, updated_link: LinkUpdate):
 
     db.commit()
     db.refresh(link)
+
+    if (
+        old_banner_url
+        and "banner_url" in data
+        and old_banner_url != link.banner_url
+    ):
+        still_used = (
+            db.query(Link).filter(Link.banner_url == old_banner_url).first()
+        )
+        if not still_used:
+            delete_replaced_upload(old_banner_url, link.banner_url)
+
     return _serialize_link(link)
 
 
@@ -137,8 +152,17 @@ def delete_link(db: Session, link_id: int):
             detail="Does not exist link",
         )
 
+    banner_url = link.banner_url
     db.delete(link)
     db.commit()
+
+    if banner_url:
+        still_used = (
+            db.query(Link).filter(Link.banner_url == banner_url).first()
+        )
+        if not still_used:
+            delete_uploaded_file(banner_url)
+
     return True
 
 

@@ -3,6 +3,7 @@ import os
 import uuid
 from pathlib import Path
 from typing import Any
+from urllib.parse import unquote, urlparse
 
 import boto3
 from botocore.config import Config as BotoConfig
@@ -85,6 +86,101 @@ def _build_public_url(key: str) -> str:
     if S3_ENDPOINT_URL:
         return f"{S3_ENDPOINT_URL.rstrip('/')}/{S3_BUCKET}/{key}"
     return f"https://{S3_BUCKET}.s3.{S3_REGION}.amazonaws.com/{key}"
+
+
+def _s3_key_from_url(url: str) -> str | None:
+    """Return the object key if ``url`` points at an object we uploaded."""
+    parsed = urlparse(url)
+    if parsed.scheme not in ("http", "https"):
+        return None
+
+    normalized = f"{parsed.scheme}://{parsed.netloc}{parsed.path}"
+    bases: list[str] = []
+    if S3_PUBLIC_BASE_URL:
+        bases.append(S3_PUBLIC_BASE_URL.rstrip("/"))
+    if S3_ENDPOINT_URL:
+        bases.append(f"{S3_ENDPOINT_URL.rstrip('/')}/{S3_BUCKET}")
+    bases.append(f"https://{S3_BUCKET}.s3.{S3_REGION}.amazonaws.com")
+
+    for base in bases:
+        if normalized.startswith(f"{base}/"):
+            return unquote(normalized[len(base) + 1 :])
+    return None
+
+
+def _local_path_from_url(url: str) -> Path | None:
+    """Return the local upload path if ``url`` points at the legacy store."""
+    path = urlparse(url).path if url.startswith(("http://", "https://")) else url
+    prefix = f"{URL_PREFIX}/"
+    if not path.startswith(prefix):
+        return None
+
+    root = UPLOAD_DIR.resolve()
+    candidate = (root / unquote(path[len(prefix) :])).resolve()
+    try:
+        candidate.relative_to(root)
+    except ValueError:
+        # Reject paths that escape the upload directory.
+        return None
+    return candidate
+
+
+def _storage_identity(url: str | None) -> tuple[str, str] | None:
+    """Identify a stored object so two URLs can be compared."""
+    if not url:
+        return None
+
+    local_path = _local_path_from_url(url)
+    if local_path is not None:
+        return ("local", str(local_path))
+
+    key = _s3_key_from_url(url)
+    if key is not None:
+        return ("s3", key)
+    return None
+
+
+def delete_uploaded_file(url: str | None) -> None:
+    """Delete a file previously stored by :func:`save_banner`.
+
+    External URLs and files managed by someone else are ignored. Failures are
+    logged but never raised, because storage cleanup must not break the
+    database operation that triggered it.
+    """
+    if not url:
+        return
+
+    local_path = _local_path_from_url(url)
+    if local_path is not None:
+        try:
+            local_path.unlink(missing_ok=True)
+        except OSError:
+            logger.warning("Failed to delete local upload: %s", url, exc_info=True)
+        return
+
+    key = _s3_key_from_url(url)
+    if key is None or not _s3_is_configured():
+        return
+
+    try:
+        _get_s3_client().delete_object(Bucket=S3_BUCKET, Key=key)
+    except (BotoCoreError, ClientError):
+        logger.warning("Failed to delete S3 object: %s", key, exc_info=True)
+
+
+def delete_replaced_upload(
+    old_url: str | None,
+    new_url: str | None,
+) -> None:
+    """Delete ``old_url`` when it is no longer referenced by ``new_url``."""
+    if not old_url or old_url == new_url:
+        return
+
+    old_identity = _storage_identity(old_url)
+    if old_identity is not None and old_identity == _storage_identity(new_url):
+        return
+
+    delete_uploaded_file(old_url)
 
 
 def _save_to_s3(

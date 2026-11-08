@@ -2,6 +2,7 @@ from fastapi import HTTPException, status
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
+from core.uploads import delete_replaced_upload, delete_uploaded_file
 from models.characters import Character, CharacterRelationship, Doll, Location
 from schemas.characters import (
     CharacterCreate,
@@ -211,6 +212,8 @@ def update_character(db: Session, character_id: int, updated: CharacterUpdate):
             detail="Does not exist character",
         )
 
+    old_thumbnail = character.thumbnail
+
     data = updated.model_dump(
         exclude_unset=True, exclude={"head_doll", "body_doll"}
     )
@@ -235,6 +238,20 @@ def update_character(db: Session, character_id: int, updated: CharacterUpdate):
 
     db.commit()
     db.refresh(character)
+
+    if (
+        old_thumbnail
+        and "thumbnail" in data
+        and old_thumbnail != character.thumbnail
+    ):
+        still_used = (
+            db.query(Character)
+            .filter(Character.thumbnail == old_thumbnail)
+            .first()
+        )
+        if not still_used:
+            delete_replaced_upload(old_thumbnail, character.thumbnail)
+
     return _serialize_character(character)
 
 
@@ -254,6 +271,7 @@ def delete_character(db: Session, character_id: int):
         | (CharacterRelationship.related_character_id == character_id)
     ).delete(synchronize_session=False)
 
+    thumbnail = character.thumbnail
     doll_ids = {
         doll_id for doll_id in (character.head, character.body) if doll_id
     }
@@ -275,6 +293,16 @@ def delete_character(db: Session, character_id: int):
             db.delete(doll)
 
     db.commit()
+
+    if thumbnail:
+        still_used = (
+            db.query(Character)
+            .filter(Character.thumbnail == thumbnail)
+            .first()
+        )
+        if not still_used:
+            delete_uploaded_file(thumbnail)
+
     return True
 
 
