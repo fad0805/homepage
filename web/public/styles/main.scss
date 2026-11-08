@@ -32,7 +32,7 @@
   grid-template-columns: minmax(0, 1fr);
   align-items: center;
   gap: 1.5rem;
-  padding: 3.5rem 2.5rem 18rem;
+  padding: 3.5rem 2.5rem 14.4rem;
   overflow: hidden;
 
   &::before {
@@ -91,13 +91,13 @@
   .hero {
     grid-template-columns: 1fr;
     gap: 1.2rem;
-    padding: 2.6rem 1.6rem 12rem;
+    padding: 2.6rem 1.6rem 9.6rem;
   }
 }
 
 @media (max-width: 480px) {
   .hero {
-    padding: 2.1rem 1.15rem 9rem;
+    padding: 2.1rem 1.15rem 7.2rem;
   }
 
   .hero__title {
