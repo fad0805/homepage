@@ -16,7 +16,7 @@
 }
 
 .author-eyebrow {
-  margin: 0;
+  margin: 0 0 0 1.5rem;
   color: var(--home-muted, var(--foreground));
   font-size: 0.64rem;
   letter-spacing: 0.24em;
@@ -24,7 +24,7 @@
 }
 
 .author-title {
-  margin: 0;
+  margin: 0 0 0 1.5rem;
   color: var(--title-color);
   font-family: Eulyoo1945-SemiBold, Arial, Helvetica, sans-serif;
   font-size: clamp(2.2rem, 5vw, 3.2rem);
@@ -33,7 +33,7 @@
 }
 
 .author-tagline {
-  margin: 0.2rem 0 0;
+  margin: 0.2rem 0 0 1.5rem;
   color: var(--foreground);
   font-size: 0.92rem;
   opacity: 0.68;
@@ -41,14 +41,21 @@
 
 .author-body {
   display: block;
+  margin-top: 0.5rem;
+
+  &::before {
+    content: '';
+    display: block;
+    width: 4.5rem;
+    height: 1px;
+    margin: 0 0 3rem 1.5rem;
+    background: linear-gradient(90deg, var(--title-color), transparent);
+    opacity: 0.5;
+  }
 }
 
 .author-copy {
-  padding: 2rem 2.2rem;
-  border: 1px solid rgba(0, 0, 0, 0.1);
-  border-radius: 1.2rem;
-  background: var(--subtheme);
-  box-shadow: 0 0 18px rgba(0, 0, 0, 0.06);
+  padding: 0 0 0 1.5rem;
 
   &::after {
     content: '';
@@ -144,7 +151,6 @@
     height: auto;
     max-height: 15.7rem;
     border-radius: 0.7rem;
-    box-shadow: 0 0 14px rgba(0, 0, 0, 0.12);
 
     &[data-align='center'] {
       display: block;
@@ -179,10 +185,6 @@
 }
 
 [data-theme='dark'] {
-  .author-copy {
-    border-color: rgba(255, 255, 255, 0.14);
-  }
-
   .author-copy blockquote {
     background: rgba(255, 255, 255, 0.06);
   }
@@ -201,7 +203,19 @@
     padding: 2rem 1.2rem 5rem;
   }
 
+  .author-eyebrow,
+  .author-title,
+  .author-tagline {
+    margin-left: 0.75rem;
+  }
+
+  .author-body::before {
+    width: 3.5rem;
+    margin-bottom: 2rem;
+    margin-left: 0.75rem;
+  }
+
   .author-copy {
-    padding: 1.5rem 1.3rem;
+    padding: 0 0 0 0.75rem;
   }
 }
