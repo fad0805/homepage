@@ -2,9 +2,12 @@
 
 import Link from "next/link";
 
+import navigation from "@/config/navigation";
+
 import "@/public/styles/main.scss";
 
 export default function Home() {
+  const menuItems = navigation.main.items;
   return (
     <div id="main">
       <section className="hero">
@@ -26,15 +29,19 @@ export default function Home() {
           </p>
 
           <div className="hero__actions">
-            <Link
-              className="hero__button hero__button--primary"
-              href="/characters"
-            >
-              등장인물 만나기
-            </Link>
-            <Link className="hero__button" href="/links">
-              놀러가기
-            </Link>
+            {menuItems.map((item) => (
+              <Link
+                key={item.href}
+                className={`hero__button${
+                  item.href === "/characters"
+                    ? " hero__button--primary"
+                    : ""
+                }`}
+                href={item.href}
+              >
+                {item.label}
+              </Link>
+            ))}
           </div>
         </div>
       </section>

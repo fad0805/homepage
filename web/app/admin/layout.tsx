@@ -23,7 +23,7 @@ export default function RootLayout({
   }, [pathname, router]);
 
   return (
-    <div>
+    <div className="admin-layout">
       <AdminNavbar />
       {children}
     </div>
