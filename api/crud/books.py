@@ -341,6 +341,18 @@ def create_chapter(db: Session, payload: ChapterCreate):
     return _serialize_chapter(chapter)
 
 
+def _reorder_chapters_by_created_at(db: Session, book_id: int) -> None:
+    """Reassign chapter order chronologically inside one book."""
+    chapters = (
+        db.query(Chapter)
+        .filter(Chapter.book_id == book_id)
+        .order_by(Chapter.created_at.asc(), Chapter.id.asc())
+        .all()
+    )
+    for index, chapter in enumerate(chapters):
+        chapter.order = index
+
+
 def update_chapter(db: Session, chapter_id: int, payload: ChapterUpdate):
     chapter = db.query(Chapter).filter(Chapter.id == chapter_id).first()
     if not chapter:
@@ -355,8 +367,18 @@ def update_chapter(db: Session, chapter_id: int, payload: ChapterUpdate):
     if "tags" in data:
         data["tags"] = _clean_tags(data["tags"])
 
+    previous_book_id = chapter.book_id
     for key, value in data.items():
         setattr(chapter, key, value)
+
+    next_book_id = data.get("book_id")
+    if next_book_id is not None and next_book_id != previous_book_id:
+        # Moving a chapter re-sorts both books so their order always follows
+        # the original creation time.
+        db.flush()
+        _reorder_chapters_by_created_at(db, previous_book_id)
+        _reorder_chapters_by_created_at(db, next_book_id)
+
     db.commit()
     db.refresh(chapter)
     return _serialize_chapter(chapter)
