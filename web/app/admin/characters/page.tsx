@@ -75,6 +75,7 @@ interface CharacterItem {
   id: number;
   name: string;
   thumbnail: string | null;
+  detail_image: string | null;
   location_id: number | null;
   alt_name: string | null;
   nickname: string | null;
@@ -93,10 +94,14 @@ interface CharacterItem {
 }
 
 interface DraftCharacter extends Omit<CharacterItem, "relationships"> {
-  /** Staged thumbnail file that will be uploaded on save. */
+  /** Staged banner file that will be uploaded on save. */
   file?: File | null;
-  /** Local object URL preview for the staged file. */
+  /** Local object URL preview for the staged banner file. */
   preview_url?: string | null;
+  /** Staged square detail file that will be uploaded on save. */
+  detail_file?: File | null;
+  /** Local object URL preview for the staged detail file. */
+  detail_preview_url?: string | null;
   relationships: CharacterRelationshipDraft[];
 }
 
@@ -174,8 +179,23 @@ function toDateValue(value: string | null | undefined) {
   return value.slice(0, 10);
 }
 
-const CROP_ASPECT = 3;
-const CROP_OUTPUT_WIDTH = 1280;
+type CropStage = "banner" | "detail";
+
+const CROP_STAGES: Record<
+  CropStage,
+  { aspect: number; outputWidth: number; label: string }
+> = {
+  banner: {
+    aspect: 3,
+    outputWidth: 1280,
+    label: "배너 (3:1)",
+  },
+  detail: {
+    aspect: 1,
+    outputWidth: 1024,
+    label: "상세 (1:1)",
+  },
+};
 
 function loadImage(src: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
@@ -190,11 +210,12 @@ async function cropImageToBlob(
   src: string,
   crop: Area,
   outputWidth: number,
+  aspect: number,
 ): Promise<Blob> {
   const image = await loadImage(src);
   const outputHeight = Math.max(
     1,
-    Math.round(outputWidth / CROP_ASPECT),
+    Math.round(outputWidth / aspect),
   );
   const canvas = document.createElement("canvas");
   canvas.width = outputWidth;
@@ -524,6 +545,9 @@ export default function AdminCharacters() {
   const [thumbnailFileName, setThumbnailFileName] = useState<string>("");
   const [thumbnailUrlInput, setThumbnailUrlInput] = useState<string>("");
   const [thumbnailFile, setThumbnailFile] = useState<File | null>(null);
+  const [detailPreview, setDetailPreview] = useState<string | null>(null);
+  const [detailFileName, setDetailFileName] = useState<string>("");
+  const [detailFile, setDetailFile] = useState<File | null>(null);
   const [relationshipDraft, setRelationshipDraft] = useState<
     CharacterRelationshipDraft[]
   >([]);
@@ -531,6 +555,12 @@ export default function AdminCharacters() {
   const [cropModalOpen, setCropModalOpen] = useState(false);
   const [cropSource, setCropSource] = useState<string | null>(null);
   const [cropFileName, setCropFileName] = useState<string>("");
+  const [cropStage, setCropStage] = useState<CropStage>("banner");
+  const [pendingBanner, setPendingBanner] = useState<{
+    file: File;
+    preview: string;
+    name: string;
+  } | null>(null);
   const [crop, setCrop] = useState({ x: 0, y: 0 });
   const [cropZoom, setCropZoom] = useState(1);
   const [croppedAreaPixels, setCroppedAreaPixels] = useState<Area | null>(null);
@@ -711,7 +741,7 @@ export default function AdminCharacters() {
     [characters, charactersByLocation, locations],
   );
 
-  const uploadThumbnail = useCallback(async (file: File) => {
+  const uploadImage = useCallback(async (file: File) => {
     const body = new FormData();
     body.append("file", file);
     const uploaded = await apiFetch<{ url: string }>(
@@ -766,13 +796,17 @@ export default function AdminCharacters() {
 
       for (const character of characters.filter((item) => item.id < 0)) {
         const thumbnail = character.file
-          ? await uploadThumbnail(character.file)
+          ? await uploadImage(character.file)
           : character.thumbnail;
+        const detailImage = character.detail_file
+          ? await uploadImage(character.detail_file)
+          : character.detail_image;
         const created = await apiFetch<CharacterItem>("/api/characters", {
           method: "POST",
           body: JSON.stringify({
             name: character.name,
             thumbnail,
+            detail_image: detailImage,
             location_id: realLocationId(character.location_id),
             alt_name: character.alt_name,
             nickname: character.nickname,
@@ -793,13 +827,17 @@ export default function AdminCharacters() {
 
       for (const character of characters.filter((item) => item.id > 0)) {
         const thumbnail = character.file
-          ? await uploadThumbnail(character.file)
+          ? await uploadImage(character.file)
           : character.thumbnail;
+        const detailImage = character.detail_file
+          ? await uploadImage(character.detail_file)
+          : character.detail_image;
         await apiFetch(`/api/characters/${character.id}`, {
           method: "PUT",
           body: JSON.stringify({
             name: character.name,
             thumbnail,
+            detail_image: detailImage,
             location_id: realLocationId(character.location_id),
             alt_name: character.alt_name,
             nickname: character.nickname,
@@ -905,7 +943,7 @@ export default function AdminCharacters() {
     locations,
     notify,
     saving,
-    uploadThumbnail,
+    uploadImage,
   ]);
 
   const handleDiscard = useCallback(async () => {
@@ -938,6 +976,9 @@ export default function AdminCharacters() {
     setThumbnailFileName("");
     setThumbnailUrlInput("");
     setThumbnailFile(null);
+    setDetailPreview(null);
+    setDetailFileName("");
+    setDetailFile(null);
     setRelationshipDraft([]);
     setFormLocationId(locationId ?? locations[0]?.id ?? null);
     setCharacterModalOpen(true);
@@ -949,6 +990,11 @@ export default function AdminCharacters() {
     setThumbnailFileName(character.file?.name ?? "");
     setThumbnailUrlInput(character.thumbnail ?? "");
     setThumbnailFile(null);
+    setDetailPreview(
+      character.detail_preview_url ?? character.detail_image,
+    );
+    setDetailFileName(character.detail_file?.name ?? "");
+    setDetailFile(null);
     setRelationshipDraft(
       character.relationships.map((relationship) => ({ ...relationship })),
     );
@@ -958,20 +1004,35 @@ export default function AdminCharacters() {
     setCharacterModalOpen(true);
   };
 
-  const resetCropState = useCallback(() => {
-    if (cropSource) {
-      URL.revokeObjectURL(cropSource);
-      objectUrls.current.delete(cropSource);
-    }
-    setCropSource(null);
-    setCropFileName("");
-    setCrop({ x: 0, y: 0 });
-    setCropZoom(1);
-    setCroppedAreaPixels(null);
-    if (thumbnailInputRef.current) {
-      thumbnailInputRef.current.value = "";
-    }
-  }, [cropSource]);
+  const resetCropState = useCallback(
+    (discardPending = true) => {
+      if (cropSource) {
+        URL.revokeObjectURL(cropSource);
+        objectUrls.current.delete(cropSource);
+      }
+      if (discardPending) {
+        setPendingBanner((current) => {
+          if (current) {
+            URL.revokeObjectURL(current.preview);
+            objectUrls.current.delete(current.preview);
+          }
+          return null;
+        });
+      } else {
+        setPendingBanner(null);
+      }
+      setCropSource(null);
+      setCropFileName("");
+      setCropStage("banner");
+      setCrop({ x: 0, y: 0 });
+      setCropZoom(1);
+      setCroppedAreaPixels(null);
+      if (thumbnailInputRef.current) {
+        thumbnailInputRef.current.value = "";
+      }
+    },
+    [cropSource],
+  );
 
   const closeCropModal = useCallback(() => {
     setCropModalOpen(false);
@@ -985,6 +1046,9 @@ export default function AdminCharacters() {
     setThumbnailFileName("");
     setThumbnailUrlInput("");
     setThumbnailFile(null);
+    setDetailPreview(null);
+    setDetailFileName("");
+    setDetailFile(null);
     setRelationshipDraft([]);
     closeCropModal();
   }, [closeCropModal]);
@@ -992,17 +1056,11 @@ export default function AdminCharacters() {
   const handleThumbnailChange = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) {
-      const urlValue = thumbnailUrlInput.trim();
-      const urlChanged = urlValue !== (editingCharacter?.thumbnail ?? "");
       setThumbnailFile(null);
       setThumbnailPreview(
-        urlChanged
-          ? urlValue || null
-          : editingCharacter?.preview_url ?? (urlValue || null),
+        editingCharacter?.preview_url ?? editingCharacter?.thumbnail ?? null,
       );
-      setThumbnailFileName(
-        urlChanged ? "" : editingCharacter?.file?.name ?? "",
-      );
+      setThumbnailFileName(editingCharacter?.file?.name ?? "");
       return;
     }
     if (!ALLOWED_THUMBNAIL_TYPES.includes(file.type)) {
@@ -1012,7 +1070,7 @@ export default function AdminCharacters() {
     }
     if (file.size > MAX_THUMBNAIL_SIZE) {
       event.target.value = "";
-      notify("error", "썸네일 이미지는 50MB 이하만 업로드할 수 있습니다.");
+      notify("error", "이미지는 50MB 이하만 업로드할 수 있습니다.");
       return;
     }
 
@@ -1020,6 +1078,8 @@ export default function AdminCharacters() {
     objectUrls.current.add(objectUrl);
     setCropSource(objectUrl);
     setCropFileName(file.name);
+    setCropStage("banner");
+    setPendingBanner(null);
     setCrop({ x: 0, y: 0 });
     setCropZoom(1);
     setCroppedAreaPixels(null);
@@ -1071,8 +1131,10 @@ export default function AdminCharacters() {
       objectUrls.current.add(objectUrl);
       setCropSource(objectUrl);
       setCropFileName(
-        value.split("/").pop()?.split("?")[0] || "thumbnail",
+        value.split("/").pop()?.split("?")[0] || "character",
       );
+      setCropStage("banner");
+      setPendingBanner(null);
       setCrop({ x: 0, y: 0 });
       setCropZoom(1);
       setCroppedAreaPixels(null);
@@ -1097,49 +1159,71 @@ export default function AdminCharacters() {
 
     setCropping(true);
     try {
+      const stage = CROP_STAGES[cropStage];
       const blob = await cropImageToBlob(
         cropSource,
         croppedAreaPixels,
-        CROP_OUTPUT_WIDTH,
+        stage.outputWidth,
+        stage.aspect,
       );
-      const baseName = cropFileName.replace(/\.[^.]+$/, "") || "thumbnail";
-      const croppedFile = new File([blob], `${baseName}.png`, {
-        type: "image/png",
-      });
+      const baseName = cropFileName.replace(/\.[^.]+$/, "") || "character";
+      const suffix = cropStage === "banner" ? "banner" : "detail";
+      const croppedFile = new File(
+        [blob],
+        `${baseName}-${suffix}.png`,
+        { type: "image/png" },
+      );
 
-      URL.revokeObjectURL(cropSource);
-      objectUrls.current.delete(cropSource);
+      if (cropStage === "banner") {
+        const previewUrl = URL.createObjectURL(croppedFile);
+        objectUrls.current.add(previewUrl);
+        setPendingBanner({
+          file: croppedFile,
+          preview: previewUrl,
+          name: croppedFile.name,
+        });
+        setCropStage("detail");
+        setCrop({ x: 0, y: 0 });
+        setCropZoom(1);
+        setCroppedAreaPixels(null);
+        return;
+      }
+
+      if (!pendingBanner) {
+        notify("error", "배너 이미지 크롭 정보를 찾지 못했습니다.");
+        return;
+      }
 
       const previewUrl = URL.createObjectURL(croppedFile);
       objectUrls.current.add(previewUrl);
-      setThumbnailFile(croppedFile);
-      setThumbnailFileName(croppedFile.name);
-      setThumbnailPreview(previewUrl);
+
+      setThumbnailFile(pendingBanner.file);
+      setThumbnailPreview(pendingBanner.preview);
+      setThumbnailFileName(pendingBanner.name);
+      setDetailFile(croppedFile);
+      setDetailPreview(previewUrl);
+      setDetailFileName(croppedFile.name);
 
       setCropModalOpen(false);
-      setCropSource(null);
-      setCropFileName("");
-      setCrop({ x: 0, y: 0 });
-      setCropZoom(1);
-      setCroppedAreaPixels(null);
-      if (thumbnailInputRef.current) {
-        thumbnailInputRef.current.value = "";
-      }
+      resetCropState(false);
     } catch (error) {
       console.error(error);
       notify("error", "이미지를 자르지 못했습니다.");
     } finally {
       setCropping(false);
     }
-  }, [cropFileName, cropSource, croppedAreaPixels, notify]);
+  }, [
+    cropFileName,
+    cropSource,
+    cropStage,
+    croppedAreaPixels,
+    notify,
+    pendingBanner,
+    resetCropState,
+  ]);
 
   const handleThumbnailUrlChange = (event: ChangeEvent<HTMLInputElement>) => {
-    const value = event.target.value;
-    setThumbnailUrlInput(value);
-    if (!thumbnailFile) {
-      setThumbnailFileName("");
-      setThumbnailPreview(value.trim() || null);
-    }
+    setThumbnailUrlInput(event.target.value);
   };
 
   const handleCharacterSubmit = (event: FormEvent<HTMLFormElement>) => {
@@ -1188,22 +1272,31 @@ export default function AdminCharacters() {
       return;
     }
 
-    const hasNewFile = thumbnailFile !== null;
-    const urlChanged = thumbnailUrl !== (editingCharacter?.thumbnail ?? "");
-    const nextFile = hasNewFile
-      ? thumbnailFile
-      : urlChanged
-        ? null
-        : (editingCharacter?.file ?? null);
-    const nextThumbnail =
-      hasNewFile || !urlChanged
-        ? (editingCharacter?.thumbnail ?? null)
-        : thumbnailUrl || null;
-    const nextPreview = hasNewFile
-      ? thumbnailPreview
-      : nextFile
-        ? (editingCharacter?.preview_url ?? null)
-        : thumbnailUrl || null;
+    if (
+      thumbnailUrl &&
+      thumbnailUrl !== (editingCharacter?.thumbnail ?? "") &&
+      !thumbnailFile
+    ) {
+      notify(
+        "error",
+        "이미지 URL은 배너·상세 두 번 자른 뒤 적용해주세요.",
+      );
+      return;
+    }
+
+    const nextFile = thumbnailFile ?? editingCharacter?.file ?? null;
+    const nextPreview =
+      thumbnailPreview ??
+      (nextFile
+        ? editingCharacter?.preview_url ?? null
+        : editingCharacter?.thumbnail ?? null);
+    const nextDetailFile =
+      detailFile ?? editingCharacter?.detail_file ?? null;
+    const nextDetailPreview =
+      detailPreview ??
+      (nextDetailFile
+        ? editingCharacter?.detail_preview_url ?? null
+        : editingCharacter?.detail_image ?? null);
 
     const remaining = characters.filter(
       (character) => character.id !== editingCharacter?.id,
@@ -1224,7 +1317,8 @@ export default function AdminCharacters() {
     const draft: DraftCharacter = {
       id: editingCharacter?.id ?? nextTempId.current--,
       name,
-      thumbnail: nextThumbnail,
+      thumbnail: editingCharacter?.thumbnail ?? null,
+      detail_image: editingCharacter?.detail_image ?? null,
       location_id: targetLocation.id,
       alt_name: altName || null,
       nickname: nickname || null,
@@ -1254,6 +1348,8 @@ export default function AdminCharacters() {
         : null,
       file: nextFile,
       preview_url: nextPreview,
+      detail_file: nextDetailFile,
+      detail_preview_url: nextDetailPreview,
     };
 
     setCharacters((prev) =>
@@ -1737,7 +1833,7 @@ export default function AdminCharacters() {
             </div>
 
             <div className="admin-field">
-              <span>썸네일 이미지</span>
+              <span>이미지 (배너 · 상세)</span>
               <input
                 type="text"
                 name="thumbnail_url"
@@ -1759,38 +1855,68 @@ export default function AdminCharacters() {
                 onClick={openCropFromUrl}
                 disabled={urlCropLoading || !thumbnailUrlInput.trim()}
               >
-                {urlCropLoading ? "불러오는 중..." : "URL 이미지 자르기"}
+                {urlCropLoading
+                  ? "불러오는 중..."
+                  : "URL 이미지로 두 번 자르기"}
               </button>
-              <div className="admin-banner-preview-wrap">
-                {thumbnailPreview ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={thumbnailPreview}
-                    alt="썸네일 미리보기"
-                    className="admin-banner-preview"
-                  />
-                ) : (
-                  <span className="admin-banner-placeholder">
-                    미리보기 없음
+              <div className="admin-character-image-previews">
+                <div className="admin-character-image-preview">
+                  <span className="admin-character-image-preview__label">
+                    배너 · 3:1
                   </span>
-                )}
+                  <div className="admin-banner-preview-wrap">
+                    {thumbnailPreview ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={thumbnailPreview}
+                        alt="배너 이미지 미리보기"
+                        className="admin-banner-preview"
+                      />
+                    ) : (
+                      <span className="admin-banner-placeholder">
+                        미리보기 없음
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <div className="admin-character-image-preview">
+                  <span className="admin-character-image-preview__label">
+                    상세 · 1:1
+                  </span>
+                  <div className="admin-detail-preview-wrap">
+                    {detailPreview ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={detailPreview}
+                        alt="상세 이미지 미리보기"
+                        className="admin-detail-preview"
+                      />
+                    ) : (
+                      <span className="admin-banner-placeholder">
+                        미리보기 없음
+                      </span>
+                    )}
+                  </div>
+                </div>
               </div>
               <input
                 ref={thumbnailInputRef}
                 type="file"
-                name="banner_file"
+                name="character_file"
                 accept="image/png,image/jpeg,image/webp,image/gif"
                 onChange={handleThumbnailChange}
               />
-              {thumbnailFileName ? (
+              {thumbnailFileName || detailFileName ? (
                 <span className="admin-banner-filename">
-                  선택됨: {thumbnailFileName}
+                  {thumbnailFileName ? `배너: ${thumbnailFileName}` : null}
+                  {thumbnailFileName && detailFileName ? " · " : null}
+                  {detailFileName ? `상세: ${detailFileName}` : null}
                 </span>
               ) : null}
               <span className="admin-banner-help">
-                이미지 URL을 입력한 뒤 &apos;URL 이미지 자르기&apos;를 누르면
-                3:1로 자를 수 있습니다. 파일을 선택해도 3:1 크롭 후
-                고해상도(너비 1280px)로 저장됩니다.
+                파일을 선택하거나 URL을 불러오면 3:1 배너 → 1:1 상세 순서로
+                두 번 자릅니다. 배너는 너비 1280px, 상세 이미지는
+                1024×1024px로 저장됩니다.
               </span>
             </div>
 
@@ -1817,7 +1943,11 @@ export default function AdminCharacters() {
 
       {cropModalOpen && cropSource ? (
         <ModalShell
-          title="이미지 자르기"
+          title={
+            cropStage === "banner"
+              ? "이미지 자르기 · 1/2 배너"
+              : "이미지 자르기 · 2/2 상세"
+          }
           onClose={closeCropModal}
           footer={
             <>
@@ -1835,7 +1965,11 @@ export default function AdminCharacters() {
                 onClick={applyCrop}
                 disabled={cropping || !croppedAreaPixels}
               >
-                {cropping ? "처리 중..." : "적용"}
+                {cropping
+                  ? "처리 중..."
+                  : cropStage === "banner"
+                    ? "다음 (상세 이미지)"
+                    : "적용"}
               </button>
             </>
           }
@@ -1843,10 +1977,11 @@ export default function AdminCharacters() {
           <div className="admin-crop">
             <div className="admin-crop-viewport">
               <Cropper
+                key={cropStage}
                 image={cropSource}
                 crop={crop}
                 zoom={cropZoom}
-                aspect={CROP_ASPECT}
+                aspect={CROP_STAGES[cropStage].aspect}
                 onCropChange={setCrop}
                 onZoomChange={setCropZoom}
                 onCropComplete={(_, areaPixels) =>
@@ -1869,8 +2004,9 @@ export default function AdminCharacters() {
               />
             </label>
             <p className="admin-crop-hint">
-              가로:세로 3:1 비율로 자릅니다. 적용하면 고해상도(너비
-              1280px)로 저장됩니다.
+              {cropStage === "banner"
+                ? "목록에 표시할 3:1 배너를 자릅니다. 다음 단계에서 상세 페이지용 1:1 이미지를 자릅니다."
+                : "상세 페이지에 표시할 정사각형(1:1) 이미지를 자릅니다. 적용하면 1024×1024px로 저장됩니다."}
             </p>
           </div>
         </ModalShell>

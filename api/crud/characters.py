@@ -63,6 +63,7 @@ def _serialize_character(character: Character) -> dict:
         "id": character.id,
         "name": character.name,
         "thumbnail": character.thumbnail,
+        "detail_image": character.detail_image,
         "location_id": character.location_id,
         "alt_name": character.alt_name,
         "nickname": character.nickname,
@@ -301,6 +302,7 @@ def update_character(db: Session, character_id: int, updated: CharacterUpdate):
         )
 
     old_thumbnail = character.thumbnail
+    old_detail_image = character.detail_image
 
     data = updated.model_dump(
         exclude_unset=True,
@@ -347,6 +349,22 @@ def update_character(db: Session, character_id: int, updated: CharacterUpdate):
         if not still_used:
             delete_replaced_upload(old_thumbnail, character.thumbnail)
 
+    if (
+        old_detail_image
+        and "detail_image" in data
+        and old_detail_image != character.detail_image
+    ):
+        still_used = (
+            db.query(Character)
+            .filter(Character.detail_image == old_detail_image)
+            .first()
+        )
+        if not still_used:
+            delete_replaced_upload(
+                old_detail_image,
+                character.detail_image,
+            )
+
     return _serialize_character(character)
 
 
@@ -367,6 +385,7 @@ def delete_character(db: Session, character_id: int):
     ).delete(synchronize_session=False)
 
     thumbnail = character.thumbnail
+    detail_image = character.detail_image
     doll_ids = {
         doll_id for doll_id in (character.head, character.body) if doll_id
     }
@@ -397,6 +416,15 @@ def delete_character(db: Session, character_id: int):
         )
         if not still_used:
             delete_uploaded_file(thumbnail)
+
+    if detail_image:
+        still_used = (
+            db.query(Character)
+            .filter(Character.detail_image == detail_image)
+            .first()
+        )
+        if not still_used:
+            delete_uploaded_file(detail_image)
 
     return True
 

@@ -59,6 +59,7 @@ class CharacterBase(BaseModel):
 
     name: str
     thumbnail: str | None = None
+    detail_image: str | None = None
     location_id: int | None = None
     alt_name: str | None = None
     nickname: str | None = None
@@ -84,6 +85,7 @@ class CharacterUpdate(BaseModel):
 
     name: str | None = None
     thumbnail: str | None = None
+    detail_image: str | None = None
     location_id: int | None = None
     alt_name: str | None = None
     nickname: str | None = None

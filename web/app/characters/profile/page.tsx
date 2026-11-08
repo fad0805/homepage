@@ -40,6 +40,7 @@ interface CharacterDetail {
   id: number;
   name: string;
   thumbnail: string | null;
+  detail_image: string | null;
   alt_name: string | null;
   nickname: string | null;
   age: string | null;
@@ -182,6 +183,7 @@ function CharacterProfileContent() {
   const subName = [character.alt_name, character.nickname]
     .filter(Boolean)
     .join(" · ");
+  const displayImage = character.detail_image ?? character.thumbnail;
   const visibleRelationships = (character.relationships ?? []).filter(
     (relationship) => relationship.character.visible !== false,
   );
@@ -194,11 +196,11 @@ function CharacterProfileContent() {
 
       <section className="character-profile__hero">
         <div
-          className={`character-profile__image${character.thumbnail ? "" : " is-empty"}`}
+          className={`character-profile__image${displayImage ? "" : " is-empty"}`}
         >
-          {character.thumbnail ? (
+          {displayImage ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={character.thumbnail} alt={character.name} />
+            <img src={displayImage} alt={character.name} />
           ) : (
             <span>이미지 없음</span>
           )}

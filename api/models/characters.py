@@ -9,6 +9,7 @@ class Character(Base):
 
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
     thumbnail = Column(String, nullable=True)
+    detail_image = Column(String, nullable=True)
     location_id = Column(Integer, ForeignKey("locations.id"), nullable=True, index=True)
     name = Column(String, nullable=False)
     alt_name = Column(String, nullable=True)
