@@ -48,6 +48,7 @@ interface ChapterItem {
   view_count: number;
   created_at: string | null;
   updated_at: string | null;
+  published_at: string | null;
   book: { id: number; title: string } | null;
 }
 
@@ -280,6 +281,68 @@ export default function AdminBookDetail() {
     }
   };
 
+  const handleBulkCopy = async () => {
+    if (bulkTargetBookId === null || selectedChapterIds.size === 0) return;
+    const target = books.find((item) => item.id === bulkTargetBookId);
+    if (!target) return;
+
+    const sourceChapters = chapters.filter((chapter) =>
+      selectedChapterIds.has(chapter.id),
+    );
+    if (sourceChapters.length === 0) return;
+
+    if (
+      !window.confirm(
+        `선택한 챕터 ${sourceChapters.length}개를 '${target.title}'(으)로 복사할까요?`,
+      )
+    ) {
+      return;
+    }
+
+    setBulkWorking(true);
+    try {
+      const allChapters = await apiFetch<ChapterItem[]>("/api/chapters");
+      const targetOrders = allChapters
+        .filter((item) => item.book_id === bulkTargetBookId)
+        .map((item) => item.order);
+      let nextOrder =
+        targetOrders.length > 0 ? Math.max(...targetOrders) + 1 : 0;
+
+      for (const chapter of sourceChapters) {
+        await apiFetch("/api/chapters", {
+          method: "POST",
+          body: JSON.stringify({
+            book_id: bulkTargetBookId,
+            title: chapter.title,
+            subtitle: chapter.subtitle,
+            body: chapter.body,
+            tags: chapter.tags,
+            order: nextOrder,
+            visible: chapter.visible,
+            published_at: chapter.published_at,
+          }),
+        });
+        nextOrder += 1;
+      }
+
+      notify(
+        "success",
+        `${sourceChapters.length}개 챕터를 '${target.title}'(으)로 복사했습니다.`,
+      );
+    } catch (error) {
+      notify(
+        "error",
+        error instanceof Error
+          ? error.message
+          : "챕터를 복사하지 못했습니다.",
+      );
+    } finally {
+      clearChapterSelection();
+      await load();
+      setBulkWorking(false);
+    }
+  };
+
   const handleBulkDelete = async () => {
     if (selectedChapterIds.size === 0) return;
     const ids = [...selectedChapterIds];
@@ -481,9 +544,9 @@ export default function AdminBookDetail() {
                     )
                   }
                   disabled={bulkWorking}
-                  aria-label="이동할 책 선택"
+                  aria-label="이동하거나 복사할 책 선택"
                 >
-                  <option value="">이동할 책 선택</option>
+                  <option value="">이동/복사할 책 선택</option>
                   {books
                     .filter((item) => item.id !== book.id)
                     .map((item) => (
@@ -499,6 +562,14 @@ export default function AdminBookDetail() {
                   disabled={bulkWorking || bulkTargetBookId === null}
                 >
                   책 이동
+                </button>
+                <button
+                  type="button"
+                  className="admin-button"
+                  onClick={handleBulkCopy}
+                  disabled={bulkWorking || bulkTargetBookId === null}
+                >
+                  책 복사
                 </button>
                 <button
                   type="button"
