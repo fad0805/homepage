@@ -93,7 +93,14 @@ export default function Links() {
                     {link.banner_url ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img src={link.banner_url} alt={link.name} />
-                    ) : null}
+                    ) : (
+                      <span
+                        className="links-banner__placeholder"
+                        aria-hidden="true"
+                      >
+                        이미지 없음
+                      </span>
+                    )}
                     <p>{link.name}</p>
                   </a>
                 ))}

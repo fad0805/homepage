@@ -33,7 +33,7 @@
 
       &.is-empty {
         width: 20rem;
-        min-height: 12rem;
+        aspect-ratio: 3 / 1;
         border-radius: 7px;
         background: var(--subtheme);
         box-shadow: 0 0 10px rgba(0, 0, 0, 0.15);

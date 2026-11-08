@@ -47,7 +47,7 @@
   }
 
   &.is-empty {
-    min-height: 16rem;
+    aspect-ratio: 3 / 1;
     border: 1px dashed rgba(0, 0, 0, 0.2);
     border-radius: 1rem;
     color: var(--foreground);
@@ -220,7 +220,6 @@
 
     &.is-empty {
       width: 100%;
-      min-height: 14rem;
     }
   }
 

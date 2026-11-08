@@ -87,3 +87,14 @@
   object-fit: contain;
   border-start-end-radius: 1rem;
 }
+
+.links-banner__placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 200px;
+  height: 40px;
+  border-start-end-radius: 1rem;
+  background: rgba(0, 0, 0, 0.14);
+  font-size: 0.7rem;
+}
