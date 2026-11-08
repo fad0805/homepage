@@ -66,14 +66,16 @@ export default function AdminChapterEdit() {
   const chapterId = isNew ? null : Number(chapterIdParam);
 
   const [book, setBook] = useState<Book | null>(null);
+  const [books, setBooks] = useState<Book[]>([]);
   const [chapter, setChapter] = useState<ChapterItem | null>(null);
+  const [allChapters, setAllChapters] = useState<ChapterItem[]>([]);
   const [title, setTitle] = useState("");
   const [subtitle, setSubtitle] = useState("");
   const [body, setBody] = useState("");
   const [tagsInput, setTagsInput] = useState("");
   const [visible, setVisible] = useState(true);
   const [publishedAt, setPublishedAt] = useState("");
-  const [nextOrder, setNextOrder] = useState(0);
+  const [targetBookId, setTargetBookId] = useState(bookId);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState<Notice | null>(null);
@@ -101,16 +103,18 @@ export default function AdminChapterEdit() {
 
     setLoading(true);
     try {
-      const [bookData, chapterData] = await Promise.all([
+      const [bookData, chapterData, bookList] = await Promise.all([
         apiFetch<Book>(`/api/books/${bookId}`),
         apiFetch<ChapterItem[]>("/api/chapters"),
+        apiFetch<Book[]>("/api/books"),
       ]);
       setBook(bookData);
+      setBooks(bookList);
+      setAllChapters(chapterData);
 
       const bookChapters = chapterData.filter(
         (item) => item.book_id === bookId,
       );
-      setNextOrder(bookChapters.length);
 
       if (!isNew) {
         const current =
@@ -124,6 +128,7 @@ export default function AdminChapterEdit() {
           return;
         }
         setChapter(current);
+        setTargetBookId(current.book_id);
         setTitle(current.title);
         setSubtitle(current.subtitle ?? "");
         setBody(current.body ?? "");
@@ -131,6 +136,7 @@ export default function AdminChapterEdit() {
         setVisible(current.visible !== false);
         setPublishedAt(toDatetimeLocal(current.published_at));
       } else {
+        setTargetBookId(bookId);
         setTagsInput("");
         setPublishedAt("");
       }
@@ -169,18 +175,32 @@ export default function AdminChapterEdit() {
       }
     }
 
+    const sourceBookId = chapter?.book_id ?? bookId;
+    const nextBookId = Number.isFinite(targetBookId) ? targetBookId : bookId;
+    const targetOrders = allChapters
+      .filter(
+        (item) => item.book_id === nextBookId && item.id !== chapter?.id,
+      )
+      .map((item) => item.order);
+    const order =
+      isNew || nextBookId !== sourceBookId
+        ? targetOrders.length > 0
+          ? Math.max(...targetOrders) + 1
+          : 0
+        : chapter?.order ?? 0;
+
     setSaving(true);
     try {
       if (isNew) {
         await apiFetch("/api/chapters", {
           method: "POST",
           body: JSON.stringify({
-            book_id: bookId,
+            book_id: nextBookId,
             title: nextTitle,
             subtitle: subtitle.trim() || null,
             body: nextBody,
             tags: parseTags(tagsInput),
-            order: nextOrder,
+            order,
             visible,
             published_at: publishedAtValue,
           }),
@@ -189,18 +209,18 @@ export default function AdminChapterEdit() {
         await apiFetch(`/api/chapters/${chapter.id}`, {
           method: "PUT",
           body: JSON.stringify({
-            book_id: bookId,
+            book_id: nextBookId,
             title: nextTitle,
             subtitle: subtitle.trim() || null,
             body: nextBody,
             tags: parseTags(tagsInput),
-            order: chapter.order,
+            order,
             visible,
             published_at: publishedAtValue,
           }),
         });
       }
-      router.push(`/admin/books/${bookId}`);
+      router.push(`/admin/books/${nextBookId}`);
     } catch (error) {
       notify(
         "error",
@@ -292,6 +312,26 @@ export default function AdminChapterEdit() {
               className="admin-books-edit-form"
               onSubmit={handleSubmit}
             >
+              <label className="admin-field">
+                <span>소속 책</span>
+                <select
+                  value={targetBookId}
+                  onChange={(event) =>
+                    setTargetBookId(Number(event.target.value))
+                  }
+                >
+                  {books.map((item) => (
+                    <option value={item.id} key={item.id}>
+                      {item.title}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {!isNew && chapter && targetBookId !== chapter.book_id ? (
+                <p className="admin-books-hint">
+                  저장하면 선택한 책으로 이동합니다.
+                </p>
+              ) : null}
               <label className="admin-field">
                 <span>챕터 제목</span>
                 <input
