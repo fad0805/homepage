@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Link } from "@heroui/react";
 
 import "@/public/styles/navbar.scss";
 import navigation from "@/config/navigation";

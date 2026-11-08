@@ -1,4 +1,3 @@
-import { useTheme } from '@heroui/use-theme';
 import type { Config } from "tailwindcss";
 
 export default {
