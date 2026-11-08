@@ -139,6 +139,3 @@ db/*
 
 # Uploaded banners
 api/uploads/
-
-# Alembic
-api/alembic/versions/*
