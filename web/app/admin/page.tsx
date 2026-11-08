@@ -4,7 +4,6 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 
 import { apiFetch } from "@/lib/api";
-import { formatDateTime } from "@/lib/datetime";
 
 import "@/public/styles/admin/main.scss";
 
@@ -52,11 +51,37 @@ interface LinkItem {
   updated_at: string | null;
 }
 
+interface VisitDay {
+  date: string;
+  visitors: number;
+  visits: number;
+}
+
+interface VisitSource {
+  source: string;
+  visits: number;
+  visitors: number;
+}
+
+interface VisitStats {
+  today: { date: string; visitors: number; visits: number };
+  week: {
+    from: string;
+    to: string;
+    visitors: number;
+    visits: number;
+  };
+  total: { visitors: number; visits: number };
+  daily: VisitDay[];
+  sources: VisitSource[];
+}
+
 interface DashboardData {
   books: Book[];
   chapters: ChapterItem[];
   characters: CharacterItem[];
   links: LinkItem[];
+  visits: VisitStats;
 }
 
 interface BookStat {
@@ -65,47 +90,29 @@ interface BookStat {
   views: number;
 }
 
-type ActivityKind = "book" | "chapter" | "character" | "link";
-
-interface ActivityItem {
-  key: string;
-  kind: ActivityKind;
-  title: string;
-  subtitle: string;
-  timestamp: string | null;
-  href: string;
-}
-
-const KIND_LABEL: Record<ActivityKind, string> = {
-  book: "책",
-  chapter: "챕터",
-  character: "등장인물",
-  link: "링크",
-};
-
 function timeValue(value: string | null) {
   if (!value) return 0;
   const time = new Date(value).getTime();
   return Number.isNaN(time) ? 0 : time;
 }
 
+function formatDayLabel(value: string) {
+  const parts = value.split("-");
+  return parts.length === 3 ? `${parts[1]}.${parts[2]}` : value;
+}
+
+function formatSource(source: string) {
+  if (source === "direct") return "직접 유입";
+  if (source === "internal") return "내부 이동";
+  return source;
+}
+
 function isChapterPublic(chapter: ChapterItem, now: number | null) {
   if (chapter.visible === false) return false;
   if (!chapter.published_at) return true;
   if (now === null) return true;
-  return new Date(chapter.published_at).getTime() <= now;
-}
-
-function chapterStatus(chapter: ChapterItem, now: number | null) {
-  if (chapter.visible === false) return "비공개";
-  if (
-    chapter.published_at &&
-    now !== null &&
-    new Date(chapter.published_at).getTime() > now
-  ) {
-    return "공개 예약";
-  }
-  return "공개";
+  const publishedAt = new Date(chapter.published_at).getTime();
+  return Number.isNaN(publishedAt) || publishedAt <= now;
 }
 
 export default function AdminHome() {
@@ -118,13 +125,15 @@ export default function AdminHome() {
     setLoading(true);
     setError(null);
     try {
-      const [books, chapters, characters, links] = await Promise.all([
-        apiFetch<Book[]>("/api/books"),
-        apiFetch<ChapterItem[]>("/api/chapters"),
-        apiFetch<CharacterItem[]>("/api/characters"),
-        apiFetch<LinkItem[]>("/api/links"),
-      ]);
-      setData({ books, chapters, characters, links });
+      const [books, chapters, characters, links, visits] =
+        await Promise.all([
+          apiFetch<Book[]>("/api/books"),
+          apiFetch<ChapterItem[]>("/api/chapters"),
+          apiFetch<CharacterItem[]>("/api/characters"),
+          apiFetch<LinkItem[]>("/api/links"),
+          apiFetch<VisitStats>("/api/visits/stats"),
+        ]);
+      setData({ books, chapters, characters, links, visits });
     } catch (reason) {
       setError(
         reason instanceof Error
@@ -228,77 +237,25 @@ export default function AdminHome() {
     ];
   }, [data, now]);
 
-  const activity = useMemo<ActivityItem[]>(() => {
+  const popularChapters = useMemo(() => {
     if (!data) return [];
-
-    const items: ActivityItem[] = [];
-    const statsByBook = new Map(bookStats.map((item) => [item.book.id, item]));
-
-    for (const book of data.books) {
-      const bookStat = statsByBook.get(book.id);
-      items.push({
-        key: `book-${book.id}`,
-        kind: "book",
-        title: book.title,
-        subtitle: [
-          book.visible === false ? "비공개" : "공개",
-          `챕터 ${bookStat?.chapters ?? 0}개`,
-        ].join(" · "),
-        timestamp: book.updated_at ?? book.created_at,
-        href: `/admin/books/${book.id}`,
-      });
-    }
-
-    for (const chapter of data.chapters) {
-      items.push({
-        key: `chapter-${chapter.id}`,
-        kind: "chapter",
-        title: chapter.title,
-        subtitle: [
-          chapter.book?.title,
-          chapterStatus(chapter, now),
-          `조회 ${chapter.view_count ?? 0}`,
-        ]
-          .filter(Boolean)
-          .join(" · "),
-        timestamp: chapter.updated_at ?? chapter.created_at,
-        href: `/admin/books/${chapter.book_id}/chapters/${chapter.id}`,
-      });
-    }
-
-    for (const character of data.characters) {
-      items.push({
-        key: `character-${character.id}`,
-        kind: "character",
-        title: character.name,
-        subtitle: [
-          character.location?.name,
-          character.visible === false ? "비공개" : "공개",
-        ]
-          .filter(Boolean)
-          .join(" · "),
-        timestamp: character.updated_at ?? character.created_at,
-        href: "/admin/characters",
-      });
-    }
-
-    for (const link of data.links) {
-      items.push({
-        key: `link-${link.id}`,
-        kind: "link",
-        title: link.name,
-        subtitle: link.category?.name ?? "카테고리 없음",
-        timestamp: link.updated_at ?? link.created_at,
-        href: "/admin/links",
-      });
-    }
-
-    return items
+    return [...data.chapters]
       .sort(
-        (a, b) => timeValue(b.timestamp) - timeValue(a.timestamp),
+        (a, b) =>
+          (b.view_count ?? 0) - (a.view_count ?? 0) ||
+          timeValue(b.updated_at ?? b.created_at) -
+            timeValue(a.updated_at ?? a.created_at),
       )
       .slice(0, 8);
-  }, [data, bookStats, now]);
+  }, [data]);
+
+  const visitMax = useMemo(() => {
+    if (!data) return 1;
+    return Math.max(
+      1,
+      ...data.visits.daily.map((day) => day.visitors),
+    );
+  }, [data]);
 
   return (
     <div id="admin-main">
@@ -359,45 +316,152 @@ export default function AdminHome() {
             ))}
           </section>
 
-          <div className="admin-dashboard-grid">
-            <section className="admin-dashboard-panel admin-dashboard-activity">
+          <section className="admin-dashboard-panel admin-dashboard-visitors">
+            <header className="admin-dashboard-panel__head">
+              <div>
+                <h2>방문자 통계</h2>
+                <p>관리자 방문을 제외한 순 방문자 기준입니다.</p>
+              </div>
+            </header>
+
+            <div className="admin-dashboard-visitor-summary">
+              <div className="admin-dashboard-visitor-metric">
+                <span className="admin-dashboard-visitor-metric__label">
+                  오늘 방문자
+                </span>
+                <strong>
+                  {data.visits.today.visitors}
+                  <small>명</small>
+                </strong>
+                <span className="admin-dashboard-visitor-metric__sub">
+                  방문 {data.visits.today.visits}회
+                </span>
+              </div>
+              <div className="admin-dashboard-visitor-metric">
+                <span className="admin-dashboard-visitor-metric__label">
+                  최근 7일
+                </span>
+                <strong>
+                  {data.visits.week.visitors}
+                  <small>명</small>
+                </strong>
+                <span className="admin-dashboard-visitor-metric__sub">
+                  방문 {data.visits.week.visits}회
+                </span>
+              </div>
+              <div className="admin-dashboard-visitor-metric">
+                <span className="admin-dashboard-visitor-metric__label">
+                  전체 방문자
+                </span>
+                <strong>
+                  {data.visits.total.visitors}
+                  <small>명</small>
+                </strong>
+                <span className="admin-dashboard-visitor-metric__sub">
+                  방문 {data.visits.total.visits}회
+                </span>
+              </div>
+            </div>
+
+            <div className="admin-dashboard-visitor-body">
+              <div className="admin-dashboard-chart">
+                <div className="admin-dashboard-subhead">
+                  <h3>최근 7일 방문자</h3>
+                  <span>
+                    {formatDayLabel(data.visits.week.from)} ~{" "}
+                    {formatDayLabel(data.visits.week.to)}
+                  </span>
+                </div>
+                <div className="admin-dashboard-chart__bars">
+                  {data.visits.daily.map((day) => {
+                    const height =
+                      day.visitors === 0
+                        ? 0
+                        : Math.max(
+                            8,
+                            Math.round(
+                              (day.visitors / visitMax) * 100,
+                            ),
+                          );
+                    return (
+                      <div
+                        className="admin-dashboard-chart__bar"
+                        key={day.date}
+                      >
+                        <span className="admin-dashboard-chart__count">
+                          {day.visitors}
+                        </span>
+                        <span className="admin-dashboard-chart__track">
+                          <span
+                            className="admin-dashboard-chart__fill"
+                            style={{ height: `${height}%` }}
+                          />
+                        </span>
+                        <span className="admin-dashboard-chart__label">
+                          {formatDayLabel(day.date)}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="admin-dashboard-sources">
+                <div className="admin-dashboard-subhead">
+                  <h3>유입 경로</h3>
+                  <span>최근 7일</span>
+                </div>
+                {data.visits.sources.length ? (
+                  <ul>
+                    {data.visits.sources.map((source) => (
+                      <li key={source.source}>
+                        <span
+                          className="admin-dashboard-sources__name"
+                          title={formatSource(source.source)}
+                        >
+                          {formatSource(source.source)}
+                        </span>
+                        <span className="admin-dashboard-sources__meta">
+                          {source.visits}회 · {source.visitors}명
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="admin-dashboard-empty">
+                    아직 유입 기록이 없습니다.
+                  </p>
+                )}
+              </div>
+            </div>
+          </section>
+
+          <div className="admin-dashboard-lower">
+            <section className="admin-dashboard-panel admin-dashboard-post-views">
               <header className="admin-dashboard-panel__head">
                 <div>
-                  <h2>최근 업데이트</h2>
-                  <p>책·챕터·등장인물·링크의 최근 수정 순서입니다.</p>
+                  <h2>게시글 조회수</h2>
+                  <p>조회수 기준 상위 게시글입니다.</p>
                 </div>
-                <Link href="/admin/books">책 관리 →</Link>
               </header>
-              {activity.length ? (
-                <ul className="admin-dashboard-updates">
-                  {activity.map((item) => (
-                    <li
-                      className="admin-dashboard-update"
-                      key={item.key}
-                    >
+              {popularChapters.length ? (
+                <ul className="admin-dashboard-post-list">
+                  {popularChapters.map((chapter, index) => (
+                    <li key={chapter.id}>
                       <Link
-                        className="admin-dashboard-update__link"
-                        href={item.href}
+                        className="admin-dashboard-post"
+                        href={`/admin/books/${chapter.book_id}/chapters/${chapter.id}`}
                       >
-                        <span
-                          className={`admin-dashboard-kind is-${item.kind}`}
-                        >
-                          {KIND_LABEL[item.kind]}
+                        <span className="admin-dashboard-post__rank">
+                          {String(index + 1).padStart(2, "0")}
                         </span>
-                        <span className="admin-dashboard-update__text">
-                          <strong>{item.title}</strong>
-                          <span>{item.subtitle}</span>
+                        <span className="admin-dashboard-post__copy">
+                          <strong>{chapter.title}</strong>
+                          <span>{chapter.book?.title}</span>
                         </span>
-                        <time
-                          dateTime={item.timestamp ?? undefined}
-                        >
-                          {formatDateTime(item.timestamp)}
-                        </time>
-                        <span
-                          className="admin-dashboard-update__arrow"
-                          aria-hidden="true"
-                        >
-                          →
+                        <span className="admin-dashboard-post__views">
+                          {chapter.view_count ?? 0}
+                          <small>회</small>
                         </span>
                       </Link>
                     </li>
@@ -405,50 +469,48 @@ export default function AdminHome() {
                 </ul>
               ) : (
                 <p className="admin-dashboard-empty">
-                  최근 업데이트가 없습니다.
+                  등록된 게시글이 없습니다.
                 </p>
               )}
             </section>
 
-            <div className="admin-dashboard-side">
-              <section className="admin-dashboard-panel admin-dashboard-book-list">
-                <header className="admin-dashboard-panel__head">
-                  <div>
-                    <h2>책별 현황</h2>
-                    <p>책별 챕터 수와 누적 조회수입니다.</p>
-                  </div>
-                  <Link href="/admin/books">전체 보기 →</Link>
-                </header>
-                {bookStats.length ? (
-                  <ul className="admin-dashboard-books">
-                    {bookStats.map(({ book, chapters, views }) => (
-                      <li key={book.id}>
-                        <Link
-                          className="admin-dashboard-book"
-                          href={`/admin/books/${book.id}`}
-                        >
-                          <span className="admin-dashboard-book__title">
-                            {book.title}
-                            {book.visible === false ? (
-                              <span className="admin-dashboard-badge">
-                                비공개
-                              </span>
-                            ) : null}
-                          </span>
-                          <span className="admin-dashboard-book__meta">
-                            챕터 {chapters} · 조회 {views}
-                          </span>
-                        </Link>
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <p className="admin-dashboard-empty">
-                    등록된 책이 없습니다.
-                  </p>
-                )}
-              </section>
-            </div>
+            <section className="admin-dashboard-panel admin-dashboard-book-list">
+              <header className="admin-dashboard-panel__head">
+                <div>
+                  <h2>책별 현황</h2>
+                  <p>책별 챕터 수와 누적 조회수입니다.</p>
+                </div>
+                <Link href="/admin/books">전체 보기 →</Link>
+              </header>
+              {bookStats.length ? (
+                <ul className="admin-dashboard-books">
+                  {bookStats.map(({ book, chapters, views }) => (
+                    <li key={book.id}>
+                      <Link
+                        className="admin-dashboard-book"
+                        href={`/admin/books/${book.id}`}
+                      >
+                        <span className="admin-dashboard-book__title">
+                          {book.title}
+                          {book.visible === false ? (
+                            <span className="admin-dashboard-badge">
+                              비공개
+                            </span>
+                          ) : null}
+                        </span>
+                        <span className="admin-dashboard-book__meta">
+                          챕터 {chapters} · 조회 {views}
+                        </span>
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="admin-dashboard-empty">
+                  등록된 책이 없습니다.
+                </p>
+              )}
+            </section>
           </div>
         </>
       ) : null}

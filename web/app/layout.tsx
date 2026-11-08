@@ -6,6 +6,7 @@ import "@/public/styles/globals.scss";
 import { Navbar } from "@/components/navbar";
 import { ThemeProvider } from "@/components/theme-provider";
 import { Shortcuts } from "@/components/shortcuts";
+import { VisitTracker } from "@/components/visit-tracker";
 
 export const metadata: Metadata = {
   title: "어디에도 없는 섬",
@@ -24,6 +25,7 @@ export default function RootLayout({
     <html lang="ko">
       <body>
         <ThemeProvider>
+          <VisitTracker />
           <Shortcuts>
             <div id="container">
               <header>

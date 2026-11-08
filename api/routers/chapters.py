@@ -19,19 +19,9 @@ from schemas.books import (
     ChapterReorderRequest,
     ChapterUpdate,
 )
-from .utils import get_optional_user, require_auth
+from .utils import get_client_ip, get_optional_user, require_auth
 
 router = APIRouter()
-
-
-def _client_ip(request: Request) -> str:
-    forwarded = request.headers.get("x-forwarded-for")
-    if forwarded:
-        return forwarded.split(",")[0].strip()
-    real_ip = request.headers.get("x-real-ip")
-    if real_ip:
-        return real_ip.strip()
-    return request.client.host if request.client else "unknown"
 
 
 @router.post("/upload")
@@ -76,7 +66,7 @@ def post_chapter_view(
     db: Session = Depends(get_db),
     current_user=Depends(get_optional_user),
 ):
-    ip_hash = hashlib.sha256(_client_ip(request).encode()).hexdigest()
+    ip_hash = hashlib.sha256(get_client_ip(request).encode()).hexdigest()
     return register_chapter_view(
         db,
         chapter_id,
