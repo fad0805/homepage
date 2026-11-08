@@ -385,6 +385,8 @@ export default function AdminLinks() {
   const [formCategoryId, setFormCategoryId] = useState<number | null>(null);
   const [bannerPreview, setBannerPreview] = useState<string | null>(null);
   const [bannerFileName, setBannerFileName] = useState<string>("");
+  const [bannerUrlInput, setBannerUrlInput] = useState<string>("");
+  const [bannerFile, setBannerFile] = useState<File | null>(null);
 
   const [categoryModalOpen, setCategoryModalOpen] = useState(false);
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
@@ -701,6 +703,8 @@ export default function AdminLinks() {
     setEditingLink(null);
     setBannerPreview(null);
     setBannerFileName("");
+    setBannerUrlInput("");
+    setBannerFile(null);
     setFormCategoryId(categoryId ?? categories[0]?.id ?? null);
     setLinkModalOpen(true);
   };
@@ -709,6 +713,8 @@ export default function AdminLinks() {
     setEditingLink(link);
     setBannerPreview(link.preview_url ?? link.banner_url);
     setBannerFileName(link.file?.name ?? "");
+    setBannerUrlInput(link.banner_url ?? "");
+    setBannerFile(null);
     setFormCategoryId(link.category.id);
     setLinkModalOpen(true);
   };
@@ -718,15 +724,24 @@ export default function AdminLinks() {
     setEditingLink(null);
     setBannerPreview(null);
     setBannerFileName("");
+    setBannerUrlInput("");
+    setBannerFile(null);
   }, []);
 
   const handleBannerChange = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) {
+      const urlValue = bannerUrlInput.trim();
+      const urlChanged = urlValue !== (editingLink?.banner_url ?? "");
+      setBannerFile(null);
       setBannerPreview(
-        editingLink?.preview_url ?? editingLink?.banner_url ?? null,
+        urlChanged
+          ? urlValue || null
+          : editingLink?.preview_url ?? (urlValue || null),
       );
-      setBannerFileName(editingLink?.file?.name ?? "");
+      setBannerFileName(
+        urlChanged ? "" : editingLink?.file?.name ?? "",
+      );
       return;
     }
     if (!ALLOWED_BANNER_TYPES.includes(file.type)) {
@@ -741,8 +756,18 @@ export default function AdminLinks() {
     }
     const objectUrl = URL.createObjectURL(file);
     objectUrls.current.add(objectUrl);
+    setBannerFile(file);
     setBannerFileName(file.name);
     setBannerPreview(objectUrl);
+  };
+
+  const handleBannerUrlChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const value = event.target.value;
+    setBannerUrlInput(value);
+    if (!bannerFile) {
+      setBannerFileName("");
+      setBannerPreview(value.trim() || null);
+    }
   };
 
   const handleLinkSubmit = (event: FormEvent<HTMLFormElement>) => {
@@ -754,6 +779,7 @@ export default function AdminLinks() {
     const description = String(form.get("description") ?? "").trim();
     const category = Number(form.get("category"));
     const file = form.get("banner_file");
+    const bannerUrl = String(form.get("banner_url") ?? "").trim();
     const targetCategory = categories.find((item) => item.id === category);
 
     if (!name || !url || !targetCategory) {
@@ -762,6 +788,22 @@ export default function AdminLinks() {
     }
 
     const hasNewFile = file instanceof File && file.size > 0;
+    const urlChanged = bannerUrl !== (editingLink?.banner_url ?? "");
+    const nextFile = hasNewFile
+      ? (file as File)
+      : urlChanged
+        ? null
+        : (editingLink?.file ?? null);
+    const nextBannerUrl =
+      hasNewFile || !urlChanged
+        ? (editingLink?.banner_url ?? null)
+        : bannerUrl || null;
+    const nextPreview = hasNewFile
+      ? bannerPreview
+      : nextFile
+        ? (editingLink?.preview_url ?? null)
+        : bannerUrl || null;
+
     const remaining = links.filter((link) => link.id !== editingLink?.id);
     const order =
       editingLink && editingLink.category.id === targetCategory.id
@@ -775,11 +817,9 @@ export default function AdminLinks() {
       name,
       url,
       description: description || null,
-      banner_url: editingLink?.banner_url ?? null,
-      file: hasNewFile ? (file as File) : (editingLink?.file ?? null),
-      preview_url: hasNewFile
-        ? bannerPreview
-        : (editingLink?.preview_url ?? null),
+      banner_url: nextBannerUrl,
+      file: nextFile,
+      preview_url: nextPreview,
       order,
       category: targetCategory,
     };
@@ -1047,6 +1087,15 @@ export default function AdminLinks() {
 
             <div className="admin-field">
               <span>배너 이미지</span>
+              <input
+                type="text"
+                name="banner_url"
+                inputMode="url"
+                value={bannerUrlInput}
+                onChange={handleBannerUrlChange}
+                placeholder="이미지 URL (선택)"
+                spellCheck={false}
+              />
               <div className="admin-banner-preview-wrap">
                 {bannerPreview ? (
                   // eslint-disable-next-line @next/next/no-img-element
@@ -1073,7 +1122,8 @@ export default function AdminLinks() {
                 </span>
               ) : null}
               <span className="admin-banner-help">
-                PNG / JPEG / WEBP / GIF, 5MB 이하
+                이미지 URL 또는 PNG / JPEG / WEBP / GIF 파일(5MB 이하).
+                파일을 선택하면 파일이 우선 적용됩니다.
               </span>
             </div>
           </form>
