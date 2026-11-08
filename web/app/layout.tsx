@@ -31,7 +31,10 @@ export default function RootLayout({
             <div id="container">
               <header>
                 <div id="title">
-                  <Link href="/">어디에도 없는 섬</Link>
+                  <Link href="/">
+                    <span className="title__text">어디에도 없는 섬</span>
+                    <span className="title__caption">Missing Island</span>
+                  </Link>
                 </div>
                 <Navbar />
               </header>

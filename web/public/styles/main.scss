@@ -66,7 +66,7 @@
   margin: 0;
   color: var(--title-color);
   font-family: Eulyoo1945-SemiBold, Arial, Helvetica, sans-serif;
-  font-size: clamp(2.1rem, 4.2vw, 3rem);
+  font-size: clamp(1.89rem, 3.78vw, 2.7rem);
   line-height: 1.36;
   letter-spacing: -0.015em;
 }
@@ -101,6 +101,6 @@
   }
 
   .hero__title {
-    font-size: 2rem;
+    font-size: 1.8rem;
   }
 }

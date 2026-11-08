@@ -97,8 +97,30 @@ div#container>header {
 
 div#container>header>div#title {
   color: var(--title-color);
-  font-size: 2.7rem;
+  font-size: 2rem;
   font-family: Eulyoo1945-SemiBold, Arial, Helvetica, sans-serif;
+
+  a {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.45rem;
+  }
+
+  .title__text {
+    display: block;
+  }
+
+  .title__caption {
+    display: block;
+    font-family: GowunDodum, Arial, Helvetica, sans-serif;
+    font-size: 0.62rem;
+    font-weight: normal;
+    letter-spacing: 0.34em;
+    text-transform: uppercase;
+    opacity: 0.55;
+    padding-left: 0.34em;
+  }
 }
 
 div#container>main {
