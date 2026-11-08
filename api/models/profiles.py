@@ -7,6 +7,7 @@ class Profile(Base):
     __tablename__ = "profiles"
     id = Column(Integer, primary_key=True, autoincrement=True)
     title = Column(String(255))
+    subtitle = Column(String(255), nullable=True)
     profile = Column(Text)
     created_at = Column(DateTime, default=func.now())
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())

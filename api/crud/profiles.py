@@ -16,7 +16,8 @@ def get_all_profiles(db: Session):
         {
             "id": profile.id,
             "title": profile.title,
-            "profile": profile.profile
+            "subtitle": profile.subtitle,
+            "profile": profile.profile,
         } for profile in results
     ]
     return profiles
@@ -30,7 +31,10 @@ def get_profile(db: Session, profile_id: int):
     query = db.query(Profile).filter(Profile.id == profile_id)
     profile = query.first()
     if not profile:
-        raise ValueError("Profile not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Profile not found",
+        )
     return profile
 
 
@@ -38,7 +42,7 @@ def create_profile(db:Session, profile: ProfileCreate):
     """
     Create a new profile in the database
     """
-    db_profile = Profile(**profile.dict())
+    db_profile = Profile(**profile.model_dump())
     db.add(db_profile)
     db.commit()
     db.refresh(db_profile)
@@ -49,7 +53,9 @@ def update_profile(db:Session, profile_id: int, updated_profile: ProfileUpdate):
     """
         Update an existing profile in the database
     """
-    db.query(Profile).filter(Profile.id == profile_id).update(updated_profile.dict(exclude_unset=True))
+    db.query(Profile).filter(Profile.id == profile_id).update(
+        updated_profile.model_dump(exclude_unset=True)
+    )
     db.commit()
     profile = db.query(Profile).filter(Profile.id == profile_id).first()
     if not profile:

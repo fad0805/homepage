@@ -5,6 +5,7 @@ from pydantic import BaseModel, Field
 class ProfileBase(BaseModel):
     """Base model for Profile"""
     title: str = "Profile"
+    subtitle: str | None = None
     profile: str
 
 
