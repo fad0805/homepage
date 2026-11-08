@@ -84,11 +84,6 @@
     color: var(--foreground);
     font-size: 0.95rem;
     line-height: 1.65;
-
-    &:first-child {
-      font-size: 1.05rem;
-      color: var(--title-color);
-    }
   }
 
   h2,
