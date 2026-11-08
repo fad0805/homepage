@@ -144,3 +144,10 @@ footer {
   color: color.adjust($maintheme, $lightness: -50%);
   font-size: 0.6rem;
 }
+
+.footer-shortcut {
+  -webkit-tap-highlight-color: transparent;
+  -webkit-user-select: none;
+  user-select: none;
+  touch-action: manipulation;
+}

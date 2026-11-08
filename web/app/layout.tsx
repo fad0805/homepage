@@ -3,6 +3,7 @@ import Link from "next/link";
 
 import "@/public/styles/globals.scss";
 
+import { FooterShortcut } from "@/components/footer-shortcut";
 import { Navbar } from "@/components/navbar";
 import { ThemeProvider } from "@/components/theme-provider";
 import { Shortcuts } from "@/components/shortcuts";
@@ -40,7 +41,7 @@ export default function RootLayout({
                 </div>
               </main>
               <footer>
-                © Rimien Siarte. All rights reserved. No external use permitted.
+                <FooterShortcut />
               </footer>
             </div>
           </Shortcuts>
