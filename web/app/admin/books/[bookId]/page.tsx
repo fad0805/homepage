@@ -77,8 +77,16 @@ export default function AdminBookDetail() {
   const bookId = Number(params.bookId);
 
   const [book, setBook] = useState<Book | null>(null);
+  const [books, setBooks] = useState<Book[]>([]);
   const [chapters, setChapters] = useState<ChapterItem[]>([]);
   const [categories, setCategories] = useState<BookCategory[]>([]);
+  const [selectedChapterIds, setSelectedChapterIds] = useState<Set<number>>(
+    () => new Set(),
+  );
+  const [bulkTargetBookId, setBulkTargetBookId] = useState<number | null>(
+    null,
+  );
+  const [bulkWorking, setBulkWorking] = useState(false);
   const [page, setPage] = useState(1);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -112,11 +120,13 @@ export default function AdminBookDetail() {
     }
     setLoading(true);
     try {
-      const [bookData, chapterData, categoryData] = await Promise.all([
-        apiFetch<Book>(`/api/books/${bookId}`),
-        apiFetch<ChapterItem[]>("/api/chapters"),
-        apiFetch<BookCategory[]>("/api/books/categories"),
-      ]);
+      const [bookData, chapterData, categoryData, bookList] =
+        await Promise.all([
+          apiFetch<Book>(`/api/books/${bookId}`),
+          apiFetch<ChapterItem[]>("/api/chapters"),
+          apiFetch<BookCategory[]>("/api/books/categories"),
+          apiFetch<Book[]>("/api/books"),
+        ]);
       setBook(bookData);
       setTitle(bookData.title);
       setDescription(bookData.description ?? "");
@@ -124,11 +134,14 @@ export default function AdminBookDetail() {
       setCategoryId(bookData.category_id);
       setVisible(bookData.visible !== false);
       setCategories(categoryData);
+      setBooks(bookList);
       setChapters(
         sortChapters(
           chapterData.filter((chapter) => chapter.book_id === bookId),
         ),
       );
+      setSelectedChapterIds(new Set());
+      setBulkTargetBookId(null);
     } catch (error) {
       notify(
         "error",
@@ -176,6 +189,123 @@ export default function AdminBookDetail() {
       ),
     [chapters, page],
   );
+
+  const allPageSelected =
+    pageChapters.length > 0 &&
+    pageChapters.every((chapter) => selectedChapterIds.has(chapter.id));
+
+  const toggleChapterSelection = (chapterId: number) => {
+    setSelectedChapterIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(chapterId)) {
+        next.delete(chapterId);
+      } else {
+        next.add(chapterId);
+      }
+      return next;
+    });
+  };
+
+  const togglePageSelection = () => {
+    setSelectedChapterIds((prev) => {
+      const next = new Set(prev);
+      const shouldSelect = !pageChapters.every((chapter) =>
+        prev.has(chapter.id),
+      );
+      for (const chapter of pageChapters) {
+        if (shouldSelect) {
+          next.add(chapter.id);
+        } else {
+          next.delete(chapter.id);
+        }
+      }
+      return next;
+    });
+  };
+
+  const clearChapterSelection = () => {
+    setSelectedChapterIds(new Set());
+    setBulkTargetBookId(null);
+  };
+
+  const handleBulkMove = async () => {
+    if (bulkTargetBookId === null || selectedChapterIds.size === 0) return;
+    const target = books.find((item) => item.id === bulkTargetBookId);
+    if (!target) return;
+
+    const ids = [...selectedChapterIds];
+    if (
+      !window.confirm(
+        `선택한 챕터 ${ids.length}개를 '${target.title}'(으)로 이동할까요?`,
+      )
+    ) {
+      return;
+    }
+
+    setBulkWorking(true);
+    try {
+      const allChapters = await apiFetch<ChapterItem[]>("/api/chapters");
+      const targetOrders = allChapters
+        .filter((item) => item.book_id === bulkTargetBookId)
+        .map((item) => item.order);
+      let nextOrder =
+        targetOrders.length > 0 ? Math.max(...targetOrders) + 1 : 0;
+
+      for (const chapterId of ids) {
+        await apiFetch(`/api/chapters/${chapterId}`, {
+          method: "PUT",
+          body: JSON.stringify({
+            book_id: bulkTargetBookId,
+            order: nextOrder,
+          }),
+        });
+        nextOrder += 1;
+      }
+
+      notify(
+        "success",
+        `${ids.length}개 챕터를 '${target.title}'(으)로 이동했습니다.`,
+      );
+    } catch (error) {
+      notify(
+        "error",
+        error instanceof Error
+          ? error.message
+          : "챕터를 이동하지 못했습니다.",
+      );
+    } finally {
+      clearChapterSelection();
+      await load();
+      setBulkWorking(false);
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedChapterIds.size === 0) return;
+    const ids = [...selectedChapterIds];
+    if (!window.confirm(`선택한 챕터 ${ids.length}개를 삭제할까요?`)) {
+      return;
+    }
+
+    setBulkWorking(true);
+    try {
+      for (const chapterId of ids) {
+        await apiFetch(`/api/chapters/${chapterId}`, { method: "DELETE" });
+      }
+      notify("success", `${ids.length}개 챕터를 삭제했습니다.`);
+    } catch (error) {
+      notify(
+        "error",
+        error instanceof Error
+          ? error.message
+          : "챕터를 삭제하지 못했습니다.",
+      );
+    } finally {
+      clearChapterSelection();
+      await load();
+      setBulkWorking(false);
+    }
+  };
 
   const openBookInfo = () => {
     if (!book) return;
@@ -321,10 +451,77 @@ export default function AdminBookDetail() {
           <section className="admin-books-panel">
             <div className="admin-books-toolbar">
               <h2>챕터</h2>
-              <span className="admin-books-hint">
-                {chapters.length}개
-              </span>
+              <div className="admin-books-toolbar-right">
+                {chapters.length > 0 ? (
+                  <label className="admin-books-checkbox">
+                    <input
+                      type="checkbox"
+                      checked={allPageSelected}
+                      onChange={togglePageSelection}
+                      disabled={bulkWorking}
+                    />
+                    <span>전체 선택</span>
+                  </label>
+                ) : null}
+                <span className="admin-books-hint">
+                  {chapters.length}개
+                </span>
+              </div>
             </div>
+
+            {selectedChapterIds.size > 0 ? (
+              <div className="admin-books-bulk">
+                <span className="admin-books-bulk__count">
+                  {selectedChapterIds.size}개 선택
+                </span>
+                <select
+                  value={bulkTargetBookId ?? ""}
+                  onChange={(event) =>
+                    setBulkTargetBookId(
+                      event.target.value
+                        ? Number(event.target.value)
+                        : null,
+                    )
+                  }
+                  disabled={bulkWorking}
+                  aria-label="이동할 책 선택"
+                >
+                  <option value="">이동할 책 선택</option>
+                  {books
+                    .filter((item) => item.id !== book.id)
+                    .map((item) => (
+                      <option value={item.id} key={item.id}>
+                        {item.title}
+                      </option>
+                    ))}
+                </select>
+                <button
+                  type="button"
+                  className="admin-button"
+                  onClick={handleBulkMove}
+                  disabled={bulkWorking || bulkTargetBookId === null}
+                >
+                  책 이동
+                </button>
+                <button
+                  type="button"
+                  className="admin-button danger"
+                  onClick={handleBulkDelete}
+                  disabled={bulkWorking}
+                >
+                  삭제
+                </button>
+                <button
+                  type="button"
+                  className="admin-button"
+                  onClick={clearChapterSelection}
+                  disabled={bulkWorking}
+                >
+                  선택 해제
+                </button>
+              </div>
+            ) : null}
+
             {chapters.length === 0 ? (
               <p className="admin-books-empty">
                 등록된 챕터가 없습니다.
@@ -333,29 +530,41 @@ export default function AdminBookDetail() {
               <>
                 <div className="admin-books-chapters">
                   {pageChapters.map((chapter) => (
-                    <Link
-                      className="admin-books-chapter-link"
-                      href={`/admin/books/${book.id}/chapters/${chapter.id}`}
+                    <div
+                      className="admin-books-chapter-row"
                       key={chapter.id}
                     >
-                      <span className="admin-books-chapter-main">
-                        <span className="admin-books-chapter-title">
-                          {chapter.title}
-                        </span>
-                      </span>
-                      <span className="admin-books-chapter-views">
-                        조회 {chapter.view_count ?? 0}
-                      </span>
-                      <span className="admin-books-chapter-updated">
-                        {formatDateTime(chapter.updated_at)}
-                      </span>
-                      <span
-                        className="admin-books-chapter-arrow"
-                        aria-hidden="true"
+                      <input
+                        type="checkbox"
+                        className="admin-books-chapter-check"
+                        checked={selectedChapterIds.has(chapter.id)}
+                        onChange={() => toggleChapterSelection(chapter.id)}
+                        disabled={bulkWorking}
+                        aria-label={`${chapter.title} 선택`}
+                      />
+                      <Link
+                        className="admin-books-chapter-link"
+                        href={`/admin/books/${book.id}/chapters/${chapter.id}`}
                       >
-                        →
-                      </span>
-                    </Link>
+                        <span className="admin-books-chapter-main">
+                          <span className="admin-books-chapter-title">
+                            {chapter.title}
+                          </span>
+                        </span>
+                        <span className="admin-books-chapter-views">
+                          조회 {chapter.view_count ?? 0}
+                        </span>
+                        <span className="admin-books-chapter-updated">
+                          {formatDateTime(chapter.updated_at)}
+                        </span>
+                        <span
+                          className="admin-books-chapter-arrow"
+                          aria-hidden="true"
+                        >
+                          →
+                        </span>
+                      </Link>
+                    </div>
                   ))}
                 </div>
                 <Pagination
