@@ -28,6 +28,7 @@ interface ChapterItem {
   body: string | null;
   order: number;
   visible: boolean;
+  published_at: string | null;
   created_at: string | null;
   updated_at: string | null;
   book: { id: number; title: string } | null;
@@ -48,6 +49,16 @@ function formatDateTime(value: string | null) {
   });
 }
 
+function toDatetimeLocal(value: string | null) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  const pad = (number: number) => String(number).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(
+    date.getDate(),
+  )}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
 export default function AdminChapterEdit() {
   const params = useParams<{ bookId: string; chapterId: string }>();
   const router = useRouter();
@@ -62,6 +73,7 @@ export default function AdminChapterEdit() {
   const [subtitle, setSubtitle] = useState("");
   const [body, setBody] = useState("");
   const [visible, setVisible] = useState(true);
+  const [publishedAt, setPublishedAt] = useState("");
   const [nextOrder, setNextOrder] = useState(0);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -117,6 +129,9 @@ export default function AdminChapterEdit() {
         setSubtitle(current.subtitle ?? "");
         setBody(current.body ?? "");
         setVisible(current.visible !== false);
+        setPublishedAt(toDatetimeLocal(current.published_at));
+      } else {
+        setPublishedAt("");
       }
     } catch (error) {
       notify(
@@ -145,6 +160,14 @@ export default function AdminChapterEdit() {
     const plainBody = body.replace(/<[^>]*>/g, "").trim();
     const nextBody = plainBody ? body : null;
 
+    let publishedAtValue: string | null = null;
+    if (publishedAt.trim()) {
+      const date = new Date(publishedAt);
+      if (!Number.isNaN(date.getTime())) {
+        publishedAtValue = date.toISOString().replace("Z", "");
+      }
+    }
+
     setSaving(true);
     try {
       if (isNew) {
@@ -157,6 +180,7 @@ export default function AdminChapterEdit() {
             body: nextBody,
             order: nextOrder,
             visible,
+            published_at: publishedAtValue,
           }),
         });
       } else if (chapter) {
@@ -169,6 +193,7 @@ export default function AdminChapterEdit() {
             body: nextBody,
             order: chapter.order,
             visible,
+            published_at: publishedAtValue,
           }),
         });
       }
@@ -237,6 +262,9 @@ export default function AdminChapterEdit() {
                 <p>
                   작성 {formatDateTime(chapter.created_at)} · 수정{" "}
                   {formatDateTime(chapter.updated_at)}
+                  {chapter.published_at
+                    ? ` · 발행 ${formatDateTime(chapter.published_at)}`
+                    : ""}
                 </p>
               ) : (
                 <p>새 챕터를 작성합니다.</p>
@@ -274,6 +302,20 @@ export default function AdminChapterEdit() {
                   placeholder="챕터 본문을 입력해주세요."
                 />
               </div>
+              <label className="admin-field">
+                <span>발행 시각</span>
+                <input
+                  type="datetime-local"
+                  value={publishedAt}
+                  onChange={(event) =>
+                    setPublishedAt(event.target.value)
+                  }
+                />
+              </label>
+              <p className="admin-books-hint">
+                비워두면 즉시 공개됩니다. 미래 시각을 지정하면 예약
+                발행됩니다. 공개가 꺼져 있으면 발행되지 않습니다.
+              </p>
               <label className="admin-books-checkbox">
                 <input
                   type="checkbox"

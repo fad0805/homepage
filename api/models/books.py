@@ -38,6 +38,7 @@ class Chapter(Base):
     body = Column(Text, nullable=True)
     order = Column(Integer, nullable=False, default=0)
     visible = Column(Boolean, nullable=False, default=True)
+    published_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=func.now())
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
 

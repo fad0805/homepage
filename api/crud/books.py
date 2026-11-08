@@ -44,6 +44,7 @@ def _serialize_chapter(chapter: Chapter) -> dict:
         "body": chapter.body,
         "order": chapter.order,
         "visible": chapter.visible,
+        "published_at": _iso_utc(chapter.published_at),
         "created_at": _iso_utc(chapter.created_at),
         "updated_at": _iso_utc(chapter.updated_at),
         "book": (

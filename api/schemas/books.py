@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from pydantic import BaseModel, Field
 
 
@@ -35,6 +37,7 @@ class ChapterBase(BaseModel):
     body: str | None = None
     order: int = 0
     visible: bool = True
+    published_at: datetime | None = None
 
 
 class ChapterCreate(ChapterBase):
@@ -48,6 +51,7 @@ class ChapterUpdate(BaseModel):
     body: str | None = None
     order: int | None = None
     visible: bool | None = None
+    published_at: datetime | None = None
 
 
 class ChapterReorderItem(BaseModel):

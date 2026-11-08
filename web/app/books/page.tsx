@@ -20,6 +20,7 @@ interface Chapter {
   body: string | null;
   order: number;
   visible: boolean;
+  published_at: string | null;
   book: { id: number; title: string } | null;
 }
 
@@ -53,6 +54,7 @@ export default function Books() {
   const [books, setBooks] = useState<Book[]>([]);
   const [chapters, setChapters] = useState<Chapter[]>([]);
   const [activeChapterId, setActiveChapterId] = useState<number | null>(null);
+  const [now, setNow] = useState(() => Date.now());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -89,18 +91,26 @@ export default function Books() {
     };
   }, []);
 
-  const visibleChapters = useMemo(
-    () =>
-      chapters
-        .filter((chapter) => chapter.visible !== false)
-        .sort(
-          (a, b) =>
-            a.order - b.order ||
-            a.title.localeCompare(b.title, "ko") ||
-            a.id - b.id,
-        ),
-    [chapters],
-  );
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 60_000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const visibleChapters = useMemo(() => {
+    return chapters
+      .filter(
+        (chapter) =>
+          chapter.visible !== false &&
+          (!chapter.published_at ||
+            new Date(chapter.published_at).getTime() <= now),
+      )
+      .sort(
+        (a, b) =>
+          a.order - b.order ||
+          a.title.localeCompare(b.title, "ko") ||
+          a.id - b.id,
+      );
+  }, [chapters, now]);
 
   const groups = useMemo(
     () =>
@@ -116,6 +126,16 @@ export default function Books() {
         .filter((group) => group.chapters.length > 0),
     [books, visibleChapters],
   );
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const requested = Number(
+      new URLSearchParams(window.location.search).get("chapter"),
+    );
+    if (Number.isFinite(requested) && requested > 0) {
+      setActiveChapterId(requested);
+    }
+  }, []);
 
   useEffect(() => {
     if (activeChapterId !== null) return;
@@ -142,6 +162,17 @@ export default function Books() {
 
   return (
     <div id="books-page">
+      <div className="books-rss-bar">
+        <a
+          className="books-rss-link"
+          href="/books/rss.xml"
+          target="_blank"
+          rel="noreferrer"
+        >
+          전체 RSS
+        </a>
+      </div>
+
       {loading ? (
         <p className="books-state">불러오는 중...</p>
       ) : error ? (
@@ -154,7 +185,17 @@ export default function Books() {
             {groups.map(({ book, chapters: bookChapters }) => (
               <section className="books-section" key={book.id}>
                 <header className="books-section__header">
-                  <h2>{book.title}</h2>
+                  <div className="books-section__heading">
+                    <h2>{book.title}</h2>
+                    <a
+                      className="books-rss-link"
+                      href={`/books/${book.id}/rss.xml`}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      RSS
+                    </a>
+                  </div>
                   {book.description ? <p>{book.description}</p> : null}
                 </header>
                 <div className="books-items">
@@ -163,6 +204,7 @@ export default function Books() {
                     return (
                       <div
                         className={`books-item${isActive ? " is-active" : ""}`}
+                        id={`chapter-${chapter.id}`}
                         key={chapter.id}
                       >
                         <button
