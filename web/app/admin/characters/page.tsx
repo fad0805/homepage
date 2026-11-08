@@ -29,7 +29,9 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
+import Cropper, { type Area } from "react-easy-crop";
 
+import "react-easy-crop/react-easy-crop.css";
 import "@/public/styles/admin/characters.scss";
 
 interface Location {
@@ -147,20 +149,78 @@ function toDateValue(value: string | null | undefined) {
   return value.slice(0, 10);
 }
 
+const CROP_ASPECT = 3;
+const CROP_OUTPUT_WIDTH = 320;
+
+function loadImage(src: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error("이미지를 불러오지 못했습니다."));
+    image.src = src;
+  });
+}
+
+async function cropImageToBlob(
+  src: string,
+  crop: Area,
+  outputWidth: number,
+): Promise<Blob> {
+  const image = await loadImage(src);
+  const outputHeight = Math.max(
+    1,
+    Math.round(outputWidth / CROP_ASPECT),
+  );
+  const canvas = document.createElement("canvas");
+  canvas.width = outputWidth;
+  canvas.height = outputHeight;
+
+  const context = canvas.getContext("2d");
+  if (!context) {
+    throw new Error("이미지를 처리할 수 없습니다.");
+  }
+
+  context.imageSmoothingEnabled = true;
+  context.imageSmoothingQuality = "high";
+  context.drawImage(
+    image,
+    crop.x,
+    crop.y,
+    crop.width,
+    crop.height,
+    0,
+    0,
+    outputWidth,
+    outputHeight,
+  );
+
+  return new Promise((resolve, reject) => {
+    canvas.toBlob((blob) => {
+      if (blob) {
+        resolve(blob);
+      } else {
+        reject(new Error("이미지를 처리할 수 없습니다."));
+      }
+    }, "image/png");
+  });
+}
+
 function ModalShell({
   title,
   onClose,
   children,
   footer,
+  closeOnEscape = true,
 }: {
   title: string;
   onClose: () => void;
   children: ReactNode;
   footer: ReactNode;
+  closeOnEscape?: boolean;
 }) {
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
+      if (event.key === "Escape" && closeOnEscape) {
         onClose();
       }
     };
@@ -172,7 +232,7 @@ function ModalShell({
       window.removeEventListener("keydown", handleKeyDown);
       document.body.style.overflow = previousOverflow;
     };
-  }, [onClose]);
+  }, [closeOnEscape, onClose]);
 
   return (
     <div
@@ -440,6 +500,14 @@ export default function AdminCharacters() {
   const [thumbnailUrlInput, setThumbnailUrlInput] = useState<string>("");
   const [thumbnailFile, setThumbnailFile] = useState<File | null>(null);
 
+  const [cropModalOpen, setCropModalOpen] = useState(false);
+  const [cropSource, setCropSource] = useState<string | null>(null);
+  const [cropFileName, setCropFileName] = useState<string>("");
+  const [crop, setCrop] = useState({ x: 0, y: 0 });
+  const [cropZoom, setCropZoom] = useState(1);
+  const [croppedAreaPixels, setCroppedAreaPixels] = useState<Area | null>(null);
+  const [cropping, setCropping] = useState(false);
+
   const [locationModalOpen, setLocationModalOpen] = useState(false);
   const [editingLocation, setEditingLocation] = useState<Location | null>(null);
 
@@ -450,6 +518,7 @@ export default function AdminCharacters() {
   const noticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const objectUrls = useRef<Set<string>>(new Set());
   const nextTempId = useRef(-1);
+  const thumbnailInputRef = useRef<HTMLInputElement | null>(null);
 
   const notify = useCallback((type: Notice["type"], text: string) => {
     if (noticeTimer.current) {
@@ -819,6 +888,26 @@ export default function AdminCharacters() {
     setCharacterModalOpen(true);
   };
 
+  const resetCropState = useCallback(() => {
+    if (cropSource) {
+      URL.revokeObjectURL(cropSource);
+      objectUrls.current.delete(cropSource);
+    }
+    setCropSource(null);
+    setCropFileName("");
+    setCrop({ x: 0, y: 0 });
+    setCropZoom(1);
+    setCroppedAreaPixels(null);
+    if (thumbnailInputRef.current) {
+      thumbnailInputRef.current.value = "";
+    }
+  }, [cropSource]);
+
+  const closeCropModal = useCallback(() => {
+    setCropModalOpen(false);
+    resetCropState();
+  }, [resetCropState]);
+
   const closeCharacterModal = useCallback(() => {
     setCharacterModalOpen(false);
     setEditingCharacter(null);
@@ -826,7 +915,8 @@ export default function AdminCharacters() {
     setThumbnailFileName("");
     setThumbnailUrlInput("");
     setThumbnailFile(null);
-  }, []);
+    closeCropModal();
+  }, [closeCropModal]);
 
   const handleThumbnailChange = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -854,12 +944,59 @@ export default function AdminCharacters() {
       notify("error", "썸네일 이미지는 5MB 이하만 업로드할 수 있습니다.");
       return;
     }
+
     const objectUrl = URL.createObjectURL(file);
     objectUrls.current.add(objectUrl);
-    setThumbnailFile(file);
-    setThumbnailFileName(file.name);
-    setThumbnailPreview(objectUrl);
+    setCropSource(objectUrl);
+    setCropFileName(file.name);
+    setCrop({ x: 0, y: 0 });
+    setCropZoom(1);
+    setCroppedAreaPixels(null);
+    setCropModalOpen(true);
   };
+
+  const applyCrop = useCallback(async () => {
+    if (!cropSource || !croppedAreaPixels) {
+      return;
+    }
+
+    setCropping(true);
+    try {
+      const blob = await cropImageToBlob(
+        cropSource,
+        croppedAreaPixels,
+        CROP_OUTPUT_WIDTH,
+      );
+      const baseName = cropFileName.replace(/\.[^.]+$/, "") || "thumbnail";
+      const croppedFile = new File([blob], `${baseName}.png`, {
+        type: "image/png",
+      });
+
+      URL.revokeObjectURL(cropSource);
+      objectUrls.current.delete(cropSource);
+
+      const previewUrl = URL.createObjectURL(croppedFile);
+      objectUrls.current.add(previewUrl);
+      setThumbnailFile(croppedFile);
+      setThumbnailFileName(croppedFile.name);
+      setThumbnailPreview(previewUrl);
+
+      setCropModalOpen(false);
+      setCropSource(null);
+      setCropFileName("");
+      setCrop({ x: 0, y: 0 });
+      setCropZoom(1);
+      setCroppedAreaPixels(null);
+      if (thumbnailInputRef.current) {
+        thumbnailInputRef.current.value = "";
+      }
+    } catch (error) {
+      console.error(error);
+      notify("error", "이미지를 자르지 못했습니다.");
+    } finally {
+      setCropping(false);
+    }
+  }, [cropFileName, cropSource, croppedAreaPixels, notify]);
 
   const handleThumbnailUrlChange = (event: ChangeEvent<HTMLInputElement>) => {
     const value = event.target.value;
@@ -894,7 +1031,6 @@ export default function AdminCharacters() {
       locationId === null
         ? null
         : locations.find((location) => location.id === locationId) ?? null;
-    const file = form.get("banner_file");
     const thumbnailUrl = String(form.get("thumbnail_url") ?? "").trim();
 
     if (!name || !targetLocation) {
@@ -902,10 +1038,10 @@ export default function AdminCharacters() {
       return;
     }
 
-    const hasNewFile = file instanceof File && file.size > 0;
+    const hasNewFile = thumbnailFile !== null;
     const urlChanged = thumbnailUrl !== (editingCharacter?.thumbnail ?? "");
     const nextFile = hasNewFile
-      ? (file as File)
+      ? thumbnailFile
       : urlChanged
         ? null
         : (editingCharacter?.file ?? null);
@@ -1178,6 +1314,7 @@ export default function AdminCharacters() {
         <ModalShell
           title={editingCharacter ? "등장인물 수정" : "등장인물 추가"}
           onClose={closeCharacterModal}
+          closeOnEscape={!cropModalOpen}
           footer={
             <>
               <button
@@ -1372,6 +1509,7 @@ export default function AdminCharacters() {
                 )}
               </div>
               <input
+                ref={thumbnailInputRef}
                 type="file"
                 name="banner_file"
                 accept="image/png,image/jpeg,image/webp,image/gif"
@@ -1384,7 +1522,7 @@ export default function AdminCharacters() {
               ) : null}
               <span className="admin-banner-help">
                 이미지 URL 또는 PNG / JPEG / WEBP / GIF 파일(5MB 이하).
-                파일을 선택하면 파일이 우선 적용됩니다.
+                파일을 선택하면 3:1 비율로 자른 뒤 너비 320px로 저장됩니다.
               </span>
             </div>
 
@@ -1406,6 +1544,67 @@ export default function AdminCharacters() {
               <span>내 인형</span>
             </label>
           </form>
+        </ModalShell>
+      ) : null}
+
+      {cropModalOpen && cropSource ? (
+        <ModalShell
+          title="이미지 자르기"
+          onClose={closeCropModal}
+          footer={
+            <>
+              <button
+                type="button"
+                className="admin-button"
+                onClick={closeCropModal}
+                disabled={cropping}
+              >
+                취소
+              </button>
+              <button
+                type="button"
+                className="admin-button primary"
+                onClick={applyCrop}
+                disabled={cropping || !croppedAreaPixels}
+              >
+                {cropping ? "처리 중..." : "적용"}
+              </button>
+            </>
+          }
+        >
+          <div className="admin-crop">
+            <div className="admin-crop-viewport">
+              <Cropper
+                image={cropSource}
+                crop={crop}
+                zoom={cropZoom}
+                aspect={CROP_ASPECT}
+                onCropChange={setCrop}
+                onZoomChange={setCropZoom}
+                onCropComplete={(_, areaPixels) =>
+                  setCroppedAreaPixels(areaPixels)
+                }
+                showGrid
+              />
+            </div>
+            <label className="admin-field">
+              <span>확대 / 축소</span>
+              <input
+                type="range"
+                min={1}
+                max={3}
+                step={0.01}
+                value={cropZoom}
+                onChange={(event) =>
+                  setCropZoom(Number(event.target.value))
+                }
+              />
+            </label>
+            <p className="admin-crop-hint">
+              가로:세로 3:1 비율로 자릅니다. 적용하면 너비 320px로
+              리사이징됩니다.
+            </p>
+          </div>
         </ModalShell>
       ) : null}
 
