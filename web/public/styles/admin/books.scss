@@ -534,6 +534,183 @@
   }
 }
 
+.mastodon-share__trigger {
+  padding: 0.45rem 0.85rem;
+  border: 1px solid var(--admin-border);
+  border-radius: 0.6rem;
+  background: var(--admin-card-bg);
+  color: var(--foreground);
+  font-family: inherit;
+  font-size: 0.8rem;
+  cursor: pointer;
+  white-space: nowrap;
+
+  &:hover {
+    filter: brightness(0.96);
+  }
+}
+
+.mastodon-share-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background: rgba(0, 0, 0, 0.45);
+}
+
+.mastodon-share-modal__dialog {
+  display: flex;
+  flex-direction: column;
+  width: min(460px, 100%);
+  max-height: 90vh;
+  overflow: hidden;
+  border-radius: 1rem;
+  background: var(--subtheme);
+  color: var(--foreground);
+  box-shadow: 0 1.5rem 3rem rgba(0, 0, 0, 0.3);
+}
+
+.mastodon-share-modal__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem 1.15rem;
+  border-bottom: 1px solid var(--admin-border);
+
+  h2 {
+    margin: 0;
+    color: var(--title-color);
+    font-family: Eulyoo1945-SemiBold, Arial, Helvetica, sans-serif;
+    font-size: 1.05rem;
+  }
+}
+
+.mastodon-share-modal__close {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--foreground);
+  font-size: 1.4rem;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0.6;
+
+  &:hover,
+  &:focus-visible {
+    opacity: 1;
+  }
+}
+
+.mastodon-share-modal__body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 1rem 1.15rem;
+  overflow-y: auto;
+}
+
+.mastodon-share-modal__field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  color: var(--foreground);
+  font-size: 0.78rem;
+
+  span {
+    color: var(--title-color);
+    font-weight: bold;
+  }
+
+  input,
+  textarea {
+    box-sizing: border-box;
+    width: 100%;
+    padding: 0.5rem 0.65rem;
+    border: 1px solid var(--admin-border);
+    border-radius: 0.55rem;
+    background: var(--input-background);
+    color: var(--input-text);
+    font-family: inherit;
+    font-size: 0.82rem;
+
+    &:focus {
+      outline: 2px solid var(--admin-primary);
+      outline-offset: 1px;
+    }
+  }
+
+  textarea {
+    resize: vertical;
+    line-height: 1.55;
+  }
+}
+
+.mastodon-share-modal__hint {
+  margin: -0.35rem 0 0;
+  color: var(--admin-muted);
+  font-size: 0.68rem;
+}
+
+.mastodon-share-modal__error {
+  margin: 0;
+  color: #c0392b;
+  font-size: 0.72rem;
+}
+
+.mastodon-share-modal__footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.4rem;
+  padding: 0.85rem 1.15rem;
+  border-top: 1px solid var(--admin-border);
+}
+
+.mastodon-share-modal__button {
+  padding: 0.45rem 0.8rem;
+  border: 1px solid var(--admin-border);
+  border-radius: 0.55rem;
+  background: transparent;
+  color: var(--foreground);
+  font-family: inherit;
+  font-size: 0.78rem;
+  cursor: pointer;
+
+  &:hover,
+  &:focus-visible {
+    background: rgba(0, 0, 0, 0.06);
+  }
+
+  &.primary {
+    border-color: var(--admin-primary);
+    background: var(--admin-primary);
+    color: var(--admin-primary-ink);
+  }
+}
+
+[data-theme='dark'] {
+  .mastodon-share-modal__dialog {
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    background: var(--background);
+  }
+
+  .mastodon-share-modal__field input,
+  .mastodon-share-modal__field textarea {
+    border-color: rgba(255, 255, 255, 0.2);
+  }
+
+  .mastodon-share-modal__button:hover,
+  .mastodon-share-modal__button:focus-visible {
+    background: rgba(255, 255, 255, 0.08);
+  }
+
+  .mastodon-share-modal__error {
+    color: #f08a80;
+  }
+}
+
 @media (max-width: 900px) {
   .admin-books-detail-layout {
     grid-template-columns: 1fr;

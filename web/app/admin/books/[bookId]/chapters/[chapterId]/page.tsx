@@ -10,6 +10,7 @@ import {
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 
+import { MastodonShare } from "@/components/mastodon-share";
 import { RichTextEditor } from "@/components/rich-text-editor";
 import { apiFetch } from "@/lib/api";
 import { formatDateTime } from "@/lib/datetime";
@@ -273,6 +274,17 @@ export default function AdminChapterEdit() {
                 <p>새 챕터를 작성합니다.</p>
               )}
             </div>
+            {!isNew && chapter && book ? (
+              <div className="admin-books-actions">
+                <MastodonShare
+                  title={chapter.title}
+                  bookTitle={book.title}
+                  bookId={bookId}
+                  chapterId={chapter.id}
+                  triggerClassName="admin-button"
+                />
+              </div>
+            ) : null}
           </header>
 
           <section className="admin-books-panel">
