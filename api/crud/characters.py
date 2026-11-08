@@ -52,6 +52,7 @@ def _serialize_character(character: Character) -> dict:
         "visible": character.visible,
         "is_my_doll": character.is_my_doll,
         "order_in_location": character.order_in_location,
+        "layout": character.layout or "auto",
         "created_at": character.created_at,
         "updated_at": character.updated_at,
         "location": _serialize_location(location) if location else None,
@@ -217,6 +218,10 @@ def update_character(db: Session, character_id: int, updated: CharacterUpdate):
     data = updated.model_dump(
         exclude_unset=True, exclude={"head_doll", "body_doll"}
     )
+
+    # ``layout`` is NOT NULL; an explicit null should leave it unchanged.
+    if data.get("layout") is None:
+        data.pop("layout", None)
 
     if "location_id" in data and data["location_id"] is not None:
         _get_location_or_404(db, data["location_id"])

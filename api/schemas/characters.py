@@ -1,6 +1,9 @@
 from datetime import date
+from typing import Literal
 
 from pydantic import BaseModel, Field
+
+CharacterLayout = Literal["auto", "left", "center", "right"]
 
 
 class LocationBase(BaseModel):
@@ -59,6 +62,7 @@ class CharacterBase(BaseModel):
     visible: bool = True
     is_my_doll: bool = True
     order_in_location: int | None = None
+    layout: CharacterLayout = "auto"
     head_doll: DollInput | None = None
     body_doll: DollInput | None = None
 
@@ -82,6 +86,7 @@ class CharacterUpdate(BaseModel):
     visible: bool | None = None
     is_my_doll: bool | None = None
     order_in_location: int | None = None
+    layout: CharacterLayout | None = None
     head_doll: DollInput | None = None
     body_doll: DollInput | None = None
 

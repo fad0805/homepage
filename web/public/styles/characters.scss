@@ -4,7 +4,7 @@
 #characters-list {
   padding: 2rem 2rem 7rem 2rem;
 
-  > *:first-child .characters > *:first-child {
+  > *:first-child .characters > *:first-child.is-auto {
     grid-row: 1 / 2;
     grid-column: 1 / span 2;
     justify-self: center;
@@ -27,6 +27,21 @@
     display: grid;
     grid-template-columns: repeat(2, 1fr);
     gap: 1rem;
+
+    .character {
+      &.is-center {
+        grid-column: 1 / -1;
+        justify-self: center;
+      }
+
+      &.is-left {
+        grid-column: 1;
+      }
+
+      &.is-right {
+        grid-column: 2;
+      }
+    }
 
     .image {
       position: relative;

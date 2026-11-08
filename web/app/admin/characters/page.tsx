@@ -49,6 +49,8 @@ interface DollInfo {
   skin_tone: string | null;
 }
 
+type CharacterLayout = "auto" | "left" | "center" | "right";
+
 interface CharacterItem {
   id: number;
   name: string;
@@ -63,6 +65,7 @@ interface CharacterItem {
   visible: boolean;
   is_my_doll: boolean;
   order_in_location: number | null;
+  layout: CharacterLayout | null;
   location: Location | null;
   head_doll: DollInfo | null;
   body_doll: DollInfo | null;
@@ -745,6 +748,7 @@ export default function AdminCharacters() {
             visible: character.visible,
             is_my_doll: character.is_my_doll,
             order_in_location: character.order_in_location,
+            layout: character.layout ?? "auto",
             head_doll: character.head_doll,
             body_doll: character.body_doll,
           }),
@@ -771,6 +775,7 @@ export default function AdminCharacters() {
             visible: character.visible,
             is_my_doll: character.is_my_doll,
             order_in_location: character.order_in_location,
+            layout: character.layout ?? "auto",
             head_doll: character.head_doll,
             body_doll: character.body_doll,
           }),
@@ -1089,6 +1094,11 @@ export default function AdminCharacters() {
     const bodyName = String(form.get("body_name") ?? "").trim();
     const bodyCompany = String(form.get("body_company") ?? "").trim();
     const bodySkinTone = String(form.get("body_skin_tone") ?? "").trim();
+    const rawLayout = String(form.get("layout") ?? "auto");
+    const layout: CharacterLayout =
+      rawLayout === "left" || rawLayout === "right" || rawLayout === "center"
+        ? rawLayout
+        : "auto";
     const rawLocation = form.get("location");
     const locationId =
       rawLocation === null || rawLocation === "" ? null : Number(rawLocation);
@@ -1150,6 +1160,7 @@ export default function AdminCharacters() {
       visible: form.get("visible") === "on",
       is_my_doll: form.get("is_my_doll") === "on",
       order_in_location: order,
+      layout,
       location: targetLocation,
       head_doll: headName
         ? {
@@ -1429,6 +1440,19 @@ export default function AdminCharacters() {
                     {location.name}
                   </option>
                 ))}
+              </select>
+            </label>
+
+            <label className="admin-field">
+              <span>배치</span>
+              <select
+                name="layout"
+                defaultValue={editingCharacter?.layout ?? "auto"}
+              >
+                <option value="auto">자동 (기본)</option>
+                <option value="left">왼쪽</option>
+                <option value="center">가운데</option>
+                <option value="right">오른쪽</option>
               </select>
             </label>
 

@@ -24,6 +24,12 @@ class Character(Base):
     visible = Column(Boolean, default=True)
     is_my_doll = Column(Boolean, default=True)
     order_in_location = Column(Integer, nullable=True)
+    layout = Column(
+        String,
+        nullable=False,
+        default="auto",
+        server_default="auto",
+    )
 
     location_relationship = relationship("Location", foreign_keys=[location_id])
     head_relationship = relationship("Doll", foreign_keys=[head])

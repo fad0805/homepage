@@ -11,6 +11,8 @@ interface CharacterLocation {
   order: number;
 }
 
+type CharacterLayout = "auto" | "left" | "center" | "right";
+
 interface CharacterItem {
   id: number;
   name: string;
@@ -18,6 +20,7 @@ interface CharacterItem {
   location_id: number | null;
   visible: boolean;
   order_in_location: number | null;
+  layout: CharacterLayout | null;
   location: CharacterLocation | null;
 }
 
@@ -99,7 +102,7 @@ export default function Characters() {
               {group.characters.map((character) => (
                 <a
                   key={character.id}
-                  className="character"
+                  className={`character is-${character.layout ?? "auto"}`}
                   href={`/characters/profile?character=${character.id}`}
                 >
                   <div
