@@ -28,7 +28,7 @@ logger = logging.getLogger(__name__)
 # Legacy local storage. New uploads go to S3 when it is configured; the local
 # directory is kept so previously uploaded files keep being served.
 UPLOAD_DIR = Path(os.getenv("UPLOAD_DIR", "uploads"))
-MAX_UPLOAD_SIZE = int(os.getenv("MAX_UPLOAD_SIZE", 5 * 1024 * 1024))
+MAX_UPLOAD_SIZE = int(os.getenv("MAX_UPLOAD_SIZE", 20 * 1024 * 1024))
 URL_PREFIX = "/uploads"
 
 ALLOWED_CONTENT_TYPES = {

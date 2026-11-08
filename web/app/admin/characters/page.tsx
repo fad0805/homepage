@@ -79,7 +79,7 @@ type Notice = { type: "success" | "error"; text: string };
 
 const LOCATION_TYPE = "location";
 const CHARACTER_TYPE = "character";
-const MAX_THUMBNAIL_SIZE = 5 * 1024 * 1024;
+const MAX_THUMBNAIL_SIZE = 20 * 1024 * 1024;
 const ALLOWED_THUMBNAIL_TYPES = [
   "image/png",
   "image/jpeg",
@@ -942,7 +942,7 @@ export default function AdminCharacters() {
     }
     if (file.size > MAX_THUMBNAIL_SIZE) {
       event.target.value = "";
-      notify("error", "썸네일 이미지는 5MB 이하만 업로드할 수 있습니다.");
+      notify("error", "썸네일 이미지는 20MB 이하만 업로드할 수 있습니다.");
       return;
     }
 
