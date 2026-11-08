@@ -1,3 +1,5 @@
+from datetime import timezone
+
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
@@ -10,6 +12,14 @@ from schemas.books import (
     ChapterReorderRequest,
     ChapterUpdate,
 )
+
+
+def _iso_utc(value):
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=timezone.utc)
+    return value.isoformat()
 
 
 def _serialize_book(book: Book) -> dict:
@@ -32,6 +42,8 @@ def _serialize_chapter(chapter: Chapter) -> dict:
         "body": chapter.body,
         "order": chapter.order,
         "visible": chapter.visible,
+        "created_at": _iso_utc(chapter.created_at),
+        "updated_at": _iso_utc(chapter.updated_at),
         "book": (
             {
                 "id": book.id,
