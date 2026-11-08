@@ -1,4 +1,4 @@
-from sqlalchemy import Boolean, Column, Integer, String, DateTime, Text, ForeignKey, func
+from sqlalchemy import Boolean, Column, Date, Integer, String, DateTime, Text, ForeignKey, func
 from sqlalchemy.orm import relationship
 
 from db.base import Base
@@ -15,7 +15,7 @@ class Character(Base):
     nickname = Column(String, nullable=True)
     head = Column(Integer, ForeignKey("dolls.id"), nullable=True, index=True)
     body = Column(Integer, ForeignKey("dolls.id"), nullable=True, index=True)
-    comming_day = Column(DateTime, nullable=True)
+    comming_day = Column(Date, nullable=True)
     age = Column(String, nullable=True)
     serif = Column(Text, nullable=True)
     description = Column(Text, nullable=True)
