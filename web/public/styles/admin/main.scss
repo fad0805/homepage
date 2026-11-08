@@ -336,9 +336,10 @@ a.admin-dashboard-stat:visited {
 
 /* Lower content */
 .admin-dashboard-lower {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(0, 0.95fr);
   gap: 1rem;
+  align-items: start;
 }
 
 .admin-dashboard-panel {
@@ -395,9 +396,8 @@ a.admin-dashboard-stat:visited {
 
 /* Post view ranking */
 .admin-dashboard-post-list {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  column-gap: 1.1rem;
+  display: flex;
+  flex-direction: column;
   margin: 0;
   padding: 0;
   list-style: none;
@@ -407,7 +407,7 @@ a.admin-dashboard-stat:visited {
   border-bottom: 1px solid var(--admin-border);
 }
 
-.admin-dashboard-post-list li:nth-last-child(-n + 2) {
+.admin-dashboard-post-list li:last-child {
   border-bottom: none;
 }
 
@@ -476,6 +476,10 @@ a.admin-dashboard-post:visited {
     font-size: 0.6rem;
     font-weight: normal;
   }
+}
+
+.admin-dashboard-post-more {
+  margin-top: 0.65rem;
 }
 
 /* Per-book overview */
@@ -552,17 +556,9 @@ a.admin-dashboard-book:visited {
   }
 }
 
-@media (max-width: 760px) {
-  .admin-dashboard-post-list {
+@media (max-width: 980px) {
+  .admin-dashboard-lower {
     grid-template-columns: minmax(0, 1fr);
-  }
-
-  .admin-dashboard-post-list li:nth-last-child(-n + 2) {
-    border-bottom: 1px solid var(--admin-border);
-  }
-
-  .admin-dashboard-post-list li:last-child {
-    border-bottom: none;
   }
 }
 

@@ -120,6 +120,7 @@ export default function AdminHome() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [now, setNow] = useState<number | null>(null);
+  const [showAllPosts, setShowAllPosts] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -245,9 +246,12 @@ export default function AdminHome() {
           (b.view_count ?? 0) - (a.view_count ?? 0) ||
           timeValue(b.updated_at ?? b.created_at) -
             timeValue(a.updated_at ?? a.created_at),
-      )
-      .slice(0, 8);
+      );
   }, [data]);
+
+  const visiblePosts = showAllPosts
+    ? popularChapters
+    : popularChapters.slice(0, 5);
 
   const visitMax = useMemo(() => {
     if (!data) return 1;
@@ -445,28 +449,41 @@ export default function AdminHome() {
                 </div>
               </header>
               {popularChapters.length ? (
-                <ul className="admin-dashboard-post-list">
-                  {popularChapters.map((chapter, index) => (
-                    <li key={chapter.id}>
-                      <Link
-                        className="admin-dashboard-post"
-                        href={`/admin/books/${chapter.book_id}/chapters/${chapter.id}`}
-                      >
-                        <span className="admin-dashboard-post__rank">
-                          {String(index + 1).padStart(2, "0")}
-                        </span>
-                        <span className="admin-dashboard-post__copy">
-                          <strong>{chapter.title}</strong>
-                          <span>{chapter.book?.title}</span>
-                        </span>
-                        <span className="admin-dashboard-post__views">
-                          {chapter.view_count ?? 0}
-                          <small>회</small>
-                        </span>
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
+                <>
+                  <ul className="admin-dashboard-post-list">
+                    {visiblePosts.map((chapter, index) => (
+                      <li key={chapter.id}>
+                        <Link
+                          className="admin-dashboard-post"
+                          href={`/admin/books/${chapter.book_id}/chapters/${chapter.id}`}
+                        >
+                          <span className="admin-dashboard-post__rank">
+                            {String(index + 1).padStart(2, "0")}
+                          </span>
+                          <span className="admin-dashboard-post__copy">
+                            <strong>{chapter.title}</strong>
+                            <span>{chapter.book?.title}</span>
+                          </span>
+                          <span className="admin-dashboard-post__views">
+                            {chapter.view_count ?? 0}
+                            <small>회</small>
+                          </span>
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                  {popularChapters.length > 5 ? (
+                    <button
+                      type="button"
+                      className="admin-button admin-dashboard-post-more"
+                      onClick={() => setShowAllPosts((prev) => !prev)}
+                    >
+                      {showAllPosts
+                        ? "접기"
+                        : `더보기 (${popularChapters.length - 5})`}
+                    </button>
+                  ) : null}
+                </>
               ) : (
                 <p className="admin-dashboard-empty">
                   등록된 게시글이 없습니다.
