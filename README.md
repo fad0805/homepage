@@ -54,24 +54,6 @@ cp .env.production.sample .env.production
 docker compose up --build -d
 ```
 
-### 운영 환경 업데이트
-
-```bash
-git pull
-
-# 컨테이너 재생성 (compose에서 제거된 서비스의 컨테이너도 함께 정리)
-docker compose up --build -d --remove-orphans
-
-# 이전 배포에서 교체되어 태그가 사라진 이미지(dangling)만 정리
-docker image prune -f --filter "label=com.docker.compose.project=homepage"
-```
-
-- `docker image prune`은 기본적으로 dangling 이미지만 지우므로, 실행 중인
-  다른 서비스의 이미지는 건드리지 않습니다. `--filter`로 `homepage`
-  프로젝트 이미지로 범위를 제한합니다.
-- 태그가 남아 있는 이미지까지 모두 지우려면 `docker image prune -af`를
-  사용하지만, 다른 프로젝트 이미지까지 삭제될 수 있어 권장하지 않습니다.
-
 ### 환경 변수
 
 | 변수 | 필수 | 설명 |
