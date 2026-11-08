@@ -31,3 +31,5 @@ export function profileToHtml(profile: string): string {
     .map((line) => `<p>${escapeHtml(line)}</p>`)
     .join("");
 }
+
+

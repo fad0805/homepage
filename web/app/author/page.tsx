@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 
 import {
-  DEFAULT_AUTHOR_PROFILE,
   profileToHtml,
   type AuthorProfile,
 } from "@/config/author";
@@ -11,9 +10,8 @@ import {
 import "@/public/styles/author.scss";
 
 export default function Author() {
-  const [profile, setProfile] = useState<AuthorProfile>(
-    DEFAULT_AUTHOR_PROFILE,
-  );
+  const [profile, setProfile] = useState<AuthorProfile | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
@@ -24,12 +22,15 @@ export default function Author() {
         return response.json() as Promise<AuthorProfile[]>;
       })
       .then((profiles) => {
-        if (!cancelled && profiles.length > 0) {
-          setProfile(profiles[0]);
+        if (!cancelled) {
+          setProfile(profiles[0] ?? null);
         }
       })
       .catch((error) => {
         console.error(error);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
       });
 
     return () => {
@@ -37,11 +38,24 @@ export default function Author() {
     };
   }, []);
 
+  if (loading) {
+    return (
+      <div id="author">
+        <p className="author-state">불러오는 중...</p>
+      </div>
+    );
+  }
+
+  if (!profile) {
+    return (
+      <div id="author">
+        <p className="author-state">작가 소개가 아직 등록되지 않았습니다.</p>
+      </div>
+    );
+  }
+
   const profileHtml = profileToHtml(profile.profile);
-  const subtitle =
-    profile.subtitle === undefined || profile.subtitle === null
-      ? DEFAULT_AUTHOR_PROFILE.subtitle
-      : profile.subtitle.trim();
+  const subtitle = profile.subtitle?.trim() ?? "";
 
   return (
     <div id="author">

@@ -19,7 +19,6 @@ import { Color, TextStyle } from "@tiptap/extension-text-style";
 import { AuthorImage } from "@/components/author-image";
 import {
   AUTHOR_IMAGE_MAX_HEIGHT_REM,
-  DEFAULT_AUTHOR_PROFILE,
   profileToHtml,
   type AuthorProfile,
 } from "@/config/author";
@@ -102,10 +101,8 @@ async function apiFetch<T>(url: string, init: RequestInit = {}): Promise<T> {
 
 export default function AdminProfile() {
   const [profile, setProfile] = useState<AuthorProfile | null>(null);
-  const [title, setTitle] = useState(DEFAULT_AUTHOR_PROFILE.title);
-  const [subtitle, setSubtitle] = useState(
-    DEFAULT_AUTHOR_PROFILE.subtitle ?? "",
-  );
+  const [title, setTitle] = useState("");
+  const [subtitle, setSubtitle] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [uploadingImage, setUploadingImage] = useState(false);
@@ -138,7 +135,7 @@ export default function AdminProfile() {
         placeholder: "작가소개 내용을 입력해주세요.",
       }),
     ],
-    content: profileToHtml(DEFAULT_AUTHOR_PROFILE.profile),
+    content: "",
     immediatelyRender: false,
     shouldRerenderOnTransaction: true,
   });
@@ -156,11 +153,9 @@ export default function AdminProfile() {
     try {
       const profiles = await apiFetch<AuthorProfile[]>("/api/profiles");
       const first = profiles[0];
-      const nextTitle = first?.title || DEFAULT_AUTHOR_PROFILE.title;
-      const nextSubtitle =
-        first?.subtitle ?? DEFAULT_AUTHOR_PROFILE.subtitle ?? "";
-      const nextProfile =
-        first?.profile || DEFAULT_AUTHOR_PROFILE.profile;
+      const nextTitle = first?.title ?? "";
+      const nextSubtitle = first?.subtitle ?? "";
+      const nextProfile = first?.profile ?? "";
       const nextHtml = profileToHtml(nextProfile);
 
       setProfile(first ?? null);
@@ -301,13 +296,18 @@ export default function AdminProfile() {
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
-    const nextTitle = title.trim() || DEFAULT_AUTHOR_PROFILE.title;
+    const nextTitle = title.trim();
     const nextSubtitle = subtitle.trim();
     const nextContent = editor?.getHTML() ?? "";
     const plainText = nextContent
       .replace(/<[^>]*>/g, "")
       .replace(/&nbsp;/g, " ")
       .trim();
+
+    if (!nextTitle) {
+      setNotice({ type: "error", text: "제목을 입력해주세요." });
+      return;
+    }
 
     if (!plainText) {
       setNotice({ type: "error", text: "소개 내용을 입력해주세요." });
