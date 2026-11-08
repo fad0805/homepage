@@ -84,6 +84,11 @@
     color: var(--foreground);
     font-size: 0.95rem;
     line-height: 1.65;
+
+    // Empty paragraphs are intentional blank lines from the editor.
+    &:empty {
+      min-height: 1.65em;
+    }
   }
 
   h2,

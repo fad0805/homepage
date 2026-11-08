@@ -25,10 +25,9 @@ export function profileToHtml(profile: string): string {
   if (/<\/?[a-z][^>]*>/i.test(value)) return value;
 
   return value
-    .split(/\n+/)
+    .split(/\r?\n/)
     .map((line) => line.trim())
-    .filter(Boolean)
-    .map((line) => `<p>${escapeHtml(line)}</p>`)
+    .map((line) => (line ? `<p>${escapeHtml(line)}</p>` : "<p></p>"))
     .join("");
 }
 
