@@ -257,6 +257,11 @@ function CharacterProfileContent() {
                       relationship.character.thumbnail ? "" : " is-empty"
                     }`}
                   >
+                    {relationship.relationship_type ? (
+                      <span className="character-profile__relation-type">
+                        {relationship.relationship_type}
+                      </span>
+                    ) : null}
                     <p>{relationship.character.name}</p>
                     {relationship.character.thumbnail ? (
                       // eslint-disable-next-line @next/next/no-img-element
@@ -266,11 +271,6 @@ function CharacterProfileContent() {
                       />
                     ) : null}
                   </div>
-                  {relationship.relationship_type ? (
-                    <span className="character-profile__relation-type">
-                      {relationship.relationship_type}
-                    </span>
-                  ) : null}
                 </>
               );
 
