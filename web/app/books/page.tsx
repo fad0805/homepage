@@ -115,6 +115,9 @@ export default function Books() {
   const [activeCategoryId, setActiveCategoryId] = useState<number | null>(
     null,
   );
+  const [expandedCategories, setExpandedCategories] = useState<Set<number>>(
+    () => new Set(),
+  );
   const [searchQuery, setSearchQuery] = useState("");
   const [chapterPage, setChapterPage] = useState(1);
   const [isMobile, setIsMobile] = useState(false);
@@ -361,8 +364,28 @@ export default function Books() {
 
   const selectCategory = (categoryId: number | null) => {
     setActiveCategoryId(categoryId);
+    if (categoryId !== null) {
+      setExpandedCategories((prev) => {
+        if (prev.has(categoryId)) return prev;
+        const next = new Set(prev);
+        next.add(categoryId);
+        return next;
+      });
+    }
     setActiveChapterId(null);
     setChapterPage(1);
+  };
+
+  const toggleCategory = (categoryId: number) => {
+    setExpandedCategories((prev) => {
+      const next = new Set(prev);
+      if (next.has(categoryId)) {
+        next.delete(categoryId);
+      } else {
+        next.add(categoryId);
+      }
+      return next;
+    });
   };
 
   const activateTag = (tag: string) => {
@@ -434,38 +457,58 @@ export default function Books() {
         {groupedBooks.length === 0 ? (
           <p className="books-list-empty">검색 결과가 없습니다.</p>
         ) : (
-          groupedBooks.map((group) => (
-            <div
-              className="books-group"
-              key={group.category?.id ?? "uncategorized"}
-            >
-              {group.category ? (
-                <p className="books-group__label">
-                  {group.category.name}
-                </p>
-              ) : null}
-              {group.books.map((book) => (
-                <button
-                  type="button"
-                  className={`books-book-button${
-                    book.id === activeBookId ? " is-active" : ""
-                  }`}
-                  onClick={() => selectBook(book.id)}
-                  aria-pressed={book.id === activeBookId}
-                  key={book.id}
-                >
-                  <span className="books-book-button__main">
-                    <span className="books-book-button__title">
-                      {book.title}
+          groupedBooks.map((group) => {
+            const categoryId = group.category?.id;
+            const isOpen =
+              categoryId === undefined ||
+              searchQuery.trim() !== "" ||
+              expandedCategories.has(categoryId);
+            return (
+              <div
+                className={`books-group${isOpen ? " is-open" : ""}`}
+                key={categoryId ?? "uncategorized"}
+              >
+                {group.category && categoryId !== undefined ? (
+                  <button
+                    type="button"
+                    className="books-group__toggle"
+                    onClick={() => toggleCategory(categoryId)}
+                    aria-expanded={isOpen}
+                  >
+                    <span>{group.category.name}</span>
+                    <span
+                      className="books-group__chevron"
+                      aria-hidden="true"
+                    >
+                      ▸
                     </span>
-                  </span>
-                  <span className="books-book-button__count">
-                    {chapterCounts.get(book.id) ?? 0}
-                  </span>
-                </button>
-              ))}
-            </div>
-          ))
+                  </button>
+                ) : null}
+                {isOpen
+                  ? group.books.map((book) => (
+                      <button
+                        type="button"
+                        className={`books-book-button${
+                          book.id === activeBookId ? " is-active" : ""
+                        }`}
+                        onClick={() => selectBook(book.id)}
+                        aria-pressed={book.id === activeBookId}
+                        key={book.id}
+                      >
+                        <span className="books-book-button__main">
+                          <span className="books-book-button__title">
+                            {book.title}
+                          </span>
+                        </span>
+                        <span className="books-book-button__count">
+                          {chapterCounts.get(book.id) ?? 0}
+                        </span>
+                      </button>
+                    ))
+                  : null}
+              </div>
+            );
+          })
         )}
       </div>
     </div>

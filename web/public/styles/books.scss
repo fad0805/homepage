@@ -267,13 +267,41 @@
   }
 }
 
-.books-group__label {
-  margin: 0 0 0.3rem 0.15rem;
+.books-group__toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.4rem;
+  width: 100%;
+  margin: 0 0 0.3rem;
+  padding: 0.15rem 0 0.15rem 0.15rem;
+  border: 0;
+  background: transparent;
   color: var(--title-color);
+  font-family: inherit;
   font-size: 0.68rem;
   font-weight: bold;
   letter-spacing: 0.04em;
+  text-align: left;
+  cursor: pointer;
   opacity: 0.7;
+  transition: opacity 0.15s ease;
+
+  &:hover,
+  &:focus-visible {
+    opacity: 1;
+  }
+}
+
+.books-group__chevron {
+  flex-shrink: 0;
+  font-size: 0.7rem;
+  line-height: 1;
+  transition: transform 0.15s ease;
+}
+
+.books-group.is-open .books-group__chevron {
+  transform: rotate(90deg);
 }
 
 .books-book-button {
