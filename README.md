@@ -59,6 +59,8 @@ docker compose up --build -d
 | 변수 | 필수 | 설명 |
 |------|------|------|
 | `SECRET_KEY` | 운영 필수 | JWT 서명용 비밀키 (개발은 자동 생성) |
+| `ACCESS_TOKEN_EXPIRE_MINUTES` | 선택 | access 토큰 만료 시간(분, 기본 30) |
+| `REFRESH_TOKEN_EXPIRE_DAYS` | 선택 | refresh 토큰/로그인 유지 기간(일, 기본 30) |
 | `ENVIRONMENT` | 선택 | `production` 설정 시 운영 모드 |
 | `DB_HOST` | 필수 | PostgreSQL 호스트 |
 | `DB_PORT` | 필수 | PostgreSQL 포트 (기본 5432) |

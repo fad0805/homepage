@@ -11,11 +11,24 @@ export async function apiFetch<T>(
     headers.set("Content-Type", "application/json");
   }
 
-  const response = await fetch(url, {
+  let response = await fetch(url, {
     credentials: "include",
     ...init,
     headers,
   });
+
+  // Access tokens are refreshed lazily. When several requests are in flight
+  // with an expired token, the first one rotates the cookies and the rest can
+  // briefly see a 401. Retry once so a concurrent refresh doesn't log the
+  // user out.
+  if (response.status === 401) {
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    response = await fetch(url, {
+      credentials: "include",
+      ...init,
+      headers,
+    });
+  }
 
   if (response.status === 401) {
     window.location.href = "/signin";

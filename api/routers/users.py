@@ -13,7 +13,7 @@ from fastapi import Form
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
 
-from core.config import ENVIRONMENT
+from core.config import ENVIRONMENT, AUTH_COOKIE_MAX_AGE
 from core.security import verify_password, create_access_token, create_refresh_token
 from routers.utils import get_current_user_from_token
 from crud.users import get_user, create_user, update_refresh_token
@@ -85,7 +85,8 @@ async def signin(
         value=refresh_token,
         httponly=True,
         secure=True if ENVIRONMENT == 'production' else False,
-        samesite="Strict"
+        samesite="Strict",
+        max_age=AUTH_COOKIE_MAX_AGE,
     )
 
     response.set_cookie(
@@ -93,7 +94,8 @@ async def signin(
         value=access_token,
         httponly=True,
         secure=True if ENVIRONMENT == 'production' else False,
-        samesite="Strict"
+        samesite="Strict",
+        max_age=AUTH_COOKIE_MAX_AGE,
     )
 
     return {"success": True, "message": "Login successful"}

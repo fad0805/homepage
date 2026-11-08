@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 from fastapi import Request, Response, Depends, HTTPException, status
 import jwt
 
-from core.config import ENVIRONMENT
+from core.config import ENVIRONMENT, AUTH_COOKIE_MAX_AGE
 from core.security import create_access_token, create_refresh_token, decode_access_token, decode_refresh_token
 from crud.users import get_user, update_refresh_token
 from db.session import get_db
@@ -29,6 +29,7 @@ def _set_auth_cookie(response: Response, key: str, token: str) -> None:
         httponly=True,
         secure=True if ENVIRONMENT == 'production' else False,
         samesite="Strict",
+        max_age=AUTH_COOKIE_MAX_AGE,
     )
 
 

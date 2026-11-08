@@ -68,11 +68,21 @@ async function apiFetch<T>(url: string, init: RequestInit = {}): Promise<T> {
     headers.set("Content-Type", "application/json");
   }
 
-  const response = await fetch(url, {
+  let response = await fetch(url, {
     credentials: "include",
     ...init,
     headers,
   });
+
+  // Retry once when a concurrent request just rotated the auth cookies.
+  if (response.status === 401) {
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    response = await fetch(url, {
+      credentials: "include",
+      ...init,
+      headers,
+    });
+  }
 
   if (response.status === 401) {
     window.location.href = "/signin";
