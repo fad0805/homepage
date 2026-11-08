@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
 
 import {
   DEFAULT_AUTHOR_PROFILE,
@@ -57,14 +56,6 @@ export default function Author() {
           className="author-copy"
           dangerouslySetInnerHTML={{ __html: profileHtml }}
         />
-
-        <aside className="author-note">
-          <span className="author-note__name">Rimien Siarte</span>
-          <p className="author-note__role">작가 · 인형 제작</p>
-          <Link className="author-note__link" href="/characters">
-            등장인물 보기 →
-          </Link>
-        </aside>
       </section>
     </div>
   );

@@ -5,6 +5,7 @@ import {
   useEffect,
   useRef,
   useState,
+  type ChangeEvent,
   type FormEvent,
   type ReactNode,
 } from "react";
@@ -12,8 +13,12 @@ import Link from "next/link";
 import { EditorContent, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Placeholder from "@tiptap/extension-placeholder";
+import TextAlign from "@tiptap/extension-text-align";
+import { Color, TextStyle } from "@tiptap/extension-text-style";
 
+import { AuthorImage } from "@/components/author-image";
 import {
+  AUTHOR_IMAGE_MAX_HEIGHT_REM,
   DEFAULT_AUTHOR_PROFILE,
   profileToHtml,
   type AuthorProfile,
@@ -22,6 +27,14 @@ import {
 import "@/public/styles/admin/author.scss";
 
 type Notice = { type: "success" | "error"; text: string };
+
+const MAX_AUTHOR_IMAGE_SIZE = 50 * 1024 * 1024;
+const ALLOWED_IMAGE_TYPES = [
+  "image/png",
+  "image/jpeg",
+  "image/webp",
+  "image/gif",
+];
 
 function ToolbarButton({
   children,
@@ -95,10 +108,12 @@ export default function AdminProfile() {
   );
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [uploadingImage, setUploadingImage] = useState(false);
   const [notice, setNotice] = useState<Notice | null>(null);
 
   const pendingContent = useRef<string | null>(null);
   const editorRef = useRef<ReturnType<typeof useEditor>>(null);
+  const imageInputRef = useRef<HTMLInputElement | null>(null);
 
   const editor = useEditor({
     extensions: [
@@ -109,6 +124,15 @@ export default function AdminProfile() {
           autolink: true,
           linkOnPaste: true,
         },
+      }),
+      TextStyle,
+      Color,
+      TextAlign.configure({
+        types: ["heading", "paragraph"],
+      }),
+      AuthorImage.configure({
+        inline: false,
+        allowBase64: false,
       }),
       Placeholder.configure({
         placeholder: "작가소개 내용을 입력해주세요.",
@@ -187,6 +211,93 @@ export default function AdminProfile() {
       .run();
   };
 
+  const handleImageFile = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file || !editor) return;
+
+    if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
+      setNotice({
+        type: "error",
+        text: "PNG / JPEG / WEBP / GIF 이미지만 업로드할 수 있습니다.",
+      });
+      return;
+    }
+    if (file.size > MAX_AUTHOR_IMAGE_SIZE) {
+      setNotice({
+        type: "error",
+        text: "이미지는 50MB 이하만 업로드할 수 있습니다.",
+      });
+      return;
+    }
+
+    setUploadingImage(true);
+    try {
+      const body = new FormData();
+      body.append("file", file);
+      const uploaded = await apiFetch<{ url: string }>(
+        "/api/profiles/upload",
+        {
+          method: "POST",
+          body,
+        },
+      );
+
+      const size = await new Promise<{ width: number; height: number }>(
+        (resolve, reject) => {
+          const image = new Image();
+          image.onload = () =>
+            resolve({
+              width: image.naturalWidth,
+              height: image.naturalHeight,
+            });
+          image.onerror = () =>
+            reject(new Error("이미지를 불러오지 못했습니다."));
+          image.src = uploaded.url;
+        },
+      );
+
+      const rootSize =
+        parseFloat(getComputedStyle(document.documentElement).fontSize) ||
+        16;
+      const maxHeight = AUTHOR_IMAGE_MAX_HEIGHT_REM * rootSize;
+      const ratio = size.height > 0 ? size.width / size.height : 1;
+      const containerWidth = editor.view.dom.clientWidth || 800;
+      let width = size.width;
+      if (size.height > maxHeight) {
+        width = maxHeight * ratio;
+      }
+      width = Math.min(width, containerWidth);
+
+      editor
+        .chain()
+        .focus()
+        .insertContent({
+          type: "image",
+          attrs: {
+            src: uploaded.url,
+            alt: file.name,
+            width: Math.round(width),
+            align: "center",
+            wrap: false,
+          },
+        })
+        .run();
+
+      setNotice({ type: "success", text: "이미지를 추가했습니다." });
+    } catch (error) {
+      setNotice({
+        type: "error",
+        text:
+          error instanceof Error
+            ? error.message
+            : "이미지를 업로드하지 못했습니다.",
+      });
+    } finally {
+      setUploadingImage(false);
+    }
+  };
+
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
@@ -244,6 +355,20 @@ export default function AdminProfile() {
       setSaving(false);
     }
   };
+
+  const activeColor = editor?.getAttributes("textStyle").color;
+  const textColor =
+    typeof activeColor === "string" && /^#[0-9a-f]{6}$/i.test(activeColor)
+      ? activeColor
+      : "#2f803c";
+  const imageAttrs = editor?.getAttributes("image") ?? {};
+  const imageAlign: "left" | "center" | "right" =
+    imageAttrs.align === "left" || imageAttrs.align === "right"
+      ? imageAttrs.align
+      : "center";
+  const imageWrap = Boolean(imageAttrs.wrap) && imageAlign !== "center";
+  const imageWidth =
+    typeof imageAttrs.width === "number" ? imageAttrs.width : null;
 
   return (
     <div id="admin-author">
@@ -341,6 +466,33 @@ export default function AdminProfile() {
                 </ToolbarButton>
                 <ToolbarButton
                   onClick={() =>
+                    editor?.chain().focus().setTextAlign("left").run()
+                  }
+                  active={editor?.isActive({ textAlign: "left" })}
+                  disabled={!editor}
+                >
+                  좌
+                </ToolbarButton>
+                <ToolbarButton
+                  onClick={() =>
+                    editor?.chain().focus().setTextAlign("center").run()
+                  }
+                  active={editor?.isActive({ textAlign: "center" })}
+                  disabled={!editor}
+                >
+                  중
+                </ToolbarButton>
+                <ToolbarButton
+                  onClick={() =>
+                    editor?.chain().focus().setTextAlign("right").run()
+                  }
+                  active={editor?.isActive({ textAlign: "right" })}
+                  disabled={!editor}
+                >
+                  우
+                </ToolbarButton>
+                <ToolbarButton
+                  onClick={() =>
                     editor?.chain().focus().toggleBulletList().run()
                   }
                   active={editor?.isActive("bulletList")}
@@ -380,6 +532,40 @@ export default function AdminProfile() {
                 >
                   링크
                 </ToolbarButton>
+                <label className="admin-editor__color">
+                  <span>색</span>
+                  <input
+                    type="color"
+                    value={textColor}
+                    disabled={!editor}
+                    onChange={(event) =>
+                      editor
+                        ?.chain()
+                        .focus()
+                        .setColor(event.target.value)
+                        .run()
+                    }
+                  />
+                </label>
+                <ToolbarButton
+                  onClick={() => editor?.chain().focus().unsetColor().run()}
+                  disabled={!editor}
+                >
+                  색 초기화
+                </ToolbarButton>
+                <ToolbarButton
+                  onClick={() => imageInputRef.current?.click()}
+                  disabled={!editor || uploadingImage}
+                >
+                  {uploadingImage ? "업로드 중..." : "이미지"}
+                </ToolbarButton>
+                <input
+                  ref={imageInputRef}
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp,image/gif"
+                  hidden
+                  onChange={handleImageFile}
+                />
                 <ToolbarButton
                   onClick={() => editor?.chain().focus().undo().run()}
                   disabled={!editor || !editor.can().undo()}
@@ -393,6 +579,78 @@ export default function AdminProfile() {
                   ↷
                 </ToolbarButton>
               </div>
+              {editor?.isActive("image") ? (
+                <div className="admin-editor__image-controls">
+                  <span className="admin-editor__image-label">이미지</span>
+                  <ToolbarButton
+                    onClick={() =>
+                      editor
+                        .chain()
+                        .focus()
+                        .updateAttributes("image", {
+                          align: "left",
+                          wrap: imageWrap,
+                        })
+                        .run()
+                    }
+                    active={imageAlign === "left"}
+                  >
+                    왼쪽
+                  </ToolbarButton>
+                  <ToolbarButton
+                    onClick={() =>
+                      editor
+                        .chain()
+                        .focus()
+                        .updateAttributes("image", {
+                          align: "center",
+                          wrap: false,
+                        })
+                        .run()
+                    }
+                    active={imageAlign === "center"}
+                  >
+                    가운데
+                  </ToolbarButton>
+                  <ToolbarButton
+                    onClick={() =>
+                      editor
+                        .chain()
+                        .focus()
+                        .updateAttributes("image", {
+                          align: "right",
+                          wrap: imageWrap,
+                        })
+                        .run()
+                    }
+                    active={imageAlign === "right"}
+                  >
+                    오른쪽
+                  </ToolbarButton>
+                  <label className="admin-editor__image-wrap">
+                    <input
+                      type="checkbox"
+                      checked={imageWrap}
+                      disabled={imageAlign === "center"}
+                      onChange={(event) =>
+                        editor
+                          .chain()
+                          .focus()
+                          .updateAttributes("image", {
+                            wrap: event.target.checked,
+                          })
+                          .run()
+                      }
+                    />
+                    텍스트 감싸기
+                  </label>
+                  {imageWidth ? (
+                    <span className="admin-editor__image-size">
+                      {imageWidth}px
+                    </span>
+                  ) : null}
+                </div>
+              ) : null}
               <div
                 className="admin-editor__content"
                 onClick={() => editor?.chain().focus().run()}

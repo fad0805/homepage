@@ -1,3 +1,6 @@
+/** 10 lines of the author copy (0.95rem / 1.65 line-height). */
+export const AUTHOR_IMAGE_MAX_HEIGHT_REM = 15.7;
+
 export interface AuthorProfile {
   id?: number;
   title: string;

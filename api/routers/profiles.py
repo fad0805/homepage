@@ -1,12 +1,24 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, File, UploadFile
 from sqlalchemy.orm import Session
 
+from core.uploads import save_banner
 from db.session import get_db
 from crud.profiles import get_all_profiles, get_profile, create_profile, update_profile, delete_profile
 from schemas.profiles import ProfileCreate, ProfileUpdate
 from .utils import require_auth
 
 router = APIRouter()
+
+
+@router.post("/upload")
+async def upload_profile_image(
+    file: UploadFile = File(...),
+    _=Depends(require_auth),
+):
+    """Upload an image used inside the author introduction."""
+    url = await save_banner(file, folder="author")
+    return {"url": url}
+
 
 @router.get("/")
 @router.get("")
