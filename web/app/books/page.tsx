@@ -482,7 +482,7 @@ export default function Books() {
             setActiveChapterId(null);
           }}
         >
-          ← 책 목록
+          ← 목차
         </button>
       ) : null}
       <header className="books-panel__header">
