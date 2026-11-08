@@ -57,6 +57,7 @@ export default function Books() {
   const [chapters, setChapters] = useState<Chapter[]>([]);
   const [activeBookId, setActiveBookId] = useState<number | null>(null);
   const [activeChapterId, setActiveChapterId] = useState<number | null>(null);
+  const [isMobile, setIsMobile] = useState(false);
   const [now, setNow] = useState(() => Date.now());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -97,6 +98,14 @@ export default function Books() {
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 60_000);
     return () => clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    const query = window.matchMedia("(max-width: 899px)");
+    const update = () => setIsMobile(query.matches);
+    update();
+    query.addEventListener("change", update);
+    return () => query.removeEventListener("change", update);
   }, []);
 
   useEffect(() => {
@@ -147,6 +156,7 @@ export default function Books() {
   }, [visibleChapters]);
 
   useEffect(() => {
+    if (isMobile) return;
     if (visibleBooks.length === 0) return;
     if (
       activeBookId !== null &&
@@ -156,7 +166,7 @@ export default function Books() {
     }
     setActiveBookId(visibleBooks[0].id);
     setActiveChapterId(null);
-  }, [activeBookId, visibleBooks]);
+  }, [activeBookId, isMobile, visibleBooks]);
 
   const activeBook =
     visibleBooks.find((book) => book.id === activeBookId) ?? null;
@@ -174,6 +184,96 @@ export default function Books() {
     setActiveChapterId(null);
   };
 
+  const bookList = (
+    <div className="books-books">
+      <p className="books-list-label">책</p>
+      {visibleBooks.map((book) => (
+        <button
+          type="button"
+          className={`books-book-button${
+            book.id === activeBookId ? " is-active" : ""
+          }`}
+          onClick={() => selectBook(book.id)}
+          aria-pressed={book.id === activeBookId}
+          key={book.id}
+        >
+          <span className="books-book-button__title">{book.title}</span>
+          <span className="books-book-button__count">
+            {chapterCounts.get(book.id) ?? 0}
+          </span>
+        </button>
+      ))}
+    </div>
+  );
+
+  const chapterPanel = activeBook ? (
+    <>
+      {isMobile ? (
+        <button
+          type="button"
+          className="books-panel__back"
+          onClick={() => {
+            setActiveBookId(null);
+            setActiveChapterId(null);
+          }}
+        >
+          ← 책 목록
+        </button>
+      ) : null}
+      <header className="books-panel__header">
+        <div>
+          <h2>{activeBook.title}</h2>
+          {activeBook.description ? (
+            <p>{activeBook.description}</p>
+          ) : null}
+        </div>
+        <RssSubscribe
+          path={`/books/${activeBook.id}/rss.xml`}
+          label="RSS"
+        />
+      </header>
+
+      {activeChapters.length === 0 ? (
+        <p className="books-panel__empty">등록된 게시글이 없습니다.</p>
+      ) : (
+        <div className="books-chapters">
+          {activeChapters.map((chapter) => (
+            <button
+              type="button"
+              className="books-chapter-link"
+              onClick={() => setActiveChapterId(chapter.id)}
+              key={chapter.id}
+            >
+              <span className="books-chapter-link__title">
+                {chapter.title}
+              </span>
+              <span className="books-chapter-link__arrow" aria-hidden="true">
+                →
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
+    </>
+  ) : null;
+
+  const detailPanel =
+    activeBook && activeChapter ? (
+      <div className="books-panel__detail">
+        <button
+          type="button"
+          className="books-panel__back"
+          onClick={() => setActiveChapterId(null)}
+        >
+          ← 게시글 목록
+        </button>
+        <ChapterDetail
+          chapter={activeChapter}
+          bookTitle={activeBook.title}
+        />
+      </div>
+    ) : null;
+
   return (
     <div id="books-page">
       <div className="books-rss-bar">
@@ -186,87 +286,24 @@ export default function Books() {
         <p className="books-state">{error}</p>
       ) : visibleBooks.length === 0 ? (
         <p className="books-state">등록된 책이 없습니다.</p>
+      ) : isMobile ? (
+        activeBook ? (
+          activeChapter ? (
+            <div className="books-panel">{detailPanel}</div>
+          ) : (
+            <div className="books-panel">{chapterPanel}</div>
+          )
+        ) : (
+          bookList
+        )
       ) : (
         <div className="books-layout">
-          <div className="books-books">
-            <p className="books-list-label">책</p>
-            {visibleBooks.map((book) => (
-              <button
-                type="button"
-                className={`books-book-button${
-                  book.id === activeBookId ? " is-active" : ""
-                }`}
-                onClick={() => selectBook(book.id)}
-                aria-pressed={book.id === activeBookId}
-                key={book.id}
-              >
-                <span className="books-book-button__title">
-                  {book.title}
-                </span>
-                <span className="books-book-button__count">
-                  {chapterCounts.get(book.id) ?? 0}
-                </span>
-              </button>
-            ))}
-          </div>
-
+          {bookList}
           <aside className="books-panel">
-            {activeBook && activeChapter ? (
-              <div className="books-panel__detail">
-                <button
-                  type="button"
-                  className="books-panel__back"
-                  onClick={() => setActiveChapterId(null)}
-                >
-                  ← 게시글 목록
-                </button>
-                <ChapterDetail
-                  chapter={activeChapter}
-                  bookTitle={activeBook.title}
-                />
-              </div>
+            {activeChapter ? (
+              detailPanel
             ) : activeBook ? (
-              <>
-                <header className="books-panel__header">
-                  <div>
-                    <h2>{activeBook.title}</h2>
-                    {activeBook.description ? (
-                      <p>{activeBook.description}</p>
-                    ) : null}
-                  </div>
-                  <RssSubscribe
-                    path={`/books/${activeBook.id}/rss.xml`}
-                    label="RSS"
-                  />
-                </header>
-
-                {activeChapters.length === 0 ? (
-                  <p className="books-panel__empty">
-                    등록된 게시글이 없습니다.
-                  </p>
-                ) : (
-                  <div className="books-chapters">
-                    {activeChapters.map((chapter) => (
-                      <button
-                        type="button"
-                        className="books-chapter-link"
-                        onClick={() => setActiveChapterId(chapter.id)}
-                        key={chapter.id}
-                      >
-                        <span className="books-chapter-link__title">
-                          {chapter.title}
-                        </span>
-                        <span
-                          className="books-chapter-link__arrow"
-                          aria-hidden="true"
-                        >
-                          →
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </>
+              chapterPanel
             ) : (
               <p className="books-panel__empty">책을 선택해주세요.</p>
             )}
