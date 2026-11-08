@@ -68,7 +68,7 @@ docker compose up --build -d
 | `POSTGRES_DB` | DB 컨테이너 | PostgreSQL 초기 데이터베이스 |
 | `POSTGRES_USER` | DB 컨테이너 | PostgreSQL 초기 사용자 |
 | `POSTGRES_PASSWORD` | DB 컨테이너 | PostgreSQL 초기 비밀번호 |
-| `MAX_UPLOAD_SIZE` | 선택 | 이미지 업로드 최대 크기(바이트, 기본 20MB) |
+| `MAX_UPLOAD_SIZE` | 선택 | 이미지 업로드 최대 크기(바이트, 기본 50MB) |
 
 ### 마이그레이션
 

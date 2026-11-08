@@ -59,7 +59,7 @@ type Notice = { type: "success" | "error"; text: string };
 
 const CATEGORY_TYPE = "category";
 const LINK_TYPE = "link";
-const MAX_BANNER_SIZE = 20 * 1024 * 1024;
+const MAX_BANNER_SIZE = 50 * 1024 * 1024;
 const ALLOWED_BANNER_TYPES = [
   "image/png",
   "image/jpeg",
@@ -751,7 +751,7 @@ export default function AdminLinks() {
     }
     if (file.size > MAX_BANNER_SIZE) {
       event.target.value = "";
-      notify("error", "배너 이미지는 20MB 이하만 업로드할 수 있습니다.");
+      notify("error", "배너 이미지는 50MB 이하만 업로드할 수 있습니다.");
       return;
     }
     const objectUrl = URL.createObjectURL(file);
@@ -1122,7 +1122,7 @@ export default function AdminLinks() {
                 </span>
               ) : null}
               <span className="admin-banner-help">
-                이미지 URL 또는 PNG / JPEG / WEBP / GIF 파일(20MB 이하).
+                이미지 URL 또는 PNG / JPEG / WEBP / GIF 파일(50MB 이하).
                 파일을 선택하면 파일이 우선 적용됩니다.
               </span>
             </div>
