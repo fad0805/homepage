@@ -449,25 +449,22 @@ export default function AdminBookDetail() {
           </header>
 
           <section className="admin-books-panel">
-            <div className="admin-books-toolbar">
-              <h2>챕터</h2>
-              <div className="admin-books-toolbar-right">
-                {chapters.length > 0 ? (
-                  <label className="admin-books-checkbox">
-                    <input
-                      type="checkbox"
-                      checked={allPageSelected}
-                      onChange={togglePageSelection}
-                      disabled={bulkWorking}
-                    />
-                    <span>전체 선택</span>
-                  </label>
-                ) : null}
+            {chapters.length > 0 ? (
+              <div className="admin-books-list-header">
+                <label className="admin-books-checkbox">
+                  <input
+                    type="checkbox"
+                    checked={allPageSelected}
+                    onChange={togglePageSelection}
+                    disabled={bulkWorking}
+                  />
+                  <span>전체 선택</span>
+                </label>
                 <span className="admin-books-hint">
                   {chapters.length}개
                 </span>
               </div>
-            </div>
+            ) : null}
 
             {selectedChapterIds.size > 0 ? (
               <div className="admin-books-bulk">
