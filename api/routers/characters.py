@@ -133,7 +133,7 @@ async def upload_character_thumbnail(
     """
     Upload a thumbnail image and return its public URL.
     """
-    url = await save_banner(file)
+    url = await save_banner(file, folder="characters")
     return {"url": url}
 
 

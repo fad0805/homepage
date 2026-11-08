@@ -132,7 +132,7 @@ async def upload_link_banner(
     """
     Upload a banner image and return its public URL.
     """
-    url = await save_banner(file)
+    url = await save_banner(file, folder="banners")
     return {"url": url}
 
 

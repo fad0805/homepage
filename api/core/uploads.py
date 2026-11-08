@@ -1,9 +1,31 @@
+import logging
 import os
 import uuid
 from pathlib import Path
+from typing import Any
 
+import boto3
+from botocore.config import Config as BotoConfig
+from botocore.exceptions import BotoCoreError, ClientError
 from fastapi import HTTPException, UploadFile, status
 
+from core.config import (
+    ENVIRONMENT,
+    S3_ACCESS_KEY_ID,
+    S3_ACL,
+    S3_ADDRESSING_STYLE,
+    S3_BUCKET,
+    S3_ENDPOINT_URL,
+    S3_KEY_PREFIX,
+    S3_PUBLIC_BASE_URL,
+    S3_REGION,
+    S3_SECRET_ACCESS_KEY,
+)
+
+logger = logging.getLogger(__name__)
+
+# Legacy local storage. New uploads go to S3 when it is configured; the local
+# directory is kept so previously uploaded files keep being served.
 UPLOAD_DIR = Path(os.getenv("UPLOAD_DIR", "uploads"))
 MAX_UPLOAD_SIZE = int(os.getenv("MAX_UPLOAD_SIZE", 5 * 1024 * 1024))
 URL_PREFIX = "/uploads"
@@ -16,46 +38,145 @@ ALLOWED_CONTENT_TYPES = {
     "image/gif": ".gif",
 }
 
+_s3_client: Any = None
+
 
 def ensure_upload_dir() -> Path:
-    """Create the upload directory if it does not exist yet."""
+    """Create the legacy local upload directory if it does not exist yet."""
     UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
     return UPLOAD_DIR
 
 
-async def save_banner(file: UploadFile) -> str:
-    """Save an uploaded banner image and return its public URL."""
-    if file.content_type not in ALLOWED_CONTENT_TYPES:
-        raise HTTPException(
-            status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
-            detail="PNG, JPEG, WEBP, GIF 이미지만 업로드할 수 있습니다.",
-        )
+def _s3_is_configured() -> bool:
+    return bool(S3_BUCKET and S3_ACCESS_KEY_ID and S3_SECRET_ACCESS_KEY)
 
-    directory = ensure_upload_dir()
-    filename = f"{uuid.uuid4().hex}{ALLOWED_CONTENT_TYPES[file.content_type]}"
-    destination = directory / filename
-    size = 0
+
+def _get_s3_client():
+    global _s3_client
+    if _s3_client is None:
+        config_kwargs: dict[str, Any] = {"signature_version": "s3v4"}
+        if S3_ADDRESSING_STYLE:
+            config_kwargs["s3"] = {"addressing_style": S3_ADDRESSING_STYLE}
+
+        _s3_client = boto3.client(
+            "s3",
+            endpoint_url=S3_ENDPOINT_URL or None,
+            region_name=S3_REGION,
+            aws_access_key_id=S3_ACCESS_KEY_ID,
+            aws_secret_access_key=S3_SECRET_ACCESS_KEY,
+            config=BotoConfig(**config_kwargs),
+        )
+    return _s3_client
+
+
+def _build_key(folder: str, extension: str) -> str:
+    parts = [
+        part
+        for part in (S3_KEY_PREFIX.strip("/"), folder.strip("/"))
+        if part
+    ]
+    parts.append(f"{uuid.uuid4().hex}{extension}")
+    return "/".join(parts)
+
+
+def _build_public_url(key: str) -> str:
+    if S3_PUBLIC_BASE_URL:
+        return f"{S3_PUBLIC_BASE_URL.rstrip('/')}/{key}"
+    if S3_ENDPOINT_URL:
+        return f"{S3_ENDPOINT_URL.rstrip('/')}/{S3_BUCKET}/{key}"
+    return f"https://{S3_BUCKET}.s3.{S3_REGION}.amazonaws.com/{key}"
+
+
+def _save_to_s3(
+    content: bytes,
+    content_type: str,
+    extension: str,
+    folder: str,
+) -> str:
+    key = _build_key(folder, extension)
+    put_kwargs: dict[str, Any] = {
+        "Bucket": S3_BUCKET,
+        "Key": key,
+        "Body": content,
+        "ContentType": content_type,
+        "CacheControl": "public, max-age=31536000, immutable",
+    }
+    if S3_ACL:
+        put_kwargs["ACL"] = S3_ACL
 
     try:
-        with destination.open("wb") as buffer:
-            while chunk := await file.read(1024 * 1024):
-                size += len(chunk)
-                if size > MAX_UPLOAD_SIZE:
-                    raise HTTPException(
-                        status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-                        detail=f"이미지 크기는 {MAX_UPLOAD_SIZE // (1024 * 1024)}MB 이하여야 합니다.",
-                    )
-                buffer.write(chunk)
-    except HTTPException:
-        destination.unlink(missing_ok=True)
-        raise
+        _get_s3_client().put_object(**put_kwargs)
+    except (BotoCoreError, ClientError):
+        logger.exception("Failed to upload image to S3")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="이미지를 업로드하지 못했습니다.",
+        )
+
+    return _build_public_url(key)
+
+
+def _save_to_local(content: bytes, extension: str, folder: str) -> str:
+    """Development fallback when S3 is not configured."""
+    directory = ensure_upload_dir()
+    subdir = directory / folder.strip("/") if folder.strip("/") else directory
+    subdir.mkdir(parents=True, exist_ok=True)
+
+    filename = f"{uuid.uuid4().hex}{extension}"
+    destination = subdir / filename
+    try:
+        destination.write_bytes(content)
     except OSError:
         destination.unlink(missing_ok=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="이미지를 저장하지 못했습니다.",
         )
+
+    folder_path = folder.strip("/")
+    if folder_path:
+        return f"{URL_PREFIX}/{folder_path}/{filename}"
+    return f"{URL_PREFIX}/{filename}"
+
+
+async def _read_upload(file: UploadFile) -> bytes:
+    content = await file.read(MAX_UPLOAD_SIZE + 1)
+    if len(content) > MAX_UPLOAD_SIZE:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail=(
+                f"이미지 크기는 {MAX_UPLOAD_SIZE // (1024 * 1024)}MB 이하여야 "
+                "합니다."
+            ),
+        )
+    return content
+
+
+async def save_banner(file: UploadFile, folder: str = "banners") -> str:
+    """Upload a banner or thumbnail image and return its public URL."""
+    if file.content_type not in ALLOWED_CONTENT_TYPES:
+        raise HTTPException(
+            status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+            detail="PNG, JPEG, WEBP, GIF 이미지만 업로드할 수 있습니다.",
+        )
+
+    content_type = (
+        "image/jpeg" if file.content_type == "image/jpg" else file.content_type
+    )
+    extension = ALLOWED_CONTENT_TYPES[file.content_type]
+
+    try:
+        content = await _read_upload(file)
     finally:
         await file.close()
 
-    return f"{URL_PREFIX}/{filename}"
+    if _s3_is_configured():
+        return _save_to_s3(content, content_type, extension, folder)
+
+    if ENVIRONMENT == "production":
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="S3 설정이 누락되었습니다.",
+        )
+
+    return _save_to_local(content, extension, folder)
