@@ -14,6 +14,7 @@ services:
     restart: always
     build: ./api
     networks:
+      - external_network
       - internal_network
     volumes:
       - ./api/alembic/versions:/app/alembic/versions
