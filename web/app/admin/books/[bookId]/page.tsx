@@ -3,6 +3,7 @@
 import {
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
   type FormEvent,
@@ -10,6 +11,7 @@ import {
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 
+import { Pagination } from "@/components/pagination";
 import { apiFetch } from "@/lib/api";
 
 import "@/public/styles/admin/books.scss";
@@ -20,6 +22,8 @@ interface Book {
   description: string | null;
   order: number;
   visible: boolean;
+  created_at: string | null;
+  updated_at: string | null;
 }
 
 interface ChapterItem {
@@ -37,6 +41,8 @@ interface ChapterItem {
 
 type Notice = { type: "success" | "error"; text: string };
 
+const CHAPTERS_PER_PAGE = 10;
+
 function sortChapters(chapters: ChapterItem[]) {
   return [...chapters].sort(
     (a, b) =>
@@ -46,6 +52,19 @@ function sortChapters(chapters: ChapterItem[]) {
   );
 }
 
+function formatDateTime(value: string | null) {
+  if (!value) return "-";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleString("ko-KR", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
 export default function AdminBookDetail() {
   const params = useParams<{ bookId: string }>();
   const router = useRouter();
@@ -53,11 +72,13 @@ export default function AdminBookDetail() {
 
   const [book, setBook] = useState<Book | null>(null);
   const [chapters, setChapters] = useState<ChapterItem[]>([]);
+  const [page, setPage] = useState(1);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [visible, setVisible] = useState(true);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [bookInfoOpen, setBookInfoOpen] = useState(false);
   const [notice, setNotice] = useState<Notice | null>(null);
 
   const noticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -111,6 +132,46 @@ export default function AdminBookDetail() {
     load();
   }, [load]);
 
+  useEffect(() => {
+    if (!bookInfoOpen) return;
+    const previousOverflow = document.body.style.overflow;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setBookInfoOpen(false);
+    };
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [bookInfoOpen]);
+
+  const totalPages = Math.max(
+    1,
+    Math.ceil(chapters.length / CHAPTERS_PER_PAGE),
+  );
+
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages);
+  }, [page, totalPages]);
+
+  const pageChapters = useMemo(
+    () =>
+      chapters.slice(
+        (page - 1) * CHAPTERS_PER_PAGE,
+        page * CHAPTERS_PER_PAGE,
+      ),
+    [chapters, page],
+  );
+
+  const openBookInfo = () => {
+    if (!book) return;
+    setTitle(book.title);
+    setDescription(book.description ?? "");
+    setVisible(book.visible !== false);
+    setBookInfoOpen(true);
+  };
+
   const handleBookSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!book) return;
@@ -133,6 +194,7 @@ export default function AdminBookDetail() {
       setBook(updated);
       setTitle(updated.title);
       setDescription(updated.description ?? "");
+      setBookInfoOpen(false);
       notify("success", "책 정보를 저장했습니다.");
     } catch (error) {
       notify(
@@ -200,78 +262,44 @@ export default function AdminBookDetail() {
           <header className="admin-books-toolbar">
             <div className="admin-books-page-title">
               <h1>{book.title}</h1>
-              <p>책 정보와 챕터 목록을 관리합니다.</p>
+              {book.description ? <p>{book.description}</p> : null}
+              <p>
+                생성 {formatDateTime(book.created_at)} · 수정{" "}
+                {formatDateTime(book.updated_at)}
+              </p>
+            </div>
+            <div className="admin-books-actions">
+              <button
+                type="button"
+                className="admin-button"
+                onClick={openBookInfo}
+              >
+                책 정보 수정
+              </button>
+              <Link
+                className="admin-button primary"
+                href={`/admin/books/${book.id}/chapters/new`}
+              >
+                새 챕터
+              </Link>
             </div>
           </header>
 
-          <div className="admin-books-detail-layout">
-            <section className="admin-books-panel">
-              <h2>책 정보</h2>
-              <form className="admin-books-form" onSubmit={handleBookSubmit}>
-                <label className="admin-field">
-                  <span>책 제목</span>
-                  <input
-                    value={title}
-                    onChange={(event) => setTitle(event.target.value)}
-                    required
-                  />
-                </label>
-                <label className="admin-field">
-                  <span>책 설명</span>
-                  <textarea
-                    value={description}
-                    onChange={(event) =>
-                      setDescription(event.target.value)
-                    }
-                    rows={5}
-                    placeholder="책 설명 (선택)"
-                  />
-                </label>
-                <label className="admin-books-checkbox">
-                  <input
-                    type="checkbox"
-                    checked={visible}
-                    onChange={(event) => setVisible(event.target.checked)}
-                  />
-                  <span>공개</span>
-                </label>
-                <div className="admin-books-form-actions">
-                  <button
-                    type="button"
-                    className="admin-button danger"
-                    onClick={handleDeleteBook}
-                    disabled={saving}
-                  >
-                    책 삭제
-                  </button>
-                  <button
-                    type="submit"
-                    className="admin-button primary"
-                    disabled={saving}
-                  >
-                    {saving ? "저장 중..." : "저장"}
-                  </button>
-                </div>
-              </form>
-            </section>
-
-            <section className="admin-books-panel">
-              <div className="admin-books-toolbar">
-                <h2>챕터</h2>
-                <Link
-                  className="admin-button"
-                  href={`/admin/books/${book.id}/chapters/new`}
-                >
-                  새 챕터
-                </Link>
-              </div>
-              {chapters.length === 0 ? (
-                <p className="admin-books-empty">
-                  등록된 챕터가 없습니다.
-                </p>
-              ) : (
+          <section className="admin-books-panel">
+            <div className="admin-books-toolbar">
+              <h2>챕터</h2>
+              <span className="admin-books-hint">
+                {chapters.length}개
+              </span>
+            </div>
+            {chapters.length === 0 ? (
+              <p className="admin-books-empty">
+                등록된 챕터가 없습니다.
+              </p>
+            ) : (
+              <>
                 <div className="admin-books-chapters">
-                  {chapters.map((chapter) => (
+                  {pageChapters.map((chapter) => (
                     <Link
                       className="admin-books-chapter-link"
                       href={`/admin/books/${book.id}/chapters/${chapter.id}`}
@@ -282,11 +310,104 @@ export default function AdminBookDetail() {
                     </Link>
                   ))}
                 </div>
-              )}
-            </section>
-          </div>
+                <Pagination
+                  page={page}
+                  totalPages={totalPages}
+                  onChange={setPage}
+                />
+              </>
+            )}
+          </section>
         </>
       )}
+
+      {bookInfoOpen && book ? (
+        <div
+          className="admin-modal-backdrop"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) {
+              setBookInfoOpen(false);
+            }
+          }}
+        >
+          <div className="admin-modal" role="dialog" aria-modal="true">
+            <div className="admin-modal-header">
+              <h2>책 정보 수정</h2>
+              <button
+                type="button"
+                className="admin-modal-close"
+                onClick={() => setBookInfoOpen(false)}
+                aria-label="닫기"
+              >
+                ×
+              </button>
+            </div>
+            <form
+              id="book-info-form"
+              className="admin-modal-body admin-books-modal-form"
+              onSubmit={handleBookSubmit}
+            >
+              <label className="admin-field">
+                <span>책 제목</span>
+                <input
+                  value={title}
+                  onChange={(event) => setTitle(event.target.value)}
+                  required
+                />
+              </label>
+              <label className="admin-field">
+                <span>책 설명</span>
+                <textarea
+                  value={description}
+                  onChange={(event) =>
+                    setDescription(event.target.value)
+                  }
+                  rows={5}
+                  placeholder="책 설명 (선택)"
+                />
+              </label>
+              <label className="admin-books-checkbox">
+                <input
+                  type="checkbox"
+                  checked={visible}
+                  onChange={(event) => setVisible(event.target.checked)}
+                />
+                <span>공개</span>
+              </label>
+              <p className="admin-books-meta">
+                생성 {formatDateTime(book.created_at)} · 수정{" "}
+                {formatDateTime(book.updated_at)}
+              </p>
+            </form>
+            <div className="admin-modal-footer admin-books-modal-footer">
+              <button
+                type="button"
+                className="admin-button danger"
+                onClick={handleDeleteBook}
+                disabled={saving}
+              >
+                책 삭제
+              </button>
+              <button
+                type="button"
+                className="admin-button"
+                onClick={() => setBookInfoOpen(false)}
+                disabled={saving}
+              >
+                취소
+              </button>
+              <button
+                type="submit"
+                form="book-info-form"
+                className="admin-button primary"
+                disabled={saving}
+              >
+                {saving ? "저장 중..." : "저장"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

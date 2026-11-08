@@ -30,6 +30,13 @@
   font-size: 0.78rem;
 }
 
+.admin-books-dirty {
+  margin: 0.3rem 0 0;
+  color: var(--title-color);
+  font-size: 0.75rem;
+  font-weight: bold;
+}
+
 .admin-books-actions {
   display: flex;
   flex-wrap: wrap;
@@ -61,6 +68,32 @@
 
   &:first-child {
     border-top: 1px solid var(--admin-border);
+  }
+
+  &.is-dragging {
+    z-index: 2;
+    border-radius: 0.6rem;
+    background: rgba(255, 255, 255, 0.35);
+  }
+}
+
+[data-theme='dark'] .admin-book-card.is-dragging {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.admin-book-card__drag {
+  flex-shrink: 0;
+  padding: 0.2rem 0.3rem;
+  border: none;
+  background: transparent;
+  color: var(--admin-muted);
+  font-size: 1rem;
+  line-height: 1;
+  cursor: grab;
+  touch-action: none;
+
+  &:active {
+    cursor: grabbing;
   }
 }
 
@@ -235,6 +268,66 @@
   gap: 0.8rem;
 }
 
+.admin-books-meta {
+  margin: 0.2rem 0 0;
+  color: var(--admin-muted);
+  font-size: 0.72rem;
+}
+
+.admin-books-modal-footer {
+  .danger {
+    margin-right: auto;
+  }
+}
+
+.pagination {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+  margin-top: 1.25rem;
+}
+
+.pagination__button {
+  min-width: 2rem;
+  padding: 0.35rem 0.55rem;
+  border: 1px solid var(--admin-border);
+  border-radius: 0.45rem;
+  background: transparent;
+  color: var(--foreground);
+  font-family: inherit;
+  font-size: 0.75rem;
+  cursor: pointer;
+
+  &:hover:not(:disabled) {
+    background: rgba(0, 0, 0, 0.06);
+  }
+
+  &.is-active {
+    border-color: var(--title-color);
+    background: var(--title-color);
+    color: var(--subtheme);
+  }
+
+  &:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+  }
+}
+
+.pagination__ellipsis {
+  padding: 0 0.25rem;
+  color: var(--admin-muted);
+  font-size: 0.75rem;
+}
+
+[data-theme='dark'] .pagination__button {
+  &:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.08);
+  }
+}
+
 .admin-books-page-title {
   display: flex;
   flex-direction: column;
@@ -274,5 +367,10 @@
 
   .admin-book-card__actions {
     width: 100%;
+  }
+
+  .pagination__button {
+    min-width: 1.7rem;
+    padding: 0.3rem 0.4rem;
   }
 }

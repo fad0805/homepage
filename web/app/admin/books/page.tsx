@@ -9,7 +9,25 @@ import {
   type FormEvent,
 } from "react";
 import Link from "next/link";
+import {
+  DndContext,
+  KeyboardSensor,
+  PointerSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  arrayMove,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 
+import { Pagination } from "@/components/pagination";
 import { apiFetch } from "@/lib/api";
 
 import "@/public/styles/admin/books.scss";
@@ -20,6 +38,8 @@ interface Book {
   description: string | null;
   order: number;
   visible: boolean;
+  created_at: string | null;
+  updated_at: string | null;
 }
 
 interface ChapterItem {
@@ -29,15 +49,87 @@ interface ChapterItem {
 
 type Notice = { type: "success" | "error"; text: string };
 
+const BOOKS_PER_PAGE = 10;
+
 function sortBooks(books: Book[]) {
-  return [...books].sort((a, b) => a.order - b.order || a.id - b.id);
+  return [...books].sort((a, b) => {
+    const aPrivate = a.visible === false ? 1 : 0;
+    const bPrivate = b.visible === false ? 1 : 0;
+    return (
+      aPrivate - bPrivate ||
+      a.order - b.order ||
+      a.id - b.id
+    );
+  });
+}
+
+function SortableBookRow({
+  book,
+  chapterCount,
+}: {
+  book: Book;
+  chapterCount: number;
+}) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: book.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.6 : 1,
+    zIndex: isDragging ? 2 : undefined,
+  };
+
+  return (
+    <article
+      ref={setNodeRef}
+      style={style}
+      className={`admin-book-card${isDragging ? " is-dragging" : ""}`}
+    >
+      <button
+        type="button"
+        className="admin-book-card__drag"
+        aria-label={`${book.title} 순서 이동`}
+        {...attributes}
+        {...listeners}
+      >
+        ⠿
+      </button>
+      <div className="admin-book-card__header">
+        <div className="admin-book-card__title">
+          <Link href={`/admin/books/${book.id}`}>{book.title}</Link>
+          {book.description ? <p>{book.description}</p> : null}
+        </div>
+        <div className="admin-book-card__meta">
+          {book.visible === false ? (
+            <span className="admin-book-badge">비공개</span>
+          ) : null}
+          <span className="admin-book-badge">{chapterCount}챕터</span>
+        </div>
+      </div>
+      <div className="admin-book-card__actions">
+        <Link className="admin-button" href={`/admin/books/${book.id}`}>
+          관리
+        </Link>
+      </div>
+    </article>
+  );
 }
 
 export default function AdminBooks() {
   const [books, setBooks] = useState<Book[]>([]);
   const [chapters, setChapters] = useState<ChapterItem[]>([]);
+  const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [savingOrder, setSavingOrder] = useState(false);
+  const [orderDirty, setOrderDirty] = useState(false);
   const [notice, setNotice] = useState<Notice | null>(null);
 
   const [bookModalOpen, setBookModalOpen] = useState(false);
@@ -46,6 +138,13 @@ export default function AdminBooks() {
   const [bookVisible, setBookVisible] = useState(true);
 
   const noticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    }),
+  );
 
   const notify = useCallback((type: Notice["type"], text: string) => {
     if (noticeTimer.current) clearTimeout(noticeTimer.current);
@@ -69,6 +168,7 @@ export default function AdminBooks() {
       ]);
       setBooks(sortBooks(bookData));
       setChapters(chapterData);
+      setOrderDirty(false);
     } catch (error) {
       notify(
         "error",
@@ -100,6 +200,36 @@ export default function AdminBooks() {
   }, [bookModalOpen]);
 
   const sortedBooks = useMemo(() => sortBooks(books), [books]);
+
+  const totalPages = Math.max(
+    1,
+    Math.ceil(sortedBooks.length / BOOKS_PER_PAGE),
+  );
+
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages);
+  }, [page, totalPages]);
+
+  useEffect(() => {
+    if (!orderDirty) return;
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => {
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+    };
+  }, [orderDirty]);
+
+  const pageBooks = useMemo(
+    () =>
+      sortedBooks.slice(
+        (page - 1) * BOOKS_PER_PAGE,
+        page * BOOKS_PER_PAGE,
+      ),
+    [page, sortedBooks],
+  );
 
   const chapterCounts = useMemo(() => {
     const map = new Map<number, number>();
@@ -137,6 +267,7 @@ export default function AdminBooks() {
       });
       setBookModalOpen(false);
       await load();
+      setPage(1);
       notify("success", "책을 만들었습니다.");
     } catch (error) {
       notify(
@@ -150,26 +281,49 @@ export default function AdminBooks() {
     }
   };
 
-  const moveBook = async (book: Book, direction: -1 | 1) => {
-    const index = sortedBooks.findIndex((item) => item.id === book.id);
-    const target = index + direction;
-    if (index < 0 || target < 0 || target >= sortedBooks.length) return;
+  const handleDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
 
+    const pageStart = (page - 1) * BOOKS_PER_PAGE;
+    const pageItems = sortedBooks.slice(
+      pageStart,
+      pageStart + BOOKS_PER_PAGE,
+    );
+    const oldIndex = pageItems.findIndex((book) => book.id === active.id);
+    const newIndex = pageItems.findIndex((book) => book.id === over.id);
+    if (oldIndex < 0 || newIndex < 0) return;
+
+    const moved = arrayMove(pageItems, oldIndex, newIndex);
     const next = [...sortedBooks];
-    [next[index], next[target]] = [next[target], next[index]];
-    const reordered = next.map((item, order) => ({ ...item, order }));
-    setBooks(reordered);
+    next.splice(pageStart, pageItems.length, ...moved);
 
+    // Private books always stay at the end of the entire list.
+    const publicBooks = next.filter((book) => book.visible !== false);
+    const privateBooks = next.filter((book) => book.visible === false);
+    const reordered = [...publicBooks, ...privateBooks].map(
+      (book, order) => ({ ...book, order }),
+    );
+
+    setBooks(reordered);
+    setOrderDirty(true);
+  };
+
+  const saveOrder = async () => {
+    if (!orderDirty || savingOrder) return;
+    setSavingOrder(true);
     try {
       await apiFetch("/api/books/reorder", {
         method: "PUT",
         body: JSON.stringify({
-          items: reordered.map((item) => ({
-            id: item.id,
-            order: item.order,
+          items: sortedBooks.map((book, order) => ({
+            id: book.id,
+            order,
           })),
         }),
       });
+      setOrderDirty(false);
+      notify("success", "책 순서를 저장했습니다.");
     } catch (error) {
       notify(
         "error",
@@ -177,8 +331,21 @@ export default function AdminBooks() {
           ? error.message
           : "책 순서를 저장하지 못했습니다.",
       );
-      await load();
+    } finally {
+      setSavingOrder(false);
     }
+  };
+
+  const handleReload = () => {
+    if (
+      orderDirty &&
+      !window.confirm(
+        "저장하지 않은 책 순서 변경이 있습니다. 새로고침할까요?",
+      )
+    ) {
+      return;
+    }
+    load();
   };
 
   return (
@@ -187,22 +354,42 @@ export default function AdminBooks() {
         <div>
           <h1>책장 관리</h1>
           <p className="admin-books-hint">
-            책을 선택해 상세 페이지에서 책 정보와 챕터를 관리합니다.
+            책을 선택해 상세 페이지에서 책 정보와 챕터를 관리합니다. 드래그로
+            책 순서를 바꾼 뒤 저장해주세요.
           </p>
+          {orderDirty ? (
+            <p className="admin-books-dirty">
+              저장하지 않은 책 순서가 있습니다.
+            </p>
+          ) : null}
         </div>
         <div className="admin-books-actions">
           <button
             type="button"
             className="admin-button"
-            onClick={load}
+            onClick={handleReload}
             disabled={loading}
           >
             새로고침
           </button>
+          {orderDirty ? (
+            <button
+              type="button"
+              className="admin-button primary"
+              onClick={saveOrder}
+              disabled={savingOrder}
+            >
+              {savingOrder ? "저장 중..." : "순서 저장"}
+            </button>
+          ) : null}
           <button
             type="button"
             className="admin-button primary"
             onClick={openCreateBook}
+            disabled={orderDirty}
+            title={
+              orderDirty ? "책 순서를 먼저 저장해주세요." : undefined
+            }
           >
             새 책
           </button>
@@ -222,52 +409,33 @@ export default function AdminBooks() {
           책이 없습니다. 새 책을 추가해주세요.
         </p>
       ) : (
-        <div className="admin-books-grid">
-          {sortedBooks.map((book, index) => (
-            <article className="admin-book-card" key={book.id}>
-              <div className="admin-book-card__header">
-                <div className="admin-book-card__title">
-                  <Link href={`/admin/books/${book.id}`}>{book.title}</Link>
-                  {book.description ? <p>{book.description}</p> : null}
-                </div>
-                <div className="admin-book-card__meta">
-                  {book.visible === false ? (
-                    <span className="admin-book-badge">비공개</span>
-                  ) : null}
-                  <span className="admin-book-badge">
-                    {chapterCounts.get(book.id) ?? 0}챕터
-                  </span>
-                </div>
+        <>
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragEnd={handleDragEnd}
+          >
+            <SortableContext
+              items={pageBooks.map((book) => book.id)}
+              strategy={verticalListSortingStrategy}
+            >
+              <div className="admin-books-grid">
+                {pageBooks.map((book) => (
+                  <SortableBookRow
+                    key={book.id}
+                    book={book}
+                    chapterCount={chapterCounts.get(book.id) ?? 0}
+                  />
+                ))}
               </div>
-              <div className="admin-book-card__actions">
-                <button
-                  type="button"
-                  className="admin-button"
-                  onClick={() => moveBook(book, -1)}
-                  disabled={index === 0}
-                  aria-label="책 위로"
-                >
-                  ↑
-                </button>
-                <button
-                  type="button"
-                  className="admin-button"
-                  onClick={() => moveBook(book, 1)}
-                  disabled={index === sortedBooks.length - 1}
-                  aria-label="책 아래로"
-                >
-                  ↓
-                </button>
-                <Link
-                  className="admin-button"
-                  href={`/admin/books/${book.id}`}
-                >
-                  관리
-                </Link>
-              </div>
-            </article>
-          ))}
-        </div>
+            </SortableContext>
+          </DndContext>
+          <Pagination
+            page={page}
+            totalPages={totalPages}
+            onChange={setPage}
+          />
+        </>
       )}
 
       {bookModalOpen ? (

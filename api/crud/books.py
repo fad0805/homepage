@@ -29,6 +29,8 @@ def _serialize_book(book: Book) -> dict:
         "description": book.description,
         "order": book.order,
         "visible": book.visible,
+        "created_at": _iso_utc(book.created_at),
+        "updated_at": _iso_utc(book.updated_at),
     }
 
 
