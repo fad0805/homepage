@@ -24,7 +24,9 @@ router = APIRouter()
 
 
 def create_admin_for_dev():
-    if ENVIRONMENT == 'production':
+    # Only seed the default account in explicit development mode. Any other
+    # value (including a missing/misspelled ENVIRONMENT) must fail closed.
+    if ENVIRONMENT != 'development':
         return
 
     with closing(next(get_db())) as db:
