@@ -29,6 +29,7 @@ import { CSS } from "@dnd-kit/utilities";
 
 import { Pagination } from "@/components/pagination";
 import { apiFetch } from "@/lib/api";
+import { formatDateTime } from "@/lib/datetime";
 
 import "@/public/styles/admin/books.scss";
 
@@ -45,6 +46,7 @@ interface Book {
 interface ChapterItem {
   id: number;
   book_id: number;
+  updated_at: string | null;
 }
 
 type Notice = { type: "success" | "error"; text: string };
@@ -66,9 +68,11 @@ function sortBooks(books: Book[]) {
 function SortableBookRow({
   book,
   chapterCount,
+  latestChapterUpdated,
 }: {
   book: Book;
   chapterCount: number;
+  latestChapterUpdated: string | null;
 }) {
   const {
     attributes,
@@ -105,6 +109,11 @@ function SortableBookRow({
         <div className="admin-book-card__title">
           <Link href={`/admin/books/${book.id}`}>{book.title}</Link>
           {book.description ? <p>{book.description}</p> : null}
+          <p className="admin-book-card__updated">
+            {latestChapterUpdated
+              ? `최근 게시글 ${formatDateTime(latestChapterUpdated)}`
+              : "게시글 없음"}
+          </p>
         </div>
         <div className="admin-book-card__meta">
           {book.visible === false ? (
@@ -231,12 +240,21 @@ export default function AdminBooks() {
     [page, sortedBooks],
   );
 
-  const chapterCounts = useMemo(() => {
-    const map = new Map<number, number>();
+  const chapterStats = useMemo(() => {
+    const counts = new Map<number, number>();
+    const latest = new Map<number, string>();
     for (const chapter of chapters) {
-      map.set(chapter.book_id, (map.get(chapter.book_id) ?? 0) + 1);
+      counts.set(chapter.book_id, (counts.get(chapter.book_id) ?? 0) + 1);
+      if (!chapter.updated_at) continue;
+      const current = latest.get(chapter.book_id);
+      if (
+        !current ||
+        new Date(chapter.updated_at) > new Date(current)
+      ) {
+        latest.set(chapter.book_id, chapter.updated_at);
+      }
     }
-    return map;
+    return { counts, latest };
   }, [chapters]);
 
   const openCreateBook = () => {
@@ -424,7 +442,10 @@ export default function AdminBooks() {
                   <SortableBookRow
                     key={book.id}
                     book={book}
-                    chapterCount={chapterCounts.get(book.id) ?? 0}
+                    chapterCount={chapterStats.counts.get(book.id) ?? 0}
+                    latestChapterUpdated={
+                      chapterStats.latest.get(book.id) ?? null
+                    }
                   />
                 ))}
               </div>

@@ -12,6 +12,7 @@ import { useParams, useRouter } from "next/navigation";
 
 import { RichTextEditor } from "@/components/rich-text-editor";
 import { apiFetch } from "@/lib/api";
+import { formatDateTime } from "@/lib/datetime";
 
 import "@/public/styles/admin/books.scss";
 
@@ -35,19 +36,6 @@ interface ChapterItem {
 }
 
 type Notice = { type: "success" | "error"; text: string };
-
-function formatDateTime(value: string | null) {
-  if (!value) return "-";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleString("ko-KR", {
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
 
 function toDatetimeLocal(value: string | null) {
   if (!value) return "";

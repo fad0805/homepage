@@ -13,6 +13,7 @@ import { useParams, useRouter } from "next/navigation";
 
 import { Pagination } from "@/components/pagination";
 import { apiFetch } from "@/lib/api";
+import { formatDateTime } from "@/lib/datetime";
 
 import "@/public/styles/admin/books.scss";
 
@@ -50,19 +51,6 @@ function sortChapters(chapters: ChapterItem[]) {
       a.title.localeCompare(b.title, "ko") ||
       a.id - b.id,
   );
-}
-
-function formatDateTime(value: string | null) {
-  if (!value) return "-";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleString("ko-KR", {
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
 }
 
 export default function AdminBookDetail() {
@@ -305,8 +293,18 @@ export default function AdminBookDetail() {
                       href={`/admin/books/${book.id}/chapters/${chapter.id}`}
                       key={chapter.id}
                     >
-                      {chapter.title}
-                      <span aria-hidden="true">→</span>
+                      <span className="admin-books-chapter-title">
+                        {chapter.title}
+                      </span>
+                      <span className="admin-books-chapter-updated">
+                        {formatDateTime(chapter.updated_at)}
+                      </span>
+                      <span
+                        className="admin-books-chapter-arrow"
+                        aria-hidden="true"
+                      >
+                        →
+                      </span>
                     </Link>
                   ))}
                 </div>

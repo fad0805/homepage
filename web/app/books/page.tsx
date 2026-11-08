@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 
+import { RssSubscribe } from "@/components/rss-subscribe";
+
 import "@/public/styles/books.scss";
 
 interface Book {
@@ -163,14 +165,7 @@ export default function Books() {
   return (
     <div id="books-page">
       <div className="books-rss-bar">
-        <a
-          className="books-rss-link"
-          href="/books/rss.xml"
-          target="_blank"
-          rel="noreferrer"
-        >
-          전체 RSS
-        </a>
+        <RssSubscribe path="/books/rss.xml" label="전체 RSS 구독" />
       </div>
 
       {loading ? (
@@ -187,14 +182,10 @@ export default function Books() {
                 <header className="books-section__header">
                   <div className="books-section__heading">
                     <h2>{book.title}</h2>
-                    <a
-                      className="books-rss-link"
-                      href={`/books/${book.id}/rss.xml`}
-                      target="_blank"
-                      rel="noreferrer"
-                    >
-                      RSS
-                    </a>
+                    <RssSubscribe
+                      path={`/books/${book.id}/rss.xml`}
+                      label="RSS"
+                    />
                   </div>
                   {book.description ? <p>{book.description}</p> : null}
                 </header>

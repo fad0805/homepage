@@ -127,6 +127,11 @@
     font-size: 0.76rem;
     line-height: 1.5;
   }
+
+  .admin-book-card__updated {
+    font-size: 0.7rem;
+    opacity: 0.8;
+  }
 }
 
 .admin-book-card__meta {
@@ -235,8 +240,22 @@
     background: rgba(255, 255, 255, 0.45);
   }
 
-  span {
-    margin-left: auto;
+  .admin-books-chapter-title {
+    flex: 1;
+    min-width: 0;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+
+  .admin-books-chapter-updated {
+    flex-shrink: 0;
+    color: var(--admin-muted);
+    font-size: 0.7rem;
+    white-space: nowrap;
+  }
+
+  .admin-books-chapter-arrow {
+    flex-shrink: 0;
     opacity: 0.5;
   }
 }
