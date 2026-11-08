@@ -133,7 +133,8 @@ dist
 __pycache__/
 .venv/
 
-# DB files
+# DB files (this directory must stay empty for PostgreSQL initdb;
+# do not add .gitkeep or other placeholder files here)
 db/*
 .DS_Store
 
