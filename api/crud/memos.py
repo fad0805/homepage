@@ -33,18 +33,15 @@ def get_memos(db: Session, owner: str):
     """
     Get all current one-line memos belonging to the given user.
 
-    Pinned memos stay at the top and never expire. Other memos are kept for
-    one day from creation and are removed lazily whenever the list is read.
+    Pinned memos keep their original position and never expire. Other memos
+    are kept for one day from creation and are removed lazily whenever the
+    list is read.
     """
     _delete_expired(db, owner)
     return (
         db.query(Memo)
         .filter(Memo.owner == owner)
-        .order_by(
-            Memo.pinned.desc(),
-            Memo.created_at.desc(),
-            Memo.id.desc(),
-        )
+        .order_by(Memo.created_at.desc(), Memo.id.desc())
         .all()
     )
 

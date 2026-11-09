@@ -27,9 +27,7 @@ interface Memo {
 }
 
 function sortMemos(items: Memo[]) {
-  return [...items].sort(
-    (a, b) => Number(b.pinned) - Number(a.pinned) || b.id - a.id,
-  );
+  return [...items].sort((a, b) => b.id - a.id);
 }
 
 function resizeTextarea(element: HTMLTextAreaElement | null) {
