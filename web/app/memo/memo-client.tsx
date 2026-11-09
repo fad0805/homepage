@@ -116,31 +116,10 @@ export default function MemoClient() {
 
   const handleMemoKeyDown = (
     event: KeyboardEvent<HTMLTextAreaElement>,
-    value: string,
-    setValue: (nextValue: string) => void,
   ) => {
     if (event.nativeEvent.isComposing) return;
 
-    if (event.key === " " && event.shiftKey) {
-      event.preventDefault();
-
-      const target = event.currentTarget;
-      const start = target.selectionStart;
-      const end = target.selectionEnd;
-      const nextValue = `${value.slice(0, start)}\n${value.slice(end)}`;
-
-      if (nextValue.length > 500) return;
-
-      setValue(nextValue);
-
-      requestAnimationFrame(() => {
-        target.selectionStart = start + 1;
-        target.selectionEnd = start + 1;
-      });
-      return;
-    }
-
-    if (event.key === "Enter" && !event.shiftKey) {
+    if (event.key === "Enter" && event.shiftKey) {
       event.preventDefault();
       event.currentTarget.form?.requestSubmit();
     }
@@ -308,9 +287,7 @@ export default function MemoClient() {
                   maxLength={500}
                   placeholder="오늘의 한 줄을 남겨보세요."
                   autoComplete="off"
-                  onKeyDown={(event) =>
-                    handleMemoKeyDown(event, newContent, setNewContent)
-                  }
+                  onKeyDown={handleMemoKeyDown}
                   onChange={(event) => {
                     setNewContent(event.target.value);
                   }}
@@ -346,13 +323,7 @@ export default function MemoClient() {
                             autoFocus
                             autoComplete="off"
                             aria-label="주석 수정"
-                            onKeyDown={(event) =>
-                              handleMemoKeyDown(
-                                event,
-                                editContent,
-                                setEditContent,
-                              )
-                            }
+                            onKeyDown={handleMemoKeyDown}
                             onChange={(event) => {
                               setEditContent(event.target.value);
                             }}
