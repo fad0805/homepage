@@ -4,7 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from core.uploads import UPLOAD_DIR, ensure_upload_dir
-from routers import books, chapters, characters, links, profiles, users, visits
+from routers import books, chapters, characters, links, memos, profiles, users, visits
 
 @asynccontextmanager
 async def lifespan(app:FastAPI):
@@ -30,6 +30,7 @@ app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
 
 app.include_router(characters.router, prefix="/characters", tags=["characters"])
 app.include_router(links.router, prefix="/links", tags=["links"])
+app.include_router(memos.router, prefix="/memos", tags=["memos"])
 app.include_router(profiles.router, prefix="/profiles", tags=["profiles"])
 app.include_router(books.router, prefix="/books", tags=["books"])
 app.include_router(chapters.router, prefix="/chapters", tags=["chapters"])

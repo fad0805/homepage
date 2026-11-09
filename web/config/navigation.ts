@@ -1,6 +1,7 @@
 interface NavItem {
   href: string
   label: string
+  authOnly?: boolean
 }
 
 interface NaviSection {
@@ -20,6 +21,7 @@ const navigation: Navigation = {
       { href: "/author", label: "작가소개" },
       { href: "/characters", label: "등장인물" },
       { href: "/books", label: "목차" },
+      { href: "/memo", label: "주석", authOnly: true },
       { href: "/links", label: "놀러가기" },
     ],
   },

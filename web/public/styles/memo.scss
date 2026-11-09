@@ -1,0 +1,303 @@
+@use 'sass:color';
+@use 'variables' as *;
+
+#memo-page {
+  display: flex;
+  justify-content: center;
+  padding: 2rem 2rem 7rem;
+}
+
+#memo-page main {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 40rem;
+}
+
+#memo-page .page-title {
+  color: var(--title-color);
+}
+
+.memo-intro {
+  margin: 0 0 1.5rem;
+  color: color.change($light-text, $alpha: 0.62);
+  font-size: 0.9rem;
+}
+
+[data-theme='dark'] .memo-intro {
+  color: color.change($dark-text, $alpha: 0.62);
+}
+
+.memo-panel {
+  padding: 1.25rem 1.5rem;
+  border-radius: 1.2rem;
+  background: var(--input-background);
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+}
+
+.memo-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.memo-form label {
+  font-size: 0.85rem;
+  font-weight: bold;
+  color: var(--title-color);
+}
+
+.memo-input-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.memo-form textarea,
+.memo-edit-form textarea {
+  flex: 1;
+  min-width: 0;
+  height: 3rem;
+  min-height: 3rem;
+  max-height: 9rem;
+  padding: 0.8rem 1rem;
+  border: 1px solid color.change($maintheme, $alpha: 0.5);
+  border-radius: 0.8rem;
+  background: transparent;
+  color: var(--input-text);
+  font-family: inherit;
+  font-size: 1rem;
+  line-height: 1.4;
+  overflow-y: hidden;
+  resize: none;
+
+  &:focus {
+    outline: 2px solid color.change($maintheme, $alpha: 0.9);
+    outline-offset: 1px;
+  }
+}
+
+.memo-edit-form {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.memo-edit-form textarea {
+  height: 2.25rem;
+  min-height: 2.25rem;
+  padding: 0.35rem 0.7rem;
+  font-size: 0.9rem;
+}
+
+.memo-primary {
+  height: 3rem;
+  padding: 0 1.5rem;
+  border: 0;
+  border-radius: 0.8rem;
+  background: var(--title-color);
+  color: var(--background);
+  font-family: inherit;
+  font-size: 0.95rem;
+  font-weight: bold;
+  cursor: pointer;
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: default;
+  }
+}
+
+.memo-list-section {
+  margin-top: 0.75rem;
+}
+
+.memo-divider {
+  height: 1px;
+  margin-top: 0.9rem;
+  background: color.change($maintheme, $alpha: 0.35);
+}
+
+.memo-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.memo-item {
+  min-width: 0;
+  border-bottom: 1px solid color.change($maintheme, $alpha: 0.25);
+
+  &:last-child {
+    border-bottom: 0;
+  }
+}
+
+.memo-row,
+.memo-edit-form {
+  min-width: 0;
+  min-height: 2.6rem;
+}
+
+.memo-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.memo-content {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  color: var(--input-text);
+  font-size: 0.95rem;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.memo-item-time {
+  flex: none;
+  color: color.change($light-text, $alpha: 0.45);
+  font-size: 0.72rem;
+  white-space: nowrap;
+}
+
+[data-theme='dark'] .memo-item-time {
+  color: color.change($dark-text, $alpha: 0.45);
+}
+
+.memo-item-actions {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 0.15rem;
+}
+
+.memo-text-button {
+  padding: 0.25rem 0.35rem;
+  border: 0;
+  background: transparent;
+  color: var(--title-color);
+  font-family: inherit;
+  font-size: 0.8rem;
+  white-space: nowrap;
+  cursor: pointer;
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
+}
+
+.memo-text-button.is-accent {
+  font-weight: bold;
+}
+
+.memo-text-button.is-danger {
+  color: #b04444;
+}
+
+[data-theme='dark'] .memo-text-button.is-danger {
+  color: #e08a8a;
+}
+
+.memo-status,
+.memo-error {
+  margin: 0.7rem 0 0;
+  padding: 0 0.15rem;
+  font-size: 0.82rem;
+}
+
+.memo-status {
+  color: color.change($light-text, $alpha: 0.55);
+}
+
+[data-theme='dark'] .memo-status {
+  color: color.change($dark-text, $alpha: 0.55);
+}
+
+.memo-error {
+  color: #b04444;
+}
+
+[data-theme='dark'] .memo-error {
+  color: #e08a8a;
+}
+
+.pagination {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+  margin-top: 1rem;
+}
+
+.pagination__button {
+  min-width: 2rem;
+  padding: 0.35rem 0.55rem;
+  border: 1px solid rgba(0, 0, 0, 0.18);
+  border-radius: 0.45rem;
+  background: transparent;
+  color: var(--foreground);
+  font-family: inherit;
+  font-size: 0.75rem;
+  cursor: pointer;
+
+  &:hover:not(:disabled) {
+    background: rgba(0, 0, 0, 0.06);
+  }
+
+  &.is-active {
+    border-color: var(--title-color);
+    background: var(--title-color);
+    color: var(--subtheme);
+  }
+
+  &:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+  }
+}
+
+[data-theme='dark'] .pagination__button {
+  border-color: rgba(255, 255, 255, 0.2);
+
+  &:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.08);
+  }
+}
+
+.pagination__ellipsis {
+  padding: 0 0.25rem;
+  color: var(--foreground);
+  font-size: 0.75rem;
+  opacity: 0.55;
+}
+
+@media (max-width: $breakpoint-md) {
+  #memo-page {
+    padding: 1.5rem 1.2rem 5rem;
+  }
+
+  .memo-panel {
+    padding: 1rem;
+  }
+
+  .memo-item-time {
+    display: none;
+  }
+}
+
+@media (max-width: 480px) {
+  .memo-input-row {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .memo-primary {
+    width: 100%;
+  }
+}
