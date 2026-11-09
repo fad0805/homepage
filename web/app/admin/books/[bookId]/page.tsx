@@ -63,13 +63,21 @@ function parseTags(value: string) {
 
 const CHAPTERS_PER_PAGE = 10;
 
+function createdTime(value: string | null) {
+  if (!value) return null;
+  const time = new Date(value).getTime();
+  return Number.isNaN(time) ? null : time;
+}
+
 function sortChapters(chapters: ChapterItem[]) {
-  return [...chapters].sort(
-    (a, b) =>
-      a.order - b.order ||
-      a.title.localeCompare(b.title, "ko") ||
-      a.id - b.id,
-  );
+  return [...chapters].sort((a, b) => {
+    const aTime = createdTime(a.created_at);
+    const bTime = createdTime(b.created_at);
+    if (aTime === null && bTime === null) return b.id - a.id;
+    if (aTime === null) return 1;
+    if (bTime === null) return -1;
+    return bTime - aTime || b.id - a.id;
+  });
 }
 
 export default function AdminBookDetail() {

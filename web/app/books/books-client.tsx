@@ -13,6 +13,21 @@ import "@/public/styles/books.scss";
 
 const CHAPTERS_PER_PAGE = 15;
 
+function createdTime(value: string | null) {
+  if (!value) return null;
+  const time = new Date(value).getTime();
+  return Number.isNaN(time) ? null : time;
+}
+
+function compareChaptersByCreatedDesc(a: Chapter, b: Chapter) {
+  const aTime = createdTime(a.created_at);
+  const bTime = createdTime(b.created_at);
+  if (aTime === null && bTime === null) return b.id - a.id;
+  if (aTime === null) return 1;
+  if (bTime === null) return -1;
+  return bTime - aTime || b.id - a.id;
+}
+
 function TagChip({
   tag,
   onActivate,
@@ -165,12 +180,7 @@ export default function BooksClient({
             (!chapter.published_at ||
               new Date(chapter.published_at).getTime() <= now),
         )
-        .sort(
-          (a, b) =>
-            a.order - b.order ||
-            a.title.localeCompare(b.title, "ko") ||
-            a.id - b.id,
-        ),
+        .sort(compareChaptersByCreatedDesc),
     [chapters, now],
   );
 
