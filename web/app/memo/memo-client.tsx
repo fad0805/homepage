@@ -119,7 +119,7 @@ export default function MemoClient() {
   ) => {
     if (event.nativeEvent.isComposing) return;
 
-    if (event.key === "Enter" && event.ctrlKey) {
+    if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
       event.preventDefault();
       event.currentTarget.form?.requestSubmit();
     }
