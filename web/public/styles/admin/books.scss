@@ -30,6 +30,49 @@
   font-size: 0.78rem;
 }
 
+.admin-books-draft-notice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.8rem 1rem;
+  border: 1px solid var(--admin-border);
+  border-radius: 0.9rem;
+  background: rgba(255, 255, 255, 0.55);
+
+  strong {
+    color: var(--title-color);
+    font-size: 0.85rem;
+  }
+
+  p {
+    margin: 0.2rem 0 0;
+    color: var(--admin-muted);
+    font-size: 0.75rem;
+  }
+}
+
+.admin-books-draft-notice-actions {
+  display: flex;
+  flex-shrink: 0;
+  gap: 0.4rem;
+}
+
+[data-theme='dark'] .admin-books-draft-notice {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+@media (max-width: 600px) {
+  .admin-books-draft-notice {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .admin-books-draft-notice-actions {
+    justify-content: flex-end;
+  }
+}
+
 .admin-books-dirty {
   margin: 0.3rem 0 0;
   color: var(--title-color);

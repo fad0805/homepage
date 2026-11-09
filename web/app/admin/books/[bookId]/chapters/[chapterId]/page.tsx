@@ -130,6 +130,10 @@ export default function AdminChapterEdit() {
   const [saving, setSaving] = useState(false);
   const [draftSaving, setDraftSaving] = useState(false);
   const [draftSavedAt, setDraftSavedAt] = useState<string | null>(null);
+  const [availableDraft, setAvailableDraft] = useState<ChapterDraft | null>(
+    null,
+  );
+  const [draftPromptOpen, setDraftPromptOpen] = useState(false);
   const [autosaveReady, setAutosaveReady] = useState(false);
   const [notice, setNotice] = useState<Notice | null>(null);
 
@@ -181,6 +185,8 @@ export default function AdminChapterEdit() {
 
     setLoading(true);
     setDraftSavedAt(null);
+    setAvailableDraft(null);
+    setDraftPromptOpen(false);
     setAutosaveReady(false);
     lastSavedSignatureRef.current = null;
     try {
@@ -202,6 +208,14 @@ export default function AdminChapterEdit() {
         (item) => item.book_id === bookId,
       );
 
+      let baseTitle = "";
+      let baseSubtitle = "";
+      let baseBody = "";
+      let baseTagsInput = "";
+      let baseVisible = true;
+      let basePublishedAt = "";
+      let baseTargetBookId = bookId;
+
       if (!isNew) {
         const current =
           bookChapters.find((item) => item.id === chapterId) ?? null;
@@ -213,37 +227,50 @@ export default function AdminChapterEdit() {
           setChapter(null);
           return;
         }
+
+        baseTitle = current.title;
+        baseSubtitle = current.subtitle ?? "";
+        baseBody = current.body ?? "";
+        baseTagsInput = (current.tags ?? []).join(", ");
+        baseVisible = current.visible !== false;
+        basePublishedAt = toDatetimeLocal(current.published_at);
+        baseTargetBookId = current.book_id;
+
         setChapter(current);
-        setTargetBookId(current.book_id);
-        setTitle(current.title);
-        setSubtitle(current.subtitle ?? "");
-        setBody(current.body ?? "");
-        setTagsInput((current.tags ?? []).join(", "));
-        setVisible(current.visible !== false);
-        setPublishedAt(toDatetimeLocal(current.published_at));
+        setTargetBookId(baseTargetBookId);
+        setTitle(baseTitle);
+        setSubtitle(baseSubtitle);
+        setBody(baseBody);
+        setTagsInput(baseTagsInput);
+        setVisible(baseVisible);
+        setPublishedAt(basePublishedAt);
       } else {
-        setTargetBookId(bookId);
-        setTagsInput("");
-        setPublishedAt("");
+        setChapter(null);
+        setTargetBookId(baseTargetBookId);
+        setTitle(baseTitle);
+        setSubtitle(baseSubtitle);
+        setBody(baseBody);
+        setTagsInput(baseTagsInput);
+        setVisible(baseVisible);
+        setPublishedAt(basePublishedAt);
       }
 
+      lastSavedSignatureRef.current = getDraftSignature({
+        title: baseTitle,
+        subtitle: baseSubtitle,
+        body: baseBody,
+        tagsInput: baseTagsInput,
+        visible: baseVisible,
+        publishedAt: basePublishedAt,
+        targetBookId: baseTargetBookId,
+      });
+
       if (draftData) {
-        setTitle(draftData.title ?? "");
-        setSubtitle(draftData.subtitle ?? "");
-        setBody(draftData.body ?? "");
-        setTagsInput((draftData.tags ?? []).join(", "));
-        setVisible(draftData.visible !== false);
-        setPublishedAt(toDatetimeLocal(draftData.published_at));
-        if (
-          draftData.target_book_id !== null &&
-          bookList.some((item) => item.id === draftData.target_book_id)
-        ) {
-          setTargetBookId(draftData.target_book_id);
-        }
-        setDraftSavedAt(draftData.updated_at);
-        notify("success", "임시저장된 내용을 불러왔습니다.");
+        setAvailableDraft(draftData);
+        setDraftPromptOpen(true);
+      } else {
+        setAutosaveReady(true);
       }
-      setAutosaveReady(true);
     } catch (error) {
       notify(
         "error",
@@ -259,6 +286,50 @@ export default function AdminChapterEdit() {
   useEffect(() => {
     load();
   }, [load]);
+
+  const handleApplyDraft = useCallback(() => {
+    if (!availableDraft) return;
+
+    const nextTitle = availableDraft.title ?? "";
+    const nextSubtitle = availableDraft.subtitle ?? "";
+    const nextBody = availableDraft.body ?? "";
+    const nextTagsInput = (availableDraft.tags ?? []).join(", ");
+    const nextVisible = availableDraft.visible !== false;
+    const nextPublishedAt = toDatetimeLocal(availableDraft.published_at);
+    const nextTargetBookId =
+      availableDraft.target_book_id !== null &&
+      books.some((item) => item.id === availableDraft.target_book_id)
+        ? availableDraft.target_book_id
+        : targetBookId;
+
+    lastSavedSignatureRef.current = getDraftSignature({
+      title: nextTitle,
+      subtitle: nextSubtitle,
+      body: nextBody,
+      tagsInput: nextTagsInput,
+      visible: nextVisible,
+      publishedAt: nextPublishedAt,
+      targetBookId: nextTargetBookId,
+    });
+
+    setTitle(nextTitle);
+    setSubtitle(nextSubtitle);
+    setBody(nextBody);
+    setTagsInput(nextTagsInput);
+    setVisible(nextVisible);
+    setPublishedAt(nextPublishedAt);
+    setTargetBookId(nextTargetBookId);
+    setDraftSavedAt(availableDraft.updated_at);
+    setAvailableDraft(null);
+    setDraftPromptOpen(false);
+    setAutosaveReady(true);
+    notify("success", "임시저장된 내용을 불러왔습니다.");
+  }, [availableDraft, books, notify, targetBookId]);
+
+  const handleDismissDraftPrompt = useCallback(() => {
+    setDraftPromptOpen(false);
+    setAutosaveReady(true);
+  }, []);
 
   const saveDraft = useCallback(
     (showSuccessNotice: boolean) => {
@@ -305,6 +376,8 @@ export default function AdminChapterEdit() {
           );
           lastSavedSignatureRef.current = signature;
           setDraftSavedAt(draft.updated_at);
+          setAvailableDraft(null);
+          setDraftPromptOpen(false);
           if (showSuccessNotice) {
             notify("success", "임시저장했습니다.");
           }
@@ -509,6 +582,37 @@ export default function AdminChapterEdit() {
         <div className={`admin-notice admin-notice-${notice.type}`}>
           {notice.text}
         </div>
+      ) : null}
+
+      {!loading && availableDraft ? (
+        <section className="admin-books-draft-notice" aria-live="polite">
+          <div>
+            <strong>
+              {draftPromptOpen
+                ? "임시저장본을 불러오시겠습니까?"
+                : "불러오지 않은 임시저장본이 있습니다."}
+            </strong>
+            <p>{formatDateTime(availableDraft.updated_at)}에 저장됨</p>
+          </div>
+          <div className="admin-books-draft-notice-actions">
+            <button
+              type="button"
+              className="admin-button primary"
+              onClick={handleApplyDraft}
+            >
+              {draftPromptOpen ? "불러오기" : "임시저장 불러오기"}
+            </button>
+            {draftPromptOpen ? (
+              <button
+                type="button"
+                className="admin-button"
+                onClick={handleDismissDraftPrompt}
+              >
+                나중에
+              </button>
+            ) : null}
+          </div>
+        </section>
       ) : null}
 
       {loading ? (
