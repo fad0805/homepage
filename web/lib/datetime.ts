@@ -37,3 +37,15 @@ export function formatDateTime(value: string | null) {
     minute: "2-digit",
   });
 }
+
+export function formatDate(value: string | null) {
+  if (!value) return "-";
+  const date = parseApiDateTime(value);
+  if (!date) return value;
+  return date.toLocaleDateString("ko-KR", {
+    timeZone: KOREAN_TIME_ZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+}

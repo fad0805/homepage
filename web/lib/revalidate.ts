@@ -4,6 +4,7 @@ const PUBLIC_CONTENT_PREFIXES = [
   "/api/links",
   "/api/characters",
   "/api/profiles",
+  "/api/illustrations",
 ];
 
 const MUTATION_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);

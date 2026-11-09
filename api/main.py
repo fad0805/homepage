@@ -9,6 +9,7 @@ from routers import (
     chapter_drafts,
     chapters,
     characters,
+    illustrations,
     links,
     memos,
     profiles,
@@ -39,6 +40,11 @@ ensure_upload_dir()
 app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
 
 app.include_router(characters.router, prefix="/characters", tags=["characters"])
+app.include_router(
+    illustrations.router,
+    prefix="/illustrations",
+    tags=["illustrations"],
+)
 app.include_router(links.router, prefix="/links", tags=["links"])
 app.include_router(memos.router, prefix="/memos", tags=["memos"])
 app.include_router(profiles.router, prefix="/profiles", tags=["profiles"])

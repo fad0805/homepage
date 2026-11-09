@@ -3,6 +3,7 @@ from models import (
     books,
     chapter_drafts,
     characters,
+    illustrations,
     links,
     memos,
     profiles,
