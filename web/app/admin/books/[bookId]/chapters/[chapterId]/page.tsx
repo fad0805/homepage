@@ -17,6 +17,8 @@ import { formatDateTime } from "@/lib/datetime";
 
 import "@/public/styles/admin/books.scss";
 
+const DRAFT_AUTOSAVE_DELAY_MS = 2000;
+
 interface Book {
   id: number;
   title: string;
@@ -78,6 +80,26 @@ function toUtcDateTime(value: string) {
   return date.toISOString().replace("Z", "");
 }
 
+function getDraftSignature(values: {
+  title: string;
+  subtitle: string;
+  body: string;
+  tagsInput: string;
+  visible: boolean;
+  publishedAt: string;
+  targetBookId: number;
+}) {
+  return JSON.stringify([
+    values.title,
+    values.subtitle,
+    values.body,
+    values.tagsInput,
+    values.visible,
+    values.publishedAt,
+    values.targetBookId,
+  ]);
+}
+
 export default function AdminChapterEdit() {
   const params = useParams<{ bookId: string; chapterId: string }>();
   const router = useRouter();
@@ -108,9 +130,13 @@ export default function AdminChapterEdit() {
   const [saving, setSaving] = useState(false);
   const [draftSaving, setDraftSaving] = useState(false);
   const [draftSavedAt, setDraftSavedAt] = useState<string | null>(null);
+  const [autosaveReady, setAutosaveReady] = useState(false);
   const [notice, setNotice] = useState<Notice | null>(null);
 
   const noticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastSavedSignatureRef = useRef<string | null>(null);
+  const draftSaveInFlightRef = useRef(false);
+  const draftSavePromiseRef = useRef<Promise<void> | null>(null);
 
   const notify = useCallback((type: Notice["type"], text: string) => {
     if (noticeTimer.current) clearTimeout(noticeTimer.current);
@@ -127,6 +153,14 @@ export default function AdminChapterEdit() {
 
   const deleteDraft = useCallback(async () => {
     if (!draftKey) return;
+    const pendingSave = draftSavePromiseRef.current;
+    if (pendingSave) {
+      try {
+        await pendingSave;
+      } catch {
+        // saveDraft already reports its own failures.
+      }
+    }
     try {
       await apiFetch(
         `/api/chapter-drafts/${encodeURIComponent(draftKey)}`,
@@ -147,6 +181,8 @@ export default function AdminChapterEdit() {
 
     setLoading(true);
     setDraftSavedAt(null);
+    setAutosaveReady(false);
+    lastSavedSignatureRef.current = null;
     try {
       const [bookData, chapterData, bookList, draftData] = await Promise.all([
         apiFetch<Book>(`/api/books/${bookId}`),
@@ -207,6 +243,7 @@ export default function AdminChapterEdit() {
         setDraftSavedAt(draftData.updated_at);
         notify("success", "임시저장된 내용을 불러왔습니다.");
       }
+      setAutosaveReady(true);
     } catch (error) {
       notify(
         "error",
@@ -223,44 +260,140 @@ export default function AdminChapterEdit() {
     load();
   }, [load]);
 
-  const handleSaveDraft = async () => {
-    if (!draftKey) {
-      notify("error", "임시저장할 수 없습니다.");
+  const saveDraft = useCallback(
+    (showSuccessNotice: boolean) => {
+      if (!draftKey) {
+        if (showSuccessNotice) {
+          notify("error", "임시저장할 수 없습니다.");
+        }
+        return Promise.resolve();
+      }
+      if (draftSaveInFlightRef.current) {
+        return draftSavePromiseRef.current ?? Promise.resolve();
+      }
+
+      const signature = getDraftSignature({
+        title,
+        subtitle,
+        body,
+        tagsInput,
+        visible,
+        publishedAt,
+        targetBookId,
+      });
+
+      draftSaveInFlightRef.current = true;
+      setDraftSaving(true);
+      const task = (async () => {
+        try {
+          const draft = await apiFetch<ChapterDraft>(
+            `/api/chapter-drafts/${encodeURIComponent(draftKey)}`,
+            {
+              method: "PUT",
+              body: JSON.stringify({
+                title,
+                subtitle: subtitle || null,
+                body: body || null,
+                tags: parseTags(tagsInput),
+                visible,
+                published_at: toUtcDateTime(publishedAt),
+                target_book_id: Number.isFinite(targetBookId)
+                  ? targetBookId
+                  : bookId,
+              }),
+            },
+          );
+          lastSavedSignatureRef.current = signature;
+          setDraftSavedAt(draft.updated_at);
+          if (showSuccessNotice) {
+            notify("success", "임시저장했습니다.");
+          }
+        } catch (error) {
+          notify(
+            "error",
+            error instanceof Error
+              ? error.message
+              : "임시저장하지 못했습니다.",
+          );
+        } finally {
+          draftSaveInFlightRef.current = false;
+          setDraftSaving(false);
+        }
+      })();
+
+      draftSavePromiseRef.current = task;
+      void task.finally(() => {
+        if (draftSavePromiseRef.current === task) {
+          draftSavePromiseRef.current = null;
+        }
+      });
+      return task;
+    },
+    [
+      body,
+      bookId,
+      draftKey,
+      notify,
+      publishedAt,
+      subtitle,
+      tagsInput,
+      targetBookId,
+      title,
+      visible,
+    ],
+  );
+
+  const handleSaveDraft = () => {
+    void saveDraft(true);
+  };
+
+  useEffect(() => {
+    if (
+      !autosaveReady ||
+      loading ||
+      saving ||
+      draftSaving ||
+      !draftKey
+    ) {
       return;
     }
 
-    setDraftSaving(true);
-    try {
-      const draft = await apiFetch<ChapterDraft>(
-        `/api/chapter-drafts/${encodeURIComponent(draftKey)}`,
-        {
-          method: "PUT",
-          body: JSON.stringify({
-            title,
-            subtitle: subtitle || null,
-            body: body || null,
-            tags: parseTags(tagsInput),
-            visible,
-            published_at: toUtcDateTime(publishedAt),
-            target_book_id: Number.isFinite(targetBookId)
-              ? targetBookId
-              : bookId,
-          }),
-        },
-      );
-      setDraftSavedAt(draft.updated_at);
-      notify("success", "임시저장했습니다.");
-    } catch (error) {
-      notify(
-        "error",
-        error instanceof Error
-          ? error.message
-          : "임시저장하지 못했습니다.",
-      );
-    } finally {
-      setDraftSaving(false);
+    const signature = getDraftSignature({
+      title,
+      subtitle,
+      body,
+      tagsInput,
+      visible,
+      publishedAt,
+      targetBookId,
+    });
+
+    if (lastSavedSignatureRef.current === null) {
+      lastSavedSignatureRef.current = signature;
+      return;
     }
-  };
+    if (signature === lastSavedSignatureRef.current) return;
+
+    const timer = setTimeout(() => {
+      void saveDraft(false);
+    }, DRAFT_AUTOSAVE_DELAY_MS);
+
+    return () => clearTimeout(timer);
+  }, [
+    autosaveReady,
+    body,
+    draftKey,
+    draftSaving,
+    loading,
+    publishedAt,
+    saveDraft,
+    saving,
+    subtitle,
+    tagsInput,
+    targetBookId,
+    title,
+    visible,
+  ]);
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -338,6 +471,7 @@ export default function AdminChapterEdit() {
     if (!window.confirm(`'${chapter.title}' 챕터를 삭제할까요?`)) {
       return;
     }
+    setSaving(true);
     try {
       await apiFetch(`/api/chapters/${chapter.id}`, { method: "DELETE" });
       await deleteDraft();
@@ -349,6 +483,8 @@ export default function AdminChapterEdit() {
           ? error.message
           : "챕터를 삭제하지 못했습니다.",
       );
+    } finally {
+      setSaving(false);
     }
   };
 
