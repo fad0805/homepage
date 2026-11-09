@@ -1,6 +1,18 @@
-from datetime import date, datetime
+from datetime import date, datetime, timedelta, timezone
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
+
+KST = timezone(timedelta(hours=9))
+
+
+def today_kst() -> date:
+    return datetime.now(KST).date()
+
+
+def validate_taken_at(value: date | None) -> date | None:
+    if value is not None and value > today_kst():
+        raise ValueError("촬영 일자는 오늘 이후로 지정할 수 없습니다.")
+    return value
 
 
 class IllustrationImageRead(BaseModel):
@@ -47,6 +59,11 @@ class IllustrationUpdate(BaseModel):
     representative_image_id: int | None = None
     visible: bool | None = None
 
+    @field_validator("taken_at")
+    @classmethod
+    def check_taken_at(cls, value: date | None) -> date | None:
+        return validate_taken_at(value)
+
 
 class IllustrationBulkUpdate(BaseModel):
     """Fields applied to several illustration groups at once."""
@@ -54,6 +71,11 @@ class IllustrationBulkUpdate(BaseModel):
     ids: list[int] = Field(default_factory=list)
     visible: bool | None = None
     taken_at: date | None = None
+
+    @field_validator("taken_at")
+    @classmethod
+    def check_taken_at(cls, value: date | None) -> date | None:
+        return validate_taken_at(value)
 
 
 class IllustrationBulkDelete(BaseModel):

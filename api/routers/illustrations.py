@@ -36,6 +36,7 @@ from schemas.illustrations import (
     IllustrationReorderRequest,
     IllustrationSummary,
     IllustrationUpdate,
+    today_kst,
 )
 from .utils import require_auth
 
@@ -87,6 +88,12 @@ async def upload_illustrations(
                 f"한 번에 최대 {MAX_BULK_ILLUSTRATIONS}장까지 업로드할 수 "
                 "있습니다."
             ),
+        )
+
+    if taken_at is not None and taken_at > today_kst():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="촬영 일자는 오늘 이후로 지정할 수 없습니다.",
         )
 
     normalized_title = (title or "").strip()

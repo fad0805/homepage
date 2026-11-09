@@ -9,7 +9,11 @@ import {
 } from "react";
 
 import { apiFetch } from "@/lib/api";
-import { formatDate, formatDateTime } from "@/lib/datetime";
+import {
+  formatDate,
+  formatDateTime,
+  todayDateInputValue,
+} from "@/lib/datetime";
 import type {
   IllustrationDetailItem,
   IllustrationImageItem,
@@ -109,6 +113,7 @@ export default function AdminIllustrations() {
   const [notice, setNotice] = useState<Notice | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const modalFileInputRef = useRef<HTMLInputElement>(null);
+  const today = todayDateInputValue();
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -226,6 +231,14 @@ export default function AdminIllustrations() {
 
   const handleUpload = async () => {
     if (files.length === 0 || uploading) return;
+
+    if (takenAt && takenAt > today) {
+      setNotice({
+        type: "error",
+        text: "촬영 일자는 오늘 이후로 지정할 수 없습니다.",
+      });
+      return;
+    }
 
     const normalizedTitle = title.trim();
     if (!normalizedTitle) {
@@ -482,6 +495,14 @@ export default function AdminIllustrations() {
       return;
     }
 
+    if (editingItem.taken_at && editingItem.taken_at > today) {
+      setModalNotice({
+        type: "error",
+        text: "촬영 일자는 오늘 이후로 지정할 수 없습니다.",
+      });
+      return;
+    }
+
     setSavingId(editingItem.id);
     setModalNotice(null);
     setNotice(null);
@@ -594,6 +615,14 @@ export default function AdminIllustrations() {
     taken_at?: string | null;
   }) => {
     if (selectedIds.size === 0 || bulkWorking) return;
+
+    if (patch.taken_at && patch.taken_at > today) {
+      setNotice({
+        type: "error",
+        text: "촬영 일자는 오늘 이후로 지정할 수 없습니다.",
+      });
+      return;
+    }
 
     setBulkWorking(true);
     setNotice(null);
@@ -907,6 +936,7 @@ export default function AdminIllustrations() {
           <span>촬영 일자 (선택)</span>
           <input
             type="date"
+            max={today}
             value={takenAt}
             onChange={(event) => setTakenAt(event.target.value)}
           />
@@ -981,6 +1011,7 @@ export default function AdminIllustrations() {
                 <span>촬영 일자</span>
                 <input
                   type="date"
+                  max={today}
                   value={bulkTakenAt}
                   onChange={(event) => setBulkTakenAt(event.target.value)}
                 />
@@ -1192,6 +1223,7 @@ export default function AdminIllustrations() {
                     <span>촬영 일자</span>
                     <input
                       type="date"
+                      max={today}
                       value={editingItem.taken_at ?? ""}
                       onChange={(event) =>
                         updateEditing({
