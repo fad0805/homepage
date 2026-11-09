@@ -376,6 +376,46 @@
   text-align: center;
 }
 
+.admin-illustrations-pagination {
+  display: flex;
+  width: 100%;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+  margin-top: 1rem;
+}
+
+.admin-illustrations-pagination__button {
+  min-width: 2rem;
+  padding: 0.35rem 0.55rem;
+  border: 1px solid var(--admin-border);
+  border-radius: 0.45rem;
+  background: var(--admin-card-bg);
+  color: var(--title-color);
+  font-family: inherit;
+  font-size: 0.76rem;
+  text-align: center;
+  cursor: pointer;
+
+  &.is-active {
+    border-color: transparent;
+    background: var(--admin-primary);
+    color: var(--admin-primary-ink);
+  }
+
+  &:disabled {
+    opacity: 0.35;
+    cursor: default;
+  }
+}
+
+.admin-illustrations-pagination__ellipsis {
+  padding: 0 0.2rem;
+  color: var(--admin-muted);
+  font-size: 0.76rem;
+}
+
 .admin-illustrations-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));

@@ -31,6 +31,28 @@ interface Preview {
 const MAX_FILES = 100;
 const MAX_BATCH_FILES = 10;
 const MAX_BATCH_BYTES = 40 * 1024 * 1024;
+const LIST_PAGE_SIZE = 12;
+
+function listPageNumbers(page: number, totalPages: number) {
+  if (totalPages <= 7) {
+    return Array.from({ length: totalPages }, (_, index) => index + 1);
+  }
+
+  const pages: Array<number | "ellipsis"> = [1];
+  if (page > 3) pages.push("ellipsis");
+
+  for (
+    let current = Math.max(2, page - 1);
+    current <= Math.min(totalPages - 1, page + 1);
+    current += 1
+  ) {
+    pages.push(current);
+  }
+
+  if (page < totalPages - 2) pages.push("ellipsis");
+  pages.push(totalPages);
+  return pages;
+}
 
 function createBatches(files: File[]) {
   const batches: File[][] = [];
@@ -85,6 +107,7 @@ export default function AdminIllustrations() {
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
+  const [listPage, setListPage] = useState(1);
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<{
     done: number;
@@ -114,6 +137,15 @@ export default function AdminIllustrations() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const modalFileInputRef = useRef<HTMLInputElement>(null);
   const today = todayDateInputValue();
+  const totalPages = Math.max(
+    1,
+    Math.ceil(items.length / LIST_PAGE_SIZE),
+  );
+  const currentPage = Math.min(listPage, totalPages);
+  const visibleItems = items.slice(
+    (currentPage - 1) * LIST_PAGE_SIZE,
+    currentPage * LIST_PAGE_SIZE,
+  );
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -121,8 +153,13 @@ export default function AdminIllustrations() {
       const data = await apiFetch<IllustrationDetailItem[]>(
         "/api/illustrations/admin",
       );
-      setItems([...data].sort((a, b) => b.id - a.id));
+      setItems(
+        [...data].sort(
+          (a, b) => a.order - b.order || b.id - a.id,
+        ),
+      );
       setSelectedIds(new Set());
+      setListPage(1);
     } catch (error) {
       setNotice({
         type: "error",
@@ -157,6 +194,12 @@ export default function AdminIllustrations() {
       files.length === 0 ? 0 : Math.min(current, files.length - 1),
     );
   }, [files.length]);
+
+  useEffect(() => {
+    if (listPage > totalPages) {
+      setListPage(totalPages);
+    }
+  }, [listPage, totalPages]);
 
   useEffect(() => {
     if (!editingItem) return;
@@ -225,7 +268,9 @@ export default function AdminIllustrations() {
       const next = exists
         ? previous.map((current) => (current.id === item.id ? item : current))
         : [item, ...previous];
-      return [...next].sort((a, b) => b.id - a.id);
+      return [...next].sort(
+        (a, b) => a.order - b.order || b.id - a.id,
+      );
     });
   };
 
@@ -1053,8 +1098,9 @@ export default function AdminIllustrations() {
             아직 등록된 삽화가 없습니다.
           </p>
         ) : (
-          <div className="admin-illustrations-grid">
-            {items.map((item) => {
+          <>
+            <div className="admin-illustrations-grid">
+              {visibleItems.map((item) => {
               const representative = representativeImage(item);
               return (
                 <article
@@ -1150,7 +1196,63 @@ export default function AdminIllustrations() {
                 </article>
               );
             })}
-          </div>
+            </div>
+
+            {totalPages > 1 ? (
+              <nav
+                className="admin-illustrations-pagination"
+                aria-label="등록된 삽화 페이지"
+              >
+                <button
+                  type="button"
+                  className="admin-illustrations-pagination__button"
+                  onClick={() =>
+                    setListPage((page) => Math.max(1, page - 1))
+                  }
+                  disabled={currentPage <= 1}
+                >
+                  이전
+                </button>
+                {listPageNumbers(currentPage, totalPages).map(
+                  (value, index) =>
+                    value === "ellipsis" ? (
+                      <span
+                        className="admin-illustrations-pagination__ellipsis"
+                        key={`ellipsis-${index}`}
+                      >
+                        …
+                      </span>
+                    ) : (
+                      <button
+                        type="button"
+                        className={`admin-illustrations-pagination__button${
+                          value === currentPage ? " is-active" : ""
+                        }`}
+                        onClick={() => setListPage(value)}
+                        aria-current={
+                          value === currentPage ? "page" : undefined
+                        }
+                        key={value}
+                      >
+                        {value}
+                      </button>
+                    ),
+                )}
+                <button
+                  type="button"
+                  className="admin-illustrations-pagination__button"
+                  onClick={() =>
+                    setListPage((page) =>
+                      Math.min(totalPages, page + 1),
+                    )
+                  }
+                  disabled={currentPage >= totalPages}
+                >
+                  다음
+                </button>
+              </nav>
+            ) : null}
+          </>
         )}
       </section>
 

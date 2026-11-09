@@ -20,6 +20,50 @@
   }
 }
 
+.illustrations-header__top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: 0.75rem 1rem;
+}
+
+.illustrations-sort {
+  display: flex;
+  width: auto;
+  margin: 0 0 0 auto;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.3rem;
+  color: color.change($light-text, $alpha: 0.55);
+  font-size: 0.7rem;
+
+  a,
+  a:visited {
+    padding: 0.3rem 0.55rem;
+    border: 1px solid rgba(0, 0, 0, 0.16);
+    border-radius: 999px;
+    color: var(--foreground);
+    text-decoration: none;
+  }
+
+  a.is-active,
+  a.is-active:visited {
+    border-color: transparent;
+    background: var(--title-color);
+    color: #fff;
+  }
+}
+
+[data-theme='dark'] .illustrations-sort {
+  color: color.change($dark-text, $alpha: 0.55);
+
+  a,
+  a:visited {
+    border-color: rgba(255, 255, 255, 0.18);
+  }
+}
+
 .illustrations-eyebrow {
   margin: 0 0 0.45rem;
   color: color.change($light-text, $alpha: 0.45);
@@ -47,6 +91,57 @@
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr));
   gap: 1rem;
+}
+
+.illustrations-pagination {
+  display: flex;
+  width: 100%;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+  margin: 1.5rem 0 0;
+}
+
+.illustrations-pagination__button {
+  min-width: 2rem;
+  padding: 0.35rem 0.55rem;
+  border: 1px solid rgba(0, 0, 0, 0.16);
+  border-radius: 0.45rem;
+  color: var(--title-color);
+  font-size: 0.78rem;
+  text-align: center;
+  text-decoration: none;
+
+  &.is-active {
+    border-color: transparent;
+    background: var(--title-color);
+    color: #fff;
+  }
+
+  &.is-disabled {
+    opacity: 0.35;
+  }
+}
+
+.illustrations-pagination
+  .illustrations-pagination__button.is-active,
+.illustrations-pagination
+  .illustrations-pagination__button.is-active:visited {
+  border-color: transparent;
+  background: var(--title-color);
+  color: #fff;
+}
+
+.illustrations-pagination__ellipsis {
+  padding: 0 0.2rem;
+  color: var(--foreground);
+  font-size: 0.78rem;
+  opacity: 0.5;
+}
+
+[data-theme='dark'] .illustrations-pagination__button {
+  border-color: rgba(255, 255, 255, 0.18);
 }
 
 .illustration-card {
