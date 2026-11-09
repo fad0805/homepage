@@ -38,6 +38,20 @@ interface ChapterItem {
   book: { id: number; title: string } | null;
 }
 
+interface ChapterDraft {
+  id: number;
+  draft_key: string;
+  title: string;
+  subtitle: string | null;
+  body: string | null;
+  tags: string[];
+  visible: boolean;
+  published_at: string | null;
+  target_book_id: number | null;
+  created_at: string;
+  updated_at: string;
+}
+
 type Notice = { type: "success" | "error"; text: string };
 
 function parseTags(value: string) {
@@ -57,6 +71,13 @@ function toDatetimeLocal(value: string | null) {
   )}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
+function toUtcDateTime(value: string) {
+  if (!value.trim()) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return date.toISOString().replace("Z", "");
+}
+
 export default function AdminChapterEdit() {
   const params = useParams<{ bookId: string; chapterId: string }>();
   const router = useRouter();
@@ -64,6 +85,13 @@ export default function AdminChapterEdit() {
   const chapterIdParam = params.chapterId;
   const isNew = chapterIdParam === "new";
   const chapterId = isNew ? null : Number(chapterIdParam);
+  const draftKey = isNew
+    ? Number.isFinite(bookId)
+      ? `new-${bookId}`
+      : null
+    : chapterId !== null && Number.isFinite(chapterId)
+      ? `chapter-${chapterId}`
+      : null;
 
   const [book, setBook] = useState<Book | null>(null);
   const [books, setBooks] = useState<Book[]>([]);
@@ -78,6 +106,8 @@ export default function AdminChapterEdit() {
   const [targetBookId, setTargetBookId] = useState(bookId);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [draftSaving, setDraftSaving] = useState(false);
+  const [draftSavedAt, setDraftSavedAt] = useState<string | null>(null);
   const [notice, setNotice] = useState<Notice | null>(null);
 
   const noticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -95,6 +125,20 @@ export default function AdminChapterEdit() {
     [],
   );
 
+  const deleteDraft = useCallback(async () => {
+    if (!draftKey) return;
+    try {
+      await apiFetch(
+        `/api/chapter-drafts/${encodeURIComponent(draftKey)}`,
+        { method: "DELETE" },
+      );
+    } catch (error) {
+      // The saved chapter is the source of truth. A leftover draft is
+      // harmless, so don't block navigation when cleanup fails.
+      console.error(error);
+    }
+  }, [draftKey]);
+
   const load = useCallback(async () => {
     if (!Number.isFinite(bookId)) {
       setLoading(false);
@@ -102,11 +146,17 @@ export default function AdminChapterEdit() {
     }
 
     setLoading(true);
+    setDraftSavedAt(null);
     try {
-      const [bookData, chapterData, bookList] = await Promise.all([
+      const [bookData, chapterData, bookList, draftData] = await Promise.all([
         apiFetch<Book>(`/api/books/${bookId}`),
         apiFetch<ChapterItem[]>("/api/chapters"),
         apiFetch<Book[]>("/api/books"),
+        draftKey
+          ? apiFetch<ChapterDraft | null>(
+              `/api/chapter-drafts/${encodeURIComponent(draftKey)}`,
+            )
+          : Promise.resolve(null),
       ]);
       setBook(bookData);
       setBooks(bookList);
@@ -140,6 +190,23 @@ export default function AdminChapterEdit() {
         setTagsInput("");
         setPublishedAt("");
       }
+
+      if (draftData) {
+        setTitle(draftData.title ?? "");
+        setSubtitle(draftData.subtitle ?? "");
+        setBody(draftData.body ?? "");
+        setTagsInput((draftData.tags ?? []).join(", "));
+        setVisible(draftData.visible !== false);
+        setPublishedAt(toDatetimeLocal(draftData.published_at));
+        if (
+          draftData.target_book_id !== null &&
+          bookList.some((item) => item.id === draftData.target_book_id)
+        ) {
+          setTargetBookId(draftData.target_book_id);
+        }
+        setDraftSavedAt(draftData.updated_at);
+        notify("success", "임시저장된 내용을 불러왔습니다.");
+      }
     } catch (error) {
       notify(
         "error",
@@ -150,11 +217,50 @@ export default function AdminChapterEdit() {
     } finally {
       setLoading(false);
     }
-  }, [bookId, chapterId, isNew, notify]);
+  }, [bookId, chapterId, draftKey, isNew, notify]);
 
   useEffect(() => {
     load();
   }, [load]);
+
+  const handleSaveDraft = async () => {
+    if (!draftKey) {
+      notify("error", "임시저장할 수 없습니다.");
+      return;
+    }
+
+    setDraftSaving(true);
+    try {
+      const draft = await apiFetch<ChapterDraft>(
+        `/api/chapter-drafts/${encodeURIComponent(draftKey)}`,
+        {
+          method: "PUT",
+          body: JSON.stringify({
+            title,
+            subtitle: subtitle || null,
+            body: body || null,
+            tags: parseTags(tagsInput),
+            visible,
+            published_at: toUtcDateTime(publishedAt),
+            target_book_id: Number.isFinite(targetBookId)
+              ? targetBookId
+              : bookId,
+          }),
+        },
+      );
+      setDraftSavedAt(draft.updated_at);
+      notify("success", "임시저장했습니다.");
+    } catch (error) {
+      notify(
+        "error",
+        error instanceof Error
+          ? error.message
+          : "임시저장하지 못했습니다.",
+      );
+    } finally {
+      setDraftSaving(false);
+    }
+  };
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -166,14 +272,7 @@ export default function AdminChapterEdit() {
 
     const plainBody = body.replace(/<[^>]*>/g, "").trim();
     const nextBody = plainBody || /<img\b/i.test(body) ? body : null;
-
-    let publishedAtValue: string | null = null;
-    if (publishedAt.trim()) {
-      const date = new Date(publishedAt);
-      if (!Number.isNaN(date.getTime())) {
-        publishedAtValue = date.toISOString().replace("Z", "");
-      }
-    }
+    const publishedAtValue = toUtcDateTime(publishedAt);
 
     const sourceBookId = chapter?.book_id ?? bookId;
     const nextBookId = Number.isFinite(targetBookId) ? targetBookId : bookId;
@@ -220,6 +319,7 @@ export default function AdminChapterEdit() {
           }),
         });
       }
+      await deleteDraft();
       router.push(`/admin/books/${nextBookId}`);
     } catch (error) {
       notify(
@@ -240,6 +340,7 @@ export default function AdminChapterEdit() {
     }
     try {
       await apiFetch(`/api/chapters/${chapter.id}`, { method: "DELETE" });
+      await deleteDraft();
       router.push(`/admin/books/${bookId}`);
     } catch (error) {
       notify(
@@ -293,6 +394,11 @@ export default function AdminChapterEdit() {
               ) : (
                 <p>새 챕터를 작성합니다.</p>
               )}
+              {draftSavedAt ? (
+                <p className="admin-books-hint">
+                  임시저장 {formatDateTime(draftSavedAt)}
+                </p>
+              ) : null}
             </div>
             {!isNew && chapter && book ? (
               <div className="admin-books-actions">
@@ -407,9 +513,17 @@ export default function AdminChapterEdit() {
                   취소
                 </Link>
                 <button
+                  type="button"
+                  className="admin-button"
+                  onClick={handleSaveDraft}
+                  disabled={saving || draftSaving}
+                >
+                  {draftSaving ? "임시저장 중..." : "임시저장"}
+                </button>
+                <button
                   type="submit"
                   className="admin-button primary"
-                  disabled={saving}
+                  disabled={saving || draftSaving}
                 >
                   {saving ? "저장 중..." : "저장"}
                 </button>
