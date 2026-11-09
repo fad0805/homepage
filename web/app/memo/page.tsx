@@ -12,5 +12,5 @@ export default async function MemoPage() {
     redirect("/signin");
   }
 
-  return <MemoClient />;
+  return <MemoClient username={user.username} />;
 }

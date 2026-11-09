@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Response
 from sqlalchemy.orm import Session
 
 from crud.memos import create_memo, delete_memo, get_memos, update_memo
@@ -7,7 +7,12 @@ from schemas.memos import MemoCreate, MemoRead, MemoUpdate
 
 from .utils import require_auth
 
-router = APIRouter()
+
+def _no_store(response: Response) -> None:
+    response.headers["Cache-Control"] = "no-store"
+
+
+router = APIRouter(dependencies=[Depends(_no_store)])
 
 
 @router.get("", response_model=list[MemoRead])

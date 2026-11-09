@@ -40,7 +40,7 @@ function resizeTextarea(element: HTMLTextAreaElement | null) {
     element.scrollHeight > maxHeight ? "auto" : "hidden";
 }
 
-export default function MemoClient() {
+export default function MemoClient({ username }: { username: string }) {
   const [memos, setMemos] = useState<Memo[]>([]);
   const [newContent, setNewContent] = useState("");
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -58,7 +58,7 @@ export default function MemoClient() {
   useEffect(() => {
     let cancelled = false;
 
-    apiFetch<Memo[]>("/api/memos")
+    apiFetch<Memo[]>("/api/memos", { cache: "no-store" })
       .then((data) => {
         if (!cancelled) setMemos(sortMemos(data));
       })
@@ -85,7 +85,7 @@ export default function MemoClient() {
     const refresh = () => {
       if (document.visibilityState === "hidden") return;
 
-      apiFetch<Memo[]>("/api/memos")
+      apiFetch<Memo[]>("/api/memos", { cache: "no-store" })
         .then((data) => setMemos(sortMemos(data)))
         .catch(() => {
           // A transient refresh failure should not clear the current list.
@@ -297,7 +297,9 @@ export default function MemoClient() {
             <div className="memo-divider" aria-hidden="true" />
             <section className="memo-list-section">
               {memos.length === 0 ? (
-                <p className="memo-status">아직 기록이 없습니다.</p>
+                <p className="memo-status">
+                  {username} 계정의 기록이 없습니다.
+                </p>
               ) : (
                 <ul className="memo-list">
                   {visibleMemos.map((memo) => (
