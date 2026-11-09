@@ -193,8 +193,12 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  width: 100%;
   min-height: 12rem;
+  max-height: 78vh;
   padding: 1rem;
+  box-sizing: border-box;
+  overflow: hidden;
   border-radius: 1rem;
   background: var(--input-background);
   box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
@@ -203,7 +207,7 @@
   > img {
     display: block;
     max-width: 100%;
-    max-height: 72vh;
+    max-height: 100%;
     border-radius: 0.6rem;
     object-fit: contain;
   }

@@ -10,7 +10,44 @@ export function IllustrationDetailGallery({
   images: IllustrationImageItem[];
 }) {
   const [index, setIndex] = useState(0);
+  const [maxRatio, setMaxRatio] = useState<number | null>(null);
   const touchStart = useRef<{ x: number; y: number } | null>(null);
+  const imageKey = images.map((image) => image.url).join("|");
+
+  useEffect(() => {
+    let cancelled = false;
+    if (images.length === 0) {
+      setMaxRatio(null);
+      return;
+    }
+
+    const ratios: number[] = [];
+    let pending = images.length;
+
+    const finish = () => {
+      if (cancelled) return;
+      pending -= 1;
+      if (pending === 0) {
+        setMaxRatio(ratios.length > 0 ? Math.max(...ratios) : null);
+      }
+    };
+
+    images.forEach((item) => {
+      const image = new window.Image();
+      image.onload = () => {
+        if (image.naturalWidth > 0) {
+          ratios.push(image.naturalHeight / image.naturalWidth);
+        }
+        finish();
+      };
+      image.onerror = finish;
+      image.src = item.url;
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [imageKey, images]);
 
   useEffect(() => {
     setIndex((current) =>
@@ -47,6 +84,9 @@ export function IllustrationDetailGallery({
     <div className="illustration-detail__viewer">
       <div
         className="illustration-detail__main"
+        style={{
+          aspectRatio: maxRatio ? `1 / ${maxRatio}` : "4 / 3",
+        }}
         onTouchStart={(event) => {
           if (images.length <= 1) return;
           const touch = event.touches[0];
