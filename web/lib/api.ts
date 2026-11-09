@@ -1,3 +1,5 @@
+import { maybeRevalidatePublicContent } from "@/lib/revalidate";
+
 export async function apiFetch<T>(
   url: string,
   init: RequestInit = {},
@@ -47,6 +49,8 @@ export async function apiFetch<T>(
     }
     throw new Error(detail);
   }
+
+  maybeRevalidatePublicContent(url, init);
 
   if (response.status === 204) {
     return undefined as T;

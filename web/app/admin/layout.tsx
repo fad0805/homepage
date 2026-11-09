@@ -1,9 +1,9 @@
 "use client";
 import React, { useEffect } from "react";
-import { useRouter, usePathname } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { AdminNavbar } from '@/components/admin-navbar';
 
-import { isAuthenticated } from "@/components/authentication";
+import { useAuth } from "@/components/auth-provider";
 
 import '@/public/styles/admin/globals.scss';
 
@@ -13,14 +13,13 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   const router = useRouter();
-  const pathname = usePathname();
+  const { ready, isLoggedIn } = useAuth();
+
   useEffect(() => {
-    isAuthenticated(router).then((isAuth) => {
-      if (!isAuth) {
-        router.push('/signin');
-      }
-    });
-  }, [pathname, router]);
+    if (ready && !isLoggedIn) {
+      router.push('/signin');
+    }
+  }, [ready, isLoggedIn, router]);
 
   return (
     <div className="admin-layout">

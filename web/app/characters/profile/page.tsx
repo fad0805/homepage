@@ -1,12 +1,11 @@
-"use client";
-
-import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
 
 import { toRichTextHtml } from "@/lib/rich-text";
+import { ServerApiError, serverApiFetch } from "@/lib/server-api";
 
 import "@/public/styles/character-profile.scss";
+
+export const dynamic = "force-dynamic";
 
 interface CharacterLocation {
   id: number;
@@ -102,80 +101,46 @@ function DollCard({ title, doll }: { title: string; doll: DollInfo | null }) {
   );
 }
 
-function CharacterProfileContent() {
-  const searchParams = useSearchParams();
-  const characterId = searchParams.get("character");
+function firstParam(value: string | string[] | undefined) {
+  return Array.isArray(value) ? value[0] : value;
+}
 
-  const [character, setCharacter] = useState<CharacterDetail | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+export default async function CharacterProfile({
+  searchParams,
+}: {
+  searchParams: Promise<{ character?: string | string[] }>;
+}) {
+  const params = await searchParams;
+  const characterId = firstParam(params.character)?.trim() ?? "";
 
-  useEffect(() => {
-    if (!characterId) {
-      setLoading(false);
-      setError("등장인물을 찾을 수 없습니다.");
-      return;
+  let character: CharacterDetail | null = null;
+  let errorMessage = "등장인물을 찾을 수 없습니다.";
+
+  if (characterId) {
+    try {
+      character = await serverApiFetch<CharacterDetail>(
+        `/characters/${encodeURIComponent(characterId)}`,
+        { tags: ["characters"] },
+      );
+    } catch (error) {
+      if (error instanceof ServerApiError && error.status === 404) {
+        errorMessage = "등장인물을 찾을 수 없습니다.";
+      } else {
+        console.error(error);
+        errorMessage = "등장인물을 불러오지 못했습니다.";
+      }
     }
-
-    let cancelled = false;
-    setLoading(true);
-    setError(null);
-
-    fetch(`/api/characters/${encodeURIComponent(characterId)}`)
-      .then((response) => {
-        if (response.status === 404) {
-          throw new Error("등장인물을 찾을 수 없습니다.");
-        }
-        if (!response.ok) {
-          throw new Error("등장인물을 불러오지 못했습니다.");
-        }
-        return response.json() as Promise<CharacterDetail>;
-      })
-      .then((data) => {
-        if (cancelled) return;
-        if (data.visible === false || data.is_my_doll !== true) {
-          setError("등장인물을 찾을 수 없습니다.");
-          return;
-        }
-        setCharacter(data);
-      })
-      .catch((reason) => {
-        const isNotFound =
-          reason instanceof Error &&
-          reason.message === "등장인물을 찾을 수 없습니다.";
-        if (!isNotFound) {
-          console.error(reason);
-        }
-        if (!cancelled) {
-          setError(
-            reason instanceof Error
-              ? reason.message
-              : "등장인물을 불러오지 못했습니다.",
-          );
-        }
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [characterId]);
-
-  if (loading) {
-    return (
-      <div id="character-profile">
-        <p className="character-profile__state">불러오는 중...</p>
-      </div>
-    );
   }
 
-  if (error || !character) {
+  if (
+    !character ||
+    character.visible === false ||
+    character.is_my_doll !== true
+  ) {
     return (
       <div id="character-profile">
         <div className="character-profile__state">
-          <p>{error ?? "등장인물을 찾을 수 없습니다."}</p>
+          <p>{errorMessage}</p>
           <Link href="/characters">← 등장인물 목록으로</Link>
         </div>
       </div>
@@ -311,19 +276,5 @@ function CharacterProfileContent() {
         </div>
       </section>
     </div>
-  );
-}
-
-export default function CharacterProfile() {
-  return (
-    <Suspense
-      fallback={
-        <div id="character-profile">
-          <p className="character-profile__state">불러오는 중...</p>
-        </div>
-      }
-    >
-      <CharacterProfileContent />
-    </Suspense>
   );
 }

@@ -30,6 +30,8 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 
+import { maybeRevalidatePublicContent } from "@/lib/revalidate";
+
 import "@/public/styles/admin/links.scss";
 
 interface Category {
@@ -112,6 +114,8 @@ async function apiFetch<T>(url: string, init: RequestInit = {}): Promise<T> {
     }
     throw new Error(detail);
   }
+
+  maybeRevalidatePublicContent(url, init);
 
   if (response.status === 204) {
     return undefined as T;

@@ -3,6 +3,7 @@ import Link from "next/link";
 
 import "@/public/styles/globals.scss";
 
+import { AuthProvider } from "@/components/auth-provider";
 import { FooterShortcut } from "@/components/footer-shortcut";
 import { Navbar } from "@/components/navbar";
 import { ThemeProvider } from "@/components/theme-provider";
@@ -26,28 +27,30 @@ export default function RootLayout({
     <html lang="ko">
       <body>
         <ThemeProvider>
-          <VisitTracker />
-          <Shortcuts>
-            <div id="container">
-              <header>
-                <div id="title">
-                  <Link href="/">
-                    <span className="title__text">어디에도 없는 섬</span>
-                    <span className="title__caption">Missing Island</span>
-                  </Link>
-                </div>
-                <Navbar />
-              </header>
-              <main>
-                <div id="content">
-                  {children}
-                </div>
-              </main>
-              <footer>
-                <FooterShortcut />
-              </footer>
-            </div>
-          </Shortcuts>
+          <AuthProvider>
+            <VisitTracker />
+            <Shortcuts>
+              <div id="container">
+                <header>
+                  <div id="title">
+                    <Link href="/">
+                      <span className="title__text">어디에도 없는 섬</span>
+                      <span className="title__caption">Missing Island</span>
+                    </Link>
+                  </div>
+                  <Navbar />
+                </header>
+                <main>
+                  <div id="content">
+                    {children}
+                  </div>
+                </main>
+                <footer>
+                  <FooterShortcut />
+                </footer>
+              </div>
+            </Shortcuts>
+          </AuthProvider>
         </ThemeProvider>
       </body>
     </html>

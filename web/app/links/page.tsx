@@ -1,8 +1,8 @@
-"use client";
-
-import { useEffect, useMemo, useState } from "react";
+import { serverApiFetch } from "@/lib/server-api";
 
 import "@/public/styles/links.scss";
+
+export const dynamic = "force-dynamic";
 
 interface Category {
   id: number;
@@ -20,61 +20,44 @@ interface LinkItem {
   category: Category;
 }
 
-export default function Links() {
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [links, setLinks] = useState<LinkItem[]>([]);
-  const [loading, setLoading] = useState(true);
+export default async function Links() {
+  let categories: Category[] = [];
+  let links: LinkItem[] = [];
+  let failed = false;
 
-  useEffect(() => {
-    let cancelled = false;
-
-    Promise.all([
-      fetch("/api/links/categories").then((response) => {
-        if (!response.ok) throw new Error("카테고리를 불러오지 못했습니다.");
-        return response.json() as Promise<Category[]>;
+  try {
+    [categories, links] = await Promise.all([
+      serverApiFetch<Category[]>("/links/categories", {
+        tags: ["links"],
       }),
-      fetch("/api/links").then((response) => {
-        if (!response.ok) throw new Error("링크를 불러오지 못했습니다.");
-        return response.json() as Promise<LinkItem[]>;
+      serverApiFetch<LinkItem[]>("/links", {
+        tags: ["links"],
       }),
-    ])
-      .then(([categoryData, linkData]) => {
-        if (cancelled) return;
-        setCategories(
-          [...categoryData].sort(
-            (a, b) => a.order - b.order || a.id - b.id,
-          ),
-        );
-        setLinks(linkData);
-      })
-      .catch((error) => {
-        console.error(error);
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
+    ]);
+  } catch (error) {
+    console.error(error);
+    failed = true;
+  }
 
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  const grouped = useMemo(() => {
-    return categories
-      .map((category) => ({
-        category,
-        items: links
-          .filter((link) => link.category.id === category.id)
-          .sort((a, b) => a.order - b.order || a.id - b.id),
-      }))
-      .filter((group) => group.items.length > 0);
-  }, [categories, links]);
+  const sortedCategories = [...categories].sort(
+    (a, b) => a.order - b.order || a.id - b.id,
+  );
+  const grouped = sortedCategories
+    .map((category) => ({
+      category,
+      items: links
+        .filter((link) => link.category.id === category.id)
+        .sort((a, b) => a.order - b.order || a.id - b.id),
+    }))
+    .filter((group) => group.items.length > 0);
 
   return (
     <div id="links-page">
       <main>
-        {loading ? (
-          <p>불러오는 중...</p>
+        {failed ? (
+          <p>링크를 불러오지 못했습니다.</p>
+        ) : grouped.length === 0 ? (
+          <p>등록된 링크가 없습니다.</p>
         ) : (
           grouped.map((group) => (
             <div key={group.category.id}>

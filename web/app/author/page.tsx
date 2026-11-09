@@ -1,51 +1,35 @@
-"use client";
-
-import { useEffect, useState } from "react";
-
 import {
   profileToHtml,
   type AuthorProfile,
 } from "@/config/author";
+import { serverApiFetch } from "@/lib/server-api";
 
 import "@/public/styles/author.scss";
 
-export default function Author() {
-  const [profile, setProfile] = useState<AuthorProfile | null>(null);
-  const [loading, setLoading] = useState(true);
+export const dynamic = "force-dynamic";
 
-  useEffect(() => {
-    let cancelled = false;
+export default async function Author() {
+  let profiles: AuthorProfile[] = [];
+  let failed = false;
 
-    fetch("/api/profiles")
-      .then((response) => {
-        if (!response.ok) throw new Error("프로필을 불러오지 못했습니다.");
-        return response.json() as Promise<AuthorProfile[]>;
-      })
-      .then((profiles) => {
-        if (!cancelled) {
-          setProfile(profiles[0] ?? null);
-        }
-      })
-      .catch((error) => {
-        console.error(error);
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
+  try {
+    profiles = await serverApiFetch<AuthorProfile[]>("/profiles", {
+      tags: ["profiles"],
+    });
+  } catch (error) {
+    console.error(error);
+    failed = true;
+  }
 
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  if (loading) {
+  if (failed) {
     return (
       <div id="author">
-        <p className="author-state">불러오는 중...</p>
+        <p className="author-state">작가 소개를 불러오지 못했습니다.</p>
       </div>
     );
   }
 
+  const profile = profiles[0] ?? null;
   if (!profile) {
     return (
       <div id="author">

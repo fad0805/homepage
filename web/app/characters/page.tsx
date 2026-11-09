@@ -1,8 +1,8 @@
-"use client";
-
-import { useEffect, useMemo, useState } from "react";
+import { serverApiFetch } from "@/lib/server-api";
 
 import "@/public/styles/characters.scss";
+
+export const dynamic = "force-dynamic";
 
 interface CharacterLocation {
   id: number;
@@ -25,75 +25,50 @@ interface CharacterItem {
   location: CharacterLocation | null;
 }
 
-export default function Characters() {
-  const [locations, setLocations] = useState<CharacterLocation[]>([]);
-  const [characters, setCharacters] = useState<CharacterItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+export default async function Characters() {
+  let locations: CharacterLocation[] = [];
+  let characters: CharacterItem[] = [];
+  let failed = false;
 
-  useEffect(() => {
-    let cancelled = false;
-
-    Promise.all([
-      fetch("/api/characters/locations").then((response) => {
-        if (!response.ok) throw new Error("위치를 불러오지 못했습니다.");
-        return response.json() as Promise<CharacterLocation[]>;
+  try {
+    [locations, characters] = await Promise.all([
+      serverApiFetch<CharacterLocation[]>("/characters/locations", {
+        tags: ["characters"],
       }),
-      fetch("/api/characters").then((response) => {
-        if (!response.ok) throw new Error("등장인물을 불러오지 못했습니다.");
-        return response.json() as Promise<CharacterItem[]>;
+      serverApiFetch<CharacterItem[]>("/characters", {
+        tags: ["characters"],
       }),
-    ])
-      .then(([locationData, characterData]) => {
-        if (cancelled) return;
-        setLocations(
-          [...locationData].sort(
-            (a, b) => a.order - b.order || a.id - b.id,
-          ),
-        );
-        setCharacters(characterData);
-      })
-      .catch((reason) => {
-        console.error(reason);
-        if (!cancelled) {
-          setError("등장인물을 불러오지 못했습니다.");
-        }
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
+    ]);
+  } catch (error) {
+    console.error(error);
+    failed = true;
+  }
 
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  const grouped = useMemo(() => {
-    return locations
-      .map((location) => ({
-        location,
-        characters: characters
-          .filter(
-            (character) =>
-              character.visible !== false &&
-              character.is_my_doll === true &&
-              character.location_id === location.id,
-          )
-          .sort(
-            (a, b) =>
-              (a.order_in_location ?? 0) - (b.order_in_location ?? 0) ||
-              a.id - b.id,
-          ),
-      }))
-      .filter((group) => group.characters.length > 0);
-  }, [characters, locations]);
+  const sortedLocations = [...locations].sort(
+    (a, b) => a.order - b.order || a.id - b.id,
+  );
+  const grouped = sortedLocations
+    .map((location) => ({
+      location,
+      characters: characters
+        .filter(
+          (character) =>
+            character.visible !== false &&
+            character.is_my_doll === true &&
+            character.location_id === location.id,
+        )
+        .sort(
+          (a, b) =>
+            (a.order_in_location ?? 0) - (b.order_in_location ?? 0) ||
+            a.id - b.id,
+        ),
+    }))
+    .filter((group) => group.characters.length > 0);
 
   return (
     <div id="characters-list">
-      {loading ? (
-        <p>불러오는 중...</p>
-      ) : error ? (
-        <p>{error}</p>
+      {failed ? (
+        <p>등장인물을 불러오지 못했습니다.</p>
       ) : grouped.length === 0 ? (
         <p>등록된 등장인물이 없습니다.</p>
       ) : (

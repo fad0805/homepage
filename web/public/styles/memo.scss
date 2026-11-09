@@ -195,6 +195,27 @@
   font-weight: bold;
 }
 
+.memo-text-button.is-pin {
+  color: color.change($light-text, $alpha: 0.55);
+
+  &.is-active {
+    color: var(--title-color);
+    font-weight: bold;
+  }
+}
+
+[data-theme='dark'] .memo-text-button.is-pin {
+  color: color.change($dark-text, $alpha: 0.55);
+}
+
+[data-theme='dark'] .memo-text-button.is-pin.is-active {
+  color: var(--title-color);
+}
+
+.memo-row.is-pinned .memo-content {
+  font-weight: 600;
+}
+
 .memo-text-button.is-danger {
   color: #b04444;
 }

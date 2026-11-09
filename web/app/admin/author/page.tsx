@@ -10,6 +10,7 @@ import Link from "next/link";
 
 import { RichTextEditor } from "@/components/rich-text-editor";
 import { profileToHtml, type AuthorProfile } from "@/config/author";
+import { maybeRevalidatePublicContent } from "@/lib/revalidate";
 
 import "@/public/styles/admin/author.scss";
 
@@ -58,6 +59,8 @@ async function apiFetch<T>(url: string, init: RequestInit = {}): Promise<T> {
     }
     throw new Error(detail);
   }
+
+  maybeRevalidatePublicContent(url, init);
 
   if (response.status === 204) {
     return undefined as T;

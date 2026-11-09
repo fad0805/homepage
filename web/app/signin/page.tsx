@@ -2,19 +2,19 @@
 import { useEffect, FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 
+import { useAuth } from '@/components/auth-provider';
+
 import '@/public/styles/signin.scss';
-import { isAuthenticated } from '@/components/authentication';
 
 export default function Signin() {
   const router = useRouter();
+  const { ready, isLoggedIn } = useAuth();
 
   useEffect(() => {
-    isAuthenticated(router).then(isAuth => {
-      if (isAuth) {
-        router.push('/admin');
-      }
-    });
-  }, []);
+    if (ready && isLoggedIn) {
+      router.push('/admin');
+    }
+  }, [ready, isLoggedIn, router]);
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();

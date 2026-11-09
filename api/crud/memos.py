@@ -1,18 +1,50 @@
+from datetime import datetime, timedelta, timezone
+
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
 from models.memos import Memo
 from schemas.memos import MemoCreate, MemoUpdate
 
+MEMO_TTL = timedelta(days=1)
+
+
+def _utcnow() -> datetime:
+    """Return a naive UTC datetime matching the database column type."""
+    return datetime.now(timezone.utc).replace(tzinfo=None)
+
+
+def _delete_expired(db: Session, owner: str) -> None:
+    """Remove this user's unpinned memos whose 24-hour window has ended."""
+    deleted = (
+        db.query(Memo)
+        .filter(
+            Memo.owner == owner,
+            Memo.pinned.is_(False),
+            Memo.expires_at <= _utcnow(),
+        )
+        .delete(synchronize_session=False)
+    )
+    if deleted:
+        db.commit()
+
 
 def get_memos(db: Session, owner: str):
     """
-    Get all one-line memos belonging to the given user.
+    Get all current one-line memos belonging to the given user.
+
+    Pinned memos stay at the top and never expire. Other memos are kept for
+    one day from creation and are removed lazily whenever the list is read.
     """
+    _delete_expired(db, owner)
     return (
         db.query(Memo)
         .filter(Memo.owner == owner)
-        .order_by(Memo.created_at.desc(), Memo.id.desc())
+        .order_by(
+            Memo.pinned.desc(),
+            Memo.created_at.desc(),
+            Memo.id.desc(),
+        )
         .all()
     )
 
@@ -42,7 +74,12 @@ def create_memo(db: Session, owner: str, memo: MemoCreate):
             detail="메모 내용을 입력해주세요.",
         )
 
-    db_memo = Memo(owner=owner, content=content)
+    db_memo = Memo(
+        owner=owner,
+        content=content,
+        pinned=False,
+        expires_at=_utcnow() + MEMO_TTL,
+    )
     db.add(db_memo)
     db.commit()
     db.refresh(db_memo)
@@ -57,16 +94,33 @@ def update_memo(
 ):
     """
     Update a one-line memo belonging to the given user.
+
+    Content and pin state are independent. Unpinning starts a fresh one-day
+    lifetime so an old pinned memo does not disappear immediately.
     """
-    content = memo.content.strip()
-    if not content:
+    if memo.content is None and memo.pinned is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="메모 내용을 입력해주세요.",
+            detail="수정할 내용이 없습니다.",
         )
 
+    _delete_expired(db, owner)
     db_memo = _get_owned_memo(db, owner, memo_id)
-    db_memo.content = content
+
+    if memo.content is not None:
+        content = memo.content.strip()
+        if not content:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="메모 내용을 입력해주세요.",
+            )
+        db_memo.content = content
+
+    if memo.pinned is not None:
+        db_memo.pinned = memo.pinned
+        if not memo.pinned:
+            db_memo.expires_at = _utcnow() + MEMO_TTL
+
     db.commit()
     db.refresh(db_memo)
     return db_memo
@@ -76,6 +130,7 @@ def delete_memo(db: Session, owner: str, memo_id: int):
     """
     Delete a one-line memo belonging to the given user.
     """
+    _delete_expired(db, owner)
     db_memo = _get_owned_memo(db, owner, memo_id)
     db.delete(db_memo)
     db.commit()

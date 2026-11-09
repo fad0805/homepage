@@ -15,7 +15,7 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from core.config import ENVIRONMENT, AUTH_COOKIE_MAX_AGE
 from core.security import verify_password, create_access_token, create_refresh_token
-from routers.utils import get_current_user_from_token
+from routers.utils import get_current_user_from_token, get_optional_user
 from crud.users import get_user, create_user, update_refresh_token
 from db.session import get_db
 from schemas.users import UserCreate
@@ -135,4 +135,25 @@ def get_current_user(
     user = get_current_user_from_token(db, request, response, token=access_token)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
+    return {"success": True, "user": user.username}
+
+
+@router.get("/me/status")
+def get_current_user_status(
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """
+    Lightweight authentication check used by server-rendered pages.
+
+    Unlike /me, this endpoint never rotates tokens, so it is safe to call from
+    a Next.js server component that cannot propagate Set-Cookie headers.
+    """
+    user = get_optional_user(
+        request,
+        db,
+        token=request.cookies.get("access_token"),
+    )
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
     return {"success": True, "user": user.username}

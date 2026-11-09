@@ -33,6 +33,7 @@ import Cropper, { type Area } from "react-easy-crop";
 
 import { RichTextEditor } from "@/components/rich-text-editor";
 import { isRichTextEmpty, toRichTextHtml } from "@/lib/rich-text";
+import { maybeRevalidatePublicContent } from "@/lib/revalidate";
 
 import "react-easy-crop/react-easy-crop.css";
 import "@/public/styles/admin/characters.scss";
@@ -165,6 +166,8 @@ async function apiFetch<T>(url: string, init: RequestInit = {}): Promise<T> {
     }
     throw new Error(detail);
   }
+
+  maybeRevalidatePublicContent(url, init);
 
   if (response.status === 204) {
     return undefined as T;

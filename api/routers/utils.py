@@ -150,6 +150,7 @@ def get_optional_user(
     an administrator without rejecting anonymous visitors.
     """
     username = None
+    used_refresh_token = False
 
     if token:
         try:
@@ -164,6 +165,7 @@ def get_optional_user(
             try:
                 payload = decode_refresh_token(refresh_token)
                 username = payload.get("sub")
+                used_refresh_token = True
             except (jwt.ExpiredSignatureError, jwt.InvalidTokenError):
                 username = None
 
@@ -171,9 +173,23 @@ def get_optional_user(
         return None
 
     try:
-        return get_user(db, username)
+        user = get_user(db, username)
     except ValueError:
         return None
+
+    if used_refresh_token:
+        refresh_token = get_refresh_token_from_cookie(request)
+        if (
+            not refresh_token
+            or not user.refresh_token
+            or not hmac.compare_digest(
+                user.refresh_token.encode(),
+                refresh_token.encode(),
+            )
+        ):
+            return None
+
+    return user
 
 
 async def require_auth(

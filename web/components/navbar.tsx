@@ -1,53 +1,33 @@
 "use client";
-import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+
+import { useAuth } from "@/components/auth-provider";
 
 import "@/public/styles/navbar.scss";
 import navigation from "@/config/navigation";
 
+interface MenuItem {
+    label: string;
+    href: string;
+    authOnly?: boolean;
+}
+
 export const Navbar = () => {
     const currentPath = usePathname();
-    const [path, setPath] = useState(currentPath);
-    const [isLoggedIn, setIsLoggedIn] = useState(false);
+    const { isLoggedIn } = useAuth();
 
-    useEffect(() => {
-        setPath(currentPath);
-    }, [currentPath]);
-
-    useEffect(() => {
-        let cancelled = false;
-
-        fetch("/api/users/me", { credentials: "include" })
-            .then((response) => {
-                if (!cancelled) setIsLoggedIn(response.ok);
-            })
-            .catch(() => {
-                if (!cancelled) setIsLoggedIn(false);
-            });
-
-        return () => {
-            cancelled = true;
-        };
-    }, [currentPath]);
-
-    interface MenuItem {
-        label: string;
-        href: string;
-        authOnly?: boolean;
-    };
     const menuItems = navigation.main.items.filter(
         (item: MenuItem) => !item.authOnly || isLoggedIn
     );
-    const menuList = menuItems.map((item: MenuItem, index: number) => {
-        return <Link
-            key={index}
-            href={item.href}
-            className={ path === item.href ? "active" : "" }
-        >{item.label}</Link>;
-    });
 
     return <nav id="navbar">
-        { menuList }
+        { menuItems.map((item: MenuItem) => (
+            <Link
+                key={item.href}
+                href={item.href}
+                className={ currentPath === item.href ? "active" : "" }
+            >{item.label}</Link>
+        )) }
     </nav>;
 };

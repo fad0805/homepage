@@ -1,5 +1,3 @@
-"use client";
-
 import "@/public/styles/main.scss";
 
 export default function Home() {
