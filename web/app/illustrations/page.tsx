@@ -1,6 +1,10 @@
 import Link from "next/link";
 
-import { formatDate } from "@/lib/datetime";
+import {
+  dateInputValue,
+  formatDate,
+  todayDateInputValue,
+} from "@/lib/datetime";
 import type { IllustrationItem } from "@/lib/illustration-types";
 import { serverApiFetch } from "@/lib/server-api";
 
@@ -25,6 +29,18 @@ function parseSort(value: string | string[] | undefined): SortKey {
   return firstParam(value) === "created" ? "created" : "taken";
 }
 
+function parseFilter(value: string | string[] | undefined): SortKey {
+  return firstParam(value) === "created" ? "created" : "taken";
+}
+
+function parseDateParam(value: string | string[] | undefined) {
+  const raw = firstParam(value)?.trim();
+  if (!raw || !/^\d{4}-\d{2}-\d{2}$/.test(raw)) return null;
+
+  const parsed = new Date(`${raw}T00:00:00Z`);
+  return Number.isNaN(parsed.getTime()) ? null : raw;
+}
+
 function dateValue(value: string | null) {
   if (!value) return null;
   const parsed = new Date(value).getTime();
@@ -36,6 +52,25 @@ function compareDateDesc(a: number | null, b: number | null) {
   if (a === null) return 1;
   if (b === null) return -1;
   return b - a;
+}
+
+function filterIllustrations(
+  items: IllustrationItem[],
+  basis: SortKey,
+  from: string | null,
+  to: string | null,
+  includeUndated: boolean,
+) {
+  return items.filter((item) => {
+    const value =
+      basis === "taken"
+        ? item.taken_at?.slice(0, 10) ?? null
+        : dateInputValue(item.created_at) || null;
+    if (!value) return includeUndated;
+    if (from && value < from) return false;
+    if (to && value > to) return false;
+    return true;
+  });
 }
 
 function sortIllustrations(items: IllustrationItem[], sort: SortKey) {
@@ -83,9 +118,18 @@ function pageNumbers(page: number, totalPages: number) {
   return pages;
 }
 
-function pageHref(page: number, sort: SortKey) {
+function pageHref(
+  page: number,
+  sort: SortKey,
+  filterBasis: SortKey,
+  from: string | null,
+  to: string | null,
+) {
   const params = new URLSearchParams();
   if (sort !== "taken") params.set("sort", sort);
+  if (filterBasis !== "taken") params.set("filter", filterBasis);
+  if (from) params.set("from", from);
+  if (to) params.set("to", to);
   if (page > 1) params.set("page", String(page));
   const query = params.toString();
   return query ? `/illustrations?${query}` : "/illustrations";
@@ -97,11 +141,29 @@ export default async function IllustrationsPage({
   searchParams: Promise<{
     page?: string | string[];
     sort?: string | string[];
+    filter?: string | string[];
+    from?: string | string[];
+    to?: string | string[];
   }>;
 }) {
   const params = await searchParams;
   const requestedPage = parsePage(params.page);
   const sort = parseSort(params.sort);
+  const filterBasis = parseFilter(params.filter);
+  const today = todayDateInputValue();
+  const explicitRange =
+    params.from !== undefined || params.to !== undefined;
+  const rawFrom = parseDateParam(params.from);
+  const rawTo = parseDateParam(params.to);
+  let from =
+    explicitRange && rawFrom && rawFrom <= today ? rawFrom : null;
+  let to =
+    explicitRange && rawTo && rawTo <= today ? rawTo : null;
+  if (from && to && from > to) {
+    [from, to] = [to, from];
+  }
+  const hasRange = explicitRange;
+  const defaultEndDate = to ?? today;
 
   let illustrations: IllustrationItem[] = [];
   let failed = false;
@@ -116,46 +178,97 @@ export default async function IllustrationsPage({
     failed = true;
   }
 
-  const sorted = sortIllustrations(illustrations, sort);
+  const filtered = filterIllustrations(
+    illustrations,
+    filterBasis,
+    from,
+    to,
+    !from,
+  );
+  const sorted = sortIllustrations(filtered, sort);
   const totalPages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
   const page = Math.min(requestedPage, totalPages);
   const visible = sorted.slice(
     (page - 1) * PAGE_SIZE,
     page * PAGE_SIZE,
   );
-
   return (
     <div id="illustrations-page">
-      <header className="illustrations-header">
-        <div className="illustrations-header__top">
-          <div>
-            <p className="illustrations-eyebrow">ILLUSTRATIONS</p>
-            <h1>삽화</h1>
-          </div>
-          {!failed && illustrations.length > 0 ? (
+      {!failed && illustrations.length > 0 ? (
+        <header className="illustrations-header">
+          <div className="illustrations-controls">
+            <form
+              className="illustrations-filter"
+              method="get"
+              action="/illustrations"
+            >
+              {sort !== "taken" ? (
+                <input type="hidden" name="sort" value={sort} />
+              ) : null}
+              <label className="illustrations-filter__basis">
+                <span>범위</span>
+                <select name="filter" defaultValue={filterBasis}>
+                  <option value="taken">촬영일</option>
+                  <option value="created">등록일</option>
+                </select>
+              </label>
+              <label>
+                <span>시작일</span>
+                <input
+                  type="date"
+                  name="from"
+                  max={today}
+                  defaultValue={from ?? ""}
+                />
+              </label>
+              <span className="illustrations-filter__dash">~</span>
+              <label>
+                <span>종료일</span>
+                <input
+                  type="date"
+                  name="to"
+                  max={today}
+                  defaultValue={defaultEndDate}
+                />
+              </label>
+              <button type="submit">조회</button>
+              {hasRange ? (
+                <Link
+                  className="illustrations-filter__reset"
+                  href={pageHref(1, sort, filterBasis, null, null)}
+                >
+                  초기화
+                </Link>
+              ) : null}
+            </form>
+
             <nav className="illustrations-sort" aria-label="삽화 정렬">
               <span>정렬</span>
               <Link
                 className={sort === "taken" ? "is-active" : ""}
-                href={pageHref(1, "taken")}
+                href={pageHref(1, "taken", filterBasis, from, to)}
               >
                 촬영일
               </Link>
               <Link
                 className={sort === "created" ? "is-active" : ""}
-                href={pageHref(1, "created")}
+                href={pageHref(1, "created", filterBasis, from, to)}
               >
                 등록일
               </Link>
             </nav>
-          ) : null}
-        </div>
-      </header>
+          </div>
+        </header>
+      ) : null}
 
       {failed ? (
         <p className="illustrations-state">삽화를 불러오지 못했습니다.</p>
       ) : illustrations.length === 0 ? (
         <p className="illustrations-state">등록된 삽화가 없습니다.</p>
+      ) : filtered.length === 0 ? (
+        <p className="illustrations-state">
+          조건에 맞는 삽화가 없습니다.
+        </p>
       ) : (
         <>
           <div className="illustrations-grid">
@@ -210,7 +323,7 @@ export default async function IllustrationsPage({
               {page > 1 ? (
                 <Link
                   className="illustrations-pagination__button"
-                  href={pageHref(page - 1, sort)}
+                  href={pageHref(page - 1, sort, filterBasis, from, to)}
                 >
                   이전
                 </Link>
@@ -233,7 +346,7 @@ export default async function IllustrationsPage({
                     className={`illustrations-pagination__button${
                       value === page ? " is-active" : ""
                     }`}
-                    href={pageHref(value, sort)}
+                    href={pageHref(value, sort, filterBasis, from, to)}
                     aria-current={value === page ? "page" : undefined}
                     key={value}
                   >
@@ -245,7 +358,7 @@ export default async function IllustrationsPage({
               {page < totalPages ? (
                 <Link
                   className="illustrations-pagination__button"
-                  href={pageHref(page + 1, sort)}
+                  href={pageHref(page + 1, sort, filterBasis, from, to)}
                 >
                   다음
                 </Link>

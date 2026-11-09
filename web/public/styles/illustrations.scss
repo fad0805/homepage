@@ -1,6 +1,14 @@
 @use 'sass:color';
 @use 'variables' as *;
 
+:root {
+  --illustration-card-bg: var(--input-background);
+}
+
+[data-theme='dark'] {
+  --illustration-card-bg: #{color.adjust($dark-bg-sub, $lightness: 4%)};
+}
+
 #illustrations-page {
   width: min(1120px, 100%);
   margin: 0 auto;
@@ -10,22 +18,14 @@
 
 .illustrations-header {
   margin-bottom: 1.5rem;
-
-  h1 {
-    margin: 0;
-    color: var(--title-color);
-    font-family: Eulyoo1945-SemiBold, Arial, Helvetica, sans-serif;
-    font-size: 1.6rem;
-    line-height: 1.2;
-  }
 }
 
-.illustrations-header__top {
+.illustrations-controls {
   display: flex;
+  align-items: center;
   justify-content: space-between;
-  align-items: flex-end;
   flex-wrap: wrap;
-  gap: 0.75rem 1rem;
+  gap: 0.5rem 0.75rem;
 }
 
 .illustrations-sort {
@@ -64,16 +64,91 @@
   }
 }
 
-.illustrations-eyebrow {
-  margin: 0 0 0.45rem;
-  color: color.change($light-text, $alpha: 0.45);
-  font-size: 0.62rem;
-  letter-spacing: 0.2em;
-  text-transform: uppercase;
+.illustrations-filter {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.5rem;
+  margin-top: 0;
+  color: color.change($light-text, $alpha: 0.55);
+  font-size: 0.7rem;
+
+  label {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+  }
+
+  input[type='date'] {
+    padding: 0.3rem 0.45rem;
+    border: 1px solid rgba(0, 0, 0, 0.16);
+    border-radius: 0.45rem;
+    background: var(--input-background);
+    color: var(--foreground);
+    font-family: inherit;
+    font-size: 0.72rem;
+
+    &:focus {
+      outline: 2px solid var(--title-color);
+      outline-offset: 1px;
+    }
+  }
+
+  button {
+    padding: 0.35rem 0.7rem;
+    border: 1px solid transparent;
+    border-radius: 0.45rem;
+    background: var(--title-color);
+    color: #fff;
+    font-family: inherit;
+    font-size: 0.72rem;
+    cursor: pointer;
+  }
 }
 
-[data-theme='dark'] .illustrations-eyebrow {
-  color: color.change($dark-text, $alpha: 0.45);
+.illustrations-filter__basis {
+  color: var(--title-color);
+  font-weight: 600;
+}
+
+.illustrations-filter select {
+  padding: 0.3rem 0.45rem;
+  border: 1px solid rgba(0, 0, 0, 0.16);
+  border-radius: 0.45rem;
+  background: var(--input-background);
+  color: var(--foreground);
+  font-family: inherit;
+  font-size: 0.72rem;
+
+  &:focus {
+    outline: 2px solid var(--title-color);
+    outline-offset: 1px;
+  }
+}
+
+[data-theme='dark'] .illustrations-filter select {
+  border-color: rgba(255, 255, 255, 0.18);
+}
+
+.illustrations-filter__dash {
+  color: color.change($light-text, $alpha: 0.4);
+}
+
+.illustrations-filter__reset {
+  color: var(--title-color);
+  font-size: 0.7rem;
+}
+
+[data-theme='dark'] .illustrations-filter {
+  color: color.change($dark-text, $alpha: 0.55);
+
+  input[type='date'] {
+    border-color: rgba(255, 255, 255, 0.18);
+  }
+}
+
+[data-theme='dark'] .illustrations-filter__dash {
+  color: color.change($dark-text, $alpha: 0.55);
 }
 
 .illustrations-state {
@@ -150,7 +225,7 @@
   min-width: 0;
   overflow: hidden;
   border-radius: 0.9rem;
-  background: var(--input-background);
+  background: var(--illustration-card-bg);
   box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
   color: var(--foreground);
   text-decoration: none;
@@ -179,7 +254,7 @@
   position: relative;
   aspect-ratio: 4 / 3;
   overflow: hidden;
-  background: var(--subtheme);
+  background: var(--illustration-card-bg);
 
   img {
     display: block;
@@ -295,7 +370,7 @@
   box-sizing: border-box;
   overflow: hidden;
   border-radius: 1rem;
-  background: var(--input-background);
+  background: var(--illustration-card-bg);
   box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
   touch-action: pan-y;
 

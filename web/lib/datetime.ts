@@ -38,13 +38,20 @@ export function formatDateTime(value: string | null) {
   });
 }
 
-export function todayDateInputValue() {
+export function dateInputValue(value: string | null) {
+  if (!value) return "";
+  const date = parseApiDateTime(value);
+  if (!date) return "";
   return new Intl.DateTimeFormat("en-CA", {
     timeZone: KOREAN_TIME_ZONE,
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
-  }).format(new Date());
+  }).format(date);
+}
+
+export function todayDateInputValue() {
+  return dateInputValue(new Date().toISOString());
 }
 
 export function formatDate(value: string | null) {

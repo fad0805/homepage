@@ -1,6 +1,14 @@
 @use 'sass:color';
 @use 'variables' as *;
 
+:root {
+  --memo-panel-bg: var(--input-background);
+}
+
+[data-theme='dark'] {
+  --memo-panel-bg: #{color.adjust($dark-bg-sub, $lightness: 4%)};
+}
+
 #memo-page {
   display: flex;
   justify-content: center;
@@ -32,7 +40,7 @@
 .memo-panel {
   padding: 1.25rem 1.5rem;
   border-radius: 1.2rem;
-  background: var(--input-background);
+  background: var(--memo-panel-bg);
   box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
 }
 
