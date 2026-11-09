@@ -265,17 +265,11 @@ export default function MemoClient() {
   return (
     <div id="memo-page">
       <main>
-        <h2 className="page-title">주석</h2>
-        <p className="memo-intro">
-          한 줄로 남기는 기록입니다. 고정하지 않은 주석은 24시간 뒤
-          사라집니다.
-        </p>
         {loading ? (
           <p className="memo-status">불러오는 중...</p>
         ) : (
-          <div className="memo-panel">
+          <>
             <form className="memo-form" onSubmit={handleCreate}>
-              <label htmlFor="memo-new-content">새 한 줄 메모</label>
               <div className="memo-input-row">
                 <textarea
                   id="memo-new-content"
@@ -415,7 +409,7 @@ export default function MemoClient() {
               totalPages={totalPages}
               onChange={setPage}
             />
-          </div>
+          </>
         )}
       </main>
     </div>

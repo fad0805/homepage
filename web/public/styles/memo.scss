@@ -2,11 +2,11 @@
 @use 'variables' as *;
 
 :root {
-  --memo-panel-bg: var(--input-background);
+  --memo-input-bg: var(--input-background);
 }
 
 [data-theme='dark'] {
-  --memo-panel-bg: #{color.adjust($dark-bg-sub, $lightness: 4%)};
+  --memo-input-bg: #{color.adjust($dark-bg-sub, $lightness: 4%)};
 }
 
 #memo-page {
@@ -23,37 +23,10 @@
   min-width: 0;
 }
 
-#memo-page .page-title {
-  color: var(--title-color);
-}
-
-.memo-intro {
-  margin: 0 0 1.5rem;
-  color: color.change($light-text, $alpha: 0.62);
-  font-size: 0.9rem;
-}
-
-[data-theme='dark'] .memo-intro {
-  color: color.change($dark-text, $alpha: 0.62);
-}
-
-.memo-panel {
-  padding: 1.25rem 1.5rem;
-  border-radius: 1.2rem;
-  background: var(--memo-panel-bg);
-  box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-}
-
 .memo-form {
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
-}
-
-.memo-form label {
-  font-size: 0.85rem;
-  font-weight: bold;
-  color: var(--title-color);
 }
 
 .memo-input-row {
@@ -72,7 +45,7 @@
   padding: 0.8rem 1rem;
   border: 1px solid color.change($maintheme, $alpha: 0.5);
   border-radius: 0.8rem;
-  background: transparent;
+  background: var(--memo-input-bg);
   color: var(--input-text);
   font-family: inherit;
   font-size: 1rem;
@@ -319,10 +292,6 @@
 @media (max-width: $breakpoint-md) {
   #memo-page {
     padding: 1.5rem 1.2rem 5rem;
-  }
-
-  .memo-panel {
-    padding: 1rem;
   }
 
   .memo-item-time {
