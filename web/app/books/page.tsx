@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 
 import { Pagination } from "@/components/pagination";
 import { RssSubscribe } from "@/components/rss-subscribe";
@@ -121,6 +122,23 @@ export default function Books() {
   const [now, setNow] = useState(() => Date.now());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    fetch("/api/users/me", { credentials: "include" })
+      .then((response) => {
+        if (!cancelled) setIsLoggedIn(response.ok);
+      })
+      .catch(() => {
+        if (!cancelled) setIsLoggedIn(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -541,13 +559,23 @@ export default function Books() {
   const detailPanel =
     activeBook && activeChapter ? (
       <div className="books-panel__detail">
-        <button
-          type="button"
-          className="books-panel__back"
-          onClick={() => setActiveChapterId(null)}
-        >
-          ← 게시글 목록
-        </button>
+        <div className="books-detail-nav">
+          <button
+            type="button"
+            className="books-panel__back"
+            onClick={() => setActiveChapterId(null)}
+          >
+            ← 게시글 목록
+          </button>
+          {isLoggedIn ? (
+            <Link
+              className="books-detail__edit"
+              href={`/admin/books/${activeBook.id}/chapters/${activeChapter.id}`}
+            >
+              수정
+            </Link>
+          ) : null}
+        </div>
         <ChapterDetail
           chapter={activeChapter}
           bookTitle={activeBook.title}

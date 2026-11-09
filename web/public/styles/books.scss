@@ -428,6 +428,37 @@
   opacity: 0.5;
 }
 
+.books-detail-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.8rem;
+}
+
+.books-detail-nav .books-panel__back {
+  margin-bottom: 0;
+}
+
+.books-detail__edit {
+  flex-shrink: 0;
+  padding: 0.2rem 0.5rem;
+  border: 1px solid rgba(0, 0, 0, 0.16);
+  border-radius: 0.4rem;
+  color: var(--title-color);
+  font-size: 0.68rem;
+  line-height: 1.4;
+  white-space: nowrap;
+  opacity: 0.75;
+  transition: opacity 0.15s ease, background-color 0.15s ease;
+
+  &:hover,
+  &:focus-visible {
+    background: rgba(255, 255, 255, 0.4);
+    opacity: 1;
+  }
+}
+
 .tag-list {
   display: flex;
   flex-wrap: wrap;
@@ -745,6 +776,15 @@
   .books-chapter-link:hover,
   .books-chapter-link:focus-visible {
     background: rgba(255, 255, 255, 0.06);
+  }
+
+  .books-detail__edit {
+    border-color: rgba(255, 255, 255, 0.2);
+
+    &:hover,
+    &:focus-visible {
+      background: rgba(255, 255, 255, 0.08);
+    }
   }
 
   .pagination__button:hover:not(:disabled) {
