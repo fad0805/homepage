@@ -352,52 +352,56 @@ export default function MemoClient() {
                           <p className="memo-content" title={memo.content}>
                             {memo.content}
                           </p>
-                          <span
-                            className="memo-item-time"
-                            title={`작성 ${formatDateTime(memo.created_at)}${
-                              memo.updated_at !== memo.created_at
-                                ? ` · 수정 ${formatDateTime(memo.updated_at)}`
-                                : ""
-                            }`}
-                          >
-                            {formatDateTime(memo.updated_at)}
-                          </span>
-                          <div className="memo-item-actions">
-                            <button
-                              className={`memo-text-button is-pin${
-                                memo.pinned ? " is-active" : ""
+                          <div className="memo-meta">
+                            <div className="memo-item-actions">
+                              <button
+                                className={`memo-text-button is-pin${
+                                  memo.pinned ? " is-active" : ""
+                                }`}
+                                type="button"
+                                aria-pressed={memo.pinned}
+                                disabled={pinningId !== null}
+                                title={
+                                  memo.pinned
+                                    ? "고정을 해제하면 24시간 뒤 사라집니다."
+                                    : "고정하면 계속 보관됩니다."
+                                }
+                                onClick={() => handleTogglePin(memo)}
+                              >
+                                {pinningId === memo.id
+                                  ? "변경 중..."
+                                  : memo.pinned
+                                    ? "고정 해제"
+                                    : "고정"}
+                              </button>
+                              <button
+                                className="memo-text-button"
+                                type="button"
+                                onClick={() => startEditing(memo)}
+                              >
+                                수정
+                              </button>
+                              <button
+                                className="memo-text-button is-danger"
+                                type="button"
+                                disabled={deletingId !== null}
+                                onClick={() => handleDelete(memo)}
+                              >
+                                {deletingId === memo.id
+                                  ? "삭제 중..."
+                                  : "삭제"}
+                              </button>
+                            </div>
+                            <span
+                              className="memo-item-time"
+                              title={`작성 ${formatDateTime(memo.created_at)}${
+                                memo.updated_at !== memo.created_at
+                                  ? ` · 수정 ${formatDateTime(memo.updated_at)}`
+                                  : ""
                               }`}
-                              type="button"
-                              aria-pressed={memo.pinned}
-                              disabled={pinningId !== null}
-                              title={
-                                memo.pinned
-                                  ? "고정을 해제하면 24시간 뒤 사라집니다."
-                                  : "고정하면 계속 보관됩니다."
-                              }
-                              onClick={() => handleTogglePin(memo)}
                             >
-                              {pinningId === memo.id
-                                ? "변경 중..."
-                                : memo.pinned
-                                  ? "고정 해제"
-                                  : "고정"}
-                            </button>
-                            <button
-                              className="memo-text-button"
-                              type="button"
-                              onClick={() => startEditing(memo)}
-                            >
-                              수정
-                            </button>
-                            <button
-                              className="memo-text-button is-danger"
-                              type="button"
-                              disabled={deletingId !== null}
-                              onClick={() => handleDelete(memo)}
-                            >
-                              {deletingId === memo.id ? "삭제 중..." : "삭제"}
-                            </button>
+                              {formatDateTime(memo.updated_at)}
+                            </span>
                           </div>
                         </div>
                       )}

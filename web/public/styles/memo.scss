@@ -143,7 +143,7 @@
 
 .memo-row {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 0.6rem;
 }
 
@@ -159,8 +159,16 @@
   white-space: pre-wrap;
 }
 
-.memo-item-time {
+.memo-meta {
+  display: flex;
   flex: none;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.1rem;
+}
+
+.memo-item-time {
+  padding-bottom: 0.35rem;
   color: color.change($light-text, $alpha: 0.45);
   font-size: 0.72rem;
   white-space: nowrap;
