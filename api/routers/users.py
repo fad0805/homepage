@@ -29,6 +29,17 @@ def create_admin_for_dev():
     if ENVIRONMENT != 'development':
         return
 
+    # Require an explicit opt-in as well. This prevents an accidental
+    # development-mode start from creating the default admin account in a
+    # database that is not meant for it.
+    if os.getenv('DEV_ADMIN_SEED', '').strip().lower() not in (
+        '1',
+        'true',
+        'yes',
+        'on',
+    ):
+        return
+
     with closing(next(get_db())) as db:
         try:
             signup(username='admin', password='admin', db=db)

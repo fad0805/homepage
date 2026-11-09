@@ -1,20 +1,21 @@
 services:
   db:
     env_file:
-      - path: .env.development
-        required: true
       - path: .env.production
         required: false
+      - path: .env.development
+        required: true
 
   api:
     command: sh -c "./entrypoint.sh uvicorn main:app --host 0.0.0.0 --port 8000 --reload"
     env_file:
-      - path: .env.development
-        required: true
       - path: .env.production
         required: false
+      - path: .env.development
+        required: true
     environment:
       - ENVIRONMENT=development
+      - DEV_ADMIN_SEED=true
     networks:
       - external_network
       - internal_network

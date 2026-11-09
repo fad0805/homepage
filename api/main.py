@@ -1,8 +1,10 @@
+import logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
+from core.config import ENVIRONMENT
 from core.uploads import UPLOAD_DIR, ensure_upload_dir
 from routers import (
     books,
@@ -17,8 +19,16 @@ from routers import (
     visits,
 )
 
+logger = logging.getLogger("uvicorn.error")
+
 @asynccontextmanager
 async def lifespan(app:FastAPI):
+    logger.info("ENVIRONMENT=%s", ENVIRONMENT)
+    if ENVIRONMENT == "development":
+        logger.warning(
+            "Development mode is enabled. Do not use this configuration "
+            "on a production server."
+        )
     users.create_admin_for_dev()
     yield
 
