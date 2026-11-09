@@ -156,7 +156,7 @@ div#container>main>div#content {
   color: color.adjust($maintheme, $lightness: -60%);
 }
 
-main {
+div#container > main {
   min-width: 100%;
   @media (width >= 768px) {
     min-width: 755px;
