@@ -2,10 +2,16 @@
 
 import { useEffect } from "react";
 
+import { useAuth } from "@/components/auth-provider";
+
 const SESSION_KEY = "missing-island-visit-tracked";
 
 export function VisitTracker() {
+  const { ready, isLoggedIn } = useAuth();
+
   useEffect(() => {
+    if (!ready || isLoggedIn) return;
+
     try {
       if (window.sessionStorage.getItem(SESSION_KEY)) return;
       window.sessionStorage.setItem(SESSION_KEY, "1");
@@ -27,7 +33,7 @@ export function VisitTracker() {
     }).catch(() => {
       // Analytics must never break the page.
     });
-  }, []);
+  }, [ready, isLoggedIn]);
 
   return null;
 }
