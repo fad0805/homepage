@@ -31,7 +31,7 @@ interface Memo {
 function sortMemos(items: Memo[]) {
   return [...items].sort((a, b) => {
     if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
-    return b.id - a.id;
+    return a.pinned ? a.id - b.id : b.id - a.id;
   });
 }
 
