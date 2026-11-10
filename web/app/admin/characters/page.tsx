@@ -29,13 +29,16 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import Cropper, { type Area } from "react-easy-crop";
 
+import {
+  ImageCropModal,
+  type CropStageConfig,
+  type CroppedImageResult,
+} from "@/components/image-crop-modal";
 import { RichTextEditor } from "@/components/rich-text-editor";
 import { isRichTextEmpty, toRichTextHtml } from "@/lib/rich-text";
 import { maybeRevalidatePublicContent } from "@/lib/revalidate";
 
-import "react-easy-crop/react-easy-crop.css";
 import "@/public/styles/admin/characters.scss";
 
 interface Location {
@@ -195,77 +198,24 @@ function toDateValue(value: string | null | undefined) {
   return value.slice(0, 10);
 }
 
-type CropStage = "banner" | "detail";
-
-const CROP_STAGES: Record<
-  CropStage,
-  { aspect: number; outputWidth: number; label: string }
-> = {
-  banner: {
+const CHARACTER_CROP_STAGES: CropStageConfig[] = [
+  {
+    key: "banner",
     aspect: 3,
     outputWidth: 1280,
-    label: "배너 (3:1)",
+    title: "이미지 자르기 · 1/2 배너",
+    hint: "목록에 표시할 3:1 배너를 자릅니다. 다음 단계에서 상세 페이지용 1:1 이미지를 자릅니다.",
+    fileSuffix: "banner",
   },
-  detail: {
+  {
+    key: "detail",
     aspect: 1,
     outputWidth: 1024,
-    label: "상세 (1:1)",
+    title: "이미지 자르기 · 2/2 상세",
+    hint: "상세 페이지에 표시할 정사각형(1:1) 이미지를 자릅니다. 적용하면 1024×1024px로 저장됩니다.",
+    fileSuffix: "detail",
   },
-};
-
-function loadImage(src: string): Promise<HTMLImageElement> {
-  return new Promise((resolve, reject) => {
-    const image = new Image();
-    image.onload = () => resolve(image);
-    image.onerror = () => reject(new Error("이미지를 불러오지 못했습니다."));
-    image.src = src;
-  });
-}
-
-async function cropImageToBlob(
-  src: string,
-  crop: Area,
-  outputWidth: number,
-  aspect: number,
-): Promise<Blob> {
-  const image = await loadImage(src);
-  const outputHeight = Math.max(
-    1,
-    Math.round(outputWidth / aspect),
-  );
-  const canvas = document.createElement("canvas");
-  canvas.width = outputWidth;
-  canvas.height = outputHeight;
-
-  const context = canvas.getContext("2d");
-  if (!context) {
-    throw new Error("이미지를 처리할 수 없습니다.");
-  }
-
-  context.imageSmoothingEnabled = true;
-  context.imageSmoothingQuality = "high";
-  context.drawImage(
-    image,
-    crop.x,
-    crop.y,
-    crop.width,
-    crop.height,
-    0,
-    0,
-    outputWidth,
-    outputHeight,
-  );
-
-  return new Promise((resolve, reject) => {
-    canvas.toBlob((blob) => {
-      if (blob) {
-        resolve(blob);
-      } else {
-        reject(new Error("이미지를 처리할 수 없습니다."));
-      }
-    }, "image/png");
-  });
-}
+];
 
 function ModalShell({
   title,
@@ -572,19 +522,10 @@ export default function AdminCharacters() {
     CharacterRelationshipDraft[]
   >([]);
 
-  const [cropModalOpen, setCropModalOpen] = useState(false);
-  const [cropSource, setCropSource] = useState<string | null>(null);
-  const [cropFileName, setCropFileName] = useState<string>("");
-  const [cropStage, setCropStage] = useState<CropStage>("banner");
-  const [pendingBanner, setPendingBanner] = useState<{
-    file: File;
-    preview: string;
-    name: string;
+  const [cropRequest, setCropRequest] = useState<{
+    src: string;
+    fileName: string;
   } | null>(null);
-  const [crop, setCrop] = useState({ x: 0, y: 0 });
-  const [cropZoom, setCropZoom] = useState(1);
-  const [croppedAreaPixels, setCroppedAreaPixels] = useState<Area | null>(null);
-  const [cropping, setCropping] = useState(false);
   const [urlCropLoading, setUrlCropLoading] = useState(false);
 
   const [locationModalOpen, setLocationModalOpen] = useState(false);
@@ -1043,40 +984,18 @@ export default function AdminCharacters() {
     setCharacterModalOpen(true);
   };
 
-  const resetCropState = useCallback(
-    (discardPending = true) => {
-      if (cropSource) {
-        URL.revokeObjectURL(cropSource);
-        objectUrls.current.delete(cropSource);
-      }
-      if (discardPending) {
-        setPendingBanner((current) => {
-          if (current) {
-            URL.revokeObjectURL(current.preview);
-            objectUrls.current.delete(current.preview);
-          }
-          return null;
-        });
-      } else {
-        setPendingBanner(null);
-      }
-      setCropSource(null);
-      setCropFileName("");
-      setCropStage("banner");
-      setCrop({ x: 0, y: 0 });
-      setCropZoom(1);
-      setCroppedAreaPixels(null);
-      if (thumbnailInputRef.current) {
-        thumbnailInputRef.current.value = "";
-      }
-    },
-    [cropSource],
-  );
-
   const closeCropModal = useCallback(() => {
-    setCropModalOpen(false);
-    resetCropState();
-  }, [resetCropState]);
+    setCropRequest((current) => {
+      if (current) {
+        URL.revokeObjectURL(current.src);
+        objectUrls.current.delete(current.src);
+      }
+      return null;
+    });
+    if (thumbnailInputRef.current) {
+      thumbnailInputRef.current.value = "";
+    }
+  }, []);
 
   const closeCharacterModal = useCallback(() => {
     setCharacterModalOpen(false);
@@ -1116,14 +1035,7 @@ export default function AdminCharacters() {
 
     const objectUrl = URL.createObjectURL(file);
     objectUrls.current.add(objectUrl);
-    setCropSource(objectUrl);
-    setCropFileName(file.name);
-    setCropStage("banner");
-    setPendingBanner(null);
-    setCrop({ x: 0, y: 0 });
-    setCropZoom(1);
-    setCroppedAreaPixels(null);
-    setCropModalOpen(true);
+    setCropRequest({ src: objectUrl, fileName: file.name });
   };
 
   const openCropFromUrl = useCallback(async () => {
@@ -1169,16 +1081,10 @@ export default function AdminCharacters() {
 
       const objectUrl = URL.createObjectURL(blob);
       objectUrls.current.add(objectUrl);
-      setCropSource(objectUrl);
-      setCropFileName(
-        value.split("/").pop()?.split("?")[0] || "character",
-      );
-      setCropStage("banner");
-      setPendingBanner(null);
-      setCrop({ x: 0, y: 0 });
-      setCropZoom(1);
-      setCroppedAreaPixels(null);
-      setCropModalOpen(true);
+      setCropRequest({
+        src: objectUrl,
+        fileName: value.split("/").pop()?.split("?")[0] || "character",
+      });
     } catch (error) {
       console.error(error);
       notify(
@@ -1192,75 +1098,33 @@ export default function AdminCharacters() {
     }
   }, [notify, thumbnailUrlInput, urlCropLoading]);
 
-  const applyCrop = useCallback(async () => {
-    if (!cropSource || !croppedAreaPixels) {
-      return;
-    }
+  const handleCropComplete = useCallback(
+    (results: CroppedImageResult[]) => {
+      const banner = results.find((result) => result.stage === "banner");
+      const detail = results.find((result) => result.stage === "detail");
 
-    setCropping(true);
-    try {
-      const stage = CROP_STAGES[cropStage];
-      const blob = await cropImageToBlob(
-        cropSource,
-        croppedAreaPixels,
-        stage.outputWidth,
-        stage.aspect,
-      );
-      const baseName = cropFileName.replace(/\.[^.]+$/, "") || "character";
-      const suffix = cropStage === "banner" ? "banner" : "detail";
-      const croppedFile = new File(
-        [blob],
-        `${baseName}-${suffix}.png`,
-        { type: "image/png" },
-      );
-
-      if (cropStage === "banner") {
-        const previewUrl = URL.createObjectURL(croppedFile);
-        objectUrls.current.add(previewUrl);
-        setPendingBanner({
-          file: croppedFile,
-          preview: previewUrl,
-          name: croppedFile.name,
-        });
-        setCropStage("detail");
-        setCrop({ x: 0, y: 0 });
-        setCropZoom(1);
-        setCroppedAreaPixels(null);
+      if (!banner || !detail) {
+        notify("error", "이미지 크롭 결과를 찾지 못했습니다.");
+        closeCropModal();
         return;
       }
 
-      if (!pendingBanner) {
-        notify("error", "배너 이미지 크롭 정보를 찾지 못했습니다.");
-        return;
-      }
+      const bannerPreview = URL.createObjectURL(banner.file);
+      const detailPreview = URL.createObjectURL(detail.file);
+      objectUrls.current.add(bannerPreview);
+      objectUrls.current.add(detailPreview);
 
-      const previewUrl = URL.createObjectURL(croppedFile);
-      objectUrls.current.add(previewUrl);
+      setThumbnailFile(banner.file);
+      setThumbnailPreview(bannerPreview);
+      setThumbnailFileName(banner.file.name);
+      setDetailFile(detail.file);
+      setDetailPreview(detailPreview);
+      setDetailFileName(detail.file.name);
 
-      setThumbnailFile(pendingBanner.file);
-      setThumbnailPreview(pendingBanner.preview);
-      setThumbnailFileName(pendingBanner.name);
-      setDetailFile(croppedFile);
-      setDetailPreview(previewUrl);
-      setDetailFileName(croppedFile.name);
-
-      setCropModalOpen(false);
-      resetCropState(false);
-    } catch (error) {
-      console.error(error);
-      notify("error", "이미지를 자르지 못했습니다.");
-    } finally {
-      setCropping(false);
-    }
-  }, [
-    cropFileName,
-    cropSource,
-    cropStage,
-    croppedAreaPixels,
-    notify,
-    pendingBanner,
-    resetCropState,
-  ]);
+      closeCropModal();
+    },
+    [closeCropModal, notify],
+  );
 
   const handleThumbnailUrlChange = (event: ChangeEvent<HTMLInputElement>) => {
     setThumbnailUrlInput(event.target.value);
@@ -1643,7 +1507,7 @@ export default function AdminCharacters() {
         <ModalShell
           title={editingCharacter ? "등장인물 수정" : "등장인물 추가"}
           onClose={closeCharacterModal}
-          closeOnEscape={!cropModalOpen}
+          closeOnEscape={!cropRequest}
           footer={
             <>
               <button
@@ -2005,75 +1869,14 @@ export default function AdminCharacters() {
         </ModalShell>
       ) : null}
 
-      {cropModalOpen && cropSource ? (
-        <ModalShell
-          title={
-            cropStage === "banner"
-              ? "이미지 자르기 · 1/2 배너"
-              : "이미지 자르기 · 2/2 상세"
-          }
+      {cropRequest ? (
+        <ImageCropModal
+          imageSrc={cropRequest.src}
+          fileName={cropRequest.fileName}
+          stages={CHARACTER_CROP_STAGES}
           onClose={closeCropModal}
-          footer={
-            <>
-              <button
-                type="button"
-                className="admin-button"
-                onClick={closeCropModal}
-                disabled={cropping}
-              >
-                취소
-              </button>
-              <button
-                type="button"
-                className="admin-button primary"
-                onClick={applyCrop}
-                disabled={cropping || !croppedAreaPixels}
-              >
-                {cropping
-                  ? "처리 중..."
-                  : cropStage === "banner"
-                    ? "다음 (상세 이미지)"
-                    : "적용"}
-              </button>
-            </>
-          }
-        >
-          <div className="admin-crop">
-            <div className="admin-crop-viewport">
-              <Cropper
-                key={cropStage}
-                image={cropSource}
-                crop={crop}
-                zoom={cropZoom}
-                aspect={CROP_STAGES[cropStage].aspect}
-                onCropChange={setCrop}
-                onZoomChange={setCropZoom}
-                onCropComplete={(_, areaPixels) =>
-                  setCroppedAreaPixels(areaPixels)
-                }
-                showGrid
-              />
-            </div>
-            <label className="admin-field">
-              <span>확대 / 축소</span>
-              <input
-                type="range"
-                min={1}
-                max={3}
-                step={0.01}
-                value={cropZoom}
-                onChange={(event) =>
-                  setCropZoom(Number(event.target.value))
-                }
-              />
-            </label>
-            <p className="admin-crop-hint">
-              {cropStage === "banner"
-                ? "목록에 표시할 3:1 배너를 자릅니다. 다음 단계에서 상세 페이지용 1:1 이미지를 자릅니다."
-                : "상세 페이지에 표시할 정사각형(1:1) 이미지를 자릅니다. 적용하면 1024×1024px로 저장됩니다."}
-            </p>
-          </div>
-        </ModalShell>
+          onComplete={handleCropComplete}
+        />
       ) : null}
 
       {locationModalOpen ? (

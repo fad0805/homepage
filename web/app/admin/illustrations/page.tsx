@@ -8,6 +8,11 @@ import {
   type DragEvent,
 } from "react";
 
+import {
+  ImageCropModal,
+  type CropStageConfig,
+  type CroppedImageResult,
+} from "@/components/image-crop-modal";
 import { apiFetch } from "@/lib/api";
 import {
   formatDate,
@@ -31,7 +36,19 @@ interface Preview {
 const MAX_FILES = 100;
 const MAX_BATCH_FILES = 10;
 const MAX_BATCH_BYTES = 40 * 1024 * 1024;
+const MAX_IMAGE_BYTES = 50 * 1024 * 1024;
 const LIST_PAGE_SIZE = 12;
+
+const REPRESENTATIVE_CROP_STAGES: CropStageConfig[] = [
+  {
+    key: "representative",
+    aspect: 1,
+    outputWidth: 1024,
+    title: "대표 이미지 자르기",
+    hint: "목록에 표시할 정사각형(1:1) 이미지를 자릅니다. 적용하면 1024×1024px로 저장됩니다.",
+    fileSuffix: "representative",
+  },
+];
 
 function listPageNumbers(page: number, totalPages: number) {
   if (totalPages <= 7) {
@@ -88,14 +105,6 @@ function moveItem<T>(items: T[], from: number, to: number) {
   return next;
 }
 
-function representativeImage(item: IllustrationDetailItem) {
-  return (
-    item.images.find((image) => image.id === item.representative_image_id) ??
-    item.images[0] ??
-    null
-  );
-}
-
 export default function AdminIllustrations() {
   const [items, setItems] = useState<IllustrationDetailItem[]>([]);
   const [files, setFiles] = useState<File[]>([]);
@@ -103,7 +112,16 @@ export default function AdminIllustrations() {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [takenAt, setTakenAt] = useState("");
-  const [representativeIndex, setRepresentativeIndex] = useState(0);
+  const [createRepresentativeFile, setCreateRepresentativeFile] =
+    useState<File | null>(null);
+  const [createRepresentativePreview, setCreateRepresentativePreview] =
+    useState<string | null>(null);
+  const [representativeCrop, setRepresentativeCrop] = useState<{
+    target: "create" | "edit";
+    src: string;
+    fileName: string;
+  } | null>(null);
+  const [savingRepresentative, setSavingRepresentative] = useState(false);
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
@@ -136,6 +154,8 @@ export default function AdminIllustrations() {
   const [notice, setNotice] = useState<Notice | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const modalFileInputRef = useRef<HTMLInputElement>(null);
+  const createRepresentativeInputRef = useRef<HTMLInputElement>(null);
+  const modalRepresentativeInputRef = useRef<HTMLInputElement>(null);
   const today = todayDateInputValue();
   const totalPages = Math.max(
     1,
@@ -190,9 +210,18 @@ export default function AdminIllustrations() {
   }, [files]);
 
   useEffect(() => {
-    setRepresentativeIndex((current) =>
-      files.length === 0 ? 0 : Math.min(current, files.length - 1),
-    );
+    return () => {
+      if (createRepresentativePreview) {
+        URL.revokeObjectURL(createRepresentativePreview);
+      }
+    };
+  }, [createRepresentativePreview]);
+
+  useEffect(() => {
+    if (files.length === 0) {
+      setCreateRepresentativeFile(null);
+      setCreateRepresentativePreview(null);
+    }
   }, [files.length]);
 
   useEffect(() => {
@@ -205,7 +234,7 @@ export default function AdminIllustrations() {
     if (!editingItem) return;
 
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
+      if (event.key === "Escape" && !representativeCrop) {
         setEditingItem(null);
       }
     };
@@ -217,7 +246,7 @@ export default function AdminIllustrations() {
       window.removeEventListener("keydown", handleKeyDown);
       document.body.style.overflow = previousOverflow;
     };
-  }, [editingItem]);
+  }, [editingItem, representativeCrop]);
 
   const addFiles = (list: FileList | null) => {
     if (!list) return;
@@ -245,21 +274,59 @@ export default function AdminIllustrations() {
     setFiles((previous) =>
       previous.filter((_, fileIndex) => fileIndex !== index),
     );
-    setRepresentativeIndex((current) => {
-      if (current === index) return 0;
-      if (current > index) return current - 1;
-      return current;
-    });
   };
 
   const moveFile = (from: number, to: number) => {
     setFiles((previous) => moveItem(previous, from, to));
-    setRepresentativeIndex((current) => {
-      if (current === from) return to;
-      if (from < current && to >= current) return current - 1;
-      if (from > current && to <= current) return current + 1;
-      return current;
+  };
+
+  const closeRepresentativeCrop = useCallback(() => {
+    setRepresentativeCrop((current) => {
+      if (current) {
+        URL.revokeObjectURL(current.src);
+      }
+      return null;
     });
+  }, []);
+
+  const openRepresentativeCrop = (
+    list: FileList | null,
+    target: "create" | "edit",
+  ) => {
+    const file = list?.[0];
+    if (!file) return;
+
+    const showError = (text: string) => {
+      if (target === "edit") {
+        setModalNotice({ type: "error", text });
+      } else {
+        setNotice({ type: "error", text });
+      }
+    };
+
+    const resetInput = () => {
+      if (target === "create" && createRepresentativeInputRef.current) {
+        createRepresentativeInputRef.current.value = "";
+      }
+      if (target === "edit" && modalRepresentativeInputRef.current) {
+        modalRepresentativeInputRef.current.value = "";
+      }
+    };
+
+    if (!file.type.startsWith("image/")) {
+      showError("PNG / JPEG / WEBP / GIF 이미지만 업로드할 수 있습니다.");
+      resetInput();
+      return;
+    }
+    if (file.size > MAX_IMAGE_BYTES) {
+      showError("이미지는 50MB 이하만 업로드할 수 있습니다.");
+      resetInput();
+      return;
+    }
+
+    const src = URL.createObjectURL(file);
+    setRepresentativeCrop({ target, src, fileName: file.name });
+    resetInput();
   };
 
   const upsertItem = (item: IllustrationDetailItem) => {
@@ -296,6 +363,7 @@ export default function AdminIllustrations() {
     let groupId: number | null = null;
     let detail: IllustrationDetailItem | null = null;
     let processed = 0;
+    let representativeError: string | null = null;
 
     setUploading(true);
     setUploadProgress({ done: 0, total: selectedFiles.length });
@@ -333,34 +401,40 @@ export default function AdminIllustrations() {
         upsertItem(result);
       }
 
-      if (detail) {
-        const selectedRepresentative =
-          detail.images[representativeIndex] ?? detail.images[0] ?? null;
-        if (
-          selectedRepresentative &&
-          selectedRepresentative.id !== detail.representative_image_id
-        ) {
+      if (detail && createRepresentativeFile) {
+        try {
+          const representativeForm = new FormData();
+          representativeForm.append("file", createRepresentativeFile);
           const updated = await apiFetch<IllustrationDetailItem>(
-            `/api/illustrations/${detail.id}`,
-            {
-              method: "PUT",
-              body: JSON.stringify({
-                representative_image_id: selectedRepresentative.id,
-              }),
-            },
+            `/api/illustrations/${detail.id}/representative`,
+            { method: "PUT", body: representativeForm },
           );
           detail = updated;
           upsertItem(updated);
+        } catch (error) {
+          representativeError =
+            error instanceof Error
+              ? error.message
+              : "대표 이미지를 업로드하지 못했습니다.";
         }
       }
 
       setFiles([]);
       setTitle("");
       setDescription("");
-      setNotice({
-        type: "success",
-        text: `${detail?.image_count ?? selectedFiles.length}장을 하나의 삽화로 올렸습니다.`,
-      });
+      setCreateRepresentativeFile(null);
+      setCreateRepresentativePreview(null);
+      setNotice(
+        representativeError
+          ? {
+              type: "error",
+              text: `삽화는 올렸지만 대표 이미지를 저장하지 못했습니다. ${representativeError}`,
+            }
+          : {
+              type: "success",
+              text: `${detail?.image_count ?? selectedFiles.length}장을 하나의 삽화로 올렸습니다.`,
+            },
+      );
     } catch (error) {
       if (groupId === null) {
         // Nothing was created, so keep the selection for another attempt.
@@ -423,6 +497,64 @@ export default function AdminIllustrations() {
       ),
     );
     return mediaPatch;
+  };
+
+  const handleRepresentativeCropComplete = async (
+    results: CroppedImageResult[],
+  ) => {
+    const result = results[0];
+    const target = representativeCrop?.target;
+    if (!result || !target) {
+      closeRepresentativeCrop();
+      return;
+    }
+
+    if (target === "create") {
+      const preview = URL.createObjectURL(result.file);
+      setCreateRepresentativeFile(result.file);
+      setCreateRepresentativePreview(preview);
+      closeRepresentativeCrop();
+      setNotice({
+        type: "success",
+        text: "대표 이미지를 선택했습니다. 삽화를 올리면 함께 저장됩니다.",
+      });
+      return;
+    }
+
+    if (!editingItem) {
+      closeRepresentativeCrop();
+      return;
+    }
+
+    setSavingRepresentative(true);
+    setModalNotice(null);
+    try {
+      const formData = new FormData();
+      formData.append("file", result.file);
+      const updated = await apiFetch<IllustrationDetailItem>(
+        `/api/illustrations/${editingItem.id}/representative`,
+        { method: "PUT", body: formData },
+      );
+      const mediaPatch = applyMediaUpdate(updated);
+      setEditingItem((current) =>
+        current ? { ...current, ...mediaPatch } : current,
+      );
+      setModalNotice({
+        type: "success",
+        text: "대표 이미지를 변경했습니다.",
+      });
+    } catch (error) {
+      setModalNotice({
+        type: "error",
+        text:
+          error instanceof Error
+            ? error.message
+            : "대표 이미지를 업로드하지 못했습니다.",
+      });
+    } finally {
+      setSavingRepresentative(false);
+      closeRepresentativeCrop();
+    }
   };
 
   const addImagesToEditing = async (list: FileList | null) => {
@@ -573,8 +705,6 @@ export default function AdminIllustrations() {
             title: editingItem.title,
             description: editingItem.description,
             taken_at: editingItem.taken_at || null,
-            representative_image_id:
-              editingItem.representative_image_id,
             visible: editingItem.visible,
           }),
         },
@@ -863,8 +993,8 @@ export default function AdminIllustrations() {
                 </button>
               </div>
               <p className="admin-illustrations-order-hint">
-                사진을 드래그해 순서를 바꾸고, 미리보기에 사용할 대표
-                이미지를 선택하세요.
+                사진을 드래그해 순서를 바꾸세요. 대표 이미지는 아래에서
+                따로 업로드할 수 있습니다.
               </p>
               <div className="admin-illustrations-previews">
                 {previews.map((preview, index) => (
@@ -921,19 +1051,6 @@ export default function AdminIllustrations() {
                     </span>
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img src={preview.url} alt={preview.file.name} />
-                    <label
-                      className={`admin-illustrations-preview__rep${
-                        representativeIndex === index ? " is-active" : ""
-                      }`}
-                    >
-                      <input
-                        type="radio"
-                        name="representative-image"
-                        checked={representativeIndex === index}
-                        onChange={() => setRepresentativeIndex(index)}
-                      />
-                      대표
-                    </label>
                     <button
                       type="button"
                       onClick={() => removeFile(index)}
@@ -953,6 +1070,50 @@ export default function AdminIllustrations() {
             </>
           )}
         </div>
+
+        {previews.length > 0 ? (
+          <div className="admin-illustrations-representative">
+            <div className="admin-illustrations-representative__preview">
+              {createRepresentativePreview ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={createRepresentativePreview}
+                  alt="대표 이미지 미리보기"
+                />
+              ) : (
+                <span>대표 이미지 없음</span>
+              )}
+            </div>
+            <div className="admin-illustrations-representative__body">
+              <h3>대표 이미지</h3>
+              <p>
+                목록에 표시할 정사각형 이미지를 업로드하세요. 없으면 첫
+                사진이 사용됩니다.
+              </p>
+              <button
+                type="button"
+                className="admin-button"
+                onClick={() =>
+                  createRepresentativeInputRef.current?.click()
+                }
+                disabled={uploading}
+              >
+                {createRepresentativeFile
+                  ? "대표 이미지 다시 선택"
+                  : "대표 이미지 선택"}
+              </button>
+              <input
+                ref={createRepresentativeInputRef}
+                type="file"
+                accept="image/png,image/jpeg,image/webp,image/gif"
+                hidden
+                onChange={(event) =>
+                  openRepresentativeCrop(event.target.files, "create")
+                }
+              />
+            </div>
+          </div>
+        ) : null}
 
         <div className="admin-illustrations-fields">
           <label className="admin-illustrations-field">
@@ -1101,7 +1262,6 @@ export default function AdminIllustrations() {
           <>
             <div className="admin-illustrations-grid">
               {visibleItems.map((item) => {
-              const representative = representativeImage(item);
               return (
                 <article
                   className={`admin-illustration-card is-compact${
@@ -1170,10 +1330,10 @@ export default function AdminIllustrations() {
                     />
                     선택
                   </label>
-                  {representative ? (
+                  {item.representative_url ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
-                      src={representative.url}
+                      src={item.representative_url}
                       alt={item.title}
                       loading="lazy"
                       decoding="async"
@@ -1286,13 +1446,44 @@ export default function AdminIllustrations() {
             <div className="admin-modal-body">
               <div className="admin-illustrations-modal__summary">
                 <div className="admin-illustrations-modal__cover">
-                  {representativeImage(editingItem) ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={representativeImage(editingItem)!.url}
-                      alt={editingItem.title}
-                    />
-                  ) : null}
+                  <div className="admin-illustrations-modal__cover-image">
+                    {editingItem.representative_url ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={editingItem.representative_url}
+                        alt={editingItem.title}
+                      />
+                    ) : (
+                      <span>대표 이미지 없음</span>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    className="admin-button"
+                    onClick={() =>
+                      modalRepresentativeInputRef.current?.click()
+                    }
+                    disabled={savingRepresentative}
+                  >
+                    {savingRepresentative
+                      ? "업로드 중..."
+                      : "대표 이미지 변경"}
+                  </button>
+                  <input
+                    ref={modalRepresentativeInputRef}
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp,image/gif"
+                    hidden
+                    onChange={(event) =>
+                      openRepresentativeCrop(
+                        event.target.files,
+                        "edit",
+                      )
+                    }
+                  />
+                  <p className="admin-illustrations-modal__cover-hint">
+                    정사각형(1:1)으로 자동 크롭됩니다.
+                  </p>
                 </div>
                 <div className="admin-illustrations-modal__fields">
                   <label className="admin-illustration-card__field">
@@ -1352,11 +1543,8 @@ export default function AdminIllustrations() {
               <div className="admin-illustrations-modal__images">
                 <div className="admin-illustrations-modal__images-head">
                   <div>
-                    <h3>사진 순서 및 대표 이미지</h3>
-                    <p>
-                      사진을 드래그해 순서를 바꾸고, 라디오로 대표
-                      이미지를 선택하세요.
-                    </p>
+                    <h3>사진 순서</h3>
+                    <p>사진을 드래그해 순서를 바꾸세요.</p>
                   </div>
                   <div className="admin-illustrations-modal__images-actions">
                     <span>{editingItem.image_count}장</span>
@@ -1442,28 +1630,6 @@ export default function AdminIllustrations() {
                         loading="lazy"
                         decoding="async"
                       />
-                      <label
-                        className={`admin-illustrations-modal__image-rep${
-                          editingItem.representative_image_id === image.id
-                            ? " is-active"
-                            : ""
-                        }`}
-                      >
-                        <input
-                          type="radio"
-                          name={`modal-representative-${editingItem.id}`}
-                          checked={
-                            editingItem.representative_image_id ===
-                            image.id
-                          }
-                          onChange={() =>
-                            updateEditing({
-                              representative_image_id: image.id,
-                            })
-                          }
-                        />
-                        대표
-                      </label>
                       <span className="admin-illustrations-modal__image-order">
                         {index + 1}
                       </span>
@@ -1521,6 +1687,16 @@ export default function AdminIllustrations() {
             </footer>
           </div>
         </div>
+      ) : null}
+
+      {representativeCrop ? (
+        <ImageCropModal
+          imageSrc={representativeCrop.src}
+          fileName={representativeCrop.fileName}
+          stages={REPRESENTATIVE_CROP_STAGES}
+          onClose={closeRepresentativeCrop}
+          onComplete={handleRepresentativeCropComplete}
+        />
       ) : null}
     </div>
   );

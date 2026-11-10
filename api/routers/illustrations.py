@@ -25,6 +25,7 @@ from crud.illustrations import (
     get_visible_illustrations,
     reorder_illustration_images,
     reorder_illustrations,
+    set_illustration_representative,
     update_illustration,
 )
 from db.session import get_db
@@ -191,6 +192,31 @@ def remove_illustration_image(
 ):
     """Delete one photo from an illustration group."""
     return delete_illustration_image(db, illustration_id, image_id)
+
+
+@router.put(
+    "/{illustration_id}/representative",
+    response_model=IllustrationDetail,
+)
+async def put_illustration_representative(
+    illustration_id: int,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    _=Depends(require_auth),
+):
+    """Upload a separately cropped representative image."""
+    original_name = Path(file.filename or "").name[:255] or None
+    url = await save_banner(file, folder="illustrations")
+    try:
+        return set_illustration_representative(
+            db,
+            illustration_id,
+            url,
+            original_name,
+        )
+    except Exception:
+        delete_uploaded_file(url)
+        raise
 
 
 @router.get("/{illustration_id}", response_model=IllustrationDetail)

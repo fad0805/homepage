@@ -4,7 +4,7 @@ from fastapi import HTTPException, status
 from sqlalchemy import func
 from sqlalchemy.orm import Session, selectinload
 
-from core.uploads import delete_uploaded_file
+from core.uploads import delete_replaced_upload, delete_uploaded_file
 from models.illustrations import Illustration, IllustrationImage
 from schemas.illustrations import (
     IllustrationBulkUpdate,
@@ -35,6 +35,13 @@ def _serialize_image(image: IllustrationImage) -> dict:
 
 def _serialize_summary(illustration: Illustration) -> dict:
     representative = _representative_image(illustration)
+    representative_url = illustration.representative_url or (
+        representative.url if representative else None
+    )
+    representative_original_name = (
+        illustration.representative_original_name
+        or (representative.original_name if representative else None)
+    )
     return {
         "id": illustration.id,
         "title": illustration.title,
@@ -44,10 +51,8 @@ def _serialize_summary(illustration: Illustration) -> dict:
         "representative_image_id": (
             representative.id if representative else None
         ),
-        "representative_url": representative.url if representative else None,
-        "representative_original_name": (
-            representative.original_name if representative else None
-        ),
+        "representative_url": representative_url,
+        "representative_original_name": representative_original_name,
         "image_count": len(illustration.images or []),
         "order": illustration.order,
         "created_at": illustration.created_at,
@@ -208,6 +213,31 @@ def append_illustration_images(
     )
 
 
+def set_illustration_representative(
+    db: Session,
+    illustration_id: int,
+    url: str,
+    original_name: str | None,
+):
+    """Replace an illustration's separately uploaded representative image."""
+    illustration = _get_illustration_or_404(db, illustration_id)
+    old_url = illustration.representative_url
+
+    illustration.representative_url = url
+    illustration.representative_original_name = original_name
+
+    try:
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+
+    delete_replaced_upload(old_url, url)
+    return _serialize_detail(
+        _get_illustration_or_404(db, illustration_id)
+    )
+
+
 def update_illustration(
     db: Session,
     illustration_id: int,
@@ -215,6 +245,7 @@ def update_illustration(
 ):
     illustration = _get_illustration_or_404(db, illustration_id)
     data = payload.model_dump(exclude_unset=True)
+    replaced_representative_url: str | None = None
 
     if "title" in data:
         title = data["title"]
@@ -233,20 +264,30 @@ def update_illustration(
 
     if "representative_image_id" in data:
         representative_id = data["representative_image_id"]
-        if representative_id is not None and not any(
-            image.id == representative_id
-            for image in illustration.images
-        ):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="이 삽화에 속한 이미지만 대표 이미지로 선택할 수 있습니다.",
-            )
+        if representative_id is not None:
+            if not any(
+                image.id == representative_id
+                for image in illustration.images
+            ):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=(
+                        "이 삽화에 속한 이미지만 대표 이미지로 선택할 수 "
+                        "있습니다."
+                    ),
+                )
+            # Selecting a gallery image clears the separately uploaded cover.
+            replaced_representative_url = illustration.representative_url
+            illustration.representative_url = None
+            illustration.representative_original_name = None
 
     for key, value in data.items():
         setattr(illustration, key, value)
 
     db.commit()
     db.refresh(illustration)
+    if replaced_representative_url:
+        delete_uploaded_file(replaced_representative_url)
     return _serialize_detail(
         _get_illustration_or_404(db, illustration_id)
     )
@@ -409,6 +450,11 @@ def bulk_delete_illustrations(db: Session, ids: list[int]):
         for illustration in illustrations
         for image in (illustration.images or [])
     }
+    urls.update(
+        illustration.representative_url
+        for illustration in illustrations
+        if illustration.representative_url
+    )
     for illustration in illustrations:
         db.delete(illustration)
     db.commit()
@@ -421,6 +467,8 @@ def bulk_delete_illustrations(db: Session, ids: list[int]):
 def delete_illustration(db: Session, illustration_id: int):
     illustration = _get_illustration_or_404(db, illustration_id)
     urls = [image.url for image in illustration.images]
+    if illustration.representative_url:
+        urls.append(illustration.representative_url)
 
     db.delete(illustration)
     db.commit()

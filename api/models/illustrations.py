@@ -23,6 +23,8 @@ class Illustration(Base):
     description = Column(Text, nullable=True)
     taken_at = Column(Date, nullable=True)
     representative_image_id = Column(Integer, nullable=True)
+    representative_url = Column(String(1000), nullable=True)
+    representative_original_name = Column(String(255), nullable=True)
     order = Column(Integer, nullable=False, default=0)
     visible = Column(Boolean, nullable=False, default=True)
     created_at = Column(DateTime, default=func.now(), nullable=False)
