@@ -46,6 +46,10 @@ router = APIRouter()
 MAX_BULK_ILLUSTRATIONS = 100
 
 
+def _parse_tags(value: str | None) -> list[str]:
+    return [tag.strip() for tag in (value or "").split(",") if tag.strip()]
+
+
 @router.get("", response_model=list[IllustrationSummary])
 @router.get(
     "/",
@@ -71,6 +75,7 @@ async def upload_illustrations(
     files: list[UploadFile] = File(...),
     title: str | None = Form(default=None),
     description: str | None = Form(default=None),
+    tags: str | None = Form(default=None),
     taken_at: date | None = Form(default=None),
     representative_index: int = Form(default=0),
     illustration_id: int | None = Form(default=None),
@@ -118,6 +123,7 @@ async def upload_illustrations(
                 owner=getattr(user, "username", "admin"),
                 title=normalized_title,
                 description=normalized_description,
+                tags=_parse_tags(tags),
                 uploads=uploaded,
                 taken_at=taken_at,
                 representative_index=representative_index,

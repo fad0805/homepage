@@ -14,6 +14,15 @@ from schemas.illustrations import (
 )
 
 
+def _clean_tags(tags: list[str] | None) -> list[str]:
+    cleaned: list[str] = []
+    for tag in tags or []:
+        value = tag.strip()
+        if value and value not in cleaned:
+            cleaned.append(value)
+    return cleaned[:20]
+
+
 def _representative_image(
     illustration: Illustration,
 ) -> IllustrationImage | None:
@@ -46,6 +55,7 @@ def _serialize_summary(illustration: Illustration) -> dict:
         "id": illustration.id,
         "title": illustration.title,
         "description": illustration.description,
+        "tags": illustration.tags or [],
         "taken_at": illustration.taken_at,
         "visible": illustration.visible,
         "representative_image_id": (
@@ -159,6 +169,7 @@ def create_illustration_group(
     title: str,
     uploads: list[tuple[str, str | None]],
     description: str | None = None,
+    tags: list[str] | None = None,
     taken_at: date | None = None,
     representative_index: int = 0,
 ):
@@ -167,6 +178,7 @@ def create_illustration_group(
         owner=owner,
         title=title,
         description=description,
+        tags=_clean_tags(tags),
         taken_at=taken_at,
         visible=True,
         order=_next_illustration_order(db),
@@ -261,6 +273,9 @@ def update_illustration(
         if isinstance(description, str):
             description = description.strip()
         data["description"] = description or None
+
+    if "tags" in data:
+        data["tags"] = _clean_tags(data["tags"])
 
     if "representative_image_id" in data:
         representative_id = data["representative_image_id"]
@@ -426,6 +441,8 @@ def bulk_update_illustrations(
             illustration.visible = data["visible"]
         if "taken_at" in data:
             illustration.taken_at = data["taken_at"]
+        if "tags" in data and data["tags"] is not None:
+            illustration.tags = _clean_tags(data["tags"])
 
     db.commit()
     return len(illustrations)

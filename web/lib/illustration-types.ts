@@ -9,6 +9,7 @@ export interface IllustrationItem {
   id: number;
   title: string;
   description: string | null;
+  tags: string[];
   taken_at: string | null;
   visible: boolean;
   representative_image_id: number | null;

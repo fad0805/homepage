@@ -273,45 +273,59 @@ export default async function IllustrationsPage({
         <>
           <div className="illustrations-grid">
             {visible.map((item) => (
-              <Link
-                className="illustration-card"
-                href={`/illustrations/${item.id}`}
-                key={item.id}
-              >
-                <div className="illustration-card__thumb">
-                  {item.representative_url ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={item.representative_url}
-                      alt={item.title}
-                      loading="lazy"
-                      decoding="async"
-                    />
-                  ) : (
-                    <span className="illustration-card__empty">
-                      이미지 없음
-                    </span>
-                  )}
-                  {item.image_count > 1 ? (
-                    <span className="illustration-card__count">
-                      {item.image_count}장
-                    </span>
-                  ) : null}
-                </div>
-                <div className="illustration-card__body">
-                  <p className="illustration-card__title">
-                    {item.title}
-                  </p>
-                  {item.description ? (
-                    <p className="illustration-card__description">
-                      {item.description}
+              <article className="illustration-card" key={item.id}>
+                <Link
+                  className="illustration-card__link"
+                  href={`/illustrations/${item.id}`}
+                >
+                  <div className="illustration-card__thumb">
+                    {item.representative_url ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={item.representative_url}
+                        alt={item.title}
+                        loading="lazy"
+                        decoding="async"
+                      />
+                    ) : (
+                      <span className="illustration-card__empty">
+                        이미지 없음
+                      </span>
+                    )}
+                    {item.image_count > 1 ? (
+                      <span className="illustration-card__count">
+                        {item.image_count}장
+                      </span>
+                    ) : null}
+                  </div>
+                  <div className="illustration-card__body">
+                    <p className="illustration-card__title">
+                      {item.title}
                     </p>
-                  ) : null}
-                  <p className="illustration-card__meta">
-                    촬영 {formatDate(item.taken_at)}
-                  </p>
-                </div>
-              </Link>
+                    {item.description ? (
+                      <p className="illustration-card__description">
+                        {item.description}
+                      </p>
+                    ) : null}
+                    <p className="illustration-card__meta">
+                      촬영 {formatDate(item.taken_at)}
+                    </p>
+                  </div>
+                </Link>
+                {item.tags?.length ? (
+                  <div className="tag-list illustration-card__tags">
+                    {item.tags.map((tag) => (
+                      <Link
+                        className="tag is-clickable"
+                        href={`/search?q=${encodeURIComponent(tag)}`}
+                        key={tag}
+                      >
+                        {tag}
+                      </Link>
+                    ))}
+                  </div>
+                ) : null}
+              </article>
             ))}
           </div>
 

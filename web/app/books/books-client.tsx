@@ -28,44 +28,23 @@ function compareChaptersByCreatedDesc(a: Chapter, b: Chapter) {
   return bTime - aTime || b.id - a.id;
 }
 
-function TagChip({
-  tag,
-  onActivate,
-}: {
-  tag: string;
-  onActivate: (tag: string) => void;
-}) {
+function TagChip({ tag }: { tag: string }) {
   return (
-    <span
+    <Link
       className="tag is-clickable"
-      role="button"
-      tabIndex={0}
-      onClick={(event) => {
-        event.preventDefault();
-        event.stopPropagation();
-        onActivate(tag);
-      }}
-      onKeyDown={(event) => {
-        if (event.key === "Enter" || event.key === " ") {
-          event.preventDefault();
-          event.stopPropagation();
-          onActivate(tag);
-        }
-      }}
+      href={`/search?q=${encodeURIComponent(tag)}`}
     >
       {tag}
-    </span>
+    </Link>
   );
 }
 
 function ChapterDetail({
   chapter,
   bookTitle,
-  onTagClick,
 }: {
   chapter: Chapter;
   bookTitle: string;
-  onTagClick: (tag: string) => void;
 }) {
   return (
     <article className="chapter-detail">
@@ -85,7 +64,7 @@ function ChapterDetail({
       {chapter.tags?.length ? (
         <div className="tag-list chapter-detail__tags">
           {chapter.tags.map((tag) => (
-            <TagChip tag={tag} onActivate={onTagClick} key={tag} />
+            <TagChip tag={tag} key={tag} />
           ))}
         </div>
       ) : null}
@@ -309,12 +288,6 @@ export default function BooksClient({
     });
   };
 
-  const activateTag = (tag: string) => {
-    setSearchQuery(tag);
-    setActiveChapterId(null);
-    setChapterPage(1);
-  };
-
   const handleSearchChange = (value: string) => {
     setSearchQuery(value);
     setActiveChapterId(null);
@@ -432,7 +405,7 @@ export default function BooksClient({
                 </span>
               ) : null}
               {activeBook.tags?.map((tag) => (
-                <TagChip tag={tag} onActivate={activateTag} key={tag} />
+                <TagChip tag={tag} key={tag} />
               ))}
             </div>
           ) : null}
@@ -518,7 +491,6 @@ export default function BooksClient({
         <ChapterDetail
           chapter={activeChapter}
           bookTitle={activeBook.title}
-          onTagClick={activateTag}
         />
       </div>
     ) : null;

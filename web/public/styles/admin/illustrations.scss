@@ -608,6 +608,25 @@
   }
 }
 
+.admin-illustrations-bulkbar__tags {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  color: var(--admin-muted);
+  font-size: 0.68rem;
+
+  input {
+    width: 9rem;
+    padding: 0.3rem 0.4rem;
+    border: 1px solid var(--admin-border);
+    border-radius: 0.4rem;
+    background: var(--admin-card-bg);
+    color: var(--foreground);
+    font-family: inherit;
+    font-size: 0.7rem;
+  }
+}
+
 .admin-button.is-danger {
   border-color: rgba(176, 68, 68, 0.45);
   color: #a33c3c;
@@ -724,6 +743,10 @@
     color: var(--admin-muted);
     font-size: 0.64rem;
     font-weight: normal;
+  }
+
+  .admin-illustration-card__compact-tags {
+    margin-top: 0.05rem;
   }
 }
 

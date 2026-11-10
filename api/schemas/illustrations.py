@@ -33,6 +33,7 @@ class IllustrationSummary(BaseModel):
     id: int
     title: str
     description: str | None = None
+    tags: list[str] = Field(default_factory=list)
     taken_at: date | None = None
     visible: bool
     representative_image_id: int | None = None
@@ -55,6 +56,7 @@ class IllustrationUpdate(BaseModel):
 
     title: str | None = Field(default=None, max_length=255)
     description: str | None = Field(default=None, max_length=2000)
+    tags: list[str] | None = None
     taken_at: date | None = None
     representative_image_id: int | None = None
     visible: bool | None = None
@@ -71,6 +73,7 @@ class IllustrationBulkUpdate(BaseModel):
     ids: list[int] = Field(default_factory=list)
     visible: bool | None = None
     taken_at: date | None = None
+    tags: list[str] | None = None
 
     @field_validator("taken_at")
     @classmethod

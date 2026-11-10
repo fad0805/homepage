@@ -459,39 +459,6 @@
   }
 }
 
-.tag-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.2rem;
-}
-
-.tag {
-  padding: 0.05rem 0.4rem;
-  border: 1px solid rgba(0, 0, 0, 0.16);
-  border-radius: 999px;
-  color: var(--title-color);
-  font-size: 0.62rem;
-  line-height: 1.4;
-  opacity: 0.8;
-  white-space: nowrap;
-
-  &.is-clickable {
-    cursor: pointer;
-
-    &:hover,
-    &:focus-visible {
-      border-color: var(--title-color);
-      opacity: 1;
-    }
-  }
-
-  &.is-category {
-    border-color: var(--title-color);
-    font-weight: bold;
-    opacity: 1;
-  }
-}
-
 .books-panel__tags {
   margin-top: 0.35rem;
 }
@@ -802,10 +769,6 @@
 
   .chapter-detail__body code {
     background: rgba(255, 255, 255, 0.08);
-  }
-
-  .tag {
-    border-color: rgba(255, 255, 255, 0.2);
   }
 
   .books-search input,

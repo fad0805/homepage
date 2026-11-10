@@ -243,11 +243,27 @@
       transform: scale(1.025);
     }
   }
+}
+
+.illustration-card__link {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  color: var(--foreground);
+  text-decoration: none;
+
+  &:visited {
+    color: var(--foreground);
+  }
 
   &:focus-visible {
     outline: 2px solid var(--title-color);
-    outline-offset: 2px;
+    outline-offset: -2px;
   }
+}
+
+.illustration-card__tags {
+  padding: 0 0.75rem 0.75rem;
 }
 
 .illustration-card__thumb {
@@ -486,6 +502,10 @@
   line-height: 1.7;
   overflow-wrap: anywhere;
   white-space: pre-wrap;
+}
+
+.illustration-detail__tags {
+  margin-top: 0.55rem;
 }
 
 .illustration-detail__meta {

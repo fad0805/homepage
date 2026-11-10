@@ -105,12 +105,24 @@ function moveItem<T>(items: T[], from: number, to: number) {
   return next;
 }
 
+function parseTags(value: string) {
+  const tags: string[] = [];
+  for (const raw of value.split(",")) {
+    const tag = raw.trim();
+    if (tag && !tags.includes(tag)) {
+      tags.push(tag);
+    }
+  }
+  return tags;
+}
+
 export default function AdminIllustrations() {
   const [items, setItems] = useState<IllustrationDetailItem[]>([]);
   const [files, setFiles] = useState<File[]>([]);
   const [previews, setPreviews] = useState<Preview[]>([]);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
+  const [tagsInput, setTagsInput] = useState("");
   const [takenAt, setTakenAt] = useState("");
   const [createRepresentativeFile, setCreateRepresentativeFile] =
     useState<File | null>(null);
@@ -138,10 +150,12 @@ export default function AdminIllustrations() {
   );
   const [bulkWorking, setBulkWorking] = useState(false);
   const [bulkTakenAt, setBulkTakenAt] = useState("");
+  const [bulkTags, setBulkTags] = useState("");
   const [cardDragId, setCardDragId] = useState<number | null>(null);
   const [cardDragOverId, setCardDragOverId] = useState<number | null>(null);
   const [editingItem, setEditingItem] =
     useState<IllustrationDetailItem | null>(null);
+  const [editingTagsInput, setEditingTagsInput] = useState("");
   const [modalDragIndex, setModalDragIndex] = useState<number | null>(null);
   const [modalDragOverIndex, setModalDragOverIndex] = useState<
     number | null
@@ -377,6 +391,9 @@ export default function AdminIllustrations() {
         if (description.trim()) {
           formData.append("description", description.trim());
         }
+        if (tagsInput.trim()) {
+          formData.append("tags", tagsInput.trim());
+        }
         if (takenAt) {
           formData.append("taken_at", takenAt);
         }
@@ -422,6 +439,7 @@ export default function AdminIllustrations() {
       setFiles([]);
       setTitle("");
       setDescription("");
+      setTagsInput("");
       setCreateRepresentativeFile(null);
       setCreateRepresentativePreview(null);
       setNotice(
@@ -460,6 +478,7 @@ export default function AdminIllustrations() {
       ...item,
       images: [...item.images],
     });
+    setEditingTagsInput((item.tags ?? []).join(", "));
     setModalNotice(null);
     setModalDragIndex(null);
     setModalDragOverIndex(null);
@@ -704,6 +723,7 @@ export default function AdminIllustrations() {
           body: JSON.stringify({
             title: editingItem.title,
             description: editingItem.description,
+            tags: parseTags(editingTagsInput),
             taken_at: editingItem.taken_at || null,
             visible: editingItem.visible,
           }),
@@ -788,6 +808,7 @@ export default function AdminIllustrations() {
   const bulkUpdate = async (patch: {
     visible?: boolean;
     taken_at?: string | null;
+    tags?: string[];
   }) => {
     if (selectedIds.size === 0 || bulkWorking) return;
 
@@ -816,6 +837,9 @@ export default function AdminIllustrations() {
           selectedIds.has(item.id) ? { ...item, ...patch } : item,
         ),
       );
+      if (patch.tags !== undefined) {
+        setBulkTags("");
+      }
       setNotice({
         type: "success",
         text: `${result.updated}개의 삽화를 수정했습니다.`,
@@ -1136,6 +1160,14 @@ export default function AdminIllustrations() {
               onChange={(event) => setDescription(event.target.value)}
             />
           </label>
+          <label className="admin-illustrations-field">
+            <span>태그 <em>선택</em></span>
+            <input
+              value={tagsInput}
+              placeholder="쉼표로 구분 (예: 바다, 밤)"
+              onChange={(event) => setTagsInput(event.target.value)}
+            />
+          </label>
         </div>
 
         <label className="admin-illustrations-batch-date">
@@ -1231,6 +1263,24 @@ export default function AdminIllustrations() {
                 disabled={bulkWorking || !bulkTakenAt}
               >
                 촬영일 적용
+              </button>
+              <label className="admin-illustrations-bulkbar__tags">
+                <span>태그</span>
+                <input
+                  value={bulkTags}
+                  placeholder="쉼표로 구분"
+                  onChange={(event) => setBulkTags(event.target.value)}
+                />
+              </label>
+              <button
+                type="button"
+                className="admin-button"
+                onClick={() =>
+                  void bulkUpdate({ tags: parseTags(bulkTags) })
+                }
+                disabled={bulkWorking || parseTags(bulkTags).length === 0}
+              >
+                태그 적용
               </button>
               <button
                 type="button"
@@ -1346,6 +1396,15 @@ export default function AdminIllustrations() {
                         <p className="admin-illustration-card__compact-description">
                           {item.description}
                         </p>
+                      ) : null}
+                      {item.tags?.length ? (
+                        <div className="tag-list admin-illustration-card__compact-tags">
+                          {item.tags.map((tag) => (
+                            <span className="tag" key={tag}>
+                              {tag}
+                            </span>
+                          ))}
+                        </div>
                       ) : null}
                       <p className="admin-illustration-card__compact-date">
                         촬영 {formatDate(item.taken_at)}
@@ -1509,6 +1568,16 @@ export default function AdminIllustrations() {
                         updateEditing({
                           description: event.target.value,
                         })
+                      }
+                    />
+                  </label>
+                  <label className="admin-illustration-card__field">
+                    <span>태그</span>
+                    <input
+                      value={editingTagsInput}
+                      placeholder="쉼표로 구분 (예: 바다, 밤)"
+                      onChange={(event) =>
+                        setEditingTagsInput(event.target.value)
                       }
                     />
                   </label>

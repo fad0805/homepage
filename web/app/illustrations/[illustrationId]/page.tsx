@@ -72,6 +72,19 @@ export default async function IllustrationDetailPage({
                 {illustration.description}
               </p>
             ) : null}
+            {illustration.tags?.length ? (
+              <div className="tag-list illustration-detail__tags">
+                {illustration.tags.map((tag) => (
+                  <Link
+                    className="tag is-clickable"
+                    href={`/search?q=${encodeURIComponent(tag)}`}
+                    key={tag}
+                  >
+                    {tag}
+                  </Link>
+                ))}
+              </div>
+            ) : null}
           </div>
           <dl className="illustration-detail__meta">
             <div>

@@ -1,4 +1,5 @@
 from sqlalchemy import (
+    JSON,
     Boolean,
     Column,
     Date,
@@ -21,6 +22,7 @@ class Illustration(Base):
     owner = Column(String(50), nullable=False, index=True)
     title = Column(String(255), nullable=False)
     description = Column(Text, nullable=True)
+    tags = Column(JSON, nullable=False, default=list)
     taken_at = Column(Date, nullable=True)
     representative_image_id = Column(Integer, nullable=True)
     representative_url = Column(String(1000), nullable=True)
