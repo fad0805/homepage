@@ -1,5 +1,5 @@
 from datetime import date, datetime, timedelta, timezone
-from urllib.parse import urlparse
+from urllib.parse import parse_qs, urlparse
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import func
@@ -38,6 +38,61 @@ def normalize_source(referrer: str | None, request_host: str | None) -> str:
             return "internal"
 
     return host[:255]
+
+
+def _search_query_parameter(host: str) -> str | None:
+    """Return the query parameter used by a known search engine."""
+    if host == "google.com" or host.startswith("google.") or ".google." in host:
+        return "q"
+    if host == "naver.com" or host.endswith(".naver.com"):
+        return "query"
+    if host == "daum.net" or host.endswith(".daum.net"):
+        return "q"
+    if host == "bing.com" or host.endswith(".bing.com"):
+        return "q"
+    if host == "duckduckgo.com" or host.endswith(".duckduckgo.com"):
+        return "q"
+    if host == "yahoo.com" or host.endswith(".yahoo.com"):
+        return "p"
+    if host == "zum.com" or host.endswith(".zum.com"):
+        return "q"
+    if host == "nate.com" or host.endswith(".nate.com"):
+        return "q"
+    if host == "baidu.com" or host.endswith(".baidu.com"):
+        return "wd"
+    if host.startswith("yandex.") or ".yandex." in host:
+        return "text"
+    return None
+
+
+def extract_search_query(referrer: str | None) -> str | None:
+    """Extract a normalized search term from a search engine referrer."""
+    if not referrer:
+        return None
+
+    try:
+        parsed = urlparse(referrer)
+        host = parsed.hostname
+    except ValueError:
+        return None
+
+    if not host:
+        return None
+
+    host = host.lower()
+    if host.startswith("www."):
+        host = host[4:]
+
+    parameter = _search_query_parameter(host)
+    if not parameter:
+        return None
+
+    values = parse_qs(parsed.query, keep_blank_values=False).get(parameter)
+    if not values:
+        return None
+
+    term = " ".join(values[0].split())
+    return term[:255] if term else None
 
 
 def record_visit(
@@ -119,7 +174,7 @@ def get_visit_stats(db: Session) -> dict:
         .filter(SiteVisit.visited_on >= week_start)
         .group_by(SiteVisit.source)
         .order_by(func.count(SiteVisit.id).desc())
-        .limit(8)
+        .limit(5)
         .all()
     )
     sources = [
@@ -129,6 +184,35 @@ def get_visit_stats(db: Session) -> dict:
             "visitors": int(row[2] or 0),
         }
         for row in source_rows
+    ]
+
+    search_rows = (
+        db.query(SiteVisit.referrer, SiteVisit.ip_hash)
+        .filter(
+            SiteVisit.visited_on >= week_start,
+            SiteVisit.referrer.isnot(None),
+        )
+        .all()
+    )
+    search_map: dict[str, dict] = {}
+    for referrer, ip_hash in search_rows:
+        term = extract_search_query(referrer)
+        if not term:
+            continue
+        entry = search_map.setdefault(term, {"visits": 0, "visitors": set()})
+        entry["visits"] += 1
+        entry["visitors"].add(ip_hash)
+
+    searches = [
+        {
+            "query": term,
+            "visits": entry["visits"],
+            "visitors": len(entry["visitors"]),
+        }
+        for term, entry in sorted(
+            search_map.items(),
+            key=lambda item: (-item[1]["visits"], item[0]),
+        )[:5]
     ]
 
     return {
@@ -149,4 +233,5 @@ def get_visit_stats(db: Session) -> dict:
         },
         "daily": daily,
         "sources": sources,
+        "searches": searches,
     }

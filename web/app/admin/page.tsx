@@ -63,6 +63,12 @@ interface VisitSource {
   visitors: number;
 }
 
+interface VisitSearch {
+  query: string;
+  visits: number;
+  visitors: number;
+}
+
 interface VisitStats {
   today: { date: string; visitors: number; visits: number };
   week: {
@@ -74,6 +80,7 @@ interface VisitStats {
   total: { visitors: number; visits: number };
   daily: VisitDay[];
   sources: VisitSource[];
+  searches: VisitSearch[];
 }
 
 interface DashboardData {
@@ -410,32 +417,62 @@ export default function AdminHome() {
                 </div>
               </div>
 
-              <div className="admin-dashboard-sources">
-                <div className="admin-dashboard-subhead">
-                  <h3>유입 경로</h3>
-                  <span>최근 7일</span>
+              <div className="admin-dashboard-traffic">
+                <div className="admin-dashboard-sources">
+                  <div className="admin-dashboard-subhead">
+                    <h3>유입 경로</h3>
+                    <span>최근 7일</span>
+                  </div>
+                  {data.visits.sources.length ? (
+                    <ul>
+                      {data.visits.sources.map((source) => (
+                        <li key={source.source}>
+                          <span
+                            className="admin-dashboard-sources__name"
+                            title={formatSource(source.source)}
+                          >
+                            {formatSource(source.source)}
+                          </span>
+                          <span className="admin-dashboard-sources__meta">
+                            {source.visits}회 · {source.visitors}명
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="admin-dashboard-empty">
+                      아직 유입 기록이 없습니다.
+                    </p>
+                  )}
                 </div>
-                {data.visits.sources.length ? (
-                  <ul>
-                    {data.visits.sources.map((source) => (
-                      <li key={source.source}>
-                        <span
-                          className="admin-dashboard-sources__name"
-                          title={formatSource(source.source)}
-                        >
-                          {formatSource(source.source)}
-                        </span>
-                        <span className="admin-dashboard-sources__meta">
-                          {source.visits}회 · {source.visitors}명
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <p className="admin-dashboard-empty">
-                    아직 유입 기록이 없습니다.
-                  </p>
-                )}
+
+                <div className="admin-dashboard-sources admin-dashboard-searches">
+                  <div className="admin-dashboard-subhead">
+                    <h3>유입 검색어</h3>
+                    <span>최근 7일</span>
+                  </div>
+                  {data.visits.searches.length ? (
+                    <ul>
+                      {data.visits.searches.map((search) => (
+                        <li key={search.query}>
+                          <span
+                            className="admin-dashboard-sources__name"
+                            title={search.query}
+                          >
+                            {search.query}
+                          </span>
+                          <span className="admin-dashboard-sources__meta">
+                            {search.visits}회 · {search.visitors}명
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="admin-dashboard-empty">
+                      아직 검색어 유입이 없습니다.
+                    </p>
+                  )}
+                </div>
               </div>
             </div>
           </section>

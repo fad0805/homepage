@@ -215,6 +215,18 @@ a.admin-dashboard-stat:visited {
   gap: 0.8rem;
 }
 
+.admin-dashboard-traffic {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  min-width: 0;
+}
+
+.admin-dashboard-chart {
+  display: flex;
+  flex-direction: column;
+}
+
 .admin-dashboard-chart,
 .admin-dashboard-sources {
   min-width: 0;
@@ -222,6 +234,18 @@ a.admin-dashboard-stat:visited {
   border: 1px solid var(--admin-border);
   border-radius: 0.8rem;
   background: var(--admin-card-bg);
+}
+
+.admin-dashboard-traffic .admin-dashboard-sources {
+  padding: 0.7rem 0.8rem 0.55rem;
+}
+
+.admin-dashboard-traffic .admin-dashboard-subhead {
+  margin-bottom: 0.4rem;
+}
+
+.admin-dashboard-traffic .admin-dashboard-empty {
+  padding: 0.9rem 0;
 }
 
 .admin-dashboard-subhead {
@@ -248,7 +272,8 @@ a.admin-dashboard-stat:visited {
   display: flex;
   align-items: stretch;
   gap: 0.45rem;
-  height: 9rem;
+  flex: 1;
+  min-height: 11rem;
   padding-top: 0.4rem;
 }
 
@@ -305,7 +330,7 @@ a.admin-dashboard-stat:visited {
   justify-content: space-between;
   align-items: center;
   gap: 0.5rem;
-  padding: 0.5rem 0;
+  padding: 0.32rem 0;
   border-top: 1px solid var(--admin-border);
 
   &:first-child {
@@ -318,7 +343,7 @@ a.admin-dashboard-stat:visited {
   min-width: 0;
   overflow: hidden;
   color: var(--title-color);
-  font-size: 0.76rem;
+  font-size: 0.72rem;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -326,7 +351,7 @@ a.admin-dashboard-stat:visited {
 .admin-dashboard-sources__meta {
   flex: 0 0 auto;
   color: var(--admin-muted);
-  font-size: 0.64rem;
+  font-size: 0.62rem;
   white-space: nowrap;
 }
 
