@@ -282,11 +282,9 @@ function ModalShell({
 function SortableCharacterCard({
   character,
   onEdit,
-  onDelete,
 }: {
   character: DraftCharacter;
   onEdit: (character: DraftCharacter) => void;
-  onDelete: (character: DraftCharacter) => void;
 }) {
   const {
     attributes,
@@ -331,50 +329,44 @@ function SortableCharacterCard({
         ⠿
       </button>
 
-      <div className="admin-character-thumb">
-        {thumbnail ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={thumbnail} alt={character.name} loading="lazy" />
-        ) : (
-          <span className="admin-character-thumb-empty">이미지 없음</span>
-        )}
-      </div>
-
-      <div className="admin-character-body">
-        <strong className="admin-character-name" title={character.name}>
-          {character.name}
-          {character.id < 0 ? (
-            <span className="admin-draft-badge">미저장</span>
-          ) : null}
-        </strong>
-        {subName ? (
-          <span className="admin-character-meta">{subName}</span>
-        ) : null}
-        {character.age ? (
-          <span className="admin-character-meta">나이: {character.age}</span>
-        ) : null}
-        <div className="admin-character-badges">
-          {character.visible === false || character.is_my_doll !== true ? (
-            <span className="admin-character-badge">비공개</span>
-          ) : null}
-          {character.is_my_doll ? (
-            <span className="admin-character-badge">내 인형</span>
-          ) : null}
+      <button
+        type="button"
+        className="admin-character-open"
+        onClick={() => onEdit(character)}
+        aria-label={`${character.name} 수정`}
+      >
+        <div className="admin-character-thumb">
+          {thumbnail ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={thumbnail} alt={character.name} loading="lazy" />
+          ) : (
+            <span className="admin-character-thumb-empty">이미지 없음</span>
+          )}
         </div>
-      </div>
 
-      <div className="admin-character-actions">
-        <button type="button" onClick={() => onEdit(character)}>
-          수정
-        </button>
-        <button
-          type="button"
-          className="danger"
-          onClick={() => onDelete(character)}
-        >
-          삭제
-        </button>
-      </div>
+        <div className="admin-character-body">
+          <strong className="admin-character-name" title={character.name}>
+            {character.name}
+            {character.id < 0 ? (
+              <span className="admin-draft-badge">미저장</span>
+            ) : null}
+          </strong>
+          {subName ? (
+            <span className="admin-character-meta">{subName}</span>
+          ) : null}
+          {character.age ? (
+            <span className="admin-character-meta">나이: {character.age}</span>
+          ) : null}
+          <div className="admin-character-badges">
+            {character.visible === false || character.is_my_doll !== true ? (
+              <span className="admin-character-badge">비공개</span>
+            ) : null}
+            {character.is_my_doll ? (
+              <span className="admin-character-badge">내 인형</span>
+            ) : null}
+          </div>
+        </div>
+      </button>
     </article>
   );
 }
@@ -386,7 +378,6 @@ function SortableLocationSection({
   onEditLocation,
   onDeleteLocation,
   onEditCharacter,
-  onDeleteCharacter,
 }: {
   location: Location;
   characters: DraftCharacter[];
@@ -394,7 +385,6 @@ function SortableLocationSection({
   onEditLocation: (location: Location) => void;
   onDeleteLocation: (location: Location) => void;
   onEditCharacter: (character: DraftCharacter) => void;
-  onDeleteCharacter: (character: DraftCharacter) => void;
 }) {
   const {
     attributes,
@@ -486,7 +476,6 @@ function SortableLocationSection({
                 key={character.id}
                 character={character}
                 onEdit={onEditCharacter}
-                onDelete={onDeleteCharacter}
               />
             ))}
           </div>
@@ -1271,7 +1260,7 @@ export default function AdminCharacters() {
 
   const handleDeleteCharacter = (character: DraftCharacter) => {
     if (!window.confirm(`'${character.name}' 등장인물을 삭제할까요?`)) {
-      return;
+      return false;
     }
     setCharacters((prev) =>
       prev
@@ -1288,6 +1277,7 @@ export default function AdminCharacters() {
       setDeletedCharacterIds((prev) => [...prev, character.id]);
     }
     setIsDirty(true);
+    return true;
   };
 
   const openCreateLocation = () => {
@@ -1495,7 +1485,6 @@ export default function AdminCharacters() {
                   onEditLocation={openEditLocation}
                   onDeleteLocation={handleDeleteLocation}
                   onEditCharacter={openEditCharacter}
-                  onDeleteCharacter={handleDeleteCharacter}
                 />
               ))}
             </div>
@@ -1510,6 +1499,20 @@ export default function AdminCharacters() {
           closeOnEscape={!cropRequest}
           footer={
             <>
+              {editingCharacter ? (
+                <button
+                  type="button"
+                  className="admin-button danger admin-character-delete"
+                  onClick={() => {
+                    if (handleDeleteCharacter(editingCharacter)) {
+                      closeCharacterModal();
+                    }
+                  }}
+                  disabled={saving}
+                >
+                  삭제
+                </button>
+              ) : null}
               <button
                 type="button"
                 className="admin-button"
