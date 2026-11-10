@@ -1,9 +1,15 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import {
+  useEffect,
+  useMemo,
+  useState,
+  type MouseEvent as ReactMouseEvent,
+} from "react";
 import Link from "next/link";
 
 import { useAuth } from "@/components/auth-provider";
+import { ImageLightbox, type LightboxImage } from "@/components/image-lightbox";
 import { Pagination } from "@/components/pagination";
 import { RssSubscribe } from "@/components/rss-subscribe";
 import { formatDateTime } from "@/lib/datetime";
@@ -46,6 +52,40 @@ function ChapterDetail({
   chapter: Chapter;
   bookTitle: string;
 }) {
+  const [lightbox, setLightbox] = useState<{
+    images: LightboxImage[];
+    index: number;
+  } | null>(null);
+
+  useEffect(() => {
+    setLightbox(null);
+  }, [chapter.id]);
+
+  const handleBodyImageClick = (event: ReactMouseEvent<HTMLDivElement>) => {
+    const target = event.target;
+    if (!(target instanceof HTMLImageElement)) return;
+    if (target.closest(".rich-page-preview-block, .rich-page-preview")) {
+      return;
+    }
+
+    const body = event.currentTarget;
+    const images = Array.from(body.querySelectorAll("img")).filter(
+      (image) => !image.closest(".rich-page-preview-block, .rich-page-preview"),
+    );
+    const index = images.indexOf(target);
+    if (index === -1) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+    setLightbox({
+      images: images.map((image) => ({
+        src: image.currentSrc || image.src,
+        alt: image.alt || null,
+      })),
+      index,
+    });
+  };
+
   return (
     <article className="chapter-detail">
       <p className="chapter-detail__book">{bookTitle}</p>
@@ -56,6 +96,7 @@ function ChapterDetail({
       {chapter.body ? (
         <div
           className="chapter-detail__body"
+          onClick={handleBodyImageClick}
           dangerouslySetInnerHTML={{ __html: chapter.body }}
         />
       ) : (
@@ -67,6 +108,18 @@ function ChapterDetail({
             <TagChip tag={tag} key={tag} />
           ))}
         </div>
+      ) : null}
+      {lightbox ? (
+        <ImageLightbox
+          images={lightbox.images}
+          index={lightbox.index}
+          onIndexChange={(index) =>
+            setLightbox((current) =>
+              current ? { ...current, index } : current,
+            )
+          }
+          onClose={() => setLightbox(null)}
+        />
       ) : null}
     </article>
   );

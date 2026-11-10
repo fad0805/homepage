@@ -679,6 +679,7 @@
     height: auto;
     max-height: 15.7rem;
     border-radius: 0.7rem;
+    cursor: zoom-in;
 
     &[data-align='center'] {
       display: block;
@@ -709,6 +710,10 @@
       margin: 0.3rem 0 0.8rem 1.1rem;
       clear: none;
     }
+  }
+
+  .rich-page-preview img {
+    cursor: pointer;
   }
 }
 

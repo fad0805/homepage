@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 
+import { ImageLightbox } from "@/components/image-lightbox";
 import type { IllustrationImageItem } from "@/lib/illustration-types";
 
 export function IllustrationDetailGallery({
@@ -11,7 +12,9 @@ export function IllustrationDetailGallery({
 }) {
   const [index, setIndex] = useState(0);
   const [maxRatio, setMaxRatio] = useState<number | null>(null);
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const touchStart = useRef<{ x: number; y: number } | null>(null);
+  const swipedRef = useRef(false);
   const imageKey = images.map((image) => image.url).join("|");
 
   useEffect(() => {
@@ -53,11 +56,10 @@ export function IllustrationDetailGallery({
     setIndex((current) =>
       images.length === 0 ? 0 : Math.min(current, images.length - 1),
     );
+    setLightboxIndex((current) =>
+      current === null || current < images.length ? current : null,
+    );
   }, [images.length]);
-
-  if (images.length === 0) {
-    return <p className="illustrations-state">등록된 이미지가 없습니다.</p>;
-  }
 
   const current = images[index];
   const move = (delta: number) => {
@@ -65,7 +67,7 @@ export function IllustrationDetailGallery({
   };
 
   useEffect(() => {
-    if (images.length <= 1) return;
+    if (images.length <= 1 || lightboxIndex !== null) return;
 
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "ArrowLeft") {
@@ -78,7 +80,11 @@ export function IllustrationDetailGallery({
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [images.length]);
+  }, [images.length, lightboxIndex]);
+
+  if (!current) {
+    return <p className="illustrations-state">등록된 이미지가 없습니다.</p>;
+  }
 
   return (
     <div className="illustration-detail__viewer">
@@ -90,6 +96,7 @@ export function IllustrationDetailGallery({
         onTouchStart={(event) => {
           if (images.length <= 1) return;
           const touch = event.touches[0];
+          if (!touch) return;
           touchStart.current = { x: touch.clientX, y: touch.clientY };
         }}
         onTouchEnd={(event) => {
@@ -98,6 +105,7 @@ export function IllustrationDetailGallery({
           if (!start) return;
 
           const touch = event.changedTouches[0];
+          if (!touch) return;
           const deltaX = touch.clientX - start.x;
           const deltaY = touch.clientY - start.y;
           if (
@@ -106,7 +114,11 @@ export function IllustrationDetailGallery({
           ) {
             return;
           }
+          swipedRef.current = true;
           move(deltaX < 0 ? 1 : -1);
+          window.setTimeout(() => {
+            swipedRef.current = false;
+          }, 350);
         }}
         onTouchCancel={() => {
           touchStart.current = null;
@@ -116,6 +128,22 @@ export function IllustrationDetailGallery({
         <img
           src={current.url}
           alt={current.original_name || "삽화"}
+          role="button"
+          tabIndex={0}
+          aria-label={`${current.original_name || "삽화"} 확대 보기`}
+          onClick={() => {
+            if (swipedRef.current) {
+              swipedRef.current = false;
+              return;
+            }
+            setLightboxIndex(index);
+          }}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" || event.key === " ") {
+              event.preventDefault();
+              setLightboxIndex(index);
+            }
+          }}
         />
         {images.length > 1 ? (
           <>
@@ -165,6 +193,21 @@ export function IllustrationDetailGallery({
             </button>
           ))}
         </div>
+      ) : null}
+
+      {lightboxIndex !== null ? (
+        <ImageLightbox
+          images={images.map((image) => ({
+            src: image.url,
+            alt: image.original_name || "삽화",
+          }))}
+          index={lightboxIndex}
+          onIndexChange={(nextIndex) => {
+            setIndex(nextIndex);
+            setLightboxIndex(nextIndex);
+          }}
+          onClose={() => setLightboxIndex(null)}
+        />
       ) : null}
     </div>
   );
