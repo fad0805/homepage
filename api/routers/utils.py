@@ -1,14 +1,20 @@
 import hmac
+from datetime import datetime, timedelta
 from typing import Optional
 from sqlalchemy.orm import Session
 
 from fastapi import Request, Response, Depends, HTTPException, status
 import jwt
 
-from core.config import ENVIRONMENT, AUTH_COOKIE_MAX_AGE
+from core.config import (
+    ENVIRONMENT,
+    AUTH_COOKIE_MAX_AGE,
+    REFRESH_TOKEN_GRACE_SECONDS,
+)
 from core.security import create_access_token, create_refresh_token, decode_access_token, decode_refresh_token
-from crud.users import get_user, update_refresh_token
+from crud.users import get_user
 from db.session import get_db
+from models.users import User
 
 
 def get_client_ip(request: Request) -> str:
@@ -43,12 +49,36 @@ def get_refresh_token_from_cookie(request: Request) -> Optional[str]:
     return None
 
 
+def _token_matches(stored: Optional[str], token: Optional[str]) -> bool:
+    if not stored or not token:
+        return False
+    return hmac.compare_digest(stored.encode(), token.encode())
+
+
+def _rotated_token_is_in_grace(user: User, token: Optional[str]) -> bool:
+    """Accept the previous refresh token briefly after a rotation."""
+    if not _token_matches(user.previous_refresh_token, token):
+        return False
+    if user.refresh_token_rotated_at is None:
+        return False
+    return datetime.utcnow() - user.refresh_token_rotated_at <= timedelta(
+        seconds=REFRESH_TOKEN_GRACE_SECONDS
+    )
+
+
 def refresh_access_token(
     db: Session,
     refresh_token: str = Depends(get_refresh_token_from_cookie)
 ):
     """
     Refresh the access token using the provided refresh token.
+
+    Refresh tokens rotate on use, but concurrent requests can present the same
+    token (multiple tabs, or a batch of API calls after the access token has
+    expired). The rotation is applied with an atomic conditional update so only
+    one request advances the stored token; the others reuse that new token
+    during a short grace period instead of being rejected. Reusing the previous
+    token after the grace window revokes the token family.
     """
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -75,18 +105,50 @@ def refresh_access_token(
     except ValueError:
         raise credentials_exception
 
-    # Only the most recently issued refresh token stays valid. Comparing
-    # against the stored token makes rotation actually revoke older tokens.
-    stored_token = user.refresh_token
-    if not stored_token or not hmac.compare_digest(
-        stored_token.encode(), refresh_token.encode()
-    ):
-        raise credentials_exception
-
     new_access_token = create_access_token(data={"sub": username})
     new_refresh_token = create_refresh_token(data={"sub": username})
-    update_refresh_token(db, username, new_refresh_token)
-    return username, new_access_token, new_refresh_token
+
+    # Only rotate when the presented token is still the current one. The
+    # condition is evaluated by the database, so concurrent refreshes cannot
+    # both win the race.
+    rotated = (
+        db.query(User)
+        .filter(
+            User.id == user.id,
+            User.refresh_token == refresh_token,
+        )
+        .update(
+            {
+                User.previous_refresh_token: refresh_token,
+                User.refresh_token: new_refresh_token,
+                User.refresh_token_rotated_at: datetime.utcnow(),
+            },
+            synchronize_session=False,
+        )
+    )
+    db.commit()
+
+    if rotated:
+        return username, new_access_token, new_refresh_token
+
+    # Another request just rotated the token. Reuse the stored token so every
+    # response writes the same cookie value.
+    db.refresh(user)
+    if user.refresh_token and _rotated_token_is_in_grace(
+        user, refresh_token
+    ):
+        return username, new_access_token, user.refresh_token
+
+    # The token is a valid previous-generation token, but the grace window has
+    # passed. Treat this as possible reuse/theft and revoke the whole token
+    # family so the stale token cannot keep minting access tokens.
+    if _token_matches(user.previous_refresh_token, refresh_token):
+        user.refresh_token = None
+        user.previous_refresh_token = None
+        user.refresh_token_rotated_at = None
+        db.commit()
+
+    raise credentials_exception
 
 
 def get_current_user_from_token(
@@ -121,9 +183,7 @@ def get_current_user_from_token(
             new_refresh_token,
         ) = refresh_access_token(db, refresh_token=refresh_token)
 
-        response.delete_cookie("access_token")
         _set_auth_cookie(response, "access_token", new_access_token)
-        response.delete_cookie("refresh_token")
         _set_auth_cookie(response, "refresh_token", new_refresh_token)
     except jwt.InvalidTokenError:
         raise credentials_exception
@@ -179,13 +239,9 @@ def get_optional_user(
 
     if used_refresh_token:
         refresh_token = get_refresh_token_from_cookie(request)
-        if (
-            not refresh_token
-            or not user.refresh_token
-            or not hmac.compare_digest(
-                user.refresh_token.encode(),
-                refresh_token.encode(),
-            )
+        if not (
+            _token_matches(user.refresh_token, refresh_token)
+            or _rotated_token_is_in_grace(user, refresh_token)
         ):
             return None
 

@@ -65,6 +65,7 @@ docker compose up --build -d
 | `SECRET_KEY` | 운영 필수 | JWT 서명용 비밀키 (개발은 자동 생성) |
 | `ACCESS_TOKEN_EXPIRE_MINUTES` | 선택 | access 토큰 만료 시간(분, 기본 30) |
 | `REFRESH_TOKEN_EXPIRE_DAYS` | 선택 | refresh 토큰/로그인 유지 기간(일, 기본 30) |
+| `REFRESH_TOKEN_GRACE_SECONDS` | 선택 | refresh 토큰 회전 후 이전 토큰 허용 시간(초, 기본 60) |
 | `ENVIRONMENT` | 선택 | `production` 설정 시 운영 모드 |
 | `DEV_ADMIN_SEED` | 개발 전용 | `true`일 때 개발용 `admin/admin` 계정 생성 (기본 비활성) |
 | `DB_HOST` | 필수 | PostgreSQL 호스트 |

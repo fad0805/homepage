@@ -11,6 +11,11 @@ class User(Base):
     created_at = Column(DateTime, default=func.now())
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
     refresh_token = Column(String(255), nullable=True)
+    # The most recently rotated token stays valid for a short grace period so
+    # concurrent refreshes (e.g. several restored tabs waking from sleep) do
+    # not invalidate each other.
+    previous_refresh_token = Column(String(255), nullable=True)
+    refresh_token_rotated_at = Column(DateTime, nullable=True)
 
 
 class UserSigninHistory(Base):

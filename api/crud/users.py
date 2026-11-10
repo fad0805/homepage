@@ -47,8 +47,13 @@ def update_user(db: Session, username: str, user_update: UserUpdate):
 
 def update_refresh_token(db:Session, username: str, token: str):
     """
-    Update refresh token when rotate access token
+    Replace the stored refresh token on sign-in.
+
+    Any rotation grace state belongs to the previous session and must not be
+    reused after a fresh login.
     """
     user = get_user(db, username)
     user.refresh_token = token
+    user.previous_refresh_token = None
+    user.refresh_token_rotated_at = None
     db.commit()

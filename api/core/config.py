@@ -8,6 +8,11 @@ REFRESH_TOKEN_EXPIRE_DAYS = int(os.getenv('REFRESH_TOKEN_EXPIRE_DAYS', 30))
 # Keep auth cookies alive for as long as the refresh token is valid so that
 # closing the browser does not end the session.
 AUTH_COOKIE_MAX_AGE = REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60
+# After a refresh token is rotated, accept the previous one for a short window
+# so concurrent requests do not invalidate each other's cookies.
+REFRESH_TOKEN_GRACE_SECONDS = int(
+    os.getenv('REFRESH_TOKEN_GRACE_SECONDS', 60)
+)
 
 # S3-compatible object storage
 S3_ENDPOINT_URL = os.getenv('S3_ENDPOINT_URL')
