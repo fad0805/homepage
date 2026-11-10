@@ -127,7 +127,7 @@ div#container {
   align-items: center;
   justify-items: center;
   min-height: 100vh;
-  padding: 2rem 1rem;
+  padding: 2rem 1rem 0;
   box-sizing: border-box;
 
   @media (width >= 768px) {
@@ -141,7 +141,7 @@ div#container>header {
   justify-content: center;
   align-items: center;
   width: 100%;
-  margin: 2rem 0;
+  margin: 1.5rem 0 1rem 0;
 }
 
 div#container>header>div#title {
