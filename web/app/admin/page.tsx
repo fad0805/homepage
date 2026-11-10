@@ -292,7 +292,7 @@ export default function AdminHome() {
             책과 챕터, 등장인물과 링크의 현황을 한눈에 확인하세요.
           </p>
         </div>
-        <div className="admin-dashboard-actions">
+        <div className="admin-dashboard-actions admin-dashboard-actions--header">
           <button
             type="button"
             className="admin-button admin-dashboard-logout"
@@ -587,6 +587,17 @@ export default function AdminHome() {
           </div>
         </>
       ) : null}
+
+      <div className="admin-dashboard-actions admin-dashboard-actions--mobile">
+        <button
+          type="button"
+          className="admin-button admin-dashboard-logout"
+          onClick={handleLogout}
+          disabled={loggingOut}
+        >
+          {loggingOut ? "로그아웃 중..." : "로그아웃"}
+        </button>
+      </div>
     </div>
   );
 }
