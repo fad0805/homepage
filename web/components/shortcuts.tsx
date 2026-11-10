@@ -4,6 +4,17 @@ import { useRouter, usePathname } from "next/navigation";
 
 import { isAuthenticated } from "@/components/authentication"
 
+function isEditableElement(element: Element | null) {
+    if (!element) return false;
+
+    return (
+        element.tagName === 'INPUT' ||
+        element.tagName === 'TEXTAREA' ||
+        element.tagName === 'SELECT' ||
+        (element as HTMLElement).isContentEditable
+    );
+}
+
 export const Shortcuts = ({
 children,
 }:{
@@ -14,19 +25,19 @@ children: React.ReactNode;
     
     useEffect(() => {
         const handleKeyDown = (event: KeyboardEvent) => {
-            const activeElement = document.activeElement;
-            const isInputField = 
-                activeElement?.tagName === 'INPUT' ||
-                activeElement?.tagName === 'TEXTAREA' ||
-                activeElement?.tagName === 'SELECT';
+            if (event.defaultPrevented || event.isComposing) return;
+            if (event.ctrlKey || event.metaKey || event.altKey) return;
 
-            if (isInputField) return;
+            if (isEditableElement(document.activeElement)) return;
 
-            if (event.key === 'q' || event.key === 'Q') {
-                if(
-                    pathname.slice(0, 6) !== '/admin'
-                    && pathname !== '/signin'
-                ) {
+            // Check the physical key as well so the shortcut keeps working
+            // while a Korean (or other non-Latin) input mode is active.
+            if (
+                event.code === 'KeyQ' ||
+                event.key === 'q' ||
+                event.key === 'Q'
+            ) {
+                if(!pathname.startsWith('/admin') && pathname !== '/signin') {
                     isAuthenticated(router).then(isAuth => {
                         if(isAuth) router.push('/admin');
                         else router.push('/signin');
@@ -40,7 +51,7 @@ children: React.ReactNode;
         return () => {
             window.removeEventListener('keydown', handleKeyDown);
         };
-    }, []);
+    }, [pathname, router]);
 
     return <>{children}</>;
 };
