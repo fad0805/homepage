@@ -2,11 +2,11 @@
 @use '../variables' as *;
 
 :root {
-  --navbar-active-color: #{$light-bold-text};
+  --admin-navbar-active-color: #{$light-bold-text};
 }
 
 [data-theme='dark'] {
-  --navbar-active-color: #{$dark-bold-text};
+  --admin-navbar-active-color: #{$dark-bold-text};
 }
 
 div#content>div>nav {
@@ -33,6 +33,6 @@ nav#admin-navbar a {
 
   &.active {
     font-size: 1rem;
-    color: var(--navbar-active-color);
+    color: var(--admin-navbar-active-color);
   }
 }
