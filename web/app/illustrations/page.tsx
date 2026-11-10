@@ -312,19 +312,6 @@ export default async function IllustrationsPage({
                     </p>
                   </div>
                 </Link>
-                {item.tags?.length ? (
-                  <div className="tag-list illustration-card__tags">
-                    {item.tags.map((tag) => (
-                      <Link
-                        className="tag is-clickable"
-                        href={`/search?q=${encodeURIComponent(tag)}`}
-                        key={tag}
-                      >
-                        {tag}
-                      </Link>
-                    ))}
-                  </div>
-                ) : null}
               </article>
             ))}
           </div>
