@@ -129,6 +129,7 @@ export default function AdminChapterEdit() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [draftSaving, setDraftSaving] = useState(false);
+  const [draftDeleting, setDraftDeleting] = useState(false);
   const [draftSavedAt, setDraftSavedAt] = useState<string | null>(null);
   const [availableDraft, setAvailableDraft] = useState<ChapterDraft | null>(
     null,
@@ -156,7 +157,7 @@ export default function AdminChapterEdit() {
     [],
   );
 
-  const deleteDraft = useCallback(async () => {
+  const requestDeleteDraft = useCallback(async () => {
     if (!draftKey) return;
     const pendingSave = draftSavePromiseRef.current;
     if (pendingSave) {
@@ -166,17 +167,21 @@ export default function AdminChapterEdit() {
         // saveDraft already reports its own failures.
       }
     }
+    await apiFetch(
+      `/api/chapter-drafts/${encodeURIComponent(draftKey)}`,
+      { method: "DELETE" },
+    );
+  }, [draftKey]);
+
+  const deleteDraft = useCallback(async () => {
     try {
-      await apiFetch(
-        `/api/chapter-drafts/${encodeURIComponent(draftKey)}`,
-        { method: "DELETE" },
-      );
+      await requestDeleteDraft();
     } catch (error) {
       // The saved chapter is the source of truth. A leftover draft is
       // harmless, so don't block navigation when cleanup fails.
       console.error(error);
     }
-  }, [draftKey]);
+  }, [requestDeleteDraft]);
 
   const load = useCallback(async () => {
     if (!Number.isFinite(bookId)) {
@@ -358,6 +363,54 @@ export default function AdminChapterEdit() {
     setAutosaveReady(true);
   }, []);
 
+  const handleDeleteDraft = useCallback(async () => {
+    if (!draftKey || draftDeleting) return;
+    if (!window.confirm("임시저장본을 삭제할까요?")) return;
+
+    setDraftDeleting(true);
+    try {
+      await requestDeleteDraft();
+      setAvailableDraft(null);
+      setDraftPromptOpen(false);
+      setDraftPreviewOpen(false);
+      setDraftSavedAt(null);
+      setAutosaveReady(true);
+      // Keep the current editor content as the autosave baseline so the
+      // deleted draft is not immediately recreated by the autosave timer.
+      lastSavedSignatureRef.current = getDraftSignature({
+        title,
+        subtitle,
+        body,
+        tagsInput,
+        visible,
+        publishedAt,
+        targetBookId,
+      });
+      notify("success", "임시저장본을 삭제했습니다.");
+    } catch (error) {
+      notify(
+        "error",
+        error instanceof Error
+          ? error.message
+          : "임시저장본을 삭제하지 못했습니다.",
+      );
+    } finally {
+      setDraftDeleting(false);
+    }
+  }, [
+    body,
+    draftDeleting,
+    draftKey,
+    notify,
+    publishedAt,
+    requestDeleteDraft,
+    subtitle,
+    tagsInput,
+    targetBookId,
+    title,
+    visible,
+  ]);
+
   const saveDraft = useCallback(
     (showSuccessNotice: boolean) => {
       if (!draftKey) {
@@ -454,6 +507,7 @@ export default function AdminChapterEdit() {
       loading ||
       saving ||
       draftSaving ||
+      draftDeleting ||
       draftPreviewOpen ||
       !draftKey
     ) {
@@ -484,6 +538,7 @@ export default function AdminChapterEdit() {
   }, [
     autosaveReady,
     body,
+    draftDeleting,
     draftKey,
     draftPreviewOpen,
     draftSaving,
@@ -641,6 +696,14 @@ export default function AdminChapterEdit() {
                 나중에
               </button>
             ) : null}
+            <button
+              type="button"
+              className="admin-button danger"
+              onClick={handleDeleteDraft}
+              disabled={draftDeleting}
+            >
+              {draftDeleting ? "삭제 중..." : "삭제"}
+            </button>
           </div>
         </section>
       ) : null}
@@ -665,9 +728,19 @@ export default function AdminChapterEdit() {
                 <p>새 챕터를 작성합니다.</p>
               )}
               {draftSavedAt ? (
-                <p className="admin-books-hint">
-                  임시저장 {formatDateTime(draftSavedAt)}
-                </p>
+                <div className="admin-books-draft-status">
+                  <p className="admin-books-hint">
+                    임시저장 {formatDateTime(draftSavedAt)}
+                  </p>
+                  <button
+                    type="button"
+                    className="admin-button danger"
+                    onClick={handleDeleteDraft}
+                    disabled={draftDeleting || draftSaving || saving}
+                  >
+                    {draftDeleting ? "삭제 중..." : "임시저장 삭제"}
+                  </button>
+                </div>
               ) : null}
             </div>
             {!isNew && chapter && book ? (
@@ -862,6 +935,14 @@ export default function AdminChapterEdit() {
                 onClick={() => setDraftPreviewOpen(false)}
               >
                 취소
+              </button>
+              <button
+                type="button"
+                className="admin-button danger"
+                onClick={handleDeleteDraft}
+                disabled={draftDeleting}
+              >
+                {draftDeleting ? "삭제 중..." : "삭제"}
               </button>
               <button
                 type="button"

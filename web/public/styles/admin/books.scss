@@ -30,6 +30,22 @@
   font-size: 0.78rem;
 }
 
+.admin-books-draft-status {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+
+  .admin-books-hint {
+    margin: 0;
+  }
+
+  .admin-button {
+    padding: 0.25rem 0.55rem;
+    font-size: 0.7rem;
+  }
+}
+
 .admin-books-draft-notice {
   display: flex;
   align-items: center;
