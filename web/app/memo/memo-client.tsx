@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  Fragment,
   FormEvent,
   KeyboardEvent,
   useEffect,
@@ -12,6 +13,7 @@ import {
 import { Pagination } from "@/components/pagination";
 import { apiFetch } from "@/lib/api";
 import { formatDateTime } from "@/lib/datetime";
+import { linkifyParts } from "@/lib/linkify";
 
 import "@/public/styles/memo.scss";
 
@@ -349,7 +351,20 @@ export default function MemoClient({ username }: { username: string }) {
                           className={`memo-row${memo.pinned ? " is-pinned" : ""}`}
                         >
                           <p className="memo-content" title={memo.content}>
-                            {memo.content}
+                            {linkifyParts(memo.content).map((part, index) =>
+                              part.href ? (
+                                <a
+                                  key={`${part.href}-${index}`}
+                                  href={part.href}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                >
+                                  {part.text}
+                                </a>
+                              ) : (
+                                <Fragment key={index}>{part.text}</Fragment>
+                              ),
+                            )}
                           </p>
                           <div className="memo-meta">
                             <div className="memo-item-actions">

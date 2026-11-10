@@ -18,6 +18,7 @@ import { AuthorImage } from "@/components/author-image";
 import { PagePreview } from "@/components/page-preview";
 import { AUTHOR_IMAGE_MAX_HEIGHT_REM } from "@/config/author";
 import { apiFetch } from "@/lib/api";
+import { findLinkTokens } from "@/lib/linkify";
 
 import "@/public/styles/admin/author.scss";
 
@@ -102,6 +103,7 @@ export function RichTextEditor({
           openOnClick: false,
           autolink: true,
           linkOnPaste: true,
+          defaultProtocol: "https",
         },
       }),
       TextStyle,
@@ -151,6 +153,47 @@ export function RichTextEditor({
       .extendMarkRange("link")
       .setLink({ href: url.trim() })
       .run();
+  }, [editor]);
+
+  const linkifyEditorContent = useCallback(() => {
+    if (!editor) return;
+
+    const { state } = editor;
+    const linkType = state.schema.marks.link;
+    if (!linkType) return;
+
+    const tr = state.tr;
+    let changed = false;
+
+    state.doc.descendants((node, pos) => {
+      if (
+        !node.isTextblock ||
+        node.type.name === "codeBlock" ||
+        node.content.size !== node.textContent.length
+      ) {
+        return;
+      }
+
+      for (const token of findLinkTokens(node.textContent)) {
+        const from = pos + 1 + token.start;
+        const to = pos + 1 + token.end;
+        if (from >= to) continue;
+        if (state.doc.rangeHasMark(from, to, linkType)) continue;
+
+        const codeType = state.schema.marks.code;
+        if (codeType && state.doc.rangeHasMark(from, to, codeType)) {
+          continue;
+        }
+
+        tr.addMark(from, to, linkType.create({ href: token.href }));
+        changed = true;
+      }
+    });
+
+    if (!changed) return;
+
+    tr.setMeta("preventAutolink", true);
+    editor.view.dispatch(tr);
   }, [editor]);
 
   const insertPagePreview = useCallback(async () => {
@@ -603,6 +646,16 @@ export function RichTextEditor({
       <div
         className="admin-editor__content"
         onClick={() => editor?.chain().focus().run()}
+        onBlur={(event) => {
+          const related = event.relatedTarget;
+          if (
+            related instanceof Node &&
+            event.currentTarget.closest(".admin-editor")?.contains(related)
+          ) {
+            return;
+          }
+          linkifyEditorContent();
+        }}
       >
         <EditorContent editor={editor} />
       </div>
