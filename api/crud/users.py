@@ -57,3 +57,15 @@ def update_refresh_token(db:Session, username: str, token: str):
     user.previous_refresh_token = None
     user.refresh_token_rotated_at = None
     db.commit()
+
+
+def clear_refresh_token(db: Session, username: str):
+    """Invalidate the stored refresh token for a user."""
+    try:
+        user = get_user(db, username)
+    except ValueError:
+        return
+    user.refresh_token = None
+    user.previous_refresh_token = None
+    user.refresh_token_rotated_at = None
+    db.commit()

@@ -53,6 +53,22 @@ div#admin-main {
   gap: 0.4rem;
 }
 
+.admin-dashboard-logout {
+  padding: 0.32rem 0.62rem;
+  border-color: transparent;
+  background: transparent;
+  color: var(--admin-muted);
+  font-size: 0.72rem;
+  opacity: 0.75;
+
+  &:hover:not(:disabled) {
+    border-color: var(--admin-border);
+    background: var(--admin-card-bg);
+    color: var(--foreground);
+    opacity: 1;
+  }
+}
+
 /* Loading / error */
 .admin-dashboard-state {
   display: flex;

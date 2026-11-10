@@ -128,6 +128,7 @@ export default function AdminHome() {
   const [error, setError] = useState<string | null>(null);
   const [now, setNow] = useState<number | null>(null);
   const [showAllPosts, setShowAllPosts] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -156,6 +157,19 @@ export default function AdminHome() {
   useEffect(() => {
     load();
   }, [load]);
+
+  const handleLogout = useCallback(async () => {
+    if (loggingOut) return;
+    setLoggingOut(true);
+    try {
+      await fetch("/api/users/signout", {
+        method: "POST",
+        credentials: "include",
+      });
+    } finally {
+      window.location.href = "/signin";
+    }
+  }, [loggingOut]);
 
   useEffect(() => {
     setNow(Date.now());
@@ -279,9 +293,14 @@ export default function AdminHome() {
           </p>
         </div>
         <div className="admin-dashboard-actions">
-          <Link className="admin-button primary" href="/admin/books">
-            책 관리
-          </Link>
+          <button
+            type="button"
+            className="admin-button admin-dashboard-logout"
+            onClick={handleLogout}
+            disabled={loggingOut}
+          >
+            {loggingOut ? "로그아웃 중..." : "로그아웃"}
+          </button>
         </div>
       </header>
 

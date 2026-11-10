@@ -16,7 +16,12 @@ from sqlalchemy.exc import SQLAlchemyError
 from core.config import ENVIRONMENT, AUTH_COOKIE_MAX_AGE
 from core.security import verify_password, create_access_token, create_refresh_token
 from routers.utils import get_current_user_from_token, get_optional_user
-from crud.users import get_user, create_user, update_refresh_token
+from crud.users import (
+    clear_refresh_token,
+    create_user,
+    get_user,
+    update_refresh_token,
+)
 from db.session import get_db
 from schemas.users import UserCreate
 
@@ -110,6 +115,28 @@ async def signin(
     )
 
     return {"success": True, "message": "Login successful"}
+
+
+@router.post("/signout")
+def signout(
+    request: Request,
+    response: Response,
+    db: Session = Depends(get_db),
+):
+    """
+    Clear the authentication cookies and invalidate the refresh token.
+    """
+    user = get_optional_user(
+        request,
+        db,
+        token=request.cookies.get("access_token"),
+    )
+    if user:
+        clear_refresh_token(db, user.username)
+
+    response.delete_cookie("access_token", path="/")
+    response.delete_cookie("refresh_token", path="/")
+    return {"success": True, "message": "Logout successful"}
 
 
 def signup(username: str = Form(...), password: str = Form(...), db: Session = Depends(get_db)):
