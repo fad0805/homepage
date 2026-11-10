@@ -7,6 +7,7 @@ import { AuthProvider } from "@/components/auth-provider";
 import { FooterShortcut } from "@/components/footer-shortcut";
 import { Navbar } from "@/components/navbar";
 import { ThemeProvider } from "@/components/theme-provider";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { Shortcuts } from "@/components/shortcuts";
 import { VisitTracker } from "@/components/visit-tracker";
 
@@ -24,7 +25,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="ko">
+    <html lang="ko" suppressHydrationWarning>
       <body>
         <ThemeProvider>
           <AuthProvider>
@@ -50,6 +51,7 @@ export default function RootLayout({
                 </footer>
               </div>
             </Shortcuts>
+            <ThemeToggle />
           </AuthProvider>
         </ThemeProvider>
       </body>

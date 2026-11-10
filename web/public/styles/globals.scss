@@ -16,6 +16,11 @@
   src: url('/fonts/Eulyoo1945-SemiBold.woff') format('truetype');
 }
 
+html,
+body {
+  overflow-x: clip;
+}
+
 :root {
   --background: #{$light-bg};
   --foreground: #{$light-text};

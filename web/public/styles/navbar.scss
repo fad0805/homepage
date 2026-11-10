@@ -32,3 +32,9 @@ nav#navbar a {
     color: var(--navbar-active-color);
   }
 }
+
+@media (max-width: $breakpoint-md) {
+  nav#navbar {
+    flex-wrap: wrap;
+  }
+}

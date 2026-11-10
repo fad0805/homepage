@@ -1,47 +1,55 @@
 "use client";
-import { useEffect, useState } from "react";
+import {
+    createContext,
+    useCallback,
+    useContext,
+    useEffect,
+    useMemo,
+    useState,
+} from "react";
 import { useServerInsertedHTML } from "next/navigation";
+
+export type Theme = "light" | "dark";
+
+interface ThemeContextValue {
+    theme: Theme;
+    setTheme: (theme: Theme) => void;
+}
+
+const ThemeContext = createContext<ThemeContextValue | null>(null);
+
+function readStoredTheme(): Theme {
+    if (typeof window === "undefined") return "light";
+
+    try {
+        return window.localStorage.getItem("theme") === "dark" ? "dark" : "light";
+    } catch {
+        return "light";
+    }
+}
 
 export const ThemeProvider = ({
 children,
 }:{
 children: React.ReactNode;
 }) => {
-    const [currentTheme, setCurrentTheme] = useState<"light" | "dark">(() => {
-        if (typeof window !== 'undefined') {
-            return (localStorage.getItem('theme') === 'dark' ? 'dark' : 'light');
+    const [theme, setThemeState] = useState<Theme>(readStoredTheme);
+
+    const setTheme = useCallback((nextTheme: Theme) => {
+        setThemeState(nextTheme);
+
+        try {
+            window.localStorage.setItem("theme", nextTheme);
+        } catch {
+            // The selected theme still applies for this session.
         }
-        return 'light';
-    });
+    }, []);
 
     useEffect(() => {
-        document.documentElement.setAttribute('data-theme', currentTheme === 'dark' ? 'dark' : 'light');
+        document.documentElement.setAttribute("data-theme", theme);
+    }, [theme]);
 
-        const handleKeyDown = (event: KeyboardEvent) => {
-            const activeElement = document.activeElement;
-            const isInputField = 
-                activeElement?.tagName === 'INPUT' ||
-                activeElement?.tagName === 'TEXTAREA' ||
-                activeElement?.tagName === 'SELECT';
-
-            if (isInputField) return;
-
-            if (event.key === 'd' || event.key === 'D') {
-                setCurrentTheme(prevTheme => {
-                    const newTheme = prevTheme === 'dark' ? 'light' : 'dark';
-                    localStorage.setItem('theme', newTheme);
-                    document.documentElement.setAttribute('data-theme', newTheme);
-                    return newTheme;
-                });
-            }
-        };
-
-        window.addEventListener('keydown', handleKeyDown);
-
-        return () => {
-            window.removeEventListener('keydown', handleKeyDown);
-        };
-    }, [currentTheme]);
+    const value = useMemo(() => ({ theme, setTheme }), [theme, setTheme]);
 
     useServerInsertedHTML(() => {
         return (
@@ -66,5 +74,19 @@ children: React.ReactNode;
         );
     });
 
-    return <>{children}</>;
+    return (
+        <ThemeContext.Provider value={value}>
+            {children}
+        </ThemeContext.Provider>
+    );
 };
+
+export function useTheme() {
+    const context = useContext(ThemeContext);
+
+    if (!context) {
+        throw new Error("useTheme must be used inside ThemeProvider");
+    }
+
+    return context;
+}
