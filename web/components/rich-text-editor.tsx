@@ -15,6 +15,7 @@ import TextAlign from "@tiptap/extension-text-align";
 import { Color, TextStyle } from "@tiptap/extension-text-style";
 
 import { AuthorImage } from "@/components/author-image";
+import { PagePreview } from "@/components/page-preview";
 import { AUTHOR_IMAGE_MAX_HEIGHT_REM } from "@/config/author";
 import { apiFetch } from "@/lib/api";
 
@@ -46,11 +47,13 @@ function ToolbarButton({
   onClick,
   active = false,
   disabled = false,
+  title,
 }: {
   children: ReactNode;
   onClick: () => void;
   active?: boolean;
   disabled?: boolean;
+  title?: string;
 }) {
   return (
     <button
@@ -58,6 +61,7 @@ function ToolbarButton({
       className={`admin-editor__button${active ? " is-active" : ""}`}
       onClick={onClick}
       disabled={disabled}
+      title={title}
     >
       {children}
     </button>
@@ -76,6 +80,7 @@ export function RichTextEditor({
   const onNoticeRef = useRef(onNotice);
   const imageInputRef = useRef<HTMLInputElement | null>(null);
   const [uploadingImage, setUploadingImage] = useState(false);
+  const [loadingPagePreview, setLoadingPagePreview] = useState(false);
 
   useEffect(() => {
     onChangeRef.current = onChange;
@@ -108,6 +113,7 @@ export function RichTextEditor({
         inline: false,
         allowBase64: false,
       }),
+      PagePreview,
       Placeholder.configure({ placeholder }),
     ],
     content: value || "<p></p>",
@@ -146,6 +152,56 @@ export function RichTextEditor({
       .setLink({ href: url.trim() })
       .run();
   }, [editor]);
+
+  const insertPagePreview = useCallback(async () => {
+    if (!editor) return;
+
+    const input = window.prompt("페이지 URL", "https://");
+    if (input === null) return;
+
+    const raw = input.trim();
+    if (!raw) return;
+
+    const url = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
+
+    setLoadingPagePreview(true);
+    try {
+      const preview = await apiFetch<{
+        url: string;
+        title: string;
+        description: string | null;
+        image: string | null;
+        site_name: string | null;
+      }>(`/api/embeds/preview?url=${encodeURIComponent(url)}`);
+
+      editor
+        .chain()
+        .focus()
+        .insertContent({
+          type: "pagePreview",
+          attrs: {
+            url: preview.url,
+            title: preview.title,
+            description: preview.description,
+            image: preview.image,
+            siteName: preview.site_name,
+          },
+        })
+        .run();
+
+      notify({ type: "success", text: "페이지 미리보기를 추가했습니다." });
+    } catch (error) {
+      notify({
+        type: "error",
+        text:
+          error instanceof Error
+            ? error.message
+            : "페이지 미리보기를 불러오지 못했습니다.",
+      });
+    } finally {
+      setLoadingPagePreview(false);
+    }
+  }, [editor, notify]);
 
   const handleImageFile = useCallback(
     async (event: ChangeEvent<HTMLInputElement>) => {
@@ -247,6 +303,15 @@ export function RichTextEditor({
   const imageWrap = Boolean(imageAttrs.wrap) && imageAlign !== "center";
   const imageWidth =
     typeof imageAttrs.width === "number" ? imageAttrs.width : null;
+  const pagePreviewAttrs = editor?.getAttributes("pagePreview") ?? {};
+  const pagePreviewAlign: "left" | "center" | "right" =
+    pagePreviewAttrs.align === "left" || pagePreviewAttrs.align === "right"
+      ? pagePreviewAttrs.align
+      : "center";
+  const pagePreviewWidth =
+    typeof pagePreviewAttrs.width === "number"
+      ? pagePreviewAttrs.width
+      : null;
 
   return (
     <div className={`admin-editor${compact ? " admin-editor--compact" : ""}`}>
@@ -356,6 +421,13 @@ export function RichTextEditor({
           disabled={!editor}
         >
           링크
+        </ToolbarButton>
+        <ToolbarButton
+          onClick={insertPagePreview}
+          disabled={!editor || loadingPagePreview}
+          title="페이지 미리보기 임베드"
+        >
+          {loadingPagePreview ? "불러오는 중..." : "페이지"}
         </ToolbarButton>
         <label className="admin-editor__color">
           <span>색</span>
@@ -467,6 +539,64 @@ export function RichTextEditor({
           </label>
           {imageWidth ? (
             <span className="admin-editor__image-size">{imageWidth}px</span>
+          ) : null}
+        </div>
+      ) : null}
+      {editor?.isActive("pagePreview") ? (
+        <div className="admin-editor__image-controls">
+          <span className="admin-editor__image-label">페이지</span>
+          <ToolbarButton
+            onClick={() =>
+              editor
+                .chain()
+                .focus()
+                .updateAttributes("pagePreview", { align: "left" })
+                .run()
+            }
+            active={pagePreviewAlign === "left"}
+          >
+            왼쪽
+          </ToolbarButton>
+          <ToolbarButton
+            onClick={() =>
+              editor
+                .chain()
+                .focus()
+                .updateAttributes("pagePreview", { align: "center" })
+                .run()
+            }
+            active={pagePreviewAlign === "center"}
+          >
+            가운데
+          </ToolbarButton>
+          <ToolbarButton
+            onClick={() =>
+              editor
+                .chain()
+                .focus()
+                .updateAttributes("pagePreview", { align: "right" })
+                .run()
+            }
+            active={pagePreviewAlign === "right"}
+          >
+            오른쪽
+          </ToolbarButton>
+          <ToolbarButton
+            onClick={() =>
+              editor
+                .chain()
+                .focus()
+                .updateAttributes("pagePreview", { width: null })
+                .run()
+            }
+            disabled={!pagePreviewWidth}
+          >
+            전체 너비
+          </ToolbarButton>
+          {pagePreviewWidth ? (
+            <span className="admin-editor__image-size">
+              {pagePreviewWidth}px
+            </span>
           ) : null}
         </div>
       ) : null}

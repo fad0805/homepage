@@ -205,6 +205,207 @@ div#container > main {
   }
 }
 
+.rich-page-preview-block {
+  display: block;
+  box-sizing: border-box;
+  max-width: 100%;
+}
+
+.rich-page-preview {
+  display: flex;
+  align-items: stretch;
+  gap: 0.8rem;
+  width: 100%;
+  box-sizing: border-box;
+  max-width: 100%;
+  margin: 1.1rem 0;
+  padding: 0.7rem;
+  overflow: hidden;
+  border: 1px solid rgba(0, 0, 0, 0.14);
+  border-radius: 0.9rem;
+  background: rgba(255, 255, 255, 0.42);
+  color: var(--foreground);
+  text-decoration: none;
+  transition:
+    border-color 0.18s ease,
+    box-shadow 0.18s ease,
+    transform 0.18s ease;
+
+  &:hover,
+  &:focus-visible {
+    border-color: var(--title-color);
+    box-shadow: 0 0.5rem 1.2rem rgba(0, 0, 0, 0.09);
+    transform: translateY(-1px);
+  }
+}
+
+[data-theme='dark'] .rich-page-preview {
+  border-color: rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.055);
+
+  &:hover,
+  &:focus-visible {
+    box-shadow: 0 0.5rem 1.2rem rgba(0, 0, 0, 0.28);
+  }
+}
+
+.rich-page-preview__media {
+  display: block;
+  flex: 0 0 8rem;
+  width: 8rem;
+  min-height: 5.6rem;
+  overflow: hidden;
+  border-radius: 0.65rem;
+  background: rgba(0, 0, 0, 0.06);
+
+  img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+}
+
+[data-theme='dark'] .rich-page-preview__media {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.rich-page-preview__body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+  padding: 0.1rem 0;
+}
+
+.rich-page-preview__site {
+  overflow: hidden;
+  color: var(--title-color);
+  font-size: 0.64rem;
+  letter-spacing: 0.02em;
+  opacity: 0.78;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rich-page-preview__title {
+  display: -webkit-box;
+  overflow: hidden;
+  color: var(--title-color);
+  font-size: 0.9rem;
+  line-height: 1.4;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.rich-page-preview__description {
+  display: -webkit-box;
+  overflow: hidden;
+  font-size: 0.72rem;
+  line-height: 1.45;
+  opacity: 0.68;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.rich-page-preview__url {
+  overflow: hidden;
+  margin-top: auto;
+  padding-top: 0.2rem;
+  font-size: 0.62rem;
+  opacity: 0.45;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rich-page-preview-node {
+  position: relative;
+
+  &.is-resizing {
+    user-select: none;
+  }
+
+  &.is-selected .rich-page-preview {
+    border-color: var(--title-color);
+    box-shadow: 0 0 0 2px var(--title-color);
+  }
+
+  &:hover .rich-page-preview-node__remove,
+  &.is-selected .rich-page-preview-node__remove {
+    opacity: 1;
+  }
+
+  .rich-page-preview-node__handle {
+    display: none;
+    position: absolute;
+    right: -6px;
+    bottom: -6px;
+    z-index: 2;
+    width: 0.85rem;
+    height: 0.85rem;
+    border: 2px solid var(--title-color);
+    border-radius: 50%;
+    background: var(--subtheme);
+    box-shadow: 0 0 4px rgba(0, 0, 0, 0.25);
+    cursor: nwse-resize;
+    touch-action: none;
+  }
+
+  &:hover .rich-page-preview-node__handle,
+  &:focus-within .rich-page-preview-node__handle,
+  &.is-selected .rich-page-preview-node__handle {
+    display: block;
+  }
+}
+
+.rich-page-preview-node__remove {
+  position: absolute;
+  top: -0.45rem;
+  right: -0.45rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.4rem;
+  height: 1.4rem;
+  padding: 0;
+  border: 1px solid rgba(0, 0, 0, 0.16);
+  border-radius: 999px;
+  background: var(--input-background);
+  color: var(--foreground);
+  font-size: 0.9rem;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+
+  &:hover {
+    border-color: var(--title-color);
+    color: var(--title-color);
+  }
+}
+
+[data-theme='dark'] .rich-page-preview-node__remove {
+  border-color: rgba(255, 255, 255, 0.22);
+}
+
+@media (width <= 560px) {
+  .rich-page-preview {
+    gap: 0.6rem;
+    padding: 0.55rem;
+  }
+
+  .rich-page-preview__media {
+    flex-basis: 5.5rem;
+    width: 5.5rem;
+    min-height: 4.5rem;
+  }
+
+  .rich-page-preview-node__remove {
+    opacity: 1;
+  }
+}
+
 footer {
   @include mixins.theme-transition();
   margin-top: 2rem;

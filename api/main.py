@@ -11,6 +11,7 @@ from routers import (
     chapter_drafts,
     chapters,
     characters,
+    embeds,
     illustrations,
     links,
     memos,
@@ -50,6 +51,7 @@ ensure_upload_dir()
 app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
 
 app.include_router(characters.router, prefix="/characters", tags=["characters"])
+app.include_router(embeds.router, prefix="/embeds", tags=["embeds"])
 app.include_router(
     illustrations.router,
     prefix="/illustrations",

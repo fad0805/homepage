@@ -1,7 +1,3 @@
-import ipaddress
-import socket
-from urllib.parse import urlparse
-
 import httpx
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from fastapi.concurrency import run_in_threadpool
@@ -9,6 +5,7 @@ from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
 from core.uploads import MAX_UPLOAD_SIZE, save_banner
+from core.url_safety import validate_external_url
 from db.session import get_db
 from crud.characters import (
     create_character,
@@ -35,38 +32,6 @@ from schemas.characters import (
 from .utils import require_auth
 
 router = APIRouter()
-
-
-def _validate_external_image_url(url: str) -> None:
-    """Reject non-http(s) and private-network image URLs."""
-    parsed = urlparse(url)
-    if parsed.scheme not in ("http", "https") or not parsed.hostname:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="http 또는 https 이미지 URL만 사용할 수 있습니다.",
-        )
-
-    try:
-        addresses = socket.getaddrinfo(parsed.hostname, None)
-    except OSError:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="이미지 URL의 호스트를 확인할 수 없습니다.",
-        )
-
-    for address in addresses:
-        ip = ipaddress.ip_address(address[4][0])
-        if (
-            ip.is_private
-            or ip.is_loopback
-            or ip.is_link_local
-            or ip.is_reserved
-            or ip.is_multicast
-        ):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="내부 네트워크 주소는 사용할 수 없습니다.",
-            )
 
 
 # Character Locations
@@ -173,7 +138,11 @@ async def proxy_character_image(
     Fetch an external image through the API so it can be cropped in the
     browser without cross-origin canvas restrictions.
     """
-    await run_in_threadpool(_validate_external_image_url, url)
+    await run_in_threadpool(
+        validate_external_url,
+        url,
+        resource_label="이미지 URL",
+    )
 
     try:
         async with httpx.AsyncClient(
