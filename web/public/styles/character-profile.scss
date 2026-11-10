@@ -305,9 +305,10 @@
 
 .character-profile__relation {
   display: flex;
+  flex: 1 1 14rem;
   flex-direction: column;
   gap: 0.4rem;
-  width: 17rem;
+  min-width: 0;
   max-width: 100%;
   color: inherit;
 }
@@ -414,6 +415,7 @@
   }
 
   .character-profile__relation {
+    flex-basis: 100%;
     width: 100%;
   }
 }
