@@ -128,6 +128,7 @@ div#container {
   justify-items: center;
   min-height: 100vh;
   padding: 2rem 1rem;
+  box-sizing: border-box;
 
   @media (width >= 768px) {
     max-width: 850px;
@@ -173,15 +174,18 @@ div#container>header>div#title {
 
 div#container>main {
   display: flex;
+  flex: 1;
   flex-direction: column;
   align-items: center;
   justify-items: center;
+  width: 100%;
 }
 
 div#container>main>div#content {
   @include mixins.theme-transition();
   background: var(--subtheme);
   border-radius: 1.7rem;
+  flex: 1;
   min-height: max-content;
   width: 63vw;
   max-width: 850px;
