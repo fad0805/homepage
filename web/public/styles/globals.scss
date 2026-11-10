@@ -415,7 +415,7 @@ div#container > main {
 
 footer {
   @include mixins.theme-transition();
-  margin-top: 2rem;
+  margin-top: 1rem;
   padding: 1rem;
   text-align: center;
   background: var(--background);
