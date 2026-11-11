@@ -68,14 +68,6 @@ async def request_validation_exception_handler(
     return JSONResponse(status_code=422, content={"detail": detail})
 
 
-@app.middleware("http")
-async def add_api_security_headers(request: Request, call_next):
-    """Apply basic hardening to proxied API responses as well as the web app."""
-    response = await call_next(request)
-    response.headers.setdefault("X-Content-Type-Options", "nosniff")
-    return response
-
-
 origins = [
     "http://web:3000",
 ]
@@ -87,6 +79,14 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def add_api_security_headers(request: Request, call_next):
+    """Apply basic hardening to proxied API responses as well as the web app."""
+    response = await call_next(request)
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    return response
 
 ensure_upload_dir()
 app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
