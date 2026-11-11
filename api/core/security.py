@@ -1,3 +1,5 @@
+import hashlib
+import hmac
 from datetime import datetime, timedelta
 from typing import Optional
 import secrets
@@ -5,6 +7,43 @@ import jwt
 from passlib.context import CryptContext
 
 from core.config import SECRET_KEY, ALGORITHM, ACCESS_TOKEN_EXPIRE_MINUTES, REFRESH_TOKEN_EXPIRE_DAYS
+
+
+# Codes avoid characters that are easy to confuse when they are read aloud or
+# copied by hand: I, O, 0 and 1.
+GALLERY_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+
+
+def generate_gallery_code(length: int = 12) -> str:
+    """Create a one-time gallery code such as ``K7M4-P9QX-2RTF``."""
+    raw = "".join(
+        secrets.choice(GALLERY_CODE_ALPHABET) for _ in range(length)
+    )
+    return "-".join(raw[index : index + 4] for index in range(0, length, 4))
+
+
+def normalize_gallery_code(code: str) -> str:
+    """Drop separators and characters that are not part of a code."""
+    return "".join(
+        character
+        for character in code.upper()
+        if character in GALLERY_CODE_ALPHABET
+    )
+
+
+def hash_gallery_code(code: str) -> str:
+    """Hash a code with the server secret so the database never stores it."""
+    normalized = normalize_gallery_code(code)
+    return hmac.new(
+        SECRET_KEY.encode(),
+        normalized.encode(),
+        hashlib.sha256,
+    ).hexdigest()
+
+
+def hash_gallery_token(token: str) -> str:
+    """Hash an opaque browser session token before storing it."""
+    return hashlib.sha256(token.encode()).hexdigest()
 
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")

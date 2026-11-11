@@ -14,6 +14,12 @@ REFRESH_TOKEN_GRACE_SECONDS = int(
     os.getenv('REFRESH_TOKEN_GRACE_SECONDS', 60)
 )
 
+# One-time gallery invite codes and the browser cookie they unlock.
+GALLERY_COOKIE_NAME = os.getenv('GALLERY_COOKIE_NAME', 'gallery_access')
+GALLERY_SESSION_DAYS = int(os.getenv('GALLERY_SESSION_DAYS', 30))
+GALLERY_INVITE_HOURS = int(os.getenv('GALLERY_INVITE_HOURS', 24))
+GALLERY_COOKIE_MAX_AGE = GALLERY_SESSION_DAYS * 24 * 60 * 60
+
 # S3-compatible object storage
 S3_ENDPOINT_URL = os.getenv('S3_ENDPOINT_URL')
 S3_REGION = os.getenv('S3_REGION') or 'ap-northeast-2'

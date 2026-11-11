@@ -1,7 +1,9 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 
 import { formatDate, formatDateTime } from "@/lib/datetime";
+import { isGalleryUnlocked } from "@/lib/gallery-auth";
 import type { IllustrationDetailItem } from "@/lib/illustration-types";
 import { ServerApiError, serverApiFetch } from "@/lib/server-api";
 
@@ -32,6 +34,15 @@ export default async function IllustrationDetailPage({
   params: Promise<{ illustrationId: string }>;
 }) {
   const { illustrationId } = await params;
+
+  if (!(await isGalleryUnlocked())) {
+    redirect(
+      `/gallery/unlock?next=${encodeURIComponent(
+        `/illustrations/${illustrationId}`,
+      )}`,
+    );
+  }
+
   const id = parseId(illustrationId);
 
   let illustration: IllustrationDetailItem | null = null;

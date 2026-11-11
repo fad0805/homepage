@@ -1,0 +1,40 @@
+from datetime import datetime
+
+from pydantic import BaseModel, Field
+
+
+class GalleryUnlockRequest(BaseModel):
+    code: str = Field(min_length=1, max_length=64)
+
+
+class GalleryInviteCreate(BaseModel):
+    note: str | None = Field(default=None, max_length=255)
+    expires_in_hours: int | None = Field(default=None, ge=1, le=720)
+
+
+class GalleryInviteCreated(BaseModel):
+    id: int
+    code: str
+    note: str | None
+    expires_at: datetime
+
+
+class GalleryInviteRead(BaseModel):
+    id: int
+    note: str | None
+    created_at: datetime
+    expires_at: datetime
+    used_at: datetime | None
+    revoked_at: datetime | None
+    status: str
+
+
+class GallerySessionRead(BaseModel):
+    id: int
+    created_at: datetime
+    expires_at: datetime
+    last_seen_at: datetime | None
+    revoked_at: datetime | None
+    ip_address: str | None
+    user_agent: str | None
+    status: str

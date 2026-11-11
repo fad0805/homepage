@@ -34,6 +34,7 @@ const navigation: Navigation = {
       { href: "/admin/characters", label: "등장인물 관리" },
       { href: "/admin/books", label: "책장 관리" },
       { href: "/admin/illustrations", label: "삽화 관리" },
+      { href: "/admin/gallery", label: "삽화 열람 관리" },
       { href: "/admin/links", label: "놀러가기 관리" },
       { href: "/admin/connections", label: "연결 관리" },
     ],

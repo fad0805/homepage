@@ -17,6 +17,7 @@ const DISALLOWED_PATHS = [
   "/admin",
   "/signin",
   "/revalidate",
+  "/gallery",
   "/api/illustrations",
   "/uploads/illustrations",
 ];
