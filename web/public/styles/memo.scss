@@ -3,10 +3,12 @@
 
 :root {
   --memo-input-bg: var(--input-background);
+  --memo-pinned-bg: #{color.change($maintheme, $alpha: 0.55)};
 }
 
 [data-theme='dark'] {
   --memo-input-bg: #{color.adjust($dark-bg-sub, $lightness: 4%)};
+  --memo-pinned-bg: #{color.change($maintheme, $alpha: 0.16)};
 }
 
 #memo-page {
@@ -21,6 +23,29 @@
   width: 100%;
   max-width: 40rem;
   min-width: 0;
+}
+
+.memo-pinned-section {
+  min-width: 0;
+  padding: 0.55rem 0.8rem 0.2rem;
+  border: 1px solid color.change($maintheme, $alpha: 0.5);
+  border-radius: 1rem 1rem 0 0;
+  background: var(--memo-pinned-bg);
+}
+
+[data-theme='dark'] .memo-pinned-section {
+  border-color: rgba(255, 255, 255, 0.14);
+}
+
+.memo-section-title {
+  margin: 0 0 0.15rem 0.15rem;
+  color: color.change($light-text, $alpha: 0.5);
+  font-size: 0.7rem;
+  font-weight: 600;
+}
+
+[data-theme='dark'] .memo-section-title {
+  color: color.change($dark-text, $alpha: 0.5);
 }
 
 .memo-form {

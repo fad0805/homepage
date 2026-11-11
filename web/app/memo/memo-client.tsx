@@ -162,15 +162,26 @@ export default function MemoClient({ username }: { username: string }) {
     }
   };
 
-  const totalPages = Math.max(1, Math.ceil(memos.length / MEMOS_PER_PAGE));
+  const pinnedMemos = useMemo(
+    () => memos.filter((memo) => memo.pinned),
+    [memos],
+  );
+  const unpinnedMemos = useMemo(
+    () => memos.filter((memo) => !memo.pinned),
+    [memos],
+  );
+  const totalPages = Math.max(
+    1,
+    Math.ceil(unpinnedMemos.length / MEMOS_PER_PAGE),
+  );
   const currentPage = Math.min(page, totalPages);
   const visibleMemos = useMemo(
     () =>
-      memos.slice(
+      unpinnedMemos.slice(
         (currentPage - 1) * MEMOS_PER_PAGE,
         currentPage * MEMOS_PER_PAGE,
       ),
-    [currentPage, memos],
+    [currentPage, unpinnedMemos],
   );
 
   const handleCreate = async (event: FormEvent<HTMLFormElement>) => {
@@ -301,6 +312,95 @@ export default function MemoClient({ username }: { username: string }) {
     }
   };
 
+  const renderMemoItem = (memo: Memo) => (
+    <li className="memo-item" key={memo.id}>
+      {editingId === memo.id ? (
+        <form
+          className="memo-edit-form"
+          onSubmit={(event) => handleUpdate(event, memo.id)}
+        >
+          <textarea
+            ref={editMemoRef}
+            rows={1}
+            value={editContent}
+            maxLength={500}
+            autoFocus
+            autoComplete="off"
+            aria-label="주석 수정"
+            onKeyDown={handleMemoKeyDown}
+            onChange={(event) => {
+              setEditContent(event.target.value);
+            }}
+          />
+          <div className="memo-item-actions">
+            <button
+              className="memo-text-button"
+              type="button"
+              onClick={cancelEditing}
+            >
+              취소
+            </button>
+            <button
+              className="memo-text-button is-accent"
+              type="submit"
+              disabled={savingId !== null || !editContent.trim()}
+            >
+              {savingId === memo.id ? "저장 중..." : "저장"}
+            </button>
+          </div>
+        </form>
+      ) : (
+        <div className={`memo-row${memo.pinned ? " is-pinned" : ""}`}>
+          <p className="memo-content" title={memo.content}>
+            {renderInlineNodes(parseInlineMarkdown(memo.content))}
+          </p>
+          <div className="memo-meta">
+            <div className="memo-item-actions">
+              <button
+                className={`memo-text-button is-pin${
+                  memo.pinned ? " is-active" : ""
+                }`}
+                type="button"
+                aria-pressed={memo.pinned}
+                disabled={pinningId !== null}
+                title={
+                  memo.pinned
+                    ? "고정을 해제하면 24시간 뒤 사라집니다."
+                    : "고정하면 계속 보관됩니다."
+                }
+                onClick={() => handleTogglePin(memo)}
+              >
+                {pinningId === memo.id
+                  ? "변경 중..."
+                  : memo.pinned
+                    ? "고정 해제"
+                    : "고정"}
+              </button>
+              <button
+                className="memo-text-button"
+                type="button"
+                onClick={() => startEditing(memo)}
+              >
+                수정
+              </button>
+              <button
+                className="memo-text-button is-danger"
+                type="button"
+                disabled={deletingId !== null}
+                onClick={() => handleDelete(memo)}
+              >
+                {deletingId === memo.id ? "삭제 중..." : "삭제"}
+              </button>
+            </div>
+            <span className="memo-item-time">
+              {formatDateTime(memo.created_at)}
+            </span>
+          </div>
+        </div>
+      )}
+    </li>
+  );
+
   return (
     <div id="memo-page">
       <main>
@@ -308,6 +408,17 @@ export default function MemoClient({ username }: { username: string }) {
           <p className="memo-status">불러오는 중...</p>
         ) : (
           <>
+            {pinnedMemos.length > 0 ? (
+              <section
+                className="memo-pinned-section"
+                aria-label="고정된 주석"
+              >
+                <h2 className="memo-section-title">고정된 주석</h2>
+                <ul className="memo-list">
+                  {pinnedMemos.map(renderMemoItem)}
+                </ul>
+              </section>
+            ) : null}
             <form className="memo-form" onSubmit={handleCreate}>
               <div className="memo-input-row">
                 <textarea
@@ -333,118 +444,30 @@ export default function MemoClient({ username }: { username: string }) {
               </div>
             </form>
             {error ? <p className="memo-error">{error}</p> : null}
-            <div className="memo-divider" aria-hidden="true" />
-            <section className="memo-list-section">
-              {memos.length === 0 ? (
-                <p className="memo-status">
-                  {username} 계정의 기록이 없습니다.
-                </p>
-              ) : (
-                <ul className="memo-list">
-                  {visibleMemos.map((memo) => (
-                    <li className="memo-item" key={memo.id}>
-                      {editingId === memo.id ? (
-                        <form
-                          className="memo-edit-form"
-                          onSubmit={(event) => handleUpdate(event, memo.id)}
-                        >
-                          <textarea
-                            ref={editMemoRef}
-                            rows={1}
-                            value={editContent}
-                            maxLength={500}
-                            autoFocus
-                            autoComplete="off"
-                            aria-label="주석 수정"
-                            onKeyDown={handleMemoKeyDown}
-                            onChange={(event) => {
-                              setEditContent(event.target.value);
-                            }}
-                          />
-                          <div className="memo-item-actions">
-                            <button
-                              className="memo-text-button"
-                              type="button"
-                              onClick={cancelEditing}
-                            >
-                              취소
-                            </button>
-                            <button
-                              className="memo-text-button is-accent"
-                              type="submit"
-                              disabled={
-                                savingId !== null || !editContent.trim()
-                              }
-                            >
-                              {savingId === memo.id ? "저장 중..." : "저장"}
-                            </button>
-                          </div>
-                        </form>
-                      ) : (
-                        <div
-                          className={`memo-row${memo.pinned ? " is-pinned" : ""}`}
-                        >
-                          <p className="memo-content" title={memo.content}>
-                            {renderInlineNodes(
-                              parseInlineMarkdown(memo.content),
-                            )}
-                          </p>
-                          <div className="memo-meta">
-                            <div className="memo-item-actions">
-                              <button
-                                className={`memo-text-button is-pin${
-                                  memo.pinned ? " is-active" : ""
-                                }`}
-                                type="button"
-                                aria-pressed={memo.pinned}
-                                disabled={pinningId !== null}
-                                title={
-                                  memo.pinned
-                                    ? "고정을 해제하면 24시간 뒤 사라집니다."
-                                    : "고정하면 계속 보관됩니다."
-                                }
-                                onClick={() => handleTogglePin(memo)}
-                              >
-                                {pinningId === memo.id
-                                  ? "변경 중..."
-                                  : memo.pinned
-                                    ? "고정 해제"
-                                    : "고정"}
-                              </button>
-                              <button
-                                className="memo-text-button"
-                                type="button"
-                                onClick={() => startEditing(memo)}
-                              >
-                                수정
-                              </button>
-                              <button
-                                className="memo-text-button is-danger"
-                                type="button"
-                                disabled={deletingId !== null}
-                                onClick={() => handleDelete(memo)}
-                              >
-                                {deletingId === memo.id
-                                  ? "삭제 중..."
-                                  : "삭제"}
-                              </button>
-                            </div>
-                            <span className="memo-item-time">
-                              {formatDateTime(memo.created_at)}
-                            </span>
-                          </div>
-                        </div>
-                      )}
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </section>
-            <Pagination
-              page={currentPage}
-              totalPages={totalPages}
-              onChange={setPage}
-            />
+            {memos.length === 0 ? (
+              <>
+                <div className="memo-divider" aria-hidden="true" />
+                <section className="memo-list-section">
+                  <p className="memo-status">
+                    {username} 계정의 기록이 없습니다.
+                  </p>
+                </section>
+              </>
+            ) : unpinnedMemos.length > 0 ? (
+              <>
+                <div className="memo-divider" aria-hidden="true" />
+                <section className="memo-list-section">
+                  <ul className="memo-list">
+                    {visibleMemos.map(renderMemoItem)}
+                  </ul>
+                </section>
+                <Pagination
+                  page={currentPage}
+                  totalPages={totalPages}
+                  onChange={setPage}
+                />
+              </>
+            ) : null}
           </>
         )}
       </main>
