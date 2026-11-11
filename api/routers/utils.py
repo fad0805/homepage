@@ -1,6 +1,7 @@
 import hmac
 from datetime import datetime, timedelta
 from typing import Optional
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from fastapi import Request, Response, Depends, HTTPException, status
@@ -9,12 +10,13 @@ import jwt
 from core.config import (
     ENVIRONMENT,
     AUTH_COOKIE_MAX_AGE,
+    REFRESH_TOKEN_EXPIRE_DAYS,
     REFRESH_TOKEN_GRACE_SECONDS,
 )
 from core.security import create_access_token, create_refresh_token, decode_access_token, decode_refresh_token
 from crud.users import get_user
 from db.session import get_db
-from models.users import User
+from models.users import User, UserSession
 
 
 def get_client_ip(request: Request) -> str:
@@ -55,13 +57,13 @@ def _token_matches(stored: Optional[str], token: Optional[str]) -> bool:
     return hmac.compare_digest(stored.encode(), token.encode())
 
 
-def _rotated_token_is_in_grace(user: User, token: Optional[str]) -> bool:
+def _rotated_token_is_in_grace(session: UserSession, token: Optional[str]) -> bool:
     """Accept the previous refresh token briefly after a rotation."""
-    if not _token_matches(user.previous_refresh_token, token):
+    if not _token_matches(session.previous_refresh_token, token):
         return False
-    if user.refresh_token_rotated_at is None:
+    if session.refresh_token_rotated_at is None:
         return False
-    return datetime.utcnow() - user.refresh_token_rotated_at <= timedelta(
+    return datetime.utcnow() - session.refresh_token_rotated_at <= timedelta(
         seconds=REFRESH_TOKEN_GRACE_SECONDS
     )
 
@@ -76,9 +78,10 @@ def refresh_access_token(
     Refresh tokens rotate on use, but concurrent requests can present the same
     token (multiple tabs, or a batch of API calls after the access token has
     expired). The rotation is applied with an atomic conditional update so only
-    one request advances the stored token; the others reuse that new token
-    during a short grace period instead of being rejected. Reusing the previous
-    token after the grace window revokes the token family.
+    one request advances the session's stored token; the others reuse that new
+    token during a short grace period instead of being rejected. Reusing the
+    previous token after the grace window revokes that session only, leaving
+    every other device's session intact.
     """
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -107,21 +110,25 @@ def refresh_access_token(
 
     new_access_token = create_access_token(data={"sub": username})
     new_refresh_token = create_refresh_token(data={"sub": username})
+    now = datetime.utcnow()
 
-    # Only rotate when the presented token is still the current one. The
-    # condition is evaluated by the database, so concurrent refreshes cannot
-    # both win the race.
+    # Only rotate when the presented token is still the current one for its
+    # session. The condition is evaluated by the database, so concurrent
+    # refreshes cannot both win the race.
     rotated = (
-        db.query(User)
+        db.query(UserSession)
         .filter(
-            User.id == user.id,
-            User.refresh_token == refresh_token,
+            UserSession.user_id == user.id,
+            UserSession.refresh_token == refresh_token,
         )
         .update(
             {
-                User.previous_refresh_token: refresh_token,
-                User.refresh_token: new_refresh_token,
-                User.refresh_token_rotated_at: datetime.utcnow(),
+                UserSession.previous_refresh_token: refresh_token,
+                UserSession.refresh_token: new_refresh_token,
+                UserSession.refresh_token_rotated_at: now,
+                UserSession.last_used_at: now,
+                UserSession.expires_at: now
+                + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS),
             },
             synchronize_session=False,
         )
@@ -131,21 +138,28 @@ def refresh_access_token(
     if rotated:
         return username, new_access_token, new_refresh_token
 
-    # Another request just rotated the token. Reuse the stored token so every
-    # response writes the same cookie value.
-    db.refresh(user)
-    if user.refresh_token and _rotated_token_is_in_grace(
-        user, refresh_token
+    # Another request just rotated this session's token. Reuse the stored
+    # token so every response writes the same cookie value.
+    session = (
+        db.query(UserSession)
+        .filter(
+            UserSession.user_id == user.id,
+            UserSession.previous_refresh_token == refresh_token,
+        )
+        .first()
+    )
+    if session and session.refresh_token and _rotated_token_is_in_grace(
+        session, refresh_token
     ):
-        return username, new_access_token, user.refresh_token
+        session.last_used_at = now
+        db.commit()
+        return username, new_access_token, session.refresh_token
 
-    # The token is a valid previous-generation token, but the grace window has
-    # passed. Treat this as possible reuse/theft and revoke the whole token
-    # family so the stale token cannot keep minting access tokens.
-    if _token_matches(user.previous_refresh_token, refresh_token):
-        user.refresh_token = None
-        user.previous_refresh_token = None
-        user.refresh_token_rotated_at = None
+    # The token is a valid previous-generation token of this session, but the
+    # grace window has passed. Treat this as possible reuse/theft and revoke
+    # only that session; every other device keeps its own session.
+    if session:
+        db.delete(session)
         db.commit()
 
     raise credentials_exception
@@ -239,10 +253,23 @@ def get_optional_user(
 
     if used_refresh_token:
         refresh_token = get_refresh_token_from_cookie(request)
-        if not (
-            _token_matches(user.refresh_token, refresh_token)
-            or _rotated_token_is_in_grace(user, refresh_token)
-        ):
+        session = (
+            db.query(UserSession)
+            .filter(
+                UserSession.user_id == user.id,
+                or_(
+                    UserSession.refresh_token == refresh_token,
+                    UserSession.previous_refresh_token == refresh_token,
+                ),
+            )
+            .first()
+        )
+        if not session:
+            return None
+        if _token_matches(session.refresh_token, refresh_token):
+            session.last_used_at = datetime.utcnow()
+            db.commit()
+        elif not _rotated_token_is_in_grace(session, refresh_token):
             return None
 
     return user

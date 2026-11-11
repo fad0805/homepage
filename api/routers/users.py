@@ -15,12 +15,18 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from core.config import ENVIRONMENT, AUTH_COOKIE_MAX_AGE
 from core.security import verify_password, create_access_token, create_refresh_token
-from routers.utils import get_current_user_from_token, get_optional_user
+from routers.utils import (
+    get_client_ip,
+    get_current_user_from_token,
+    get_optional_user,
+)
 from crud.users import (
-    clear_refresh_token,
     create_user,
+    create_user_session,
+    delete_expired_user_sessions,
+    delete_user_session_by_token,
     get_user,
-    update_refresh_token,
+    record_signin_history,
 )
 from db.session import get_db
 from schemas.users import UserCreate
@@ -85,16 +91,25 @@ async def signin(
     hashed_password = user.hashed_password
     verified = verify_password(password, hashed_password)
 
+    device_info = (request.headers.get("user-agent") or "")[:255] or None
+    ip_address = get_client_ip(request)
+
     if not verified:
+        record_signin_history(db, user.id, ip_address, device_info, success=False)
         raise HTTPException(status_code=400, detail="Invalid username or password")
 
     access_token = create_access_token(data={"sub": username})
     refresh_token = create_refresh_token(data={"sub": username})
 
+    # A sign-in starts a new per-device session instead of replacing the
+    # user's single stored token, so other devices stay logged in.
     try:
-        update_refresh_token(db, username, refresh_token)
+        create_user_session(db, user.id, refresh_token, device_info, ip_address)
     except SQLAlchemyError:
         raise HTTPException(status_code=500, detail="Failed to save refresh token")
+
+    delete_expired_user_sessions(db, user.id)
+    record_signin_history(db, user.id, ip_address, device_info, success=True)
 
     response.set_cookie(
         key="refresh_token",
@@ -124,7 +139,7 @@ def signout(
     db: Session = Depends(get_db),
 ):
     """
-    Clear the authentication cookies and invalidate the refresh token.
+    Clear the authentication cookies and invalidate this device's session.
     """
     user = get_optional_user(
         request,
@@ -132,7 +147,9 @@ def signout(
         token=request.cookies.get("access_token"),
     )
     if user:
-        clear_refresh_token(db, user.username)
+        refresh_token = request.cookies.get("refresh_token")
+        if refresh_token:
+            delete_user_session_by_token(db, user.id, refresh_token)
 
     response.delete_cookie("access_token", path="/")
     response.delete_cookie("refresh_token", path="/")

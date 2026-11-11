@@ -1,6 +1,10 @@
+from datetime import datetime, timedelta
+
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
-from models.users import User
+from core.config import REFRESH_TOKEN_EXPIRE_DAYS
+from models.users import User, UserSession, UserSigninHistory
 from core.security import hash_password
 from schemas.users import UserCreate, UserUpdate
 
@@ -45,27 +49,70 @@ def update_user(db: Session, username: str, user_update: UserUpdate):
     return True if user else False
 
 
-def update_refresh_token(db:Session, username: str, token: str):
+def create_user_session(
+    db: Session,
+    user_id: int,
+    refresh_token: str,
+    device_info: str | None = None,
+    ip_address: str | None = None,
+) -> UserSession:
     """
-    Replace the stored refresh token on sign-in.
+    Add a session row for a freshly signed-in device.
 
-    Any rotation grace state belongs to the previous session and must not be
-    reused after a fresh login.
+    A sign-in never touches other rows, so logging in on one device does
+    not invalidate the sessions of every other device.
     """
-    user = get_user(db, username)
-    user.refresh_token = token
-    user.previous_refresh_token = None
-    user.refresh_token_rotated_at = None
+    session = UserSession(
+        user_id=user_id,
+        refresh_token=refresh_token,
+        device_info=(device_info or "")[:255] or None,
+        ip_address=(ip_address or "unknown")[:45],
+        expires_at=datetime.utcnow() + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS),
+    )
+    db.add(session)
+    db.commit()
+    return session
+
+
+def delete_user_session_by_token(
+    db: Session,
+    user_id: int,
+    refresh_token: str,
+) -> None:
+    """Remove the session a refresh token belongs to (sign-out)."""
+    db.query(UserSession).filter(
+        UserSession.user_id == user_id,
+        or_(
+            UserSession.refresh_token == refresh_token,
+            UserSession.previous_refresh_token == refresh_token,
+        ),
+    ).delete(synchronize_session=False)
     db.commit()
 
 
-def clear_refresh_token(db: Session, username: str):
-    """Invalidate the stored refresh token for a user."""
-    try:
-        user = get_user(db, username)
-    except ValueError:
-        return
-    user.refresh_token = None
-    user.previous_refresh_token = None
-    user.refresh_token_rotated_at = None
+def delete_expired_user_sessions(db: Session, user_id: int) -> None:
+    """Drop sessions whose sliding expiry has passed (housekeeping)."""
+    db.query(UserSession).filter(
+        UserSession.user_id == user_id,
+        UserSession.expires_at < datetime.utcnow(),
+    ).delete(synchronize_session=False)
+    db.commit()
+
+
+def record_signin_history(
+    db: Session,
+    user_id: int,
+    ip_address: str | None,
+    device_info: str | None,
+    success: bool,
+) -> None:
+    """Record a sign-in attempt for later auditing."""
+    db.add(
+        UserSigninHistory(
+            user_id=user_id,
+            ip_address=(ip_address or "unknown")[:45],
+            device_info=(device_info or "unknown")[:255],
+            success=1 if success else 0,
+        )
+    )
     db.commit()
