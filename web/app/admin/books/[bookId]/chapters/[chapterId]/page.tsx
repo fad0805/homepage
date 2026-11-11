@@ -868,40 +868,42 @@ export default function AdminChapterEdit() {
                 비워두면 즉시 공개됩니다. 미래 시각을 지정하면 예약
                 발행됩니다. 공개가 꺼져 있으면 발행되지 않습니다.
               </p>
-              <label className="admin-books-checkbox">
-                <span>공개 상태</span>
-                <select
-                  value={
-                    !visible
-                      ? "private"
-                      : chapterProtected
-                        ? "protected"
-                        : "public"
-                  }
-                  onChange={(event) => {
-                    const value = event.target.value;
-                    setVisible(value !== "private");
-                    setChapterProtected(value === "protected");
-                  }}
-                >
-                  <option value="public">공개</option>
-                  <option value="protected">보호</option>
-                  <option value="private">비공개</option>
-                </select>
-              </label>
-              {!isNew && visible && chapterProtected ? (
-                <div className="admin-books-code">
-                  <button
-                    type="button"
-                    className="admin-button"
-                    onClick={() => void issueChapterCode()}
-                    disabled={issuing}
+              <div className="admin-books-access">
+                <label className="admin-books-checkbox">
+                  <span>공개 상태</span>
+                  <select
+                    value={
+                      !visible
+                        ? "private"
+                        : chapterProtected
+                          ? "protected"
+                          : "public"
+                    }
+                    onChange={(event) => {
+                      const value = event.target.value;
+                      setVisible(value !== "private");
+                      setChapterProtected(value === "protected");
+                    }}
                   >
-                    {issuing ? "발급 중..." : "열람 코드 발급"}
-                  </button>
-                  {issuedCode ? <code>{issuedCode}</code> : null}
-                </div>
-              ) : null}
+                    <option value="public">공개</option>
+                    <option value="protected">보호</option>
+                    <option value="private">비공개</option>
+                  </select>
+                </label>
+                {!isNew && visible && chapterProtected ? (
+                  <div className="admin-books-code">
+                    <button
+                      type="button"
+                      className="admin-button"
+                      onClick={() => void issueChapterCode()}
+                      disabled={issuing}
+                    >
+                      {issuing ? "발급 중..." : "열람 코드 발급"}
+                    </button>
+                    {issuedCode ? <code>{issuedCode}</code> : null}
+                  </div>
+                ) : null}
+              </div>
               <div className="admin-books-form-actions">
                 {!isNew && chapter ? (
                   <button

@@ -395,6 +395,13 @@ p.admin-books-draft-preview-empty {
   }
 }
 
+.admin-books-access {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
 .admin-books-checkbox {
   display: flex;
   align-items: center;
@@ -404,6 +411,18 @@ p.admin-books-draft-preview-empty {
 
   input[type='checkbox'] {
     width: auto;
+  }
+
+  select {
+    height: 2rem;
+    padding: 0 0.5rem;
+    border: 1px solid var(--admin-border);
+    border-radius: 0.45rem;
+    background: var(--input-background);
+    color: var(--foreground);
+    font-family: inherit;
+    font-size: 0.75rem;
+    cursor: pointer;
   }
 
   span {

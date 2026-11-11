@@ -1645,43 +1645,47 @@ export default function AdminIllustrations() {
                       }
                     />
                   </label>
-                  <label className="admin-illustrations-modal__visible">
-                    <span>공개 상태</span>
-                    <select
-                      value={
-                        editingItem.visible === false
-                          ? "private"
-                          : editingItem.protected
-                            ? "protected"
-                            : "public"
-                      }
-                      onChange={(event) => {
-                        const value = event.target.value;
-                        updateEditing({
-                          visible: value !== "private",
-                          protected: value === "protected",
-                        });
-                      }}
-                    >
-                      <option value="public">공개</option>
-                      <option value="protected">보호</option>
-                      <option value="private">비공개</option>
-                    </select>
-                  </label>
-                  {editingItem.visible !== false &&
-                  editingItem.protected ? (
-                    <div className="admin-illustrations-modal__code">
-                      <button
-                        type="button"
-                        className="admin-button"
-                        onClick={() => void issueCode()}
-                        disabled={issuing}
+                  <div className="admin-illustrations-modal__access">
+                    <label className="admin-illustrations-modal__visible">
+                      <span>공개 상태</span>
+                      <select
+                        value={
+                          editingItem.visible === false
+                            ? "private"
+                            : editingItem.protected
+                              ? "protected"
+                              : "public"
+                        }
+                        onChange={(event) => {
+                          const value = event.target.value;
+                          updateEditing({
+                            visible: value !== "private",
+                            protected: value === "protected",
+                          });
+                        }}
                       >
-                        {issuing ? "발급 중..." : "열람 코드 발급"}
-                      </button>
-                      {issuedCode ? <code>{issuedCode}</code> : null}
-                    </div>
-                  ) : null}
+                        <option value="public">공개</option>
+                        <option value="protected">보호</option>
+                        <option value="private">비공개</option>
+                      </select>
+                    </label>
+                    {editingItem.visible !== false &&
+                    editingItem.protected ? (
+                      <div className="admin-illustrations-modal__code">
+                        <button
+                          type="button"
+                          className="admin-button"
+                          onClick={() => void issueCode()}
+                          disabled={issuing}
+                        >
+                          {issuing ? "발급 중..." : "열람 코드 발급"}
+                        </button>
+                        {issuedCode ? (
+                          <code>{issuedCode}</code>
+                        ) : null}
+                      </div>
+                    ) : null}
+                  </div>
                 </div>
               </div>
 

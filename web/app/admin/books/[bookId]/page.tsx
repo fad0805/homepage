@@ -767,40 +767,42 @@ export default function AdminBookDetail() {
                   ))}
                 </select>
               </label>
-              <label className="admin-books-checkbox">
-                <span>공개 상태</span>
-                <select
-                  value={
-                    !visible
-                      ? "private"
-                      : bookProtected
-                        ? "protected"
-                        : "public"
-                  }
-                  onChange={(event) => {
-                    const value = event.target.value;
-                    setVisible(value !== "private");
-                    setBookProtected(value === "protected");
-                  }}
-                >
-                  <option value="public">공개</option>
-                  <option value="protected">보호</option>
-                  <option value="private">비공개</option>
-                </select>
-              </label>
-              {visible && bookProtected ? (
-                <div className="admin-books-code">
-                  <button
-                    type="button"
-                    className="admin-button"
-                    onClick={() => void issueBookCode()}
-                    disabled={issuing}
+              <div className="admin-books-access">
+                <label className="admin-books-checkbox">
+                  <span>공개 상태</span>
+                  <select
+                    value={
+                      !visible
+                        ? "private"
+                        : bookProtected
+                          ? "protected"
+                          : "public"
+                    }
+                    onChange={(event) => {
+                      const value = event.target.value;
+                      setVisible(value !== "private");
+                      setBookProtected(value === "protected");
+                    }}
                   >
-                    {issuing ? "발급 중..." : "열람 코드 발급"}
-                  </button>
-                  {issuedCode ? <code>{issuedCode}</code> : null}
-                </div>
-              ) : null}
+                    <option value="public">공개</option>
+                    <option value="protected">보호</option>
+                    <option value="private">비공개</option>
+                  </select>
+                </label>
+                {visible && bookProtected ? (
+                  <div className="admin-books-code">
+                    <button
+                      type="button"
+                      className="admin-button"
+                      onClick={() => void issueBookCode()}
+                      disabled={issuing}
+                    >
+                      {issuing ? "발급 중..." : "열람 코드 발급"}
+                    </button>
+                    {issuedCode ? <code>{issuedCode}</code> : null}
+                  </div>
+                ) : null}
+              </div>
               <p className="admin-books-meta">
                 생성 {formatDateTime(book.created_at)} · 수정{" "}
                 {formatDateTime(book.updated_at)}
