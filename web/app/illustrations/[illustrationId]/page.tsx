@@ -43,7 +43,7 @@ export default async function IllustrationDetailPage({
     try {
       illustration = await serverApiFetch<IllustrationDetailItem>(
         `/illustrations/${id}`,
-        { tags: ["illustrations"] },
+        { auth: true, tags: ["illustrations"] },
       );
     } catch (error) {
       if (error instanceof ServerApiError && error.status === 404) {

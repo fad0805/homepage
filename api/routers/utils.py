@@ -1,4 +1,5 @@
 import hmac
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Optional
 
@@ -9,6 +10,7 @@ from sqlalchemy.orm import Session
 from core.config import (
     ENVIRONMENT,
     AUTH_COOKIE_MAX_AGE,
+    GALLERY_COOKIE_NAME,
     REFRESH_TOKEN_EXPIRE_DAYS,
     REFRESH_TOKEN_GRACE_SECONDS,
 )
@@ -17,7 +19,9 @@ from core.security import (
     create_refresh_token,
     decode_access_token,
     decode_refresh_token,
+    hash_gallery_token,
 )
+from crud import gallery as gallery_crud
 from crud.users import (
     delete_user_session,
     get_user,
@@ -26,6 +30,57 @@ from crud.users import (
 )
 from db.session import get_db
 from models.users import UserSession
+
+
+@dataclass(frozen=True)
+class GalleryGrants:
+    """Resources unlocked by the browser's gallery cookie."""
+
+    illustrations: frozenset[int] = frozenset()
+    chapters: frozenset[int] = frozenset()
+    books: frozenset[int] = frozenset()
+
+
+def get_gallery_grants(request: Request, db: Session) -> GalleryGrants:
+    """Resolve the gallery session grants carried by this request.
+
+    Protected pages are rendered by Next.js server components, so the API
+    cannot rely on the browser calling it directly. The server forwards the
+    gallery cookie and this helper turns it into resource ids.
+    """
+    token = request.cookies.get(GALLERY_COOKIE_NAME)
+    if not token:
+        return GalleryGrants()
+
+    session = gallery_crud.get_session_by_hash(
+        db,
+        hash_gallery_token(token),
+    )
+    if (
+        session is None
+        or session.revoked_at is not None
+        or session.expires_at <= datetime.utcnow()
+    ):
+        return GalleryGrants()
+
+    grants = session.grants
+    return GalleryGrants(
+        illustrations=frozenset(
+            grant.illustration_id
+            for grant in grants
+            if grant.illustration_id is not None
+        ),
+        chapters=frozenset(
+            grant.chapter_id
+            for grant in grants
+            if grant.chapter_id is not None
+        ),
+        books=frozenset(
+            grant.book_id
+            for grant in grants
+            if grant.book_id is not None
+        ),
+    )
 
 
 def get_client_ip(request: Request) -> str:

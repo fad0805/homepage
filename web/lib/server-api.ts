@@ -1,6 +1,14 @@
+import { cookies } from "next/headers";
+
 const API_BASE = (
   process.env.API_INTERNAL_URL ?? "http://api:8000"
 ).replace(/\/+$/, "");
+
+const VIEWER_COOKIES = [
+  "access_token",
+  "refresh_token",
+  "gallery_access",
+] as const;
 
 const configuredRevalidate = Number(
   process.env.PUBLIC_DATA_REVALIDATE ?? "60",
@@ -23,6 +31,12 @@ export class ServerApiError extends Error {
 interface ServerApiOptions {
   revalidate?: number;
   tags?: string[];
+  /**
+   * Forward the visitor's auth/gallery cookies so the API can return hidden
+   * or protected content for this specific viewer. Authenticated responses
+   * are never cached; anonymous requests still use the shared data cache.
+   */
+  auth?: boolean;
 }
 
 /**
@@ -36,21 +50,44 @@ export async function serverApiFetch<T>(
   path: string,
   options: ServerApiOptions = {},
 ): Promise<T> {
-  const revalidate = options.revalidate ?? DEFAULT_REVALIDATE;
-  const nextOptions: { revalidate: number; tags?: string[] } = {
-    revalidate,
+  const headers: Record<string, string> = {
+    Accept: "application/json",
   };
-  if (options.tags?.length) {
-    nextOptions.tags = options.tags;
+  const requestInit: RequestInit & {
+    next?: { revalidate: number; tags?: string[] };
+  } = {
+    headers,
+    cache: "force-cache",
+  };
+
+  let viewerCookie = "";
+  if (options.auth) {
+    const cookieStore = await cookies();
+    if (VIEWER_COOKIES.some((name) => cookieStore.has(name))) {
+      viewerCookie = cookieStore
+        .getAll()
+        .map(({ name, value }) => `${name}=${value}`)
+        .join("; ");
+    }
   }
 
-  const response = await fetch(`${API_BASE}${path}`, {
-    cache: "force-cache",
-    next: nextOptions,
-    headers: {
-      Accept: "application/json",
-    },
-  });
+  if (viewerCookie) {
+    // The response depends on who is asking, so it must not enter the
+    // shared data cache.
+    headers.Cookie = viewerCookie;
+    requestInit.cache = "no-store";
+  } else {
+    const revalidate = options.revalidate ?? DEFAULT_REVALIDATE;
+    const nextOptions: { revalidate: number; tags?: string[] } = {
+      revalidate,
+    };
+    if (options.tags?.length) {
+      nextOptions.tags = options.tags;
+    }
+    requestInit.next = nextOptions;
+  }
+
+  const response = await fetch(`${API_BASE}${path}`, requestInit);
 
   if (!response.ok) {
     let detail = `요청에 실패했습니다. (${response.status})`;

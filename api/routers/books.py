@@ -23,15 +23,18 @@ from schemas.books import (
     BookReorderRequest,
     BookUpdate,
 )
-from .utils import require_auth
+from .utils import get_optional_user, require_auth
 
 router = APIRouter()
 
 
 @router.get("/")
 @router.get("")
-def get_books(db: Session = Depends(get_db)):
-    return get_all_books(db)
+def get_books(
+    db: Session = Depends(get_db),
+    current_user=Depends(get_optional_user),
+):
+    return get_all_books(db, include_hidden=current_user is not None)
 
 
 @router.post("/")
@@ -97,8 +100,16 @@ def remove_book_category(
 
 
 @router.get("/{book_id}")
-def get_book_detail(book_id: int, db: Session = Depends(get_db)):
-    return get_book(db, book_id)
+def get_book_detail(
+    book_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_optional_user),
+):
+    return get_book(
+        db,
+        book_id,
+        include_hidden=current_user is not None,
+    )
 
 
 @router.put("/{book_id}")

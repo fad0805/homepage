@@ -49,6 +49,7 @@ class IllustrationSummary(BaseModel):
 class IllustrationDetail(IllustrationSummary):
     """Full illustration data including every uploaded image."""
 
+    locked: bool = False
     images: list[IllustrationImageRead] = Field(default_factory=list)
 
 

@@ -72,11 +72,20 @@ def _serialize_summary(illustration: Illustration) -> dict:
     }
 
 
-def _serialize_detail(illustration: Illustration) -> dict:
+def _serialize_detail(
+    illustration: Illustration,
+    locked: bool = False,
+) -> dict:
     data = _serialize_summary(illustration)
-    data["images"] = [
-        _serialize_image(image) for image in (illustration.images or [])
-    ]
+    data["locked"] = locked
+    data["images"] = (
+        []
+        if locked
+        else [
+            _serialize_image(image)
+            for image in (illustration.images or [])
+        ]
+    )
     return data
 
 
@@ -99,22 +108,30 @@ def get_visible_illustrations(db: Session):
     return [_serialize_summary(illustration) for illustration in illustrations]
 
 
-def get_visible_illustration(db: Session, illustration_id: int):
-    """Return a single public illustration group, or 404 when hidden."""
-    illustration = (
-        _group_query(db)
-        .filter(
-            Illustration.id == illustration_id,
-            Illustration.visible.is_(True),
-        )
-        .first()
-    )
+def get_visible_illustration(
+    db: Session,
+    illustration_id: int,
+    *,
+    include_hidden: bool = False,
+    granted_illustrations: frozenset[int] = frozenset(),
+):
+    """Return one illustration, masking its images while it stays locked."""
+    query = _group_query(db).filter(Illustration.id == illustration_id)
+    if not include_hidden:
+        query = query.filter(Illustration.visible.is_(True))
+    illustration = query.first()
     if not illustration:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="삽화를 찾을 수 없습니다.",
         )
-    return _serialize_detail(illustration)
+
+    locked = (
+        not include_hidden
+        and bool(illustration.protected)
+        and illustration.id not in granted_illustrations
+    )
+    return _serialize_detail(illustration, locked=locked)
 
 
 def get_all_illustrations(db: Session):

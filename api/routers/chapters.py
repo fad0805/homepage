@@ -19,7 +19,12 @@ from schemas.books import (
     ChapterReorderRequest,
     ChapterUpdate,
 )
-from .utils import get_client_ip, get_optional_user, require_auth
+from .utils import (
+    get_client_ip,
+    get_gallery_grants,
+    get_optional_user,
+    require_auth,
+)
 
 router = APIRouter()
 
@@ -36,8 +41,18 @@ async def upload_chapter_image(
 
 @router.get("/")
 @router.get("")
-def get_chapters(db: Session = Depends(get_db)):
-    return get_all_chapters(db)
+def get_chapters(
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_optional_user),
+):
+    grants = get_gallery_grants(request, db)
+    return get_all_chapters(
+        db,
+        include_hidden=current_user is not None,
+        granted_chapters=grants.chapters,
+        granted_books=grants.books,
+    )
 
 
 @router.post("/")
@@ -76,8 +91,20 @@ def post_chapter_view(
 
 
 @router.get("/{chapter_id}")
-def get_chapter_detail(chapter_id: int, db: Session = Depends(get_db)):
-    return get_chapter(db, chapter_id)
+def get_chapter_detail(
+    chapter_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_optional_user),
+):
+    grants = get_gallery_grants(request, db)
+    return get_chapter(
+        db,
+        chapter_id,
+        include_hidden=current_user is not None,
+        granted_chapters=grants.chapters,
+        granted_books=grants.books,
+    )
 
 
 @router.put("/{chapter_id}")

@@ -37,9 +37,11 @@ export default async function BooksPage({
   try {
     [books, chapters] = await Promise.all([
       serverApiFetch<Book[]>("/books", {
+        auth: true,
         tags: ["books"],
       }),
       serverApiFetch<Chapter[]>("/chapters", {
+        auth: true,
         tags: ["chapters"],
       }),
     ]);

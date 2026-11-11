@@ -191,18 +191,19 @@ def reorder_book_categories(
     return True
 
 
-def _serialize_chapter(chapter: Chapter) -> dict:
+def _serialize_chapter(chapter: Chapter, locked: bool = False) -> dict:
     book = chapter.book
     return {
         "id": chapter.id,
         "book_id": chapter.book_id,
         "title": chapter.title,
         "subtitle": chapter.subtitle,
-        "body": chapter.body,
+        "body": None if locked else chapter.body,
         "tags": chapter.tags or [],
         "order": chapter.order,
         "visible": chapter.visible,
         "protected": bool(chapter.protected),
+        "locked": locked,
         "view_count": chapter.view_count or 0,
         "published_at": _iso_utc(chapter.published_at),
         "created_at": _iso_utc(chapter.created_at),
@@ -219,14 +220,22 @@ def _serialize_chapter(chapter: Chapter) -> dict:
 
 
 # Book CRUD
-def get_all_books(db: Session):
-    books = db.query(Book).order_by(Book.order, Book.id).all()
+def get_all_books(db: Session, *, include_hidden: bool = False):
+    query = db.query(Book)
+    if not include_hidden:
+        query = query.filter(Book.visible.is_(True))
+    books = query.order_by(Book.order, Book.id).all()
     return [_serialize_book(book) for book in books]
 
 
-def get_book(db: Session, book_id: int):
+def get_book(
+    db: Session,
+    book_id: int,
+    *,
+    include_hidden: bool = False,
+):
     book = db.query(Book).filter(Book.id == book_id).first()
-    if not book:
+    if not book or (not include_hidden and book.visible is False):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Does not exist book",
@@ -298,7 +307,25 @@ def reorder_books(db: Session, payload: BookReorderRequest):
 
 
 # Chapter CRUD
-def get_all_chapters(db: Session):
+def _chapter_is_locked(
+    chapter: Chapter,
+    granted_chapters: frozenset[int],
+    granted_books: frozenset[int],
+) -> bool:
+    """Mirror the web UI rule: a book grant unlocks every chapter in it."""
+    book = chapter.book
+    if book is not None and book.protected:
+        return chapter.book_id not in granted_books
+    return bool(chapter.protected) and chapter.id not in granted_chapters
+
+
+def get_all_chapters(
+    db: Session,
+    *,
+    include_hidden: bool = False,
+    granted_chapters: frozenset[int] = frozenset(),
+    granted_books: frozenset[int] = frozenset(),
+):
     chapters = (
         db.query(Chapter)
         .join(Book, Chapter.book_id == Book.id)
@@ -310,17 +337,42 @@ def get_all_chapters(db: Session):
         )
         .all()
     )
-    return [_serialize_chapter(chapter) for chapter in chapters]
+
+    result = []
+    for chapter in chapters:
+        if not include_hidden and not _chapter_is_public(chapter):
+            continue
+        locked = (
+            False
+            if include_hidden
+            else _chapter_is_locked(chapter, granted_chapters, granted_books)
+        )
+        result.append(_serialize_chapter(chapter, locked=locked))
+    return result
 
 
-def get_chapter(db: Session, chapter_id: int):
+def get_chapter(
+    db: Session,
+    chapter_id: int,
+    *,
+    include_hidden: bool = False,
+    granted_chapters: frozenset[int] = frozenset(),
+    granted_books: frozenset[int] = frozenset(),
+):
     chapter = db.query(Chapter).filter(Chapter.id == chapter_id).first()
-    if not chapter:
+    if not chapter or (
+        not include_hidden and not _chapter_is_public(chapter)
+    ):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Does not exist chapter",
         )
-    return _serialize_chapter(chapter)
+    locked = (
+        False
+        if include_hidden
+        else _chapter_is_locked(chapter, granted_chapters, granted_books)
+    )
+    return _serialize_chapter(chapter, locked=locked)
 
 
 def _get_book_or_404(db: Session, book_id: int) -> Book:
@@ -428,9 +480,7 @@ def register_chapter_view(
         )
 
     now = datetime.utcnow()
-    if chapter.visible is False or (
-        chapter.published_at is not None and chapter.published_at > now
-    ):
+    if not _chapter_is_public(chapter):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Does not exist chapter",

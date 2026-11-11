@@ -23,5 +23,6 @@ export interface IllustrationItem {
 }
 
 export interface IllustrationDetailItem extends IllustrationItem {
+  locked?: boolean;
   images: IllustrationImageItem[];
 }

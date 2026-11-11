@@ -7,6 +7,7 @@ from fastapi import (
     File,
     Form,
     HTTPException,
+    Request,
     UploadFile,
     status,
 )
@@ -39,7 +40,7 @@ from schemas.illustrations import (
     IllustrationUpdate,
     today_kst,
 )
-from .utils import require_auth
+from .utils import get_gallery_grants, get_optional_user, require_auth
 
 router = APIRouter()
 
@@ -228,10 +229,18 @@ async def put_illustration_representative(
 @router.get("/{illustration_id}", response_model=IllustrationDetail)
 def read_illustration(
     illustration_id: int,
+    request: Request,
     db: Session = Depends(get_db),
+    current_user=Depends(get_optional_user),
 ):
-    """Return a single public illustration for its detail page."""
-    return get_visible_illustration(db, illustration_id)
+    """Return a single illustration, hiding images until it is unlocked."""
+    grants = get_gallery_grants(request, db)
+    return get_visible_illustration(
+        db,
+        illustration_id,
+        include_hidden=current_user is not None,
+        granted_illustrations=grants.illustrations,
+    )
 
 
 @router.put("/{illustration_id}", response_model=IllustrationDetail)
