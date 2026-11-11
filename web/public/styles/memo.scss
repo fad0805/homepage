@@ -92,6 +92,28 @@
   }
 }
 
+.memo-form-hint {
+  margin: 0.45rem 0.15rem 0;
+  color: color.change($light-text, $alpha: 0.5);
+  font-size: 0.72rem;
+
+  strong {
+    font-weight: 700;
+  }
+
+  em {
+    font-style: italic;
+  }
+
+  del {
+    opacity: 0.65;
+  }
+}
+
+[data-theme='dark'] .memo-form-hint {
+  color: color.change($dark-text, $alpha: 0.5);
+}
+
 .memo-list-section {
   margin-top: 0.75rem;
 }
@@ -145,6 +167,18 @@
     text-decoration: underline;
     text-underline-offset: 2px;
     overflow-wrap: anywhere;
+  }
+
+  strong {
+    font-weight: 700;
+  }
+
+  em {
+    font-style: italic;
+  }
+
+  del {
+    opacity: 0.65;
   }
 }
 

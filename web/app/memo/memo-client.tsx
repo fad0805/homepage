@@ -8,12 +8,16 @@ import {
   useMemo,
   useRef,
   useState,
+  type ReactNode,
 } from "react";
 
 import { Pagination } from "@/components/pagination";
 import { apiFetch } from "@/lib/api";
 import { formatDateTime } from "@/lib/datetime";
-import { linkifyParts } from "@/lib/linkify";
+import {
+  parseInlineMarkdown,
+  type InlineMarkdownNode,
+} from "@/lib/inline-markdown";
 
 import "@/public/styles/memo.scss";
 
@@ -43,6 +47,36 @@ function resizeTextarea(element: HTMLTextAreaElement | null) {
   element.style.height = `${Math.min(element.scrollHeight, maxHeight)}px`;
   element.style.overflowY =
     element.scrollHeight > maxHeight ? "auto" : "hidden";
+}
+
+function renderInlineNodes(nodes: InlineMarkdownNode[]): ReactNode[] {
+  return nodes.map((node, index) => {
+    switch (node.kind) {
+      case "link":
+        return (
+          <a
+            key={`${node.href}-${index}`}
+            href={node.href}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            {node.text}
+          </a>
+        );
+      case "strong":
+        return (
+          <strong key={index}>
+            {renderInlineNodes(node.children)}
+          </strong>
+        );
+      case "em":
+        return <em key={index}>{renderInlineNodes(node.children)}</em>;
+      case "del":
+        return <del key={index}>{renderInlineNodes(node.children)}</del>;
+      default:
+        return <Fragment key={index}>{node.text}</Fragment>;
+    }
+  });
 }
 
 export default function MemoClient({ username }: { username: string }) {
@@ -298,6 +332,13 @@ export default function MemoClient({ username }: { username: string }) {
                 </button>
               </div>
             </form>
+            <p className="memo-form-hint">
+              {renderInlineNodes(
+                parseInlineMarkdown(
+                  "**굵게**, *기울임*, ~~취소선~~ 마크다운을 사용할 수 있어요.",
+                ),
+              )}
+            </p>
             {error ? <p className="memo-error">{error}</p> : null}
             <div className="memo-divider" aria-hidden="true" />
             <section className="memo-list-section">
@@ -351,19 +392,8 @@ export default function MemoClient({ username }: { username: string }) {
                           className={`memo-row${memo.pinned ? " is-pinned" : ""}`}
                         >
                           <p className="memo-content" title={memo.content}>
-                            {linkifyParts(memo.content).map((part, index) =>
-                              part.href ? (
-                                <a
-                                  key={`${part.href}-${index}`}
-                                  href={part.href}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                >
-                                  {part.text}
-                                </a>
-                              ) : (
-                                <Fragment key={index}>{part.text}</Fragment>
-                              ),
+                            {renderInlineNodes(
+                              parseInlineMarkdown(memo.content),
                             )}
                           </p>
                           <div className="memo-meta">
