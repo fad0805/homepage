@@ -523,6 +523,16 @@ export default function AdminCharacters() {
   const [isDirty, setIsDirty] = useState(false);
   const [deletedCharacterIds, setDeletedCharacterIds] = useState<number[]>([]);
   const [deletedLocationIds, setDeletedLocationIds] = useState<number[]>([]);
+  const [dirtyCharacterIds, setDirtyCharacterIds] = useState<Set<number>>(
+    () => new Set(),
+  );
+  const [dirtyLocationIds, setDirtyLocationIds] = useState<Set<number>>(
+    () => new Set(),
+  );
+  const [reorderedLocationIds, setReorderedLocationIds] = useState<
+    Set<number>
+  >(() => new Set());
+  const [locationsReordered, setLocationsReordered] = useState(false);
 
   const noticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const objectUrls = useRef<Set<string>>(new Set());
@@ -540,6 +550,32 @@ export default function AdminCharacters() {
   const revokeObjectUrls = useCallback(() => {
     objectUrls.current.forEach((url) => URL.revokeObjectURL(url));
     objectUrls.current.clear();
+  }, []);
+
+  const markCharactersDirty = useCallback((ids: number[]) => {
+    if (ids.length === 0) return;
+    setDirtyCharacterIds((prev) => {
+      const next = new Set(prev);
+      ids.forEach((id) => next.add(id));
+      return next;
+    });
+  }, []);
+
+  const markLocationsDirty = useCallback((ids: number[]) => {
+    if (ids.length === 0) return;
+    setDirtyLocationIds((prev) => {
+      const next = new Set(prev);
+      ids.forEach((id) => next.add(id));
+      return next;
+    });
+  }, []);
+
+  const markLocationReordered = useCallback((id: number) => {
+    setReorderedLocationIds((prev) => {
+      const next = new Set(prev);
+      next.add(id);
+      return next;
+    });
   }, []);
 
   useEffect(() => {
@@ -573,6 +609,10 @@ export default function AdminCharacters() {
       );
       setDeletedCharacterIds([]);
       setDeletedLocationIds([]);
+      setDirtyCharacterIds(new Set());
+      setDirtyLocationIds(new Set());
+      setReorderedLocationIds(new Set());
+      setLocationsReordered(false);
       setIsDirty(false);
     } catch (error) {
       notify(
@@ -673,6 +713,7 @@ export default function AdminCharacters() {
             order: index,
           })),
         );
+        setLocationsReordered(true);
         setIsDirty(true);
         return;
       }
@@ -703,9 +744,10 @@ export default function AdminCharacters() {
         (character) => character.location_id !== locationId,
       );
       setCharacters([...others, ...reordered]);
+      markLocationReordered(locationId);
       setIsDirty(true);
     },
-    [characters, charactersByLocation, locations],
+    [characters, charactersByLocation, locations, markLocationReordered],
   );
 
   const uploadImage = useCallback(async (file: File) => {
@@ -729,8 +771,11 @@ export default function AdminCharacters() {
     setSaving(true);
     try {
       const locationIdMap = new Map<number, number>();
+      const deletedLocationSet = new Set(deletedLocationIds);
+      const deletedCharacterSet = new Set(deletedCharacterIds);
 
-      for (const location of locations.filter((item) => item.id < 0)) {
+      const newLocations = locations.filter((item) => item.id < 0);
+      for (const location of newLocations) {
         const created = await apiFetch<Location>("/api/characters/locations", {
           method: "POST",
           body: JSON.stringify({
@@ -745,7 +790,13 @@ export default function AdminCharacters() {
       const realLocationId = (id: number | null) =>
         id === null ? null : (locationIdMap.get(id) ?? id);
 
-      for (const location of locations.filter((item) => item.id > 0)) {
+      const dirtyExistingLocations = locations.filter(
+        (item) =>
+          item.id > 0 &&
+          dirtyLocationIds.has(item.id) &&
+          !deletedLocationSet.has(item.id),
+      );
+      for (const location of dirtyExistingLocations) {
         await apiFetch(`/api/characters/locations/${location.id}`, {
           method: "PUT",
           body: JSON.stringify({
@@ -760,8 +811,9 @@ export default function AdminCharacters() {
       }
 
       const characterIdMap = new Map<number, number>();
+      const newCharacters = characters.filter((item) => item.id < 0);
 
-      for (const character of characters.filter((item) => item.id < 0)) {
+      for (const character of newCharacters) {
         const thumbnail = character.file
           ? await uploadImage(character.file)
           : character.thumbnail;
@@ -792,7 +844,13 @@ export default function AdminCharacters() {
         characterIdMap.set(character.id, created.id);
       }
 
-      for (const character of characters.filter((item) => item.id > 0)) {
+      const dirtyExistingCharacters = characters.filter(
+        (item) =>
+          item.id > 0 &&
+          dirtyCharacterIds.has(item.id) &&
+          !deletedCharacterSet.has(item.id),
+      );
+      for (const character of dirtyExistingCharacters) {
         const thumbnail = character.file
           ? await uploadImage(character.file)
           : character.thumbnail;
@@ -829,7 +887,7 @@ export default function AdminCharacters() {
       }
 
       // New characters can only be linked after every new character has an id.
-      for (const character of characters.filter((item) => item.id < 0)) {
+      for (const character of newCharacters) {
         const realId = characterIdMap.get(character.id);
         if (!realId || character.relationships.length === 0) {
           continue;
@@ -847,40 +905,48 @@ export default function AdminCharacters() {
         });
       }
 
-      await apiFetch("/api/characters/locations/reorder", {
-        method: "PUT",
-        body: JSON.stringify({
-          items: locations.map((location, index) => ({
-            id: realLocationId(location.id),
-            order: index,
-          })),
-        }),
-      });
+      if (locationsReordered) {
+        await apiFetch("/api/characters/locations/reorder", {
+          method: "PUT",
+          body: JSON.stringify({
+            items: locations.map((location, index) => ({
+              id: realLocationId(location.id),
+              order: index,
+            })),
+          }),
+        });
+      }
 
       const characterItems: {
         id: number;
         order_in_location: number;
         location_id: number | null;
       }[] = [];
-      locations.forEach((location) => {
+      reorderedLocationIds.forEach((locationId) => {
+        if (deletedLocationSet.has(locationId)) return;
         const group = sortCharacters(
           characters.filter(
-            (character) => character.location_id === location.id,
+            (character) => character.location_id === locationId,
           ),
         );
         group.forEach((character, index) => {
-          characterItems.push({
-            id: characterIdMap.get(character.id) ?? character.id,
-            order_in_location: index,
-            location_id: realLocationId(location.id),
-          });
+          const id = characterIdMap.get(character.id) ?? character.id;
+          if (id > 0) {
+            characterItems.push({
+              id,
+              order_in_location: index,
+              location_id: realLocationId(locationId),
+            });
+          }
         });
       });
 
-      await apiFetch("/api/characters/reorder", {
-        method: "PUT",
-        body: JSON.stringify({ items: characterItems }),
-      });
+      if (characterItems.length > 0) {
+        await apiFetch("/api/characters/reorder", {
+          method: "PUT",
+          body: JSON.stringify({ items: characterItems }),
+        });
+      }
 
       for (const id of deletedLocationIds) {
         await apiFetch(`/api/characters/locations/${id}`, {
@@ -905,10 +971,14 @@ export default function AdminCharacters() {
     characters,
     deletedCharacterIds,
     deletedLocationIds,
+    dirtyCharacterIds,
+    dirtyLocationIds,
     isDirty,
     load,
     locations,
+    locationsReordered,
     notify,
+    reorderedLocationIds,
     saving,
     uploadImage,
   ]);
@@ -1254,6 +1324,9 @@ export default function AdminCharacters() {
           )
         : [...prev, draft],
     );
+    if (editingCharacter && editingCharacter.id > 0) {
+      markCharactersDirty([editingCharacter.id]);
+    }
     setIsDirty(true);
     closeCharacterModal();
   };
@@ -1262,6 +1335,16 @@ export default function AdminCharacters() {
     if (!window.confirm(`'${character.name}' 등장인물을 삭제할까요?`)) {
       return false;
     }
+    const affectedCharacterIds = characters
+      .filter(
+        (item) =>
+          item.id !== character.id &&
+          item.relationships.some(
+            (relationship) =>
+              relationship.related_character_id === character.id,
+          ),
+      )
+      .map((item) => item.id);
     setCharacters((prev) =>
       prev
         .filter((item) => item.id !== character.id)
@@ -1276,6 +1359,7 @@ export default function AdminCharacters() {
     if (character.id > 0) {
       setDeletedCharacterIds((prev) => [...prev, character.id]);
     }
+    markCharactersDirty(affectedCharacterIds);
     setIsDirty(true);
     return true;
   };
@@ -1328,6 +1412,9 @@ export default function AdminCharacters() {
             : character,
         ),
       );
+      if (editingLocation.id > 0) {
+        markLocationsDirty([editingLocation.id]);
+      }
     } else {
       const id = nextTempId.current--;
       const order =
@@ -1346,19 +1433,40 @@ export default function AdminCharacters() {
   };
 
   const handleDeleteLocation = (location: Location) => {
-    if (!window.confirm(`'${location.name}' 위치를 삭제할까요?`)) {
+    const characterCount = characters.filter(
+      (character) => character.location_id === location.id,
+    ).length;
+    const message =
+      characterCount > 0
+        ? `'${location.name}' 위치와 등장인물 ${characterCount}명을 삭제할까요?`
+        : `'${location.name}' 위치를 삭제할까요?`;
+    if (!window.confirm(message)) {
       return;
     }
+    const removedCharacters = characters.filter(
+      (character) => character.location_id === location.id,
+    );
+    const removedIds = new Set(
+      removedCharacters.map((character) => character.id),
+    );
+    const removedExistingIds = removedCharacters
+      .filter((character) => character.id > 0)
+      .map((character) => character.id);
+    const affectedCharacterIds = characters
+      .filter(
+        (character) =>
+          character.location_id !== location.id &&
+          character.relationships.some((relationship) =>
+            removedIds.has(relationship.related_character_id),
+          ),
+      )
+      .map((character) => character.id);
+
     setLocations((prev) =>
       prev.filter((item) => item.id !== location.id),
     );
-    setCharacters((prev) => {
-      const removedIds = new Set(
-        prev
-          .filter((character) => character.location_id === location.id)
-          .map((character) => character.id),
-      );
-      return prev
+    setCharacters((prev) =>
+      prev
         .filter((character) => character.location_id !== location.id)
         .map((character) => ({
           ...character,
@@ -1366,11 +1474,15 @@ export default function AdminCharacters() {
             (relationship) =>
               !removedIds.has(relationship.related_character_id),
           ),
-        }));
-    });
+        })),
+    );
+    if (removedExistingIds.length > 0) {
+      setDeletedCharacterIds((prev) => [...prev, ...removedExistingIds]);
+    }
     if (location.id > 0) {
       setDeletedLocationIds((prev) => [...prev, location.id]);
     }
+    markCharactersDirty(affectedCharacterIds);
     setIsDirty(true);
   };
 
@@ -1392,8 +1504,8 @@ export default function AdminCharacters() {
         <div>
           <h1>등장인물 관리</h1>
           <p className="admin-characters-hint">
-            위치와 등장인물을 수정하거나 드래그해서 순서를 바꾼 뒤 저장 버튼을
-            눌러주세요.
+            위치와 등장인물을 수정하거나 드래그해서 순서를 바꾼 뒤 저장
+            버튼을 눌러주세요. 변경된 항목만 저장됩니다.
           </p>
         </div>
         <div className="admin-characters-toolbar-actions">
