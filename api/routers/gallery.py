@@ -1,5 +1,4 @@
 import secrets
-from collections import defaultdict
 from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
@@ -13,6 +12,7 @@ from core.config import (
     GALLERY_INVITE_RETENTION_DAYS,
     GALLERY_SESSION_DAYS,
 )
+from core.rate_limit import FailureRateLimiter
 from core.security import (
     generate_gallery_code,
     hash_gallery_code,
@@ -34,24 +34,17 @@ from schemas.gallery import (
 
 router = APIRouter()
 
-_unlock_attempts: dict[str, list[datetime]] = defaultdict(list)
-MAX_ATTEMPTS_PER_MINUTE = 10
+# Codes are one-time secrets, so failed guesses get a progressively longer
+# lockout: 5 failures -> 1 minute, then 2, 4, ... up to one hour.
+_unlock_limiter = FailureRateLimiter(max_failures=5)
 
 
-def _rate_limit(request: Request) -> None:
-    now = datetime.utcnow()
-    ip = get_client_ip(request)
-    _unlock_attempts[ip] = [
-        attempt
-        for attempt in _unlock_attempts[ip]
-        if now - attempt < timedelta(minutes=1)
-    ]
-    if len(_unlock_attempts[ip]) >= MAX_ATTEMPTS_PER_MINUTE:
-        raise HTTPException(
-            status_code=429,
-            detail="시도 횟수가 너무 많습니다. 잠시 후 다시 시도해주세요.",
-        )
-    _unlock_attempts[ip].append(now)
+def _reject_unlock(ip: str) -> None:
+    _unlock_limiter.record_failure(ip)
+    raise HTTPException(
+        status_code=401,
+        detail="비밀번호가 올바르지 않거나 만료되었습니다.",
+    )
 
 
 def _set_cookie(response: Response, token: str) -> None:
@@ -164,14 +157,12 @@ def unlock_gallery(
     db: Session = Depends(get_db),
 ):
     """Consume a one-time code and grant access to its resource."""
-    _rate_limit(request)
+    ip = get_client_ip(request)
+    _unlock_limiter.check(ip)
 
     normalized = normalize_gallery_code(payload.code)
     if not normalized:
-        raise HTTPException(
-            status_code=401,
-            detail="비밀번호가 올바르지 않거나 만료되었습니다.",
-        )
+        _reject_unlock(ip)
 
     now = datetime.utcnow()
     invite = gallery_crud.get_invite_by_hash(
@@ -185,23 +176,17 @@ def unlock_gallery(
         or invite.expires_at <= now
         or _invite_resource(invite) is None
     ):
-        raise HTTPException(
-            status_code=401,
-            detail="비밀번호가 올바르지 않거나 만료되었습니다.",
-        )
+        _reject_unlock(ip)
 
     # Only one concurrent request can mark the invite used.
     if not gallery_crud.consume_invite(
         db,
         invite.id,
         now,
-        get_client_ip(request),
+        ip,
     ):
         db.rollback()
-        raise HTTPException(
-            status_code=401,
-            detail="비밀번호가 올바르지 않거나 만료되었습니다.",
-        )
+        _reject_unlock(ip)
 
     token = request.cookies.get(GALLERY_COOKIE_NAME)
     session = None
@@ -249,6 +234,7 @@ def unlock_gallery(
 
     resource = _invite_resource(invite)
     db.commit()
+    _unlock_limiter.reset(ip)
 
     if new_session:
         _set_cookie(response, token)

@@ -29,7 +29,15 @@ from models.users import UserSession
 
 
 def get_client_ip(request: Request) -> str:
-    """Resolve the originating client IP, preferring proxy headers."""
+    """Resolve the originating client IP, preferring proxy headers.
+
+    Cloudflare overwrites ``CF-Connecting-IP`` with the address it saw, so it
+    is more trustworthy than a client-supplied ``X-Forwarded-For`` value when
+    the site is behind the Cloudflare proxy.
+    """
+    cf_ip = request.headers.get("cf-connecting-ip")
+    if cf_ip:
+        return cf_ip.strip()
     forwarded = request.headers.get("x-forwarded-for")
     if forwarded:
         return forwarded.split(",")[0].strip()

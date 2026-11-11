@@ -1,11 +1,14 @@
 import asyncio
 import logging
 from contextlib import asynccontextmanager, suppress
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.encoders import jsonable_encoder
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from core.config import ENVIRONMENT
+from core.config import API_DOCS_ENABLED, ENVIRONMENT
 from core.mastodon import mastodon_publish_loop
 from core.uploads import UPLOAD_DIR, ensure_upload_dir
 from routers import (
@@ -43,7 +46,27 @@ async def lifespan(app:FastAPI):
         with suppress(asyncio.CancelledError):
             await mastodon_task
 
-app = FastAPI(lifespan=lifespan)
+app = FastAPI(
+    lifespan=lifespan,
+    docs_url="/docs" if API_DOCS_ENABLED else None,
+    redoc_url="/redoc" if API_DOCS_ENABLED else None,
+    openapi_url="/openapi.json" if API_DOCS_ENABLED else None,
+)
+
+
+@app.exception_handler(RequestValidationError)
+async def request_validation_exception_handler(
+    request: Request,
+    exc: RequestValidationError,
+):
+    """Avoid echoing backend validation internals to anonymous clients."""
+    if ENVIRONMENT == "development":
+        detail = jsonable_encoder(exc.errors())
+    else:
+        logger.info("Rejected an invalid request for %s", request.url.path)
+        detail = "요청 값이 올바르지 않습니다."
+    return JSONResponse(status_code=422, content={"detail": detail})
+
 
 origins = [
     "http://web:3000",

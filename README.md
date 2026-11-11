@@ -67,6 +67,7 @@ docker compose up --build -d
 | `REFRESH_TOKEN_EXPIRE_DAYS` | 선택 | refresh 토큰/로그인 유지 기간(일, 기본 30) |
 | `REFRESH_TOKEN_GRACE_SECONDS` | 선택 | refresh 토큰 회전 후 이전 토큰 허용 시간(초, 기본 60) |
 | `ENVIRONMENT` | 선택 | `production` 설정 시 운영 모드 |
+| `API_DOCS_ENABLED` | 선택 | API 문서(`/docs`, `/openapi.json`) 노출 여부. 개발 모드가 아니면 기본 비활성 |
 | `DEV_ADMIN_SEED` | 개발 전용 | `true`일 때 개발용 `admin/admin` 계정 생성 (기본 비활성) |
 | `DB_HOST` | 필수 | PostgreSQL 호스트 |
 | `DB_PORT` | 필수 | PostgreSQL 포트 (기본 5432) |

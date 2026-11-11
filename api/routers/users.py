@@ -1,10 +1,3 @@
-# rate limit
-from collections import defaultdict
-from datetime import datetime, timedelta
-
-_signin_attempts: dict[str, list[datetime]] = defaultdict(list)
-
-# import
 import os
 
 from contextlib import closing
@@ -15,6 +8,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
 
 from core.config import ENVIRONMENT, AUTH_COOKIE_MAX_AGE
+from core.rate_limit import FailureRateLimiter
 from core.security import (
     create_access_token,
     create_refresh_token,
@@ -43,6 +37,13 @@ from schemas.users import UserCreate
 
 router = APIRouter()
 
+# Password guessing is slowed down per client IP. A successful sign-in clears
+# the bucket so a person who mistyped a few times is not punished later.
+_signin_limiter = FailureRateLimiter(
+    max_failures=5,
+    message="로그인 시도가 너무 많습니다. 잠시 후 다시 시도해주세요.",
+)
+
 
 def create_admin_for_dev():
     # Only seed the default account in explicit development mode. Any other
@@ -70,16 +71,6 @@ def create_admin_for_dev():
             else:
                 raise e
 
-def rate_limit(request: Request):
-    now = datetime.now()
-    ip = request.client.host
-    _signin_attempts[ip] = [t for t in _signin_attempts[ip] if now - t < timedelta(minutes=1)]
-
-    if len(_signin_attempts[ip]) >= 5:
-        raise HTTPException(status_code=429, detail="Too many requests")
-    _signin_attempts[ip].append(now)
-
-
 @router.post("/signin")
 async def signin(
     request: Request,
@@ -91,21 +82,23 @@ async def signin(
     """
     Endpoint to handle user login.
     """
-    rate_limit(request)
+    ip_address = get_client_ip(request)
+    _signin_limiter.check(ip_address)
 
     try:
         user = get_user(db, username)
     except ValueError:
+        _signin_limiter.record_failure(ip_address)
         raise HTTPException(status_code=401, detail="Invalid username or password")
 
     hashed_password = user.hashed_password
     verified = verify_password(password, hashed_password)
 
     device_info = (request.headers.get("user-agent") or "")[:255] or None
-    ip_address = get_client_ip(request)
 
     if not verified:
         record_signin_history(db, user.id, ip_address, device_info, success=False)
+        _signin_limiter.record_failure(ip_address)
         raise HTTPException(status_code=400, detail="Invalid username or password")
 
     # A sign-in starts a new per-device session instead of replacing the
@@ -126,6 +119,7 @@ async def signin(
         raise HTTPException(status_code=500, detail="Failed to save refresh token")
 
     record_signin_history(db, user.id, ip_address, device_info, success=True)
+    _signin_limiter.reset(ip_address)
 
     response.set_cookie(
         key="refresh_token",

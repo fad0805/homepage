@@ -11,15 +11,14 @@ import type { MetadataRoute } from "next";
  * entry so Google can fetch the page and read its noindex metadata, request
  * removal in Search Console, then restore the entry.
  */
+// Admin, revalidation and API paths are intentionally absent: they are
+// protected by authentication and advertising their names in a public file
+// only helps an attacker map the application. Their responses carry an
+// X-Robots-Tag: noindex header instead.
 const DISALLOWED_PATHS = [
   "/illustrations",
   "/search",
-  "/admin",
-  "/signin",
-  "/revalidate",
   "/gallery",
-  "/api/illustrations",
-  "/uploads/illustrations",
 ];
 
 export default function robots(): MetadataRoute.Robots {

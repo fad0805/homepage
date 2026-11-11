@@ -40,3 +40,13 @@ if ENVIRONMENT == 'development':
     SECRET_KEY = os.getenv('SECRET_KEY') or secrets.token_hex(32)
 elif not SECRET_KEY:
     raise ValueError("SECRET_KEY environment variable is not set.")
+
+# Interactive API documentation (Swagger UI / ReDoc / OpenAPI JSON) is useful
+# in development but must not advertise every admin route elsewhere. Docs stay
+# off unless this is explicit development mode or API_DOCS_ENABLED is true.
+_docs_env = os.getenv('API_DOCS_ENABLED')
+API_DOCS_ENABLED = (
+    _docs_env.strip().lower() in ('1', 'true', 'yes', 'on')
+    if _docs_env is not None
+    else ENVIRONMENT == 'development'
+)
