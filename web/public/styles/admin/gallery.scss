@@ -255,3 +255,25 @@
     opacity: 0.55;
   }
 }
+
+.gallery-table--invites {
+  font-size: 0.68rem;
+
+  th,
+  td {
+    padding: 0.45rem 0.35rem;
+  }
+
+  .gallery-status {
+    font-size: 0.6rem;
+  }
+
+  /* Keep the revoke button visible while the table scrolls sideways. */
+  th:last-child,
+  td:last-child {
+    position: sticky;
+    right: 0;
+    background: var(--input-background);
+    box-shadow: -6px 0 6px -6px rgba(0, 0, 0, 0.25);
+  }
+}

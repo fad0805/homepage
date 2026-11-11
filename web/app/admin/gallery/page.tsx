@@ -157,7 +157,7 @@ export default function AdminGalleryPage() {
           <p>발급한 비밀번호가 없습니다.</p>
         ) : (
           <div className="gallery-table-wrap">
-            <table className="gallery-table">
+            <table className="gallery-table gallery-table--invites">
               <thead>
                 <tr>
                   <th>상태</th>
