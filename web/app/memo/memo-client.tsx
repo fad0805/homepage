@@ -332,13 +332,6 @@ export default function MemoClient({ username }: { username: string }) {
                 </button>
               </div>
             </form>
-            <p className="memo-form-hint">
-              {renderInlineNodes(
-                parseInlineMarkdown(
-                  "**굵게**, *기울임*, ~~취소선~~ 마크다운을 사용할 수 있어요.",
-                ),
-              )}
-            </p>
             {error ? <p className="memo-error">{error}</p> : null}
             <div className="memo-divider" aria-hidden="true" />
             <section className="memo-list-section">
