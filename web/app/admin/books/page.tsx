@@ -9,6 +9,7 @@ import {
   type FormEvent,
 } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   DndContext,
   KeyboardSensor,
@@ -107,6 +108,7 @@ function SortableBookRow({
       categoryId: book.category_id,
     },
   });
+  const router = useRouter();
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -120,11 +122,13 @@ function SortableBookRow({
       ref={setNodeRef}
       style={style}
       className={`admin-book-card${isDragging ? " is-dragging" : ""}`}
+      onClick={() => router.push(`/admin/books/${book.id}`)}
     >
       <button
         type="button"
         className="admin-book-card__drag"
         aria-label={`${book.title} 순서 이동`}
+        onClick={(event) => event.stopPropagation()}
         {...attributes}
         {...listeners}
       >
@@ -132,7 +136,12 @@ function SortableBookRow({
       </button>
       <div className="admin-book-card__header">
         <div className="admin-book-card__title">
-          <Link href={`/admin/books/${book.id}`}>{book.title}</Link>
+          <Link
+            href={`/admin/books/${book.id}`}
+            onClick={(event) => event.stopPropagation()}
+          >
+            {book.title}
+          </Link>
           {book.description ? <p>{book.description}</p> : null}
           <p className="admin-book-card__updated">
             {latestChapterUpdated
@@ -150,7 +159,11 @@ function SortableBookRow({
         </div>
       </div>
       <div className="admin-book-card__actions">
-        <Link className="admin-button" href={`/admin/books/${book.id}`}>
+        <Link
+          className="admin-button"
+          href={`/admin/books/${book.id}`}
+          onClick={(event) => event.stopPropagation()}
+        >
           관리
         </Link>
       </div>

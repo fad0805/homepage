@@ -251,6 +251,11 @@ p.admin-books-draft-preview-empty {
   gap: 0.75rem;
   padding: 0.8rem 0.2rem;
   border-bottom: 1px solid var(--admin-border);
+  cursor: pointer;
+
+  &:hover {
+    background: rgba(0, 0, 0, 0.03);
+  }
 
   &:first-child {
     border-top: 1px solid var(--admin-border);
