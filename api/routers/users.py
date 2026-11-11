@@ -10,22 +10,32 @@ import os
 from contextlib import closing
 from fastapi import APIRouter, Depends, HTTPException, Response, Request
 from fastapi import Form
+import jwt
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
 
 from core.config import ENVIRONMENT, AUTH_COOKIE_MAX_AGE
-from core.security import verify_password, create_access_token, create_refresh_token
+from core.security import (
+    create_access_token,
+    create_refresh_token,
+    decode_access_token,
+    decode_refresh_token,
+    verify_password,
+)
 from routers.utils import (
     get_client_ip,
     get_current_user_from_token,
     get_optional_user,
+    get_session_id_from_payload,
 )
 from crud.users import (
     create_user,
     create_user_session,
     delete_expired_user_sessions,
-    delete_user_session_by_token,
+    delete_user_session,
     get_user,
+    get_user_session,
+    get_user_session_by_token,
     record_signin_history,
 )
 from db.session import get_db
@@ -98,17 +108,23 @@ async def signin(
         record_signin_history(db, user.id, ip_address, device_info, success=False)
         raise HTTPException(status_code=400, detail="Invalid username or password")
 
-    access_token = create_access_token(data={"sub": username})
-    refresh_token = create_refresh_token(data={"sub": username})
-
     # A sign-in starts a new per-device session instead of replacing the
     # user's single stored token, so other devices stay logged in.
     try:
-        create_user_session(db, user.id, refresh_token, device_info, ip_address)
+        delete_expired_user_sessions(db, user.id)
+        session = create_user_session(db, user.id, device_info, ip_address)
+        access_token = create_access_token(
+            data={"sub": username, "sid": session.id}
+        )
+        refresh_token = create_refresh_token(
+            data={"sub": username, "sid": session.id}
+        )
+        session.refresh_token = refresh_token
+        db.commit()
     except SQLAlchemyError:
+        db.rollback()
         raise HTTPException(status_code=500, detail="Failed to save refresh token")
 
-    delete_expired_user_sessions(db, user.id)
     record_signin_history(db, user.id, ip_address, device_info, success=True)
 
     response.set_cookie(
@@ -139,17 +155,37 @@ def signout(
     db: Session = Depends(get_db),
 ):
     """
-    Clear the authentication cookies and invalidate this device's session.
+    Clear this browser/device's cookies and invalidate only its session.
+
+    Other devices keep their own sessions.
     """
-    user = get_optional_user(
-        request,
-        db,
-        token=request.cookies.get("access_token"),
-    )
-    if user:
-        refresh_token = request.cookies.get("refresh_token")
-        if refresh_token:
-            delete_user_session_by_token(db, user.id, refresh_token)
+    refresh_token = request.cookies.get("refresh_token")
+    session = None
+
+    if refresh_token:
+        try:
+            payload = decode_refresh_token(refresh_token)
+            session_id = get_session_id_from_payload(payload)
+        except jwt.InvalidTokenError:
+            session_id = None
+
+        if session_id is not None:
+            session = get_user_session(db, session_id)
+        if not session:
+            session = get_user_session_by_token(db, refresh_token)
+
+    if not session:
+        access_token = request.cookies.get("access_token")
+        if access_token:
+            try:
+                payload = decode_access_token(access_token)
+                session_id = get_session_id_from_payload(payload)
+            except jwt.InvalidTokenError:
+                session_id = None
+            if session_id is not None:
+                session = get_user_session(db, session_id)
+
+    delete_user_session(db, session)
 
     response.delete_cookie("access_token", path="/")
     response.delete_cookie("refresh_token", path="/")
@@ -182,12 +218,12 @@ def get_current_user(
     """
     Endpoint to get the current logged-in user's information.
     """
-    access_token = request.cookies.get("access_token")
-    
-    if not access_token:
-        raise HTTPException(status_code=401, detail="Not authenticated")
-
-    user = get_current_user_from_token(db, request, response, token=access_token)
+    user = get_current_user_from_token(
+        db,
+        request,
+        response,
+        token=request.cookies.get("access_token"),
+    )
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     return {"success": True, "user": user.username}

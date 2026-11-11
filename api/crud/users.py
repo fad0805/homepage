@@ -52,41 +52,65 @@ def update_user(db: Session, username: str, user_update: UserUpdate):
 def create_user_session(
     db: Session,
     user_id: int,
-    refresh_token: str,
     device_info: str | None = None,
     ip_address: str | None = None,
 ) -> UserSession:
     """
-    Add a session row for a freshly signed-in device.
+    Start a session row for a freshly signed-in device.
 
-    A sign-in never touches other rows, so logging in on one device does
-    not invalidate the sessions of every other device.
+    The row is flushed first so its integer id can be embedded in the access
+    and refresh tokens as the session id. The caller sets the refresh token
+    and commits once both tokens have been created.
     """
+    now = datetime.utcnow()
     session = UserSession(
         user_id=user_id,
-        refresh_token=refresh_token,
+        refresh_token="",
         device_info=(device_info or "")[:255] or None,
         ip_address=(ip_address or "unknown")[:45],
-        expires_at=datetime.utcnow() + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS),
+        created_at=now,
+        last_used_at=now,
+        expires_at=now + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS),
     )
     db.add(session)
-    db.commit()
+    db.flush()
     return session
 
 
-def delete_user_session_by_token(
-    db: Session,
-    user_id: int,
-    refresh_token: str,
-) -> None:
-    """Remove the session a refresh token belongs to (sign-out)."""
-    db.query(UserSession).filter(
-        UserSession.user_id == user_id,
-        or_(
-            UserSession.refresh_token == refresh_token,
-            UserSession.previous_refresh_token == refresh_token,
-        ),
-    ).delete(synchronize_session=False)
+def get_user_session(db: Session, session_id: int | None) -> UserSession | None:
+    """Find one device session by the id embedded in its tokens."""
+    if session_id is None:
+        return None
+    return (
+        db.query(UserSession)
+        .filter(UserSession.id == session_id)
+        .first()
+    )
+
+
+def get_user_session_by_token(
+    db: Session, refresh_token: str | None
+) -> UserSession | None:
+    """Find a session by its current or recently rotated refresh token."""
+    if not refresh_token:
+        return None
+    return (
+        db.query(UserSession)
+        .filter(
+            or_(
+                UserSession.refresh_token == refresh_token,
+                UserSession.previous_refresh_token == refresh_token,
+            )
+        )
+        .first()
+    )
+
+
+def delete_user_session(db: Session, session: UserSession | None) -> None:
+    """Delete only this device's session, leaving other devices signed in."""
+    if not session:
+        return
+    db.delete(session)
     db.commit()
 
 

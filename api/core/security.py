@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta
 from typing import Optional
+import secrets
 import jwt
 from passlib.context import CryptContext
 
@@ -42,7 +43,14 @@ def create_refresh_token(data: dict, expires_delta: Optional[timedelta] = None):
         expire = datetime.utcnow() + expires_delta
     else:
         expire = datetime.utcnow() + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
-    to_encode.update({"exp": expire, "type": "refresh"})
+    to_encode.update({
+        "exp": expire,
+        "type": "refresh",
+        # Make every rotated token unique even when two refreshes happen in
+        # the same second. Without this, identical JWT payloads produce the
+        # same token and rotation does not actually change the cookie value.
+        "jti": secrets.token_hex(4),
+    })
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
 

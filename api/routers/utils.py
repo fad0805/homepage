@@ -1,11 +1,10 @@
 import hmac
 from datetime import datetime, timedelta
 from typing import Optional
-from sqlalchemy import or_
-from sqlalchemy.orm import Session
 
 from fastapi import Request, Response, Depends, HTTPException, status
 import jwt
+from sqlalchemy.orm import Session
 
 from core.config import (
     ENVIRONMENT,
@@ -13,10 +12,20 @@ from core.config import (
     REFRESH_TOKEN_EXPIRE_DAYS,
     REFRESH_TOKEN_GRACE_SECONDS,
 )
-from core.security import create_access_token, create_refresh_token, decode_access_token, decode_refresh_token
-from crud.users import get_user
+from core.security import (
+    create_access_token,
+    create_refresh_token,
+    decode_access_token,
+    decode_refresh_token,
+)
+from crud.users import (
+    delete_user_session,
+    get_user,
+    get_user_session,
+    get_user_session_by_token,
+)
 from db.session import get_db
-from models.users import User, UserSession
+from models.users import UserSession
 
 
 def get_client_ip(request: Request) -> str:
@@ -44,11 +53,9 @@ def _set_auth_cookie(response: Response, key: str, token: str) -> None:
 def get_access_token_from_cookie(request: Request) -> Optional[str]:
     return request.cookies.get("access_token")
 
+
 def get_refresh_token_from_cookie(request: Request) -> Optional[str]:
-    refresh_token = request.cookies.get("refresh_token")
-    if refresh_token:
-        return refresh_token
-    return None
+    return request.cookies.get("refresh_token")
 
 
 def _token_matches(stored: Optional[str], token: Optional[str]) -> bool:
@@ -57,7 +64,9 @@ def _token_matches(stored: Optional[str], token: Optional[str]) -> bool:
     return hmac.compare_digest(stored.encode(), token.encode())
 
 
-def _rotated_token_is_in_grace(session: UserSession, token: Optional[str]) -> bool:
+def _rotated_token_is_in_grace(
+    session: UserSession, token: Optional[str]
+) -> bool:
     """Accept the previous refresh token briefly after a rotation."""
     if not _token_matches(session.previous_refresh_token, token):
         return False
@@ -68,20 +77,52 @@ def _rotated_token_is_in_grace(session: UserSession, token: Optional[str]) -> bo
     )
 
 
+def _session_expired(session: UserSession) -> bool:
+    return session.expires_at <= datetime.utcnow()
+
+
+def get_session_id_from_payload(payload: dict) -> Optional[int]:
+    """Read the integer session id from a token payload."""
+    session_id = payload.get("sid")
+    if session_id is None:
+        return None
+    try:
+        return int(session_id)
+    except (TypeError, ValueError):
+        return None
+
+
+def _find_refresh_session(
+    db: Session,
+    session_id: Optional[int],
+    refresh_token: Optional[str],
+) -> Optional[UserSession]:
+    if session_id is not None:
+        return get_user_session(db, session_id)
+    # Tokens issued before the multi-session migration have no session id.
+    return get_user_session_by_token(db, refresh_token)
+
+
+def _refresh_auth_cookies(
+    response: Response,
+    new_access_token: str,
+    new_refresh_token: str,
+) -> None:
+    _set_auth_cookie(response, "access_token", new_access_token)
+    _set_auth_cookie(response, "refresh_token", new_refresh_token)
+
+
 def refresh_access_token(
     db: Session,
     refresh_token: str = Depends(get_refresh_token_from_cookie)
 ):
     """
-    Refresh the access token using the provided refresh token.
+    Refresh one browser/device session using its own refresh token.
 
-    Refresh tokens rotate on use, but concurrent requests can present the same
-    token (multiple tabs, or a batch of API calls after the access token has
-    expired). The rotation is applied with an atomic conditional update so only
-    one request advances the session's stored token; the others reuse that new
-    token during a short grace period instead of being rejected. Reusing the
-    previous token after the grace window revokes that session only, leaving
-    every other device's session intact.
+    Each sign-in has an independent UserSession, so signing in on a phone no
+    longer replaces the desktop's token. Rotation is still atomic per session,
+    and the previous token is accepted briefly so concurrent requests (for
+    example several tabs restored after sleep) do not invalidate each other.
     """
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -100,6 +141,7 @@ def refresh_access_token(
         raise credentials_exception
 
     username = payload.get("sub")
+    session_id = get_session_id_from_payload(payload)
     if not username:
         raise credentials_exception
 
@@ -108,17 +150,37 @@ def refresh_access_token(
     except ValueError:
         raise credentials_exception
 
-    new_access_token = create_access_token(data={"sub": username})
-    new_refresh_token = create_refresh_token(data={"sub": username})
+    session = _find_refresh_session(db, session_id, refresh_token)
+    if not session or session.user_id != user.id:
+        raise credentials_exception
+    if _session_expired(session):
+        delete_user_session(db, session)
+        raise credentials_exception
+
+    new_access_token = create_access_token(
+        data={"sub": username, "sid": session.id}
+    )
+
+    # A delayed tab can still present the token from just before a rotation.
+    if not _token_matches(session.refresh_token, refresh_token):
+        if _rotated_token_is_in_grace(session, refresh_token):
+            return username, new_access_token, session.refresh_token
+        # Do not revoke the active session for a stale token. An old tab must
+        # not be able to sign out the current browser/device.
+        raise credentials_exception
+
+    new_refresh_token = create_refresh_token(
+        data={"sub": username, "sid": session.id}
+    )
     now = datetime.utcnow()
 
-    # Only rotate when the presented token is still the current one for its
+    # Only rotate when the presented token is still the current one for this
     # session. The condition is evaluated by the database, so concurrent
     # refreshes cannot both win the race.
     rotated = (
         db.query(UserSession)
         .filter(
-            UserSession.user_id == user.id,
+            UserSession.id == session.id,
             UserSession.refresh_token == refresh_token,
         )
         .update(
@@ -140,27 +202,12 @@ def refresh_access_token(
 
     # Another request just rotated this session's token. Reuse the stored
     # token so every response writes the same cookie value.
-    session = (
-        db.query(UserSession)
-        .filter(
-            UserSession.user_id == user.id,
-            UserSession.previous_refresh_token == refresh_token,
-        )
-        .first()
-    )
-    if session and session.refresh_token and _rotated_token_is_in_grace(
-        session, refresh_token
+    db.refresh(session)
+    if (
+        session.refresh_token
+        and _rotated_token_is_in_grace(session, refresh_token)
     ):
-        session.last_used_at = now
-        db.commit()
         return username, new_access_token, session.refresh_token
-
-    # The token is a valid previous-generation token of this session, but the
-    # grace window has passed. Treat this as possible reuse/theft and revoke
-    # only that session; every other device keeps its own session.
-    if session:
-        db.delete(session)
-        db.commit()
 
     raise credentials_exception
 
@@ -169,10 +216,13 @@ def get_current_user_from_token(
     db: Session,
     request: Request,
     response: Response,
-    token: str = Depends(get_access_token_from_cookie)
+    token: Optional[str] = Depends(get_access_token_from_cookie)
 ):
     """
     Get the current user from the access token.
+
+    If the access token is missing or expired, the browser's own refresh token
+    is used and the rotated cookies are written to the response.
     """
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -181,41 +231,69 @@ def get_current_user_from_token(
     )
 
     if not token:
-        raise credentials_exception
+        refresh_token = get_refresh_token_from_cookie(request)
+        if not refresh_token:
+            raise credentials_exception
+        username, new_access_token, new_refresh_token = refresh_access_token(
+            db, refresh_token=refresh_token
+        )
+        _refresh_auth_cookies(
+            response,
+            new_access_token,
+            new_refresh_token,
+        )
+        return _get_user_or_401(db, username, credentials_exception)
 
+    session_id = None
     try:
         payload = decode_access_token(token)
         username = payload.get("sub")
+        session_id = get_session_id_from_payload(payload)
     except jwt.ExpiredSignatureError:
         refresh_token = get_refresh_token_from_cookie(request)
         if not refresh_token:
             raise credentials_exception
-
-        (
-            username,
+        username, new_access_token, new_refresh_token = refresh_access_token(
+            db, refresh_token=refresh_token
+        )
+        _refresh_auth_cookies(
+            response,
             new_access_token,
             new_refresh_token,
-        ) = refresh_access_token(db, refresh_token=refresh_token)
-
-        _set_auth_cookie(response, "access_token", new_access_token)
-        _set_auth_cookie(response, "refresh_token", new_refresh_token)
+        )
+        return _get_user_or_401(db, username, credentials_exception)
     except jwt.InvalidTokenError:
         raise credentials_exception
 
     if not username:
         raise credentials_exception
 
+    user = _get_user_or_401(db, username, credentials_exception)
+
+    # Access tokens issued before the multi-session migration have no sid and
+    # remain valid until they expire.
+    if session_id is not None:
+        session = get_user_session(db, session_id)
+        if not session or session.user_id != user.id:
+            raise credentials_exception
+        if _session_expired(session):
+            delete_user_session(db, session)
+            raise credentials_exception
+
+    return user
+
+
+def _get_user_or_401(db: Session, username: str, credentials_exception):
     try:
-        user = get_user(db, username)
+        return get_user(db, username)
     except ValueError:
         raise credentials_exception
-    return user
 
 
 def get_optional_user(
     request: Request,
     db: Session = Depends(get_db),
-    token: str = Depends(get_access_token_from_cookie),
+    token: Optional[str] = Depends(get_access_token_from_cookie),
 ):
     """
     Return the authenticated user when possible, otherwise None.
@@ -224,14 +302,18 @@ def get_optional_user(
     an administrator without rejecting anonymous visitors.
     """
     username = None
+    session_id = None
+    refresh_token = None
     used_refresh_token = False
 
     if token:
         try:
             payload = decode_access_token(token)
             username = payload.get("sub")
+            session_id = get_session_id_from_payload(payload)
         except (jwt.ExpiredSignatureError, jwt.InvalidTokenError):
             username = None
+            session_id = None
 
     if not username:
         refresh_token = get_refresh_token_from_cookie(request)
@@ -239,9 +321,11 @@ def get_optional_user(
             try:
                 payload = decode_refresh_token(refresh_token)
                 username = payload.get("sub")
+                session_id = get_session_id_from_payload(payload)
                 used_refresh_token = True
             except (jwt.ExpiredSignatureError, jwt.InvalidTokenError):
                 username = None
+                session_id = None
 
     if not username:
         return None
@@ -252,24 +336,21 @@ def get_optional_user(
         return None
 
     if used_refresh_token:
-        refresh_token = get_refresh_token_from_cookie(request)
-        session = (
-            db.query(UserSession)
-            .filter(
-                UserSession.user_id == user.id,
-                or_(
-                    UserSession.refresh_token == refresh_token,
-                    UserSession.previous_refresh_token == refresh_token,
-                ),
-            )
-            .first()
-        )
-        if not session:
+        session = _find_refresh_session(db, session_id, refresh_token)
+        if not session or session.user_id != user.id:
             return None
-        if _token_matches(session.refresh_token, refresh_token):
-            session.last_used_at = datetime.utcnow()
-            db.commit()
-        elif not _rotated_token_is_in_grace(session, refresh_token):
+        if _session_expired(session):
+            return None
+        if not (
+            _token_matches(session.refresh_token, refresh_token)
+            or _rotated_token_is_in_grace(session, refresh_token)
+        ):
+            return None
+    elif session_id is not None:
+        session = get_user_session(db, session_id)
+        if not session or session.user_id != user.id:
+            return None
+        if _session_expired(session):
             return None
 
     return user
@@ -279,17 +360,11 @@ async def require_auth(
     request: Request,
     response: Response,
     db: Session = Depends(get_db),
-    token: str = Depends(get_access_token_from_cookie)
+    token: Optional[str] = Depends(get_access_token_from_cookie)
 ):
     """
     Dependency to require authentication for a route.
     """
-    if not token:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Not authenticated",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
     user = get_current_user_from_token(db, request, response, token)
     if not user:
         raise HTTPException(
