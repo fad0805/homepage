@@ -47,6 +47,7 @@
 .admin-editor--compact {
   .admin-editor__content {
     min-height: 9rem;
+    max-height: 18rem;
 
     .tiptap {
       min-height: 7rem;
@@ -187,6 +188,9 @@
 
 .admin-editor__content {
   min-height: 22rem;
+  max-height: 32rem;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 0.9rem 1rem;
   cursor: text;
 
