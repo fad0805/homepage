@@ -250,6 +250,12 @@ def maybe_notify_chapter(db: Session, chapter: Chapter) -> bool:
     if not _settings_ready(settings):
         return False
 
+    if chapter.book is not None and chapter.book.visible is False:
+        if chapter.mastodon_pending:
+            chapter.mastodon_pending = False
+            db.commit()
+        return False
+
     if chapter.mastodon_status_id:
         if chapter.mastodon_pending:
             chapter.mastodon_pending = False
