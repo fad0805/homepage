@@ -143,29 +143,22 @@ function SortableBookRow({
             {book.title}
           </Link>
           {book.description ? <p>{book.description}</p> : null}
+        </div>
+        <div className="admin-book-card__meta">
+          <div className="admin-book-card__chips">
+            {book.visible === false ? (
+              <span className="admin-book-badge">비공개</span>
+            ) : book.protected ? (
+              <span className="admin-book-badge">보호</span>
+            ) : null}
+            <span className="admin-book-badge">{chapterCount}챕터</span>
+          </div>
           <p className="admin-book-card__updated">
             {latestChapterUpdated
               ? `최근 게시글 ${formatDateTime(latestChapterUpdated)}`
               : "게시글 없음"}
           </p>
         </div>
-        <div className="admin-book-card__meta">
-          {book.visible === false ? (
-            <span className="admin-book-badge">비공개</span>
-          ) : book.protected ? (
-            <span className="admin-book-badge">보호</span>
-          ) : null}
-          <span className="admin-book-badge">{chapterCount}챕터</span>
-        </div>
-      </div>
-      <div className="admin-book-card__actions">
-        <Link
-          className="admin-button"
-          href={`/admin/books/${book.id}`}
-          onClick={(event) => event.stopPropagation()}
-        >
-          관리
-        </Link>
       </div>
     </article>
   );
