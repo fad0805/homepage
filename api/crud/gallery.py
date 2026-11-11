@@ -12,13 +12,17 @@ from models.gallery import (
 def create_invite(
     db: Session,
     code_hash: str,
-    illustration_id: int,
+    illustration_id: int | None,
+    chapter_id: int | None,
+    book_id: int | None,
     note: str | None,
     expires_at: datetime,
 ) -> GalleryInvite:
     invite = GalleryInvite(
         code_hash=code_hash,
         illustration_id=illustration_id,
+        chapter_id=chapter_id,
+        book_id=book_id,
         note=note,
         expires_at=expires_at,
     )
@@ -38,7 +42,11 @@ def get_invite_by_hash(db: Session, code_hash: str) -> GalleryInvite | None:
 def list_invites(db: Session) -> list[GalleryInvite]:
     return (
         db.query(GalleryInvite)
-        .options(selectinload(GalleryInvite.illustration))
+        .options(
+            selectinload(GalleryInvite.illustration),
+            selectinload(GalleryInvite.chapter),
+            selectinload(GalleryInvite.book),
+        )
         .order_by(GalleryInvite.created_at.desc(), GalleryInvite.id.desc())
         .all()
     )
@@ -68,6 +76,20 @@ def consume_invite(
         )
     )
     return bool(updated)
+
+
+def delete_old_revoked_invites(
+    db: Session, cutoff: datetime
+) -> int:
+    """Remove revoked codes that are older than the retention window."""
+    return (
+        db.query(GalleryInvite)
+        .filter(
+            GalleryInvite.revoked_at.isnot(None),
+            GalleryInvite.revoked_at < cutoff,
+        )
+        .delete(synchronize_session=False)
+    )
 
 
 def revoke_invite(db: Session, invite_id: int, now: datetime) -> bool:
@@ -116,22 +138,35 @@ def get_session_by_hash(
 def add_grant(
     db: Session,
     session_id: int,
-    illustration_id: int,
+    illustration_id: int | None = None,
+    chapter_id: int | None = None,
+    book_id: int | None = None,
 ) -> GallerySessionGrant:
-    existing = (
-        db.query(GallerySessionGrant)
-        .filter(
-            GallerySessionGrant.session_id == session_id,
-            GallerySessionGrant.illustration_id == illustration_id,
-        )
-        .first()
+    query = db.query(GallerySessionGrant).filter(
+        GallerySessionGrant.session_id == session_id
     )
+    if illustration_id is not None:
+        query = query.filter(
+            GallerySessionGrant.illustration_id == illustration_id
+        )
+    elif chapter_id is not None:
+        query = query.filter(
+            GallerySessionGrant.chapter_id == chapter_id
+        )
+    elif book_id is not None:
+        query = query.filter(GallerySessionGrant.book_id == book_id)
+    else:
+        raise ValueError("a grant needs a resource")
+
+    existing = query.first()
     if existing is not None:
         return existing
 
     grant = GallerySessionGrant(
         session_id=session_id,
         illustration_id=illustration_id,
+        chapter_id=chapter_id,
+        book_id=book_id,
     )
     db.add(grant)
     db.flush()
@@ -144,7 +179,13 @@ def list_sessions(db: Session) -> list[GallerySession]:
         .options(
             selectinload(GallerySession.grants).selectinload(
                 GallerySessionGrant.illustration
-            )
+            ),
+            selectinload(GallerySession.grants).selectinload(
+                GallerySessionGrant.chapter
+            ),
+            selectinload(GallerySession.grants).selectinload(
+                GallerySessionGrant.book
+            ),
         )
         .order_by(GallerySession.created_at.desc(), GallerySession.id.desc())
         .all()

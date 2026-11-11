@@ -166,11 +166,18 @@ export default function AdminIllustrations() {
   );
   const [modalNotice, setModalNotice] = useState<Notice | null>(null);
   const [notice, setNotice] = useState<Notice | null>(null);
+  const [issuedCode, setIssuedCode] = useState<string | null>(null);
+  const [issuing, setIssuing] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const modalFileInputRef = useRef<HTMLInputElement>(null);
   const createRepresentativeInputRef = useRef<HTMLInputElement>(null);
   const modalRepresentativeInputRef = useRef<HTMLInputElement>(null);
   const today = todayDateInputValue();
+
+  useEffect(() => {
+    setIssuedCode(null);
+  }, [editingItem?.id]);
+
   const totalPages = Math.max(
     1,
     Math.ceil(items.length / LIST_PAGE_SIZE),
@@ -726,6 +733,7 @@ export default function AdminIllustrations() {
             tags: parseTags(editingTagsInput),
             taken_at: editingItem.taken_at || null,
             visible: editingItem.visible,
+            protected: editingItem.protected,
           }),
         },
       );
@@ -743,6 +751,36 @@ export default function AdminIllustrations() {
       });
     } finally {
       setSavingId(null);
+    }
+  };
+
+  const issueCode = async () => {
+    if (!editingItem || issuing) return;
+    setIssuing(true);
+    setIssuedCode(null);
+    setModalNotice(null);
+    try {
+      const result = await apiFetch<{ code: string }>(
+        "/api/gallery/invites",
+        {
+          method: "POST",
+          body: JSON.stringify({
+            resource_type: "illustration",
+            resource_id: editingItem.id,
+          }),
+        },
+      );
+      setIssuedCode(result.code);
+    } catch (error) {
+      setModalNotice({
+        type: "error",
+        text:
+          error instanceof Error
+            ? error.message
+            : "열람 코드를 발급하지 못했습니다.",
+      });
+    } finally {
+      setIssuing(false);
     }
   };
 
@@ -807,6 +845,7 @@ export default function AdminIllustrations() {
 
   const bulkUpdate = async (patch: {
     visible?: boolean;
+    protected?: boolean;
     taken_at?: string | null;
     tags?: string[];
   }) => {
@@ -1232,10 +1271,22 @@ export default function AdminIllustrations() {
               <button
                 type="button"
                 className="admin-button"
-                onClick={() => void bulkUpdate({ visible: true })}
+                onClick={() =>
+                  void bulkUpdate({ visible: true, protected: false })
+                }
                 disabled={bulkWorking}
               >
                 공개
+              </button>
+              <button
+                type="button"
+                className="admin-button"
+                onClick={() =>
+                  void bulkUpdate({ visible: true, protected: true })
+                }
+                disabled={bulkWorking}
+              >
+                보호
               </button>
               <button
                 type="button"
@@ -1595,17 +1646,42 @@ export default function AdminIllustrations() {
                     />
                   </label>
                   <label className="admin-illustrations-modal__visible">
-                    <input
-                      type="checkbox"
-                      checked={editingItem.visible}
-                      onChange={(event) =>
-                        updateEditing({
-                          visible: event.target.checked,
-                        })
+                    <span>공개 상태</span>
+                    <select
+                      value={
+                        editingItem.visible === false
+                          ? "private"
+                          : editingItem.protected
+                            ? "protected"
+                            : "public"
                       }
-                    />
-                    공개
+                      onChange={(event) => {
+                        const value = event.target.value;
+                        updateEditing({
+                          visible: value !== "private",
+                          protected: value === "protected",
+                        });
+                      }}
+                    >
+                      <option value="public">공개</option>
+                      <option value="protected">보호</option>
+                      <option value="private">비공개</option>
+                    </select>
                   </label>
+                  {editingItem.visible !== false &&
+                  editingItem.protected ? (
+                    <div className="admin-illustrations-modal__code">
+                      <button
+                        type="button"
+                        className="admin-button"
+                        onClick={() => void issueCode()}
+                        disabled={issuing}
+                      >
+                        {issuing ? "발급 중..." : "열람 코드 발급"}
+                      </button>
+                      {issuedCode ? <code>{issuedCode}</code> : null}
+                    </div>
+                  ) : null}
                 </div>
               </div>
 

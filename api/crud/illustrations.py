@@ -59,6 +59,7 @@ def _serialize_summary(illustration: Illustration) -> dict:
         "tags": illustration.tags or [],
         "taken_at": illustration.taken_at,
         "visible": illustration.visible,
+        "protected": bool(illustration.protected),
         "representative_image_id": (
             representative.id if representative else None
         ),
@@ -446,6 +447,8 @@ def bulk_update_illustrations(
         was_visible = illustration.visible is not False
         if "visible" in data and data["visible"] is not None:
             illustration.visible = data["visible"]
+        if "protected" in data and data["protected"] is not None:
+            illustration.protected = data["protected"]
         if "taken_at" in data:
             illustration.taken_at = data["taken_at"]
         if "tags" in data and data["tags"] is not None:

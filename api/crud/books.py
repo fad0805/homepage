@@ -61,6 +61,7 @@ def _serialize_book(book: Book) -> dict:
         ),
         "order": book.order,
         "visible": book.visible,
+        "protected": bool(book.protected),
         "created_at": _iso_utc(book.created_at),
         "updated_at": _iso_utc(book.updated_at),
     }
@@ -201,6 +202,7 @@ def _serialize_chapter(chapter: Chapter) -> dict:
         "tags": chapter.tags or [],
         "order": chapter.order,
         "visible": chapter.visible,
+        "protected": bool(chapter.protected),
         "view_count": chapter.view_count or 0,
         "published_at": _iso_utc(chapter.published_at),
         "created_at": _iso_utc(chapter.created_at),

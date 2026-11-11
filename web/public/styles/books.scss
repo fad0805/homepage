@@ -809,3 +809,90 @@
     padding: 0.3rem 0.4rem;
   }
 }
+
+.chapter-detail__locked {
+  margin: 2rem 0;
+  padding: 1.5rem;
+  border: 1px dashed var(--background);
+  border-radius: 12px;
+  text-align: center;
+
+  p {
+    margin: 0 0 0.75rem;
+    opacity: 0.8;
+  }
+
+  a {
+    font-weight: 600;
+  }
+}
+
+.books-book-locked {
+  margin: 2rem 0;
+  padding: 1.5rem;
+  border: 1px dashed var(--background);
+  border-radius: 12px;
+  text-align: center;
+
+  p {
+    margin: 0 0 0.75rem;
+    opacity: 0.8;
+  }
+
+  a {
+    font-weight: 600;
+  }
+}
+
+.books-unlock {
+  margin: 2rem 0;
+  padding: 1.5rem;
+  border: 1px dashed var(--background);
+  border-radius: 12px;
+  text-align: center;
+
+  p {
+    margin: 0 0 0.75rem;
+    opacity: 0.8;
+  }
+}
+
+.books-unlock__form {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+
+  input {
+    height: 2.5rem;
+    padding: 0 0.75rem;
+    border: 1px solid var(--background);
+    border-radius: 8px;
+    background-color: transparent;
+    color: var(--foreground);
+    text-align: center;
+    letter-spacing: 0.08em;
+  }
+
+  button {
+    height: 2.5rem;
+    padding: 0 1rem;
+    border: 1px solid var(--background);
+    border-radius: 8px;
+    background-color: transparent;
+    color: var(--foreground);
+    cursor: pointer;
+  }
+
+  button:disabled {
+    cursor: default;
+    opacity: 0.5;
+  }
+}
+
+.books-unlock__error {
+  margin: 0.75rem 0 0;
+  color: #d9534f;
+  font-size: 0.9rem;
+}

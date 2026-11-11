@@ -24,7 +24,10 @@ export function UnlockForm({ next }: { next: string }) {
 
       const data = (await response.json()) as {
         detail?: unknown;
-        illustration_id?: unknown;
+        resource?: {
+          type?: unknown;
+          id?: unknown;
+        };
       };
 
       if (!response.ok) {
@@ -36,12 +39,30 @@ export function UnlockForm({ next }: { next: string }) {
         return;
       }
 
-      // The code is tied to one illustration; go there even if the visitor
-      // arrived from a different detail page.
-      const target =
-        typeof data.illustration_id === "number"
-          ? `/illustrations/${data.illustration_id}`
-          : next;
+      // The code is tied to one resource; go there even if the visitor
+      // arrived from a different page.
+      const resource = data.resource;
+      let target = next;
+      if (
+        resource &&
+        typeof resource.id === "number" &&
+        resource.type === "illustration"
+      ) {
+        target = `/illustrations/${resource.id}`;
+      } else if (
+        resource &&
+        typeof resource.id === "number" &&
+        resource.type === "chapter"
+      ) {
+        target = `/books?chapter=${resource.id}`;
+      } else if (
+        resource &&
+        typeof resource.id === "number" &&
+        resource.type === "book"
+      ) {
+        target = `/books?book=${resource.id}`;
+      }
+
       router.replace(target);
       router.refresh();
     } catch {

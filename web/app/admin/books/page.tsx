@@ -48,6 +48,7 @@ interface Book {
   category: BookCategory | null;
   order: number;
   visible: boolean;
+  protected: boolean;
   created_at: string | null;
   updated_at: string | null;
 }
@@ -142,6 +143,8 @@ function SortableBookRow({
         <div className="admin-book-card__meta">
           {book.visible === false ? (
             <span className="admin-book-badge">비공개</span>
+          ) : book.protected ? (
+            <span className="admin-book-badge">보호</span>
           ) : null}
           <span className="admin-book-badge">{chapterCount}챕터</span>
         </div>
@@ -280,6 +283,7 @@ export default function AdminBooks() {
   const [bookTags, setBookTags] = useState("");
   const [bookCategoryId, setBookCategoryId] = useState<number | null>(null);
   const [bookVisible, setBookVisible] = useState(true);
+  const [bookProtected, setBookProtected] = useState(false);
 
   const [categories, setCategories] = useState<BookCategory[]>([]);
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
@@ -455,6 +459,7 @@ export default function AdminBooks() {
     setBookTags("");
     setBookCategoryId(null);
     setBookVisible(true);
+    setBookProtected(false);
     setBookModalOpen(true);
   };
 
@@ -477,6 +482,7 @@ export default function AdminBooks() {
           category_id: bookCategoryId,
           order: sortedBooks.length,
           visible: bookVisible,
+          protected: bookProtected,
         }),
       });
       setBookModalOpen(false);
@@ -928,14 +934,25 @@ export default function AdminBooks() {
                 </select>
               </label>
               <label className="admin-books-checkbox">
-                <input
-                  type="checkbox"
-                  checked={bookVisible}
-                  onChange={(event) =>
-                    setBookVisible(event.target.checked)
+                <span>공개 상태</span>
+                <select
+                  value={
+                    !bookVisible
+                      ? "private"
+                      : bookProtected
+                        ? "protected"
+                        : "public"
                   }
-                />
-                <span>공개</span>
+                  onChange={(event) => {
+                    const value = event.target.value;
+                    setBookVisible(value !== "private");
+                    setBookProtected(value === "protected");
+                  }}
+                >
+                  <option value="public">공개</option>
+                  <option value="protected">보호</option>
+                  <option value="private">비공개</option>
+                </select>
               </label>
             </form>
             <div className="admin-modal-footer">

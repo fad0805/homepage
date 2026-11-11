@@ -10,11 +10,12 @@ from sqlalchemy import (
 from sqlalchemy.orm import relationship
 
 from db.base import Base
+from models.books import Book, Chapter
 from models.illustrations import Illustration
 
 
 class GalleryInvite(Base):
-    """A single-use code that unlocks one illustration in one browser."""
+    """A single-use code that unlocks one illustration, chapter or book."""
 
     __tablename__ = "gallery_invites"
 
@@ -26,6 +27,18 @@ class GalleryInvite(Base):
         nullable=True,
         index=True,
     )
+    chapter_id = Column(
+        Integer,
+        ForeignKey("chapters.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True,
+    )
+    book_id = Column(
+        Integer,
+        ForeignKey("books.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True,
+    )
     note = Column(String(255), nullable=True)
     created_at = Column(DateTime, default=func.now(), nullable=False)
     expires_at = Column(DateTime, nullable=False, index=True)
@@ -34,6 +47,8 @@ class GalleryInvite(Base):
     revoked_at = Column(DateTime, nullable=True)
 
     illustration = relationship(Illustration)
+    chapter = relationship(Chapter)
+    book = relationship(Book)
 
 
 class GallerySession(Base):
@@ -58,7 +73,7 @@ class GallerySession(Base):
 
 
 class GallerySessionGrant(Base):
-    """One illustration this browser is allowed to open."""
+    """One resource this browser is allowed to open."""
 
     __tablename__ = "gallery_session_grants"
     __table_args__ = (
@@ -66,6 +81,16 @@ class GallerySessionGrant(Base):
             "session_id",
             "illustration_id",
             name="uq_gallery_session_grant",
+        ),
+        UniqueConstraint(
+            "session_id",
+            "chapter_id",
+            name="uq_gallery_session_chapter",
+        ),
+        UniqueConstraint(
+            "session_id",
+            "book_id",
+            name="uq_gallery_session_book",
         ),
     )
 
@@ -79,10 +104,24 @@ class GallerySessionGrant(Base):
     illustration_id = Column(
         Integer,
         ForeignKey("illustrations.id", ondelete="CASCADE"),
-        nullable=False,
+        nullable=True,
+        index=True,
+    )
+    chapter_id = Column(
+        Integer,
+        ForeignKey("chapters.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True,
+    )
+    book_id = Column(
+        Integer,
+        ForeignKey("books.id", ondelete="CASCADE"),
+        nullable=True,
         index=True,
     )
     created_at = Column(DateTime, default=func.now(), nullable=False)
 
     session = relationship("GallerySession", back_populates="grants")
     illustration = relationship(Illustration)
+    chapter = relationship(Chapter)
+    book = relationship(Book)

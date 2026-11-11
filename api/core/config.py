@@ -19,6 +19,10 @@ GALLERY_COOKIE_NAME = os.getenv('GALLERY_COOKIE_NAME', 'gallery_access')
 GALLERY_SESSION_DAYS = int(os.getenv('GALLERY_SESSION_DAYS', 30))
 GALLERY_INVITE_HOURS = int(os.getenv('GALLERY_INVITE_HOURS', 24))
 GALLERY_COOKIE_MAX_AGE = GALLERY_SESSION_DAYS * 24 * 60 * 60
+# Revoked invite records older than this are removed automatically.
+GALLERY_INVITE_RETENTION_DAYS = int(
+    os.getenv('GALLERY_INVITE_RETENTION_DAYS', 30)
+)
 
 # S3-compatible object storage
 S3_ENDPOINT_URL = os.getenv('S3_ENDPOINT_URL')

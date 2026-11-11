@@ -40,6 +40,13 @@ class Book(Base):
     )
     order = Column(Integer, nullable=False, default=0)
     visible = Column(Boolean, nullable=False, default=True)
+    # A protected book locks every chapter inside it at once.
+    protected = Column(
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default="false",
+    )
     created_at = Column(DateTime, default=func.now())
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
 
@@ -69,6 +76,12 @@ class Chapter(Base):
     tags = Column(JSON, nullable=False, default=list)
     order = Column(Integer, nullable=False, default=0)
     visible = Column(Boolean, nullable=False, default=True)
+    protected = Column(
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default="false",
+    )
     view_count = Column(Integer, nullable=False, default=0, server_default="0")
     published_at = Column(DateTime, nullable=True)
     mastodon_status_id = Column(String(255), nullable=True)

@@ -1,6 +1,8 @@
 import { headers } from "next/headers";
 
+import { getGalleryGrants } from "@/lib/gallery-auth";
 import { serverApiFetch } from "@/lib/server-api";
+import { getCurrentUser } from "@/lib/server-auth";
 
 import BooksClient from "./books-client";
 import type { Book, Chapter } from "./types";
@@ -53,6 +55,44 @@ export default async function BooksPage({
       </div>
     );
   }
+
+  const [grants, user] = await Promise.all([
+    getGalleryGrants(),
+    getCurrentUser(),
+  ]);
+  const isAdmin = user !== null;
+  const visibleBooks = isAdmin
+    ? books
+    : books.filter((book) => book.visible !== false);
+  const visibleBookIds = new Set(visibleBooks.map((book) => book.id));
+
+  books = visibleBooks.map((book) => ({
+    ...book,
+    locked:
+      !isAdmin && book.protected && !grants.books.has(book.id),
+  }));
+  const lockedBookIds = new Set(
+    books.filter((book) => book.locked).map((book) => book.id),
+  );
+  chapters = chapters
+    .filter(
+      (chapter) =>
+        isAdmin ||
+        (chapter.visible !== false && visibleBookIds.has(chapter.book_id)),
+    )
+    .map((chapter) => {
+      const bookLocked = lockedBookIds.has(chapter.book_id);
+      const chapterLocked =
+        chapter.protected &&
+        !grants.chapters.has(chapter.id) &&
+        !grants.books.has(chapter.book_id);
+      const locked = !isAdmin && (bookLocked || chapterLocked);
+      return {
+        ...chapter,
+        locked,
+        body: locked ? null : chapter.body,
+      };
+    });
 
   let initialBookId = requestedBookId;
   if (initialBookId === null && initialChapterId !== null) {

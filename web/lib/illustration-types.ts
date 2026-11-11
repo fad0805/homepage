@@ -12,6 +12,7 @@ export interface IllustrationItem {
   tags: string[];
   taken_at: string | null;
   visible: boolean;
+  protected: boolean;
   representative_image_id: number | null;
   representative_url: string | null;
   representative_original_name: string | null;

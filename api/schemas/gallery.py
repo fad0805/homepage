@@ -1,9 +1,13 @@
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
+ResourceType = Literal["illustration", "chapter", "book"]
 
-class GalleryIllustrationRead(BaseModel):
+
+class GalleryResourceRead(BaseModel):
+    type: ResourceType
     id: int
     title: str
 
@@ -13,15 +17,15 @@ class GalleryUnlockRequest(BaseModel):
 
 
 class GalleryInviteCreate(BaseModel):
-    illustration_id: int
+    resource_type: ResourceType
+    resource_id: int
     note: str | None = Field(default=None, max_length=255)
     expires_in_hours: int | None = Field(default=None, ge=1, le=720)
 
 
 class GalleryInviteCreated(BaseModel):
     id: int
-    illustration_id: int
-    illustration_title: str
+    resource: GalleryResourceRead
     code: str
     note: str | None
     expires_at: datetime
@@ -29,8 +33,7 @@ class GalleryInviteCreated(BaseModel):
 
 class GalleryInviteRead(BaseModel):
     id: int
-    illustration_id: int | None
-    illustration_title: str | None
+    resource: GalleryResourceRead | None
     note: str | None
     created_at: datetime
     expires_at: datetime
@@ -48,4 +51,4 @@ class GallerySessionRead(BaseModel):
     ip_address: str | None
     user_agent: str | None
     status: str
-    illustrations: list[GalleryIllustrationRead]
+    resources: list[GalleryResourceRead]

@@ -268,6 +268,25 @@ def maybe_notify_chapter(db: Session, chapter: Chapter) -> bool:
             db.commit()
         return False
 
+    # A protected book is announced only once, when its first chapter is
+    # published. Later chapters are part of the same locked book, so pushing
+    # each one would spam followers with links they cannot open.
+    if chapter.book is not None and chapter.book.protected:
+        already_posted = (
+            db.query(Chapter.id)
+            .filter(
+                Chapter.book_id == chapter.book_id,
+                Chapter.id != chapter.id,
+                Chapter.mastodon_status_id.isnot(None),
+            )
+            .first()
+        )
+        if already_posted is not None:
+            if chapter.mastodon_pending:
+                chapter.mastodon_pending = False
+                db.commit()
+            return False
+
     published_at = _naive_utc(chapter.published_at)
     if published_at is not None and published_at > datetime.utcnow():
         if not chapter.mastodon_pending:

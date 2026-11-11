@@ -10,6 +10,7 @@ from core.config import (
     GALLERY_COOKIE_MAX_AGE,
     GALLERY_COOKIE_NAME,
     GALLERY_INVITE_HOURS,
+    GALLERY_INVITE_RETENTION_DAYS,
     GALLERY_SESSION_DAYS,
 )
 from core.security import (
@@ -20,10 +21,10 @@ from core.security import (
 )
 from crud import gallery as gallery_crud
 from db.session import get_db
+from models.books import Book, Chapter
 from models.illustrations import Illustration
 from routers.utils import get_client_ip, require_auth
 from schemas.gallery import (
-    GalleryIllustrationRead,
     GalleryInviteCreate,
     GalleryInviteCreated,
     GalleryInviteRead,
@@ -83,6 +84,78 @@ def _session_status(session, now: datetime) -> str:
     return "active"
 
 
+def _resource(illustration_id, chapter_id, book_id, relation):
+    if illustration_id is not None:
+        return {
+            "type": "illustration",
+            "id": illustration_id,
+            "title": relation.title if relation is not None else "",
+        }
+    if chapter_id is not None:
+        return {
+            "type": "chapter",
+            "id": chapter_id,
+            "title": relation.title if relation is not None else "",
+        }
+    if book_id is not None:
+        return {
+            "type": "book",
+            "id": book_id,
+            "title": relation.title if relation is not None else "",
+        }
+    return None
+
+
+def _invite_resource(invite):
+    if invite.illustration_id is not None:
+        return _resource(
+            invite.illustration_id,
+            None,
+            None,
+            invite.illustration,
+        )
+    if invite.chapter_id is not None:
+        return _resource(
+            None,
+            invite.chapter_id,
+            None,
+            invite.chapter,
+        )
+    if invite.book_id is not None:
+        return _resource(
+            None,
+            None,
+            invite.book_id,
+            invite.book,
+        )
+    return None
+
+
+def _grant_resource(grant):
+    if grant.illustration_id is not None:
+        return _resource(
+            grant.illustration_id,
+            None,
+            None,
+            grant.illustration,
+        )
+    if grant.chapter_id is not None:
+        return _resource(
+            None,
+            grant.chapter_id,
+            None,
+            grant.chapter,
+        )
+    if grant.book_id is not None:
+        return _resource(
+            None,
+            None,
+            grant.book_id,
+            grant.book,
+        )
+    return None
+
+
 @router.post("/unlock")
 def unlock_gallery(
     payload: GalleryUnlockRequest,
@@ -90,7 +163,7 @@ def unlock_gallery(
     response: Response,
     db: Session = Depends(get_db),
 ):
-    """Consume a one-time code and grant access to its illustration."""
+    """Consume a one-time code and grant access to its resource."""
     _rate_limit(request)
 
     normalized = normalize_gallery_code(payload.code)
@@ -107,10 +180,10 @@ def unlock_gallery(
     )
     if (
         invite is None
-        or invite.illustration_id is None
         or invite.used_at is not None
         or invite.revoked_at is not None
         or invite.expires_at <= now
+        or _invite_resource(invite) is None
     ):
         raise HTTPException(
             status_code=401,
@@ -155,11 +228,26 @@ def unlock_gallery(
             (request.headers.get("user-agent") or "")[:255] or None,
         )
 
-    gallery_crud.add_grant(
-        db,
-        session.id,
-        invite.illustration_id,
-    )
+    if invite.illustration_id is not None:
+        gallery_crud.add_grant(
+            db,
+            session.id,
+            illustration_id=invite.illustration_id,
+        )
+    elif invite.chapter_id is not None:
+        gallery_crud.add_grant(
+            db,
+            session.id,
+            chapter_id=invite.chapter_id,
+        )
+    else:
+        gallery_crud.add_grant(
+            db,
+            session.id,
+            book_id=invite.book_id,
+        )
+
+    resource = _invite_resource(invite)
     db.commit()
 
     if new_session:
@@ -167,7 +255,7 @@ def unlock_gallery(
 
     return {
         "success": True,
-        "illustration_id": invite.illustration_id,
+        "resource": resource,
         "expires_at": session.expires_at,
     }
 
@@ -178,10 +266,16 @@ def gallery_status(
     response: Response,
     db: Session = Depends(get_db),
 ):
-    """Return the illustrations this browser is allowed to open."""
+    """Return the resources this browser is allowed to open."""
+    empty = {
+        "unlocked": False,
+        "illustration_ids": [],
+        "chapter_ids": [],
+        "book_ids": [],
+    }
     token = request.cookies.get(GALLERY_COOKIE_NAME)
     if not token:
-        return {"unlocked": False, "illustration_ids": []}
+        return empty
 
     now = datetime.utcnow()
     session = gallery_crud.get_session_by_hash(
@@ -194,7 +288,7 @@ def gallery_status(
         or session.expires_at <= now
     ):
         response.delete_cookie(GALLERY_COOKIE_NAME, path="/")
-        return {"unlocked": False, "illustration_ids": []}
+        return empty
 
     # Avoid a write on every page view.
     if (
@@ -207,27 +301,22 @@ def gallery_status(
     return {
         "unlocked": True,
         "illustration_ids": [
-            grant.illustration_id for grant in session.grants
+            grant.illustration_id
+            for grant in session.grants
+            if grant.illustration_id is not None
+        ],
+        "chapter_ids": [
+            grant.chapter_id
+            for grant in session.grants
+            if grant.chapter_id is not None
+        ],
+        "book_ids": [
+            grant.book_id
+            for grant in session.grants
+            if grant.book_id is not None
         ],
         "expires_at": session.expires_at,
     }
-
-
-@router.get(
-    "/illustrations",
-    response_model=list[GalleryIllustrationRead],
-)
-def read_gallery_illustrations(
-    db: Session = Depends(get_db),
-    _=Depends(require_auth),
-):
-    """Lightweight illustration list for the invite form."""
-    return [
-        {"id": illustration.id, "title": illustration.title}
-        for illustration in db.query(Illustration)
-        .order_by(Illustration.order.asc(), Illustration.id.asc())
-        .all()
-    ]
 
 
 @router.post(
@@ -239,12 +328,25 @@ def create_gallery_invite(
     db: Session = Depends(get_db),
     _=Depends(require_auth),
 ):
-    """Generate a one-time code for one illustration."""
-    illustration = db.get(Illustration, payload.illustration_id)
-    if illustration is None:
+    """Generate a one-time code for one illustration, chapter or book."""
+    illustration_id = None
+    chapter_id = None
+    book_id = None
+
+    if payload.resource_type == "illustration":
+        target = db.get(Illustration, payload.resource_id)
+        illustration_id = payload.resource_id
+    elif payload.resource_type == "chapter":
+        target = db.get(Chapter, payload.resource_id)
+        chapter_id = payload.resource_id
+    else:
+        target = db.get(Book, payload.resource_id)
+        book_id = payload.resource_id
+
+    if target is None:
         raise HTTPException(
             status_code=404,
-            detail="삽화를 찾을 수 없습니다.",
+            detail="대상을 찾을 수 없습니다.",
         )
 
     code = generate_gallery_code()
@@ -255,7 +357,9 @@ def create_gallery_invite(
     invite = gallery_crud.create_invite(
         db,
         hash_gallery_code(code),
-        illustration.id,
+        illustration_id,
+        chapter_id,
+        book_id,
         note,
         expires_at,
     )
@@ -263,8 +367,11 @@ def create_gallery_invite(
 
     return {
         "id": invite.id,
-        "illustration_id": illustration.id,
-        "illustration_title": illustration.title,
+        "resource": {
+            "type": payload.resource_type,
+            "id": target.id,
+            "title": target.title,
+        },
         "code": code,
         "note": invite.note,
         "expires_at": invite.expires_at,
@@ -280,15 +387,16 @@ def read_gallery_invites(
     _=Depends(require_auth),
 ):
     now = datetime.utcnow()
+    deleted = gallery_crud.delete_old_revoked_invites(
+        db,
+        now - timedelta(days=GALLERY_INVITE_RETENTION_DAYS),
+    )
+    if deleted:
+        db.commit()
     return [
         {
             "id": invite.id,
-            "illustration_id": invite.illustration_id,
-            "illustration_title": (
-                invite.illustration.title
-                if invite.illustration is not None
-                else None
-            ),
+            "resource": _invite_resource(invite),
             "note": invite.note,
             "created_at": invite.created_at,
             "expires_at": invite.expires_at,
@@ -339,16 +447,12 @@ def read_gallery_sessions(
             "ip_address": session.ip_address,
             "user_agent": session.user_agent,
             "status": _session_status(session, now),
-            "illustrations": [
-                {
-                    "id": grant.illustration_id,
-                    "title": (
-                        grant.illustration.title
-                        if grant.illustration is not None
-                        else ""
-                    ),
-                }
-                for grant in session.grants
+            "resources": [
+                resource
+                for resource in (
+                    _grant_resource(grant) for grant in session.grants
+                )
+                if resource is not None
             ],
         }
         for session in gallery_crud.list_sessions(db)

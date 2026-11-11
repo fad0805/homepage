@@ -6,6 +6,7 @@ export interface RssBook {
   description: string | null;
   order: number;
   visible: boolean;
+  protected: boolean;
   created_at: string | null;
   updated_at: string | null;
 }
@@ -18,6 +19,7 @@ export interface RssChapter {
   body: string | null;
   order: number;
   visible: boolean;
+  protected: boolean;
   published_at: string | null;
   created_at: string | null;
   updated_at: string | null;
@@ -145,13 +147,17 @@ export function rssItemForChapter(
     includeBookTitle && book
       ? `${book.title} — ${chapter.title}`
       : chapter.title;
-  const description = plainText(chapter.body).slice(0, 280);
+  const isProtected =
+    chapter.protected || book?.protected === true;
 
   return {
     title,
     link,
     pubDate: chapterDate(chapter),
-    description,
-    content: chapter.body ?? "",
+    // Protected posts expose only their title through RSS.
+    description: isProtected
+      ? ""
+      : plainText(chapter.body).slice(0, 280),
+    content: isProtected ? "" : chapter.body ?? "",
   };
 }

@@ -33,6 +33,7 @@ class BookBase(BaseModel):
     category_id: int | None = None
     order: int = 0
     visible: bool = True
+    protected: bool = False
 
 
 class BookCreate(BookBase):
@@ -46,6 +47,7 @@ class BookUpdate(BaseModel):
     category_id: int | None = None
     order: int | None = None
     visible: bool | None = None
+    protected: bool | None = None
 
 
 class BookReorderItem(BaseModel):
@@ -65,6 +67,7 @@ class ChapterBase(BaseModel):
     tags: list[str] = Field(default_factory=list)
     order: int = 0
     visible: bool = True
+    protected: bool = False
     published_at: datetime | None = None
 
 
@@ -82,6 +85,7 @@ class ChapterUpdate(BaseModel):
     tags: list[str] | None = None
     order: int | None = None
     visible: bool | None = None
+    protected: bool | None = None
     published_at: datetime | None = None
 
 

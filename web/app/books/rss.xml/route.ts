@@ -16,11 +16,38 @@ export async function GET() {
     const visibleBooks = books.filter((book) => book.visible !== false);
     const bookMap = new Map(visibleBooks.map((book) => [book.id, book]));
 
-    const items = chapters
-      .filter(
-        (chapter) =>
-          isPublished(chapter) && bookMap.has(chapter.book_id),
-      )
+    const published = chapters.filter(
+      (chapter) =>
+        isPublished(chapter) && bookMap.has(chapter.book_id),
+    );
+
+    // A protected book is announced once, when its first chapter is
+    // published. Later chapters stay out of the full feed.
+    const firstProtected = new Map<
+      number,
+      (typeof published)[number]
+    >();
+    for (const chapter of published) {
+      const book = bookMap.get(chapter.book_id);
+      if (!book?.protected) continue;
+      const current = firstProtected.get(chapter.book_id);
+      if (
+        !current ||
+        chapterDate(chapter).getTime() <
+          chapterDate(current).getTime()
+      ) {
+        firstProtected.set(chapter.book_id, chapter);
+      }
+    }
+
+    const items = published
+      .filter((chapter) => {
+        const book = bookMap.get(chapter.book_id);
+        if (!book?.protected) return true;
+        return (
+          firstProtected.get(chapter.book_id)?.id === chapter.id
+        );
+      })
       .sort(
         (a, b) => chapterDate(b).getTime() - chapterDate(a).getTime(),
       )

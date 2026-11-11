@@ -13,6 +13,8 @@ export interface Book {
   category: BookCategory | null;
   order: number;
   visible: boolean;
+  protected: boolean;
+  locked?: boolean;
 }
 
 export interface Chapter {
@@ -24,6 +26,8 @@ export interface Chapter {
   tags: string[];
   order: number;
   visible: boolean;
+  protected: boolean;
+  locked?: boolean;
   view_count: number;
   created_at: string | null;
   published_at: string | null;

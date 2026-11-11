@@ -33,6 +33,7 @@ interface ChapterItem {
   tags: string[];
   order: number;
   visible: boolean;
+  protected: boolean;
   view_count: number;
   published_at: string | null;
   created_at: string | null;
@@ -124,6 +125,9 @@ export default function AdminChapterEdit() {
   const [body, setBody] = useState("");
   const [tagsInput, setTagsInput] = useState("");
   const [visible, setVisible] = useState(true);
+  const [chapterProtected, setChapterProtected] = useState(false);
+  const [issuedCode, setIssuedCode] = useState<string | null>(null);
+  const [issuing, setIssuing] = useState(false);
   const [publishedAt, setPublishedAt] = useState("");
   const [targetBookId, setTargetBookId] = useState(bookId);
   const [loading, setLoading] = useState(true);
@@ -220,6 +224,7 @@ export default function AdminChapterEdit() {
       let baseBody = "";
       let baseTagsInput = "";
       let baseVisible = true;
+      let baseProtected = false;
       let basePublishedAt = "";
       let baseTargetBookId = bookId;
 
@@ -240,6 +245,7 @@ export default function AdminChapterEdit() {
         baseBody = current.body ?? "";
         baseTagsInput = (current.tags ?? []).join(", ");
         baseVisible = current.visible !== false;
+        baseProtected = current.protected === true;
         basePublishedAt = toDatetimeLocal(current.published_at);
         baseTargetBookId = current.book_id;
 
@@ -250,6 +256,7 @@ export default function AdminChapterEdit() {
         setBody(baseBody);
         setTagsInput(baseTagsInput);
         setVisible(baseVisible);
+        setChapterProtected(baseProtected);
         setPublishedAt(basePublishedAt);
       } else {
         setChapter(null);
@@ -259,6 +266,7 @@ export default function AdminChapterEdit() {
         setBody(baseBody);
         setTagsInput(baseTagsInput);
         setVisible(baseVisible);
+        setChapterProtected(false);
         setPublishedAt(basePublishedAt);
       }
 
@@ -553,6 +561,34 @@ export default function AdminChapterEdit() {
     visible,
   ]);
 
+  const issueChapterCode = async () => {
+    if (!chapter || issuing) return;
+    setIssuing(true);
+    setIssuedCode(null);
+    try {
+      const result = await apiFetch<{ code: string }>(
+        "/api/gallery/invites",
+        {
+          method: "POST",
+          body: JSON.stringify({
+            resource_type: "chapter",
+            resource_id: chapter.id,
+          }),
+        },
+      );
+      setIssuedCode(result.code);
+    } catch (error) {
+      notify(
+        "error",
+        error instanceof Error
+          ? error.message
+          : "열람 코드를 발급하지 못했습니다.",
+      );
+    } finally {
+      setIssuing(false);
+    }
+  };
+
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const nextTitle = title.trim();
@@ -592,6 +628,7 @@ export default function AdminChapterEdit() {
             tags: parseTags(tagsInput),
             order,
             visible,
+            protected: chapterProtected,
             published_at: publishedAtValue,
           }),
         });
@@ -606,6 +643,7 @@ export default function AdminChapterEdit() {
             tags: parseTags(tagsInput),
             order,
             visible,
+            protected: chapterProtected,
             published_at: publishedAtValue,
           }),
         });
@@ -831,13 +869,39 @@ export default function AdminChapterEdit() {
                 발행됩니다. 공개가 꺼져 있으면 발행되지 않습니다.
               </p>
               <label className="admin-books-checkbox">
-                <input
-                  type="checkbox"
-                  checked={visible}
-                  onChange={(event) => setVisible(event.target.checked)}
-                />
-                <span>공개</span>
+                <span>공개 상태</span>
+                <select
+                  value={
+                    !visible
+                      ? "private"
+                      : chapterProtected
+                        ? "protected"
+                        : "public"
+                  }
+                  onChange={(event) => {
+                    const value = event.target.value;
+                    setVisible(value !== "private");
+                    setChapterProtected(value === "protected");
+                  }}
+                >
+                  <option value="public">공개</option>
+                  <option value="protected">보호</option>
+                  <option value="private">비공개</option>
+                </select>
               </label>
+              {!isNew && visible && chapterProtected ? (
+                <div className="admin-books-code">
+                  <button
+                    type="button"
+                    className="admin-button"
+                    onClick={() => void issueChapterCode()}
+                    disabled={issuing}
+                  >
+                    {issuing ? "발급 중..." : "열람 코드 발급"}
+                  </button>
+                  {issuedCode ? <code>{issuedCode}</code> : null}
+                </div>
+              ) : null}
               <div className="admin-books-form-actions">
                 {!isNew && chapter ? (
                   <button

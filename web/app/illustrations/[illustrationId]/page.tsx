@@ -36,14 +36,6 @@ export default async function IllustrationDetailPage({
   const { illustrationId } = await params;
   const id = parseId(illustrationId);
 
-  if (id !== null && !(await isIllustrationUnlocked(id))) {
-    redirect(
-      `/gallery/unlock?next=${encodeURIComponent(
-        `/illustrations/${illustrationId}`,
-      )}`,
-    );
-  }
-
   let illustration: IllustrationDetailItem | null = null;
   let errorMessage = "삽화를 찾을 수 없습니다.";
 
@@ -61,6 +53,19 @@ export default async function IllustrationDetailPage({
         errorMessage = "삽화를 불러오지 못했습니다.";
       }
     }
+  }
+
+  if (
+    illustration &&
+    illustration.protected &&
+    id !== null &&
+    !(await isIllustrationUnlocked(id))
+  ) {
+    redirect(
+      `/gallery/unlock?next=${encodeURIComponent(
+        `/illustrations/${illustrationId}`,
+      )}`,
+    );
   }
 
   if (!illustration) {

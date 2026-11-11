@@ -32,6 +32,7 @@ interface Book {
   category: BookCategory | null;
   order: number;
   visible: boolean;
+  protected: boolean;
   created_at: string | null;
   updated_at: string | null;
 }
@@ -45,6 +46,7 @@ interface ChapterItem {
   tags: string[];
   order: number;
   visible: boolean;
+  protected: boolean;
   view_count: number;
   created_at: string | null;
   updated_at: string | null;
@@ -102,6 +104,9 @@ export default function AdminBookDetail() {
   const [tagsInput, setTagsInput] = useState("");
   const [categoryId, setCategoryId] = useState<number | null>(null);
   const [visible, setVisible] = useState(true);
+  const [bookProtected, setBookProtected] = useState(false);
+  const [issuedCode, setIssuedCode] = useState<string | null>(null);
+  const [issuing, setIssuing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [bookInfoOpen, setBookInfoOpen] = useState(false);
@@ -142,6 +147,7 @@ export default function AdminBookDetail() {
       setTagsInput((bookData.tags ?? []).join(", "));
       setCategoryId(bookData.category_id);
       setVisible(bookData.visible !== false);
+      setBookProtected(bookData.protected === true);
       setCategories(categoryData);
       setBooks(bookList);
       setChapters(
@@ -386,7 +392,37 @@ export default function AdminBookDetail() {
     setTagsInput((book.tags ?? []).join(", "));
     setCategoryId(book.category_id);
     setVisible(book.visible !== false);
+    setBookProtected(book.protected === true);
+    setIssuedCode(null);
     setBookInfoOpen(true);
+  };
+
+  const issueBookCode = async () => {
+    if (!book || issuing) return;
+    setIssuing(true);
+    setIssuedCode(null);
+    try {
+      const result = await apiFetch<{ code: string }>(
+        "/api/gallery/invites",
+        {
+          method: "POST",
+          body: JSON.stringify({
+            resource_type: "book",
+            resource_id: book.id,
+          }),
+        },
+      );
+      setIssuedCode(result.code);
+    } catch (error) {
+      notify(
+        "error",
+        error instanceof Error
+          ? error.message
+          : "열람 코드를 발급하지 못했습니다.",
+      );
+    } finally {
+      setIssuing(false);
+    }
   };
 
   const handleBookSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -408,6 +444,7 @@ export default function AdminBookDetail() {
           tags: parseTags(tagsInput),
           category_id: categoryId,
           visible,
+          protected: bookProtected,
         }),
       });
       setBook(updated);
@@ -415,6 +452,8 @@ export default function AdminBookDetail() {
       setDescription(updated.description ?? "");
       setTagsInput((updated.tags ?? []).join(", "));
       setCategoryId(updated.category_id);
+      setVisible(updated.visible !== false);
+      setBookProtected(updated.protected === true);
       setBookInfoOpen(false);
       notify("success", "책 정보를 저장했습니다.");
     } catch (error) {
@@ -729,13 +768,39 @@ export default function AdminBookDetail() {
                 </select>
               </label>
               <label className="admin-books-checkbox">
-                <input
-                  type="checkbox"
-                  checked={visible}
-                  onChange={(event) => setVisible(event.target.checked)}
-                />
-                <span>공개</span>
+                <span>공개 상태</span>
+                <select
+                  value={
+                    !visible
+                      ? "private"
+                      : bookProtected
+                        ? "protected"
+                        : "public"
+                  }
+                  onChange={(event) => {
+                    const value = event.target.value;
+                    setVisible(value !== "private");
+                    setBookProtected(value === "protected");
+                  }}
+                >
+                  <option value="public">공개</option>
+                  <option value="protected">보호</option>
+                  <option value="private">비공개</option>
+                </select>
               </label>
+              {visible && bookProtected ? (
+                <div className="admin-books-code">
+                  <button
+                    type="button"
+                    className="admin-button"
+                    onClick={() => void issueBookCode()}
+                    disabled={issuing}
+                  >
+                    {issuing ? "발급 중..." : "열람 코드 발급"}
+                  </button>
+                  {issuedCode ? <code>{issuedCode}</code> : null}
+                </div>
+              ) : null}
               <p className="admin-books-meta">
                 생성 {formatDateTime(book.created_at)} · 수정{" "}
                 {formatDateTime(book.updated_at)}

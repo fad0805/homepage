@@ -4,9 +4,11 @@ import {
   useEffect,
   useMemo,
   useState,
+  type FormEvent,
   type MouseEvent as ReactMouseEvent,
 } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 
 import { useAuth } from "@/components/auth-provider";
 import { ImageLightbox, type LightboxImage } from "@/components/image-lightbox";
@@ -42,6 +44,71 @@ function TagChip({ tag }: { tag: string }) {
     >
       {tag}
     </Link>
+  );
+}
+
+function InlineUnlockForm({ label }: { label: string }) {
+  const router = useRouter();
+  const [code, setCode] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setLoading(true);
+    setError(null);
+
+    try {
+      const response = await fetch("/api/gallery/unlock", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ code }),
+      });
+
+      if (!response.ok) {
+        let detail = "비밀번호가 올바르지 않거나 만료되었습니다.";
+        try {
+          const data = (await response.json()) as { detail?: unknown };
+          if (typeof data.detail === "string") {
+            detail = data.detail;
+          }
+        } catch {
+          // Ignore malformed error bodies.
+        }
+        setError(detail);
+        return;
+      }
+
+      setCode("");
+      router.refresh();
+    } catch {
+      setError("요청에 실패했습니다. 잠시 후 다시 시도해주세요.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="books-unlock">
+      <p>{label}</p>
+      <form className="books-unlock__form" onSubmit={handleSubmit}>
+        <input
+          type="text"
+          value={code}
+          onChange={(event) => setCode(event.target.value)}
+          placeholder="XXXX-XXXX-XXXX"
+          autoComplete="one-time-code"
+          autoCapitalize="characters"
+          spellCheck={false}
+          required
+        />
+        <button type="submit" disabled={loading}>
+          {loading ? "확인 중..." : "입장"}
+        </button>
+      </form>
+      {error ? <p className="books-unlock__error">{error}</p> : null}
+    </div>
   );
 }
 
@@ -93,7 +160,9 @@ function ChapterDetail({
       {chapter.subtitle ? (
         <p className="chapter-detail__subtitle">{chapter.subtitle}</p>
       ) : null}
-      {chapter.body ? (
+      {chapter.locked ? (
+        <InlineUnlockForm label="이 글은 열람 비밀번호가 필요합니다." />
+      ) : chapter.body ? (
         <div
           className="chapter-detail__body"
           onClick={handleBodyImageClick}
@@ -463,12 +532,18 @@ export default function BooksClient({
             </div>
           ) : null}
         </div>
-        <RssSubscribe
-          path={`/books/${activeBook.id}/rss.xml`}
-          label="RSS"
-        />
+        {activeBook.locked ? null : (
+          <RssSubscribe
+            path={`/books/${activeBook.id}/rss.xml`}
+            label="RSS"
+          />
+        )}
       </header>
 
+      {activeBook.locked ? (
+        <InlineUnlockForm label="이 책은 열람 비밀번호가 필요합니다." />
+      ) : (
+        <>
       {searchQuery ? (
         <p className="books-search-active">
           검색: <strong>{searchQuery}</strong>
@@ -518,11 +593,13 @@ export default function BooksClient({
           />
         </>
       )}
+        </>
+      )}
     </>
   ) : null;
 
   const detailPanel =
-    activeBook && activeChapter ? (
+    activeBook && activeChapter && !activeBook.locked ? (
       <div className="books-panel__detail">
         <div className="books-detail-nav">
           <button
@@ -554,7 +631,7 @@ export default function BooksClient({
         <p className="books-state">등록된 책이 없습니다.</p>
       ) : isMobile ? (
         activeBook ? (
-          activeChapter ? (
+          activeChapter && !activeBook.locked ? (
             <div className="books-panel">{detailPanel}</div>
           ) : (
             <div className="books-panel">{chapterPanel}</div>
@@ -566,7 +643,7 @@ export default function BooksClient({
         <div className="books-layout">
           {bookList}
           <aside className="books-panel">
-            {activeChapter ? (
+            {activeChapter && !activeBook?.locked ? (
               detailPanel
             ) : activeBook ? (
               chapterPanel
