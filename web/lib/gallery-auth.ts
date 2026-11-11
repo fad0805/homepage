@@ -9,18 +9,26 @@ const API_BASE = (
 
 const GALLERY_COOKIE = "gallery_access";
 
-/**
- * Check whether this browser may open the illustration pages.
- *
- * The API owns the invite codes and session rows, so the cookie is verified
- * there on every gated page. A logged-in administrator bypasses the gate and
- * does not need to enter a one-time code on their own site.
- */
-export const isGalleryUnlocked = cache(async (): Promise<boolean> => {
-  const cookieStore = await cookies();
-  const token = cookieStore.get(GALLERY_COOKIE)?.value;
+interface GalleryStatusResponse {
+  unlocked?: boolean;
+  illustration_ids?: number[];
+}
 
-  if (token) {
+/**
+ * Illustrations this browser may open.
+ *
+ * The API owns the invite codes and the session grants, so the cookie is
+ * verified there. A logged-in administrator is handled separately by
+ * `isIllustrationUnlocked` and never needs a one-time code on their own site.
+ */
+export const getGalleryIllustrationIds = cache(
+  async (): Promise<Set<number>> => {
+    const cookieStore = await cookies();
+    const token = cookieStore.get(GALLERY_COOKIE)?.value;
+    if (!token) {
+      return new Set<number>();
+    }
+
     try {
       const response = await fetch(`${API_BASE}/gallery/status`, {
         headers: {
@@ -29,17 +37,36 @@ export const isGalleryUnlocked = cache(async (): Promise<boolean> => {
         },
         cache: "no-store",
       });
-      if (response.ok) {
-        const data = (await response.json()) as { unlocked?: boolean };
-        if (data.unlocked === true) {
-          return true;
-        }
+      if (!response.ok) {
+        return new Set<number>();
       }
+
+      const data = (await response.json()) as GalleryStatusResponse;
+      if (data.unlocked !== true || !Array.isArray(data.illustration_ids)) {
+        return new Set<number>();
+      }
+
+      return new Set(
+        data.illustration_ids.filter(
+          (id): id is number => typeof id === "number",
+        ),
+      );
     } catch (error) {
       console.error("Failed to check gallery access.", error);
+      return new Set<number>();
     }
-  }
+  },
+);
 
-  const user = await getCurrentUser();
-  return user !== null;
-});
+export const isIllustrationUnlocked = cache(
+  async (illustrationId: number): Promise<boolean> => {
+    const ids = await getGalleryIllustrationIds();
+    if (ids.has(illustrationId)) {
+      return true;
+    }
+
+    // The site owner should not have to unlock their own gallery.
+    const user = await getCurrentUser();
+    return user !== null;
+  },
+);

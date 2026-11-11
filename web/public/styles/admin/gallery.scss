@@ -1,10 +1,13 @@
 .gallery-admin {
-  width: min(100%, 1000px);
+  width: 100%;
+  max-width: 1000px;
   margin: 0 auto;
   padding: 2rem 1.25rem 4rem;
+  box-sizing: border-box;
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
+  min-width: 0;
 
   header {
     h2 {
@@ -29,6 +32,8 @@
 }
 
 .gallery-panel {
+  min-width: 0;
+  box-sizing: border-box;
   border: 1px solid var(--background);
   border-radius: 12px;
   padding: 1.25rem;
@@ -50,10 +55,14 @@
   display: flex;
   gap: 0.5rem;
   flex-wrap: wrap;
+  width: 100%;
+  box-sizing: border-box;
 
-  input {
-    flex: 1 1 16rem;
-    min-width: 0;
+  input,
+  select,
+  button {
+    box-sizing: border-box;
+    max-width: 100%;
     height: 2.5rem;
     padding: 0 0.75rem;
     border: 1px solid var(--background);
@@ -62,14 +71,14 @@
     color: var(--foreground);
   }
 
-  select,
-  button {
-    height: 2.5rem;
-    padding: 0 0.75rem;
-    border: 1px solid var(--background);
-    border-radius: 8px;
-    background-color: transparent;
-    color: var(--foreground);
+  input {
+    flex: 1 1 14rem;
+    min-width: 0;
+  }
+
+  select {
+    flex: 0 1 14rem;
+    min-width: 0;
   }
 
   button {
@@ -126,6 +135,9 @@
 }
 
 .gallery-table-wrap {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
   overflow-x: auto;
 }
 
@@ -168,6 +180,12 @@
   max-width: 18rem;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.gallery-wrap-text {
+  min-width: 10rem;
+  max-width: 18rem;
+  white-space: normal;
 }
 
 .gallery-status {

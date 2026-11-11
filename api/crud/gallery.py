@@ -1,18 +1,24 @@
 from datetime import datetime
 
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
-from models.gallery import GalleryInvite, GallerySession
+from models.gallery import (
+    GalleryInvite,
+    GallerySession,
+    GallerySessionGrant,
+)
 
 
 def create_invite(
     db: Session,
     code_hash: str,
+    illustration_id: int,
     note: str | None,
     expires_at: datetime,
 ) -> GalleryInvite:
     invite = GalleryInvite(
         code_hash=code_hash,
+        illustration_id=illustration_id,
         note=note,
         expires_at=expires_at,
     )
@@ -32,6 +38,7 @@ def get_invite_by_hash(db: Session, code_hash: str) -> GalleryInvite | None:
 def list_invites(db: Session) -> list[GalleryInvite]:
     return (
         db.query(GalleryInvite)
+        .options(selectinload(GalleryInvite.illustration))
         .order_by(GalleryInvite.created_at.desc(), GalleryInvite.id.desc())
         .all()
     )
@@ -106,9 +113,39 @@ def get_session_by_hash(
     )
 
 
+def add_grant(
+    db: Session,
+    session_id: int,
+    illustration_id: int,
+) -> GallerySessionGrant:
+    existing = (
+        db.query(GallerySessionGrant)
+        .filter(
+            GallerySessionGrant.session_id == session_id,
+            GallerySessionGrant.illustration_id == illustration_id,
+        )
+        .first()
+    )
+    if existing is not None:
+        return existing
+
+    grant = GallerySessionGrant(
+        session_id=session_id,
+        illustration_id=illustration_id,
+    )
+    db.add(grant)
+    db.flush()
+    return grant
+
+
 def list_sessions(db: Session) -> list[GallerySession]:
     return (
         db.query(GallerySession)
+        .options(
+            selectinload(GallerySession.grants).selectinload(
+                GallerySessionGrant.illustration
+            )
+        )
         .order_by(GallerySession.created_at.desc(), GallerySession.id.desc())
         .all()
     )

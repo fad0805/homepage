@@ -10,8 +10,15 @@ import "@/public/styles/admin/gallery.scss";
 type InviteStatus = "unused" | "used" | "expired" | "revoked";
 type SessionStatus = "active" | "expired" | "revoked";
 
+interface GalleryIllustration {
+  id: number;
+  title: string;
+}
+
 interface GalleryInvite {
   id: number;
+  illustration_id: number | null;
+  illustration_title: string | null;
   note: string | null;
   created_at: string;
   expires_at: string;
@@ -29,10 +36,13 @@ interface GallerySession {
   ip_address: string | null;
   user_agent: string | null;
   status: SessionStatus;
+  illustrations: GalleryIllustration[];
 }
 
 interface CreatedInvite {
   id: number;
+  illustration_id: number;
+  illustration_title: string;
   code: string;
   note: string | null;
   expires_at: string;
@@ -60,6 +70,10 @@ const EXPIRY_OPTIONS = [
 ];
 
 export default function AdminGalleryPage() {
+  const [illustrations, setIllustrations] = useState<GalleryIllustration[]>(
+    [],
+  );
+  const [illustrationId, setIllustrationId] = useState("");
   const [invites, setInvites] = useState<GalleryInvite[]>([]);
   const [sessions, setSessions] = useState<GallerySession[]>([]);
   const [note, setNote] = useState("");
@@ -73,10 +87,12 @@ export default function AdminGalleryPage() {
   const refresh = useCallback(async () => {
     setLoading(true);
     try {
-      const [inviteData, sessionData] = await Promise.all([
+      const [illustrationData, inviteData, sessionData] = await Promise.all([
+        apiFetch<GalleryIllustration[]>("/api/gallery/illustrations"),
         apiFetch<GalleryInvite[]>("/api/gallery/invites"),
         apiFetch<GallerySession[]>("/api/gallery/sessions"),
       ]);
+      setIllustrations(illustrationData);
       setInvites(inviteData);
       setSessions(sessionData);
       setError(null);
@@ -93,8 +109,16 @@ export default function AdminGalleryPage() {
     void refresh();
   }, [refresh]);
 
+  useEffect(() => {
+    if (!illustrationId && illustrations.length > 0) {
+      setIllustrationId(String(illustrations[0].id));
+    }
+  }, [illustrations, illustrationId]);
+
   async function handleCreate(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (!illustrationId) return;
+
     setBusy(true);
     setError(null);
     setCopied(false);
@@ -103,6 +127,7 @@ export default function AdminGalleryPage() {
       const result = await apiFetch<CreatedInvite>("/api/gallery/invites", {
         method: "POST",
         body: JSON.stringify({
+          illustration_id: Number(illustrationId),
           note: note.trim() || null,
           expires_in_hours: Number(hours),
         }),
@@ -127,9 +152,7 @@ export default function AdminGalleryPage() {
       await apiFetch(`/api/gallery/invites/${id}`, { method: "DELETE" });
       await refresh();
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "폐기하지 못했습니다.",
-      );
+      setError(err instanceof Error ? err.message : "폐기하지 못했습니다.");
     } finally {
       setBusy(false);
     }
@@ -143,9 +166,7 @@ export default function AdminGalleryPage() {
       await apiFetch(`/api/gallery/sessions/${id}`, { method: "DELETE" });
       await refresh();
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "폐기하지 못했습니다.",
-      );
+      setError(err instanceof Error ? err.message : "폐기하지 못했습니다.");
     } finally {
       setBusy(false);
     }
@@ -166,8 +187,9 @@ export default function AdminGalleryPage() {
       <header>
         <h2>삽화 열람 관리</h2>
         <p>
-          일회용 비밀번호를 발급하면 한 브라우저에서 한 번만 사용할 수
-          있습니다. 사용된 브라우저에는 만료일까지 열람 쿠키가 유지됩니다.
+          삽화마다 일회용 비밀번호를 발급합니다. 코드는 한 브라우저에서
+          한 번만 사용할 수 있고, 사용된 브라우저에는 해당 삽화의 열람
+          권한이 만료일까지 유지됩니다.
         </p>
       </header>
 
@@ -175,32 +197,48 @@ export default function AdminGalleryPage() {
 
       <section className="gallery-panel">
         <h3>새 일회용 비밀번호</h3>
-        <form className="gallery-create" onSubmit={handleCreate}>
-          <input
-            type="text"
-            value={note}
-            onChange={(event) => setNote(event.target.value)}
-            placeholder="메모 (예: OO에게 전달)"
-            maxLength={255}
-          />
-          <select
-            value={hours}
-            onChange={(event) => setHours(event.target.value)}
-          >
-            {EXPIRY_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-          <button type="submit" disabled={busy}>
-            {busy ? "발급 중..." : "발급"}
-          </button>
-        </form>
+        {illustrations.length === 0 ? (
+          <p>발급할 삽화가 없습니다.</p>
+        ) : (
+          <form className="gallery-create" onSubmit={handleCreate}>
+            <select
+              value={illustrationId}
+              onChange={(event) => setIllustrationId(event.target.value)}
+              aria-label="삽화 선택"
+            >
+              {illustrations.map((illustration) => (
+                <option key={illustration.id} value={illustration.id}>
+                  {illustration.title}
+                </option>
+              ))}
+            </select>
+            <input
+              type="text"
+              value={note}
+              onChange={(event) => setNote(event.target.value)}
+              placeholder="메모 (예: OO에게 전달)"
+              maxLength={255}
+            />
+            <select
+              value={hours}
+              onChange={(event) => setHours(event.target.value)}
+              aria-label="만료 시간"
+            >
+              {EXPIRY_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+            <button type="submit" disabled={busy}>
+              {busy ? "발급 중..." : "발급"}
+            </button>
+          </form>
+        )}
 
         {created ? (
           <div className="gallery-created">
-            <p>이 비밀번호는 지금만 표시됩니다.</p>
+            <p>{created.illustration_title} — 이 비밀번호는 지금만 표시됩니다.</p>
             <div>
               <code>{created.code}</code>
               <button type="button" onClick={copyCode}>
@@ -224,6 +262,7 @@ export default function AdminGalleryPage() {
               <thead>
                 <tr>
                   <th>상태</th>
+                  <th>삽화</th>
                   <th>메모</th>
                   <th>발급</th>
                   <th>만료</th>
@@ -235,10 +274,13 @@ export default function AdminGalleryPage() {
                 {invites.map((invite) => (
                   <tr key={invite.id}>
                     <td>
-                      <span className={`gallery-status gallery-status--${invite.status}`}>
+                      <span
+                        className={`gallery-status gallery-status--${invite.status}`}
+                      >
                         {INVITE_LABEL[invite.status]}
                       </span>
                     </td>
+                    <td>{invite.illustration_title || "-"}</td>
                     <td>{invite.note || "-"}</td>
                     <td>{formatDateTime(invite.created_at)}</td>
                     <td>{formatDateTime(invite.expires_at)}</td>
@@ -274,6 +316,7 @@ export default function AdminGalleryPage() {
               <thead>
                 <tr>
                   <th>상태</th>
+                  <th>열람 범위</th>
                   <th>열람 시작</th>
                   <th>만료</th>
                   <th>마지막 접속</th>
@@ -286,9 +329,18 @@ export default function AdminGalleryPage() {
                 {sessions.map((session) => (
                   <tr key={session.id}>
                     <td>
-                      <span className={`gallery-status gallery-status--${session.status}`}>
+                      <span
+                        className={`gallery-status gallery-status--${session.status}`}
+                      >
                         {SESSION_LABEL[session.status]}
                       </span>
+                    </td>
+                    <td className="gallery-wrap-text">
+                      {session.illustrations.length === 0
+                        ? "-"
+                        : session.illustrations
+                            .map((item) => item.title)
+                            .join(", ")}
                     </td>
                     <td>{formatDateTime(session.created_at)}</td>
                     <td>{formatDateTime(session.expires_at)}</td>

@@ -1,13 +1,11 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { redirect } from "next/navigation";
 
 import {
   dateInputValue,
   formatDate,
   todayDateInputValue,
 } from "@/lib/datetime";
-import { isGalleryUnlocked } from "@/lib/gallery-auth";
 import type { IllustrationItem } from "@/lib/illustration-types";
 import { serverApiFetch } from "@/lib/server-api";
 
@@ -159,10 +157,6 @@ export default async function IllustrationsPage({
     to?: string | string[];
   }>;
 }) {
-  if (!(await isGalleryUnlocked())) {
-    redirect("/gallery/unlock?next=%2Fillustrations");
-  }
-
   const params = await searchParams;
   const requestedPage = parsePage(params.page);
   const sort = parseSort(params.sort);

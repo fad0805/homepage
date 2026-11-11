@@ -3,7 +3,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { formatDate, formatDateTime } from "@/lib/datetime";
-import { isGalleryUnlocked } from "@/lib/gallery-auth";
+import { isIllustrationUnlocked } from "@/lib/gallery-auth";
 import type { IllustrationDetailItem } from "@/lib/illustration-types";
 import { ServerApiError, serverApiFetch } from "@/lib/server-api";
 
@@ -34,16 +34,15 @@ export default async function IllustrationDetailPage({
   params: Promise<{ illustrationId: string }>;
 }) {
   const { illustrationId } = await params;
+  const id = parseId(illustrationId);
 
-  if (!(await isGalleryUnlocked())) {
+  if (id !== null && !(await isIllustrationUnlocked(id))) {
     redirect(
       `/gallery/unlock?next=${encodeURIComponent(
         `/illustrations/${illustrationId}`,
       )}`,
     );
   }
-
-  const id = parseId(illustrationId);
 
   let illustration: IllustrationDetailItem | null = null;
   let errorMessage = "삽화를 찾을 수 없습니다.";

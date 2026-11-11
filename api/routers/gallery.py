@@ -20,8 +20,10 @@ from core.security import (
 )
 from crud import gallery as gallery_crud
 from db.session import get_db
+from models.illustrations import Illustration
 from routers.utils import get_client_ip, require_auth
 from schemas.gallery import (
+    GalleryIllustrationRead,
     GalleryInviteCreate,
     GalleryInviteCreated,
     GalleryInviteRead,
@@ -88,7 +90,7 @@ def unlock_gallery(
     response: Response,
     db: Session = Depends(get_db),
 ):
-    """Consume a one-time code and issue a browser access cookie."""
+    """Consume a one-time code and grant access to its illustration."""
     _rate_limit(request)
 
     normalized = normalize_gallery_code(payload.code)
@@ -105,6 +107,7 @@ def unlock_gallery(
     )
     if (
         invite is None
+        or invite.illustration_id is None
         or invite.used_at is not None
         or invite.revoked_at is not None
         or invite.expires_at <= now
@@ -127,20 +130,46 @@ def unlock_gallery(
             detail="비밀번호가 올바르지 않거나 만료되었습니다.",
         )
 
-    token = secrets.token_urlsafe(32)
-    expires_at = now + timedelta(days=GALLERY_SESSION_DAYS)
-    user_agent = (request.headers.get("user-agent") or "")[:255] or None
-    gallery_crud.create_session(
+    token = request.cookies.get(GALLERY_COOKIE_NAME)
+    session = None
+    if token:
+        session = gallery_crud.get_session_by_hash(
+            db,
+            hash_gallery_token(token),
+        )
+        if session is not None and (
+            session.revoked_at is not None
+            or session.expires_at <= now
+        ):
+            session = None
+
+    new_session = session is None
+    if new_session:
+        token = secrets.token_urlsafe(32)
+        expires_at = now + timedelta(days=GALLERY_SESSION_DAYS)
+        session = gallery_crud.create_session(
+            db,
+            hash_gallery_token(token),
+            expires_at,
+            get_client_ip(request),
+            (request.headers.get("user-agent") or "")[:255] or None,
+        )
+
+    gallery_crud.add_grant(
         db,
-        hash_gallery_token(token),
-        expires_at,
-        get_client_ip(request),
-        user_agent,
+        session.id,
+        invite.illustration_id,
     )
     db.commit()
 
-    _set_cookie(response, token)
-    return {"success": True, "expires_at": expires_at}
+    if new_session:
+        _set_cookie(response, token)
+
+    return {
+        "success": True,
+        "illustration_id": invite.illustration_id,
+        "expires_at": session.expires_at,
+    }
 
 
 @router.get("/status")
@@ -149,10 +178,10 @@ def gallery_status(
     response: Response,
     db: Session = Depends(get_db),
 ):
-    """Tell the web app whether this browser still has access."""
+    """Return the illustrations this browser is allowed to open."""
     token = request.cookies.get(GALLERY_COOKIE_NAME)
     if not token:
-        return {"unlocked": False}
+        return {"unlocked": False, "illustration_ids": []}
 
     now = datetime.utcnow()
     session = gallery_crud.get_session_by_hash(
@@ -165,7 +194,7 @@ def gallery_status(
         or session.expires_at <= now
     ):
         response.delete_cookie(GALLERY_COOKIE_NAME, path="/")
-        return {"unlocked": False}
+        return {"unlocked": False, "illustration_ids": []}
 
     # Avoid a write on every page view.
     if (
@@ -175,7 +204,30 @@ def gallery_status(
         session.last_seen_at = now
         db.commit()
 
-    return {"unlocked": True, "expires_at": session.expires_at}
+    return {
+        "unlocked": True,
+        "illustration_ids": [
+            grant.illustration_id for grant in session.grants
+        ],
+        "expires_at": session.expires_at,
+    }
+
+
+@router.get(
+    "/illustrations",
+    response_model=list[GalleryIllustrationRead],
+)
+def read_gallery_illustrations(
+    db: Session = Depends(get_db),
+    _=Depends(require_auth),
+):
+    """Lightweight illustration list for the invite form."""
+    return [
+        {"id": illustration.id, "title": illustration.title}
+        for illustration in db.query(Illustration)
+        .order_by(Illustration.order.asc(), Illustration.id.asc())
+        .all()
+    ]
 
 
 @router.post(
@@ -187,7 +239,14 @@ def create_gallery_invite(
     db: Session = Depends(get_db),
     _=Depends(require_auth),
 ):
-    """Generate a one-time code. The plaintext is returned only once."""
+    """Generate a one-time code for one illustration."""
+    illustration = db.get(Illustration, payload.illustration_id)
+    if illustration is None:
+        raise HTTPException(
+            status_code=404,
+            detail="삽화를 찾을 수 없습니다.",
+        )
+
     code = generate_gallery_code()
     hours = payload.expires_in_hours or GALLERY_INVITE_HOURS
     note = (payload.note or "").strip() or None
@@ -196,6 +255,7 @@ def create_gallery_invite(
     invite = gallery_crud.create_invite(
         db,
         hash_gallery_code(code),
+        illustration.id,
         note,
         expires_at,
     )
@@ -203,6 +263,8 @@ def create_gallery_invite(
 
     return {
         "id": invite.id,
+        "illustration_id": illustration.id,
+        "illustration_title": illustration.title,
         "code": code,
         "note": invite.note,
         "expires_at": invite.expires_at,
@@ -221,6 +283,12 @@ def read_gallery_invites(
     return [
         {
             "id": invite.id,
+            "illustration_id": invite.illustration_id,
+            "illustration_title": (
+                invite.illustration.title
+                if invite.illustration is not None
+                else None
+            ),
             "note": invite.note,
             "created_at": invite.created_at,
             "expires_at": invite.expires_at,
@@ -271,6 +339,17 @@ def read_gallery_sessions(
             "ip_address": session.ip_address,
             "user_agent": session.user_agent,
             "status": _session_status(session, now),
+            "illustrations": [
+                {
+                    "id": grant.illustration_id,
+                    "title": (
+                        grant.illustration.title
+                        if grant.illustration is not None
+                        else ""
+                    ),
+                }
+                for grant in session.grants
+            ],
         }
         for session in gallery_crud.list_sessions(db)
     ]
@@ -282,7 +361,7 @@ def revoke_gallery_session(
     db: Session = Depends(get_db),
     _=Depends(require_auth),
 ):
-    """Force one unlocked browser to sign in again."""
+    """Force one unlocked browser to request a new code."""
     if not gallery_crud.revoke_session(
         db,
         session_id,

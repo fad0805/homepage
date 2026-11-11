@@ -22,21 +22,27 @@ export function UnlockForm({ next }: { next: string }) {
         body: JSON.stringify({ code }),
       });
 
+      const data = (await response.json()) as {
+        detail?: unknown;
+        illustration_id?: unknown;
+      };
+
       if (!response.ok) {
-        let detail = "비밀번호가 올바르지 않거나 만료되었습니다.";
-        try {
-          const data = (await response.json()) as { detail?: unknown };
-          if (typeof data.detail === "string") {
-            detail = data.detail;
-          }
-        } catch {
-          // Ignore malformed error bodies.
-        }
-        setError(detail);
+        setError(
+          typeof data.detail === "string"
+            ? data.detail
+            : "비밀번호가 올바르지 않거나 만료되었습니다.",
+        );
         return;
       }
 
-      router.replace(next);
+      // The code is tied to one illustration; go there even if the visitor
+      // arrived from a different detail page.
+      const target =
+        typeof data.illustration_id === "number"
+          ? `/illustrations/${data.illustration_id}`
+          : next;
+      router.replace(target);
       router.refresh();
     } catch {
       setError("요청에 실패했습니다. 잠시 후 다시 시도해주세요.");
@@ -49,7 +55,7 @@ export function UnlockForm({ next }: { next: string }) {
     <form onSubmit={handleSubmit}>
       <h2>삽화 열람</h2>
       <p className="gallery-help">
-        관리자에게 받은 일회용 비밀번호를 입력해주세요.
+        이 삽화의 일회용 비밀번호를 입력해주세요.
       </p>
       <div className="inputs">
         <input

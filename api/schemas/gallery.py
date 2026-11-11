@@ -3,17 +3,25 @@ from datetime import datetime
 from pydantic import BaseModel, Field
 
 
+class GalleryIllustrationRead(BaseModel):
+    id: int
+    title: str
+
+
 class GalleryUnlockRequest(BaseModel):
     code: str = Field(min_length=1, max_length=64)
 
 
 class GalleryInviteCreate(BaseModel):
+    illustration_id: int
     note: str | None = Field(default=None, max_length=255)
     expires_in_hours: int | None = Field(default=None, ge=1, le=720)
 
 
 class GalleryInviteCreated(BaseModel):
     id: int
+    illustration_id: int
+    illustration_title: str
     code: str
     note: str | None
     expires_at: datetime
@@ -21,6 +29,8 @@ class GalleryInviteCreated(BaseModel):
 
 class GalleryInviteRead(BaseModel):
     id: int
+    illustration_id: int | None
+    illustration_title: str | None
     note: str | None
     created_at: datetime
     expires_at: datetime
@@ -38,3 +48,4 @@ class GallerySessionRead(BaseModel):
     ip_address: str | None
     user_agent: str | None
     status: str
+    illustrations: list[GalleryIllustrationRead]
