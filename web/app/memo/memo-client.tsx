@@ -429,15 +429,8 @@ export default function MemoClient({ username }: { username: string }) {
                                   : "삭제"}
                               </button>
                             </div>
-                            <span
-                              className="memo-item-time"
-                              title={`작성 ${formatDateTime(memo.created_at)}${
-                                memo.updated_at !== memo.created_at
-                                  ? ` · 수정 ${formatDateTime(memo.updated_at)}`
-                                  : ""
-                              }`}
-                            >
-                              {formatDateTime(memo.updated_at)}
+                            <span className="memo-item-time">
+                              {formatDateTime(memo.created_at)}
                             </span>
                           </div>
                         </div>

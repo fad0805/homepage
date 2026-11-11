@@ -2,6 +2,7 @@ from datetime import datetime, timedelta, timezone
 
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
+from sqlalchemy.orm.attributes import flag_modified
 
 from models.memos import Memo
 from schemas.memos import MemoCreate, MemoUpdate
@@ -110,6 +111,7 @@ def update_memo(
 
     _delete_expired(db, owner)
     db_memo = _get_owned_memo(db, owner, memo_id)
+    original_updated_at = db_memo.updated_at
 
     if memo.content is not None:
         content = memo.content.strip()
@@ -124,6 +126,12 @@ def update_memo(
         db_memo.pinned = memo.pinned
         if not memo.pinned:
             db_memo.expires_at = _utcnow() + MEMO_TTL
+
+    if memo.content is None:
+        # Pinning or unpinning is metadata, not a content edit. Keep the
+        # original timestamp so the displayed time does not change.
+        db_memo.updated_at = original_updated_at
+        flag_modified(db_memo, "updated_at")
 
     db.commit()
     db.refresh(db_memo)
