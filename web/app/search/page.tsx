@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 
 import { formatDate, formatDateTime } from "@/lib/datetime";
@@ -8,6 +9,15 @@ import type { Book, Chapter } from "../books/types";
 import "@/public/styles/search.scss";
 
 export const dynamic = "force-dynamic";
+
+export const metadata: Metadata = {
+  robots: {
+    index: false,
+    follow: false,
+    noarchive: true,
+    noimageindex: true,
+  },
+};
 
 const MAX_QUERY_LENGTH = 100;
 

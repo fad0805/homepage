@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 
 import { formatDate, formatDateTime } from "@/lib/datetime";
@@ -9,6 +10,16 @@ import { IllustrationDetailGallery } from "./detail-gallery";
 import "@/public/styles/illustrations.scss";
 
 export const dynamic = "force-dynamic";
+
+export const metadata: Metadata = {
+  robots: {
+    index: false,
+    follow: false,
+    noarchive: true,
+    noimageindex: true,
+    nosnippet: true,
+  },
+};
 
 function parseId(value: string) {
   const parsed = Number(value);

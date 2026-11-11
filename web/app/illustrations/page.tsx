@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 
 import {
@@ -11,6 +12,16 @@ import { serverApiFetch } from "@/lib/server-api";
 import "@/public/styles/illustrations.scss";
 
 export const dynamic = "force-dynamic";
+
+export const metadata: Metadata = {
+  robots: {
+    index: false,
+    follow: false,
+    noarchive: true,
+    noimageindex: true,
+    nosnippet: true,
+  },
+};
 
 const PAGE_SIZE = 12;
 

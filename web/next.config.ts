@@ -18,6 +18,22 @@ const nextConfig: NextConfig = {
       },
     ];
   },
+  async headers() {
+    // Defence in depth alongside robots.txt: crawlers that ignore the
+    // Disallow rules still receive an explicit noindex instruction.
+    const noIndex = [
+      {
+        key: "X-Robots-Tag",
+        value: "noindex, nofollow, noarchive, noimageindex",
+      },
+    ];
+
+    return [
+      { source: "/illustrations", headers: noIndex },
+      { source: "/illustrations/:path*", headers: noIndex },
+      { source: "/search", headers: noIndex },
+    ];
+  },
 };
 
 export default nextConfig;
