@@ -413,7 +413,6 @@ export default function MemoClient({ username }: { username: string }) {
                 className="memo-pinned-section"
                 aria-label="고정된 주석"
               >
-                <h2 className="memo-section-title">고정된 주석</h2>
                 <ul className="memo-list">
                   {pinnedMemos.map(renderMemoItem)}
                 </ul>

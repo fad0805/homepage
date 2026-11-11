@@ -37,17 +37,6 @@
   border-color: rgba(255, 255, 255, 0.14);
 }
 
-.memo-section-title {
-  margin: 0 0 0.15rem 0.15rem;
-  color: color.change($light-text, $alpha: 0.5);
-  font-size: 0.7rem;
-  font-weight: 600;
-}
-
-[data-theme='dark'] .memo-section-title {
-  color: color.change($dark-text, $alpha: 0.5);
-}
-
 .memo-form {
   display: flex;
   flex-direction: column;
