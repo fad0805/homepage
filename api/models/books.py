@@ -71,6 +71,15 @@ class Chapter(Base):
     visible = Column(Boolean, nullable=False, default=True)
     view_count = Column(Integer, nullable=False, default=0, server_default="0")
     published_at = Column(DateTime, nullable=True)
+    mastodon_status_id = Column(String(255), nullable=True)
+    mastodon_posted_at = Column(DateTime, nullable=True)
+    mastodon_pending = Column(
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default="false",
+        index=True,
+    )
     created_at = Column(DateTime, default=func.now())
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
 

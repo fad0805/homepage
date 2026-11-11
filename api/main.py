@@ -1,10 +1,12 @@
+import asyncio
 import logging
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from core.config import ENVIRONMENT
+from core.mastodon import mastodon_publish_loop
 from core.uploads import UPLOAD_DIR, ensure_upload_dir
 from routers import (
     books,
@@ -16,6 +18,7 @@ from routers import (
     links,
     memos,
     profiles,
+    settings,
     users,
     visits,
 )
@@ -31,7 +34,13 @@ async def lifespan(app:FastAPI):
             "on a production server."
         )
     users.create_admin_for_dev()
-    yield
+    mastodon_task = asyncio.create_task(mastodon_publish_loop())
+    try:
+        yield
+    finally:
+        mastodon_task.cancel()
+        with suppress(asyncio.CancelledError):
+            await mastodon_task
 
 app = FastAPI(lifespan=lifespan)
 
@@ -67,6 +76,7 @@ app.include_router(
     prefix="/chapter-drafts",
     tags=["chapter-drafts"],
 )
+app.include_router(settings.router, prefix="/settings", tags=["settings"])
 app.include_router(users.router, prefix="/users", tags=["signin"])
 app.include_router(visits.router, prefix="/visits", tags=["visits"])
 

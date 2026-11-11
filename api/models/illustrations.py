@@ -29,6 +29,8 @@ class Illustration(Base):
     representative_original_name = Column(String(255), nullable=True)
     order = Column(Integer, nullable=False, default=0)
     visible = Column(Boolean, nullable=False, default=True)
+    mastodon_status_id = Column(String(255), nullable=True)
+    mastodon_posted_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=func.now(), nullable=False)
     updated_at = Column(
         DateTime,

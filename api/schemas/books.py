@@ -71,6 +71,8 @@ class ChapterBase(BaseModel):
 class ChapterCreate(ChapterBase):
     """Payload for creating a chapter inside a book."""
 
+    notify_mastodon: bool = True
+
 
 class ChapterUpdate(BaseModel):
     book_id: int | None = None

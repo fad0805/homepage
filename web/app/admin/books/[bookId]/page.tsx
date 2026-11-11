@@ -328,6 +328,7 @@ export default function AdminBookDetail() {
             order: nextOrder,
             visible: chapter.visible,
             published_at: chapter.published_at,
+            notify_mastodon: false,
           }),
         });
         nextOrder += 1;

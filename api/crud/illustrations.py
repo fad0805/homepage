@@ -4,6 +4,7 @@ from fastapi import HTTPException, status
 from sqlalchemy import func
 from sqlalchemy.orm import Session, selectinload
 
+from core.mastodon import maybe_notify_illustration
 from core.uploads import delete_replaced_upload, delete_uploaded_file
 from models.illustrations import Illustration, IllustrationImage
 from schemas.illustrations import (
@@ -198,6 +199,7 @@ def create_illustration_group(
         db.rollback()
         raise
 
+    maybe_notify_illustration(db, group)
     return _serialize_detail(_get_illustration_or_404(db, group.id))
 
 
@@ -256,6 +258,7 @@ def update_illustration(
     payload: IllustrationUpdate,
 ):
     illustration = _get_illustration_or_404(db, illustration_id)
+    was_visible = illustration.visible is not False
     data = payload.model_dump(exclude_unset=True)
     replaced_representative_url: str | None = None
 
@@ -301,6 +304,8 @@ def update_illustration(
 
     db.commit()
     db.refresh(illustration)
+    if not was_visible and illustration.visible is not False:
+        maybe_notify_illustration(db, illustration)
     if replaced_representative_url:
         delete_uploaded_file(replaced_representative_url)
     return _serialize_detail(
@@ -436,15 +441,21 @@ def bulk_update_illustrations(
     if not illustrations:
         return 0
 
+    became_visible: list[Illustration] = []
     for illustration in illustrations:
+        was_visible = illustration.visible is not False
         if "visible" in data and data["visible"] is not None:
             illustration.visible = data["visible"]
         if "taken_at" in data:
             illustration.taken_at = data["taken_at"]
         if "tags" in data and data["tags"] is not None:
             illustration.tags = _clean_tags(data["tags"])
+        if not was_visible and illustration.visible is not False:
+            became_visible.append(illustration)
 
     db.commit()
+    for illustration in became_visible:
+        maybe_notify_illustration(db, illustration)
     return len(illustrations)
 
 

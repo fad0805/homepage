@@ -7,6 +7,7 @@ from models import (
     links,
     memos,
     profiles,
+    settings,
     users,
     visits,
 )

@@ -5,6 +5,7 @@ from fastapi import HTTPException, status
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+from core.mastodon import maybe_notify_chapter
 from models.books import Book, BookCategory, Chapter, ChapterView
 from schemas.books import (
     BookCategoryCreate,
@@ -330,14 +331,31 @@ def _get_book_or_404(db: Session, book_id: int) -> Book:
     return book
 
 
+def _naive_utc(value: datetime | None) -> datetime | None:
+    if value is None or value.tzinfo is None:
+        return value
+    return value.astimezone(timezone.utc).replace(tzinfo=None)
+
+
+def _chapter_is_public(chapter: Chapter) -> bool:
+    if chapter.visible is False:
+        return False
+    published_at = _naive_utc(chapter.published_at)
+    if published_at is None:
+        return True
+    return published_at <= datetime.utcnow()
+
+
 def create_chapter(db: Session, payload: ChapterCreate):
     _get_book_or_404(db, payload.book_id)
-    data = payload.model_dump()
+    data = payload.model_dump(exclude={"notify_mastodon"})
     data["tags"] = _clean_tags(data.get("tags"))
     chapter = Chapter(**data)
     db.add(chapter)
     db.commit()
     db.refresh(chapter)
+    if payload.notify_mastodon:
+        maybe_notify_chapter(db, chapter)
     return _serialize_chapter(chapter)
 
 
@@ -367,6 +385,7 @@ def update_chapter(db: Session, chapter_id: int, payload: ChapterUpdate):
     if "tags" in data:
         data["tags"] = _clean_tags(data["tags"])
 
+    was_public = _chapter_is_public(chapter)
     previous_book_id = chapter.book_id
     for key, value in data.items():
         setattr(chapter, key, value)
@@ -381,6 +400,13 @@ def update_chapter(db: Session, chapter_id: int, payload: ChapterUpdate):
 
     db.commit()
     db.refresh(chapter)
+
+    if not was_public:
+        maybe_notify_chapter(db, chapter)
+    elif not _chapter_is_public(chapter) and chapter.mastodon_pending:
+        chapter.mastodon_pending = False
+        db.commit()
+
     return _serialize_chapter(chapter)
 
 
