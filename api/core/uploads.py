@@ -1,6 +1,7 @@
 import logging
 import os
 import uuid
+from io import BytesIO
 from pathlib import Path
 from typing import Any
 from urllib.parse import unquote, urlparse
@@ -9,6 +10,7 @@ import boto3
 from botocore.config import Config as BotoConfig
 from botocore.exceptions import BotoCoreError, ClientError
 from fastapi import HTTPException, UploadFile, status
+from PIL import Image, ImageOps
 
 from core.config import (
     ENVIRONMENT,
@@ -37,6 +39,15 @@ ALLOWED_CONTENT_TYPES = {
     "image/jpg": ".jpg",
     "image/webp": ".webp",
     "image/gif": ".gif",
+}
+
+# The client-provided content type is only used as a cheap pre-check. The
+# extension and MIME type that are actually stored come from the decoded image.
+_IMAGE_FORMATS = {
+    "JPEG": ("image/jpeg", ".jpg"),
+    "PNG": ("image/png", ".png"),
+    "WEBP": ("image/webp", ".webp"),
+    "GIF": ("image/gif", ".gif"),
 }
 
 _s3_client: Any = None
@@ -248,6 +259,69 @@ async def _read_upload(file: UploadFile) -> bytes:
     return content
 
 
+def _sanitize_image(content: bytes) -> tuple[bytes, str, str]:
+    """Re-encode an image so it no longer carries private metadata.
+
+    Phone and camera uploads embed GPS coordinates, device identifiers and
+    capture timestamps in EXIF. Those must not be published, so the image is
+    decoded and written again without its metadata. Orientation is applied
+    first; otherwise stripping EXIF would leave rotated photos sideways.
+
+    The returned MIME type and extension are derived from the decoded format
+    instead of trusting the client, which also rejects files that merely claim
+    to be images.
+    """
+    try:
+        with Image.open(BytesIO(content)) as image:
+            image.load()
+            image_format = image.format
+            if image_format not in _IMAGE_FORMATS:
+                raise ValueError(f"Unsupported image format: {image_format}")
+
+            content_type, extension = _IMAGE_FORMATS[image_format]
+            icc_profile = image.info.get("icc_profile")
+            save_kwargs: dict[str, Any] = {}
+            if icc_profile and image_format in {"JPEG", "PNG", "WEBP"}:
+                # Keep the colour profile: it is not personal data, and dropping
+                # it would shift colours on wide-gamut photos.
+                save_kwargs["icc_profile"] = icc_profile
+
+            if getattr(image, "is_animated", False):
+                # Animated files rarely carry useful EXIF; re-encode them as-is
+                # so frame count, loop and duration survive.
+                output = BytesIO()
+                image.save(
+                    output,
+                    format=image_format,
+                    save_all=True,
+                    **save_kwargs,
+                )
+                return output.getvalue(), content_type, extension
+
+            cleaned = ImageOps.exif_transpose(image)
+
+            if image_format == "JPEG":
+                if cleaned.mode not in ("RGB", "L", "CMYK"):
+                    cleaned = cleaned.convert("RGB")
+                save_kwargs.update(quality=95, optimize=True)
+            elif image_format == "WEBP":
+                save_kwargs.update(quality=95, method=4)
+            elif image_format == "PNG":
+                save_kwargs.update(optimize=True)
+
+            output = BytesIO()
+            cleaned.save(output, format=image_format, **save_kwargs)
+            return output.getvalue(), content_type, extension
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.warning("Rejected an image that could not be decoded: %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+            detail="이미지 파일을 읽을 수 없습니다.",
+        ) from exc
+
+
 async def save_banner(file: UploadFile, folder: str = "banners") -> str:
     """Upload a banner or thumbnail image and return its public URL."""
     if file.content_type not in ALLOWED_CONTENT_TYPES:
@@ -256,15 +330,12 @@ async def save_banner(file: UploadFile, folder: str = "banners") -> str:
             detail="PNG, JPEG, WEBP, GIF 이미지만 업로드할 수 있습니다.",
         )
 
-    content_type = (
-        "image/jpeg" if file.content_type == "image/jpg" else file.content_type
-    )
-    extension = ALLOWED_CONTENT_TYPES[file.content_type]
-
     try:
         content = await _read_upload(file)
     finally:
         await file.close()
+
+    content, content_type, extension = _sanitize_image(content)
 
     if _s3_is_configured():
         return _save_to_s3(content, content_type, extension, folder)
