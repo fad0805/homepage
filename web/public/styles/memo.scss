@@ -54,8 +54,8 @@
 .memo-edit-form textarea {
   flex: 1;
   min-width: 0;
-  height: 3rem;
-  min-height: 3rem;
+  height: 2.5rem;
+  min-height: 2.5rem;
   max-height: 9rem;
   padding: 0.8rem 1rem;
   border: 1px solid color.change($maintheme, $alpha: 0.5);
@@ -63,7 +63,7 @@
   background: var(--memo-input-bg);
   color: var(--input-text);
   font-family: inherit;
-  font-size: 1rem;
+  font-size: 0.9rem;
   line-height: 1.4;
   overflow-y: hidden;
   resize: none;
@@ -149,7 +149,7 @@
   margin: 0;
   padding: 0.4rem 0;
   color: var(--input-text);
-  font-size: 0.95rem;
+  font-size: 0.9rem;
   line-height: 1.5;
   overflow-wrap: anywhere;
   white-space: pre-wrap;
