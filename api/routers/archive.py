@@ -274,7 +274,6 @@ def _illustration_data(
                 {
                     "id": image.id,
                     "url": image.url,
-                    "original_name": image.original_name,
                     "order": image.order,
                     "storage": _storage_kind(image.url),
                     "archive_path": plan.register(
@@ -313,9 +312,6 @@ def _illustration_data(
                 "taken_at": _iso(illustration.taken_at),
                 "representative_image_id": illustration.representative_image_id,
                 "representative_url": illustration.representative_url,
-                "representative_original_name": (
-                    illustration.representative_original_name
-                ),
                 "representative_archive_path": representative_path,
                 "order": illustration.order,
                 "visible": illustration.visible,
@@ -763,6 +759,8 @@ def _readme(generated_at: datetime, section: str) -> str:
 ## 규칙
 
 - 모든 `id`는 이 아카이브 안에서 원본 DB의 ID를 유지합니다.
+- 이미지 파일명과 원본 파일명은 노출하지 않습니다. ZIP 안의 이미지
+  경로는 URL 해시로 저장됩니다.
 - 이미지의 원본 URL은 `source_url`(또는 각 레코드의 `url`)에, ZIP 안의
   파일 경로는 `archive_path`에 기록됩니다.
 - S3/로컬 저장소에서 찾지 못한 이미지는 `manifest.json`의

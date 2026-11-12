@@ -47,7 +47,6 @@ def _serialize_image(image: IllustrationImage) -> dict:
     return {
         "id": image.id,
         "url": image.url,
-        "original_name": image.original_name,
         "order": image.order,
     }
 
@@ -56,10 +55,6 @@ def _serialize_summary(illustration: Illustration) -> dict:
     representative = _representative_image(illustration)
     representative_url = illustration.representative_url or (
         representative.url if representative else None
-    )
-    representative_original_name = (
-        illustration.representative_original_name
-        or (representative.original_name if representative else None)
     )
     return {
         "id": illustration.id,
@@ -74,7 +69,6 @@ def _serialize_summary(illustration: Illustration) -> dict:
             representative.id if representative else None
         ),
         "representative_url": representative_url,
-        "representative_original_name": representative_original_name,
         "image_count": len(illustration.images or []),
         "order": illustration.order,
         "created_at": illustration.created_at,
@@ -183,16 +177,15 @@ def _get_illustration_or_404(db: Session, illustration_id: int):
 
 
 def _build_images(
-    uploads: list[tuple[str, str | None]],
+    uploads: list[str],
     start_order: int = 0,
 ) -> list[IllustrationImage]:
     return [
         IllustrationImage(
             url=url,
-            original_name=original_name,
             order=start_order + index,
         )
-        for index, (url, original_name) in enumerate(uploads)
+        for index, url in enumerate(uploads)
     ]
 
 
@@ -206,7 +199,7 @@ def create_illustration_group(
     db: Session,
     owner: str,
     title: str,
-    uploads: list[tuple[str, str | None]],
+    uploads: list[str],
     description: str | None = None,
     tags: list[str] | None = None,
     taken_at: date | None = None,
@@ -244,7 +237,7 @@ def create_illustration_group(
 def append_illustration_images(
     db: Session,
     illustration_id: int,
-    uploads: list[tuple[str, str | None]],
+    uploads: list[str],
 ):
     """Add more uploaded images to an existing illustration group."""
     group = _get_illustration_or_404(db, illustration_id)
@@ -269,14 +262,12 @@ def set_illustration_representative(
     db: Session,
     illustration_id: int,
     url: str,
-    original_name: str | None,
 ):
     """Replace an illustration's separately uploaded representative image."""
     illustration = _get_illustration_or_404(db, illustration_id)
     old_url = illustration.representative_url
 
     illustration.representative_url = url
-    illustration.representative_original_name = original_name
 
     try:
         db.commit()
@@ -335,7 +326,6 @@ def update_illustration(
             # Selecting a gallery image clears the separately uploaded cover.
             replaced_representative_url = illustration.representative_url
             illustration.representative_url = None
-            illustration.representative_original_name = None
 
     for key, value in data.items():
         setattr(illustration, key, value)

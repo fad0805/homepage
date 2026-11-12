@@ -1,7 +1,6 @@
 export interface IllustrationImageItem {
   id: number;
   url: string;
-  original_name: string | null;
   order: number;
 }
 
@@ -14,7 +13,6 @@ export interface IllustrationItem {
   protected: boolean;
   representative_image_id: number | null;
   representative_url: string | null;
-  representative_original_name: string | null;
   image_count: number;
   order: number;
   created_at: string;

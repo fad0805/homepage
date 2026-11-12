@@ -127,10 +127,10 @@ export function IllustrationDetailGallery({
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={current.url}
-          alt={current.original_name || "삽화"}
+          alt="삽화"
           role="button"
           tabIndex={0}
-          aria-label={`${current.original_name || "삽화"} 확대 보기`}
+          aria-label="삽화 확대 보기"
           onClick={() => {
             if (swipedRef.current) {
               swipedRef.current = false;
@@ -186,7 +186,7 @@ export function IllustrationDetailGallery({
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={image.url}
-                alt={image.original_name || "삽화"}
+                alt="삽화"
                 loading="lazy"
                 decoding="async"
               />
@@ -199,7 +199,7 @@ export function IllustrationDetailGallery({
         <ImageLightbox
           images={images.map((image) => ({
             src: image.url,
-            alt: image.original_name || "삽화",
+            alt: "삽화",
           }))}
           index={lightboxIndex}
           onIndexChange={(nextIndex) => {

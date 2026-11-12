@@ -513,8 +513,6 @@ export default function AdminIllustrations() {
       image_count: updated.image_count,
       representative_image_id: updated.representative_image_id,
       representative_url: updated.representative_url,
-      representative_original_name:
-        updated.representative_original_name,
       updated_at: updated.updated_at,
     };
     setItems((previous) =>
@@ -1777,7 +1775,7 @@ export default function AdminIllustrations() {
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
                         src={image.url}
-                        alt={image.original_name || editingItem.title}
+                        alt={editingItem.title}
                         loading="lazy"
                         decoding="async"
                       />

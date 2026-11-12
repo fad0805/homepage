@@ -20,7 +20,6 @@ class IllustrationImageRead(BaseModel):
 
     id: int
     url: str
-    original_name: str | None = None
     order: int
 
     class Config:
@@ -38,7 +37,6 @@ class IllustrationListItem(BaseModel):
     protected: bool = False
     representative_image_id: int | None = None
     representative_url: str | None = None
-    representative_original_name: str | None = None
     image_count: int
     order: int
     created_at: datetime

@@ -1,6 +1,5 @@
 import hashlib
 from datetime import date
-from pathlib import Path
 
 from fastapi import (
     APIRouter,
@@ -119,12 +118,11 @@ async def upload_illustrations(
         )
     normalized_description = (description or "").strip() or None
 
-    uploaded: list[tuple[str, str | None]] = []
+    uploaded: list[str] = []
     try:
         for file in files:
-            original_name = Path(file.filename or "").name[:255] or None
             url = await save_banner(file, folder="illustrations")
-            uploaded.append((url, original_name))
+            uploaded.append(url)
 
         if illustration_id is None:
             return create_illustration_group(
@@ -220,14 +218,12 @@ async def put_illustration_representative(
     _=Depends(require_auth),
 ):
     """Upload a separately cropped representative image."""
-    original_name = Path(file.filename or "").name[:255] or None
     url = await save_banner(file, folder="illustrations")
     try:
         return set_illustration_representative(
             db,
             illustration_id,
             url,
-            original_name,
         )
     except Exception:
         delete_uploaded_file(url)
