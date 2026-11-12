@@ -313,11 +313,6 @@ export default async function IllustrationsPage({
                     <p className="illustration-card__title">
                       {item.title}
                     </p>
-                    {item.description ? (
-                      <p className="illustration-card__description">
-                        {item.description}
-                      </p>
-                    ) : null}
                     <p className="illustration-card__meta">
                       촬영 {formatDate(item.taken_at)}
                     </p>

@@ -27,12 +27,11 @@ class IllustrationImageRead(BaseModel):
         from_attributes = True
 
 
-class IllustrationSummary(BaseModel):
-    """List-level illustration data with its representative image."""
+class IllustrationListItem(BaseModel):
+    """Public list-level illustration data without the description."""
 
     id: int
     title: str
-    description: str | None = None
     tags: list[str] = Field(default_factory=list)
     taken_at: date | None = None
     visible: bool
@@ -44,6 +43,12 @@ class IllustrationSummary(BaseModel):
     order: int
     created_at: datetime
     updated_at: datetime
+
+
+class IllustrationSummary(IllustrationListItem):
+    """List-level illustration data that also includes the description."""
+
+    description: str | None = None
 
 
 class IllustrationDetail(IllustrationSummary):

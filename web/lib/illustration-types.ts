@@ -8,7 +8,6 @@ export interface IllustrationImageItem {
 export interface IllustrationItem {
   id: number;
   title: string;
-  description: string | null;
   tags: string[];
   taken_at: string | null;
   visible: boolean;
@@ -23,6 +22,7 @@ export interface IllustrationItem {
 }
 
 export interface IllustrationDetailItem extends IllustrationItem {
+  description: string | null;
   locked?: boolean;
   images: IllustrationImageItem[];
 }

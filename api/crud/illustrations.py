@@ -72,6 +72,13 @@ def _serialize_summary(illustration: Illustration) -> dict:
     }
 
 
+def _serialize_list_item(illustration: Illustration) -> dict:
+    """Serialize a list entry without its (potentially long) description."""
+    data = _serialize_summary(illustration)
+    data.pop("description", None)
+    return data
+
+
 def _serialize_detail(
     illustration: Illustration,
     locked: bool = False,
@@ -105,7 +112,10 @@ def get_visible_illustrations(db: Session):
         )
         .all()
     )
-    return [_serialize_summary(illustration) for illustration in illustrations]
+    return [
+        _serialize_list_item(illustration)
+        for illustration in illustrations
+    ]
 
 
 def get_visible_illustration(

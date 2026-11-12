@@ -35,8 +35,8 @@ from schemas.illustrations import (
     IllustrationBulkUpdate,
     IllustrationDetail,
     IllustrationImageReorderRequest,
+    IllustrationListItem,
     IllustrationReorderRequest,
-    IllustrationSummary,
     IllustrationUpdate,
     today_kst,
 )
@@ -51,10 +51,10 @@ def _parse_tags(value: str | None) -> list[str]:
     return [tag.strip() for tag in (value or "").split(",") if tag.strip()]
 
 
-@router.get("", response_model=list[IllustrationSummary])
+@router.get("", response_model=list[IllustrationListItem])
 @router.get(
     "/",
-    response_model=list[IllustrationSummary],
+    response_model=list[IllustrationListItem],
     include_in_schema=False,
 )
 def read_illustrations(db: Session = Depends(get_db)):

@@ -317,23 +317,6 @@
   white-space: nowrap;
 }
 
-.illustration-card__description {
-  display: -webkit-box;
-  margin: 0;
-  overflow: hidden;
-  color: color.change($light-text, $alpha: 0.68);
-  font-size: 0.74rem;
-  line-height: 1.45;
-  overflow-wrap: anywhere;
-  white-space: normal;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-}
-
-[data-theme='dark'] .illustration-card__description {
-  color: color.change($dark-text, $alpha: 0.68);
-}
-
 .illustration-card__meta {
   margin: 0;
   color: color.change($light-text, $alpha: 0.5);

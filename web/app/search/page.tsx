@@ -137,7 +137,7 @@ export default async function SearchPage({
   const matchedIllustrations = query
     ? illustrations.filter(
         (item) =>
-          matchValues([item.title, item.description], query) ||
+          matchValues([item.title], query) ||
           matchTags(item.tags, query),
       )
     : [];
@@ -291,11 +291,6 @@ export default async function SearchPage({
                       >
                         {item.title}
                       </Link>
-                      {item.description ? (
-                        <p className="search-result__description">
-                          {item.description}
-                        </p>
-                      ) : null}
                       <p className="search-result__meta">
                         촬영 {formatDate(item.taken_at)}
                       </p>
