@@ -396,6 +396,16 @@ export default function AdminLinks() {
   const [isDirty, setIsDirty] = useState(false);
   const [deletedLinkIds, setDeletedLinkIds] = useState<number[]>([]);
   const [deletedCategoryIds, setDeletedCategoryIds] = useState<number[]>([]);
+  const [dirtyLinkIds, setDirtyLinkIds] = useState<Set<number>>(
+    () => new Set(),
+  );
+  const [dirtyCategoryIds, setDirtyCategoryIds] = useState<Set<number>>(
+    () => new Set(),
+  );
+  const [reorderedCategoryIds, setReorderedCategoryIds] = useState<
+    Set<number>
+  >(() => new Set());
+  const [categoriesReordered, setCategoriesReordered] = useState(false);
 
   const noticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const objectUrls = useRef<Set<string>>(new Set());
@@ -435,6 +445,10 @@ export default function AdminLinks() {
       setLinks(linkData);
       setDeletedLinkIds([]);
       setDeletedCategoryIds([]);
+      setDirtyLinkIds(new Set());
+      setDirtyCategoryIds(new Set());
+      setReorderedCategoryIds(new Set());
+      setCategoriesReordered(false);
       setIsDirty(false);
     } catch (error) {
       notify(
@@ -531,6 +545,7 @@ export default function AdminLinks() {
             order: index,
           })),
         );
+        setCategoriesReordered(true);
         setIsDirty(true);
         return;
       }
@@ -556,6 +571,11 @@ export default function AdminLinks() {
       );
       const others = links.filter((link) => link.category.id !== categoryId);
       setLinks([...others, ...reordered]);
+      setReorderedCategoryIds((prev) => {
+        const next = new Set(prev);
+        next.add(categoryId);
+        return next;
+      });
       setIsDirty(true);
     },
     [categories, links, linksByCategory],
@@ -579,6 +599,8 @@ export default function AdminLinks() {
     setSaving(true);
     try {
       const categoryIdMap = new Map<number, number>();
+      const deletedCategorySet = new Set(deletedCategoryIds);
+      const deletedLinkSet = new Set(deletedLinkIds);
 
       for (const category of categories.filter((item) => item.id < 0)) {
         const created = await apiFetch<Category>("/api/links/categories", {
@@ -590,7 +612,13 @@ export default function AdminLinks() {
 
       const realCategoryId = (id: number) => categoryIdMap.get(id) ?? id;
 
-      for (const category of categories.filter((item) => item.id > 0)) {
+      const dirtyExistingCategories = categories.filter(
+        (item) =>
+          item.id > 0 &&
+          dirtyCategoryIds.has(item.id) &&
+          !deletedCategorySet.has(item.id),
+      );
+      for (const category of dirtyExistingCategories) {
         await apiFetch(`/api/links/categories/${category.id}`, {
           method: "PUT",
           body: JSON.stringify({ name: category.name }),
@@ -620,7 +648,13 @@ export default function AdminLinks() {
         linkIdMap.set(link.id, created.id);
       }
 
-      for (const link of links.filter((item) => item.id > 0)) {
+      const dirtyExistingLinks = links.filter(
+        (item) =>
+          item.id > 0 &&
+          dirtyLinkIds.has(item.id) &&
+          !deletedLinkSet.has(item.id),
+      );
+      for (const link of dirtyExistingLinks) {
         const bannerUrl = link.file
           ? await uploadBanner(link.file)
           : link.banner_url;
@@ -636,34 +670,54 @@ export default function AdminLinks() {
         });
       }
 
-      await apiFetch("/api/links/categories/reorder", {
-        method: "PUT",
-        body: JSON.stringify({
-          items: categories.map((category, index) => ({
-            id: realCategoryId(category.id),
-            order: index,
-          })),
-        }),
-      });
+      if (categoriesReordered) {
+        await apiFetch("/api/links/categories/reorder", {
+          method: "PUT",
+          body: JSON.stringify({
+            items: categories.map((category, index) => ({
+              id: realCategoryId(category.id),
+              order: index,
+            })),
+          }),
+        });
+      }
 
-      const linkItems: { id: number; order: number; category: number }[] = [];
-      categories.forEach((category) => {
+      const linkItems: {
+        id: number;
+        order: number;
+        category: number;
+      }[] = [];
+      reorderedCategoryIds.forEach((categoryId) => {
+        if (deletedCategorySet.has(categoryId)) {
+          return;
+        }
+        const category = categories.find(
+          (item) => item.id === categoryId,
+        );
+        if (!category) {
+          return;
+        }
         const group = sortLinks(
-          links.filter((link) => link.category.id === category.id),
+          links.filter((link) => link.category.id === categoryId),
         );
         group.forEach((link, index) => {
-          linkItems.push({
-            id: linkIdMap.get(link.id) ?? link.id,
-            order: index,
-            category: realCategoryId(category.id),
-          });
+          const id = linkIdMap.get(link.id) ?? link.id;
+          if (id > 0) {
+            linkItems.push({
+              id,
+              order: index,
+              category: realCategoryId(categoryId),
+            });
+          }
         });
       });
 
-      await apiFetch("/api/links/reorder", {
-        method: "PUT",
-        body: JSON.stringify({ items: linkItems }),
-      });
+      if (linkItems.length > 0) {
+        await apiFetch("/api/links/reorder", {
+          method: "PUT",
+          body: JSON.stringify({ items: linkItems }),
+        });
+      }
 
       for (const id of deletedCategoryIds) {
         await apiFetch(`/api/links/categories/${id}`, {
@@ -686,12 +740,16 @@ export default function AdminLinks() {
     }
   }, [
     categories,
+    categoriesReordered,
     deletedCategoryIds,
     deletedLinkIds,
+    dirtyCategoryIds,
+    dirtyLinkIds,
     isDirty,
     links,
     load,
     notify,
+    reorderedCategoryIds,
     saving,
     uploadBanner,
   ]);
@@ -850,6 +908,21 @@ export default function AdminLinks() {
         ? prev.map((link) => (link.id === editingLink.id ? draft : link))
         : [...prev, draft],
     );
+    if (editingLink && editingLink.id > 0) {
+      setDirtyLinkIds((prev) => {
+        const next = new Set(prev);
+        next.add(editingLink.id);
+        return next;
+      });
+    }
+    if (editingLink && editingLink.category.id !== targetCategory.id) {
+      setReorderedCategoryIds((prev) => {
+        const next = new Set(prev);
+        next.add(editingLink.category.id);
+        next.add(targetCategory.id);
+        return next;
+      });
+    }
     setIsDirty(true);
     closeLinkModal();
   };
@@ -862,6 +935,16 @@ export default function AdminLinks() {
     if (link.id > 0) {
       setDeletedLinkIds((prev) => [...prev, link.id]);
     }
+    setDirtyLinkIds((prev) => {
+      const next = new Set(prev);
+      next.delete(link.id);
+      return next;
+    });
+    setReorderedCategoryIds((prev) => {
+      const next = new Set(prev);
+      next.add(link.category.id);
+      return next;
+    });
     setIsDirty(true);
     return true;
   };
@@ -907,6 +990,13 @@ export default function AdminLinks() {
       setCategories((prev) => [...prev, { id, name, order }]);
     }
 
+    if (editingCategory && editingCategory.id > 0) {
+      setDirtyCategoryIds((prev) => {
+        const next = new Set(prev);
+        next.add(editingCategory.id);
+        return next;
+      });
+    }
     setIsDirty(true);
     closeCategoryModal();
   };
@@ -923,6 +1013,16 @@ export default function AdminLinks() {
     );
     if (category.id > 0) {
       setDeletedCategoryIds((prev) => [...prev, category.id]);
+      setDirtyCategoryIds((prev) => {
+        const next = new Set(prev);
+        next.delete(category.id);
+        return next;
+      });
+      setReorderedCategoryIds((prev) => {
+        const next = new Set(prev);
+        next.delete(category.id);
+        return next;
+      });
     }
     setIsDirty(true);
   };
