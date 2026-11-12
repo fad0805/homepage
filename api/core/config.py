@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 
 ENVIRONMENT = os.getenv('ENVIRONMENT')
 SECRET_KEY = os.getenv('SECRET_KEY')
@@ -34,6 +35,16 @@ S3_PUBLIC_BASE_URL = os.getenv('S3_PUBLIC_BASE_URL')
 S3_KEY_PREFIX = os.getenv('S3_KEY_PREFIX') or 'images'
 S3_ADDRESSING_STYLE = os.getenv('S3_ADDRESSING_STYLE')
 S3_ACL = os.getenv('S3_ACL')
+
+# Background archive exports. Generated ZIPs are kept for a few days so the
+# admin can download them after the job finishes.
+ARCHIVE_DIR = Path(
+    os.getenv('ARCHIVE_DIR', '/tmp/missing-island-archives')
+)
+ARCHIVE_RETENTION_HOURS = int(os.getenv('ARCHIVE_RETENTION_HOURS', 72))
+# A small delay between items keeps a large export from monopolizing the
+# server. Set to 0 to disable throttling.
+ARCHIVE_THROTTLE_SECONDS = float(os.getenv('ARCHIVE_THROTTLE_SECONDS', 0.05))
 
 if ENVIRONMENT == 'development':
     import secrets

@@ -8,28 +8,30 @@ makes the archive portable to another database or framework.
 from __future__ import annotations
 
 import hashlib
-import io
 import json
 import logging
 import mimetypes
-import queue
 import re
 import shutil
 import tempfile
-import threading
+import time
 import zipfile
+from dataclasses import dataclass
 from datetime import date, datetime, timezone
 from pathlib import Path
-from typing import Any, Iterator
+from typing import Any, Callable
 from urllib.parse import urlparse
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi.responses import StreamingResponse
+from fastapi.responses import FileResponse
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+from core.archive_jobs import ArchiveJobBusy, ArchiveJobManager
+from core.config import ARCHIVE_DIR, ARCHIVE_THROTTLE_SECONDS
 from core.uploads import get_upload_source, open_uploaded_file
-from db.session import get_db
-from models.books import Book, BookCategory
+from db.session import SessionLocal
+from models.books import Book, BookCategory, Chapter
 from models.characters import Character, CharacterRelationship, Doll, Location
 from models.illustrations import Illustration
 from models.links import Category as LinkCategory
@@ -44,14 +46,21 @@ logger = logging.getLogger("uvicorn.error")
 router = APIRouter()
 
 ARCHIVE_FORMAT = "missing-island-archive"
-SCHEMA_VERSION = "1.0"
+SCHEMA_VERSION = "2.0"
 SITE_NAME = "어디에도 없는 섬"
 SITE_DESCRIPTION = "한 소녀가 있었다."
 
 CHUNK_SIZE = 1024 * 1024
-QUEUE_CHUNK_SIZE = 256 * 1024
 SPOOL_MAX_MEMORY = 16 * 1024 * 1024
 ALLOWED_IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".gif"}
+
+DATA_BOOK_CATEGORIES = "data/book_categories.json"
+DATA_ILLUSTRATIONS = "data/illustrations.json"
+DATA_CHARACTERS = "data/characters.json"
+DATA_LINKS = "data/links.json"
+DATA_PROFILE = "data/profile.json"
+DATA_MEMOS = "data/memos.json"
+CHAPTER_LAYOUT = "per_chapter"
 
 CONTENT_KEYS = [
     "book_categories",
@@ -75,6 +84,21 @@ SECTION_LABELS = {
     "illustrations": "삽화",
     "links": "놀러가기",
     "memos": "주석",
+}
+
+SECTION_CONTENT_KEYS = {
+    "all": list(CONTENT_KEYS),
+    "profile": ["profiles"],
+    "characters": [
+        "characters",
+        "character_relationships",
+        "locations",
+        "dolls",
+    ],
+    "books": ["book_categories", "books"],
+    "illustrations": ["illustrations"],
+    "links": ["links", "link_categories"],
+    "memos": ["memos"],
 }
 
 
@@ -131,7 +155,7 @@ class _ArchivePlan:
         """Return an archive path for a stored image, or ``None``.
 
         External URLs and files we do not own are intentionally not
-        downloaded; their original URL is still kept in ``data.json``.
+        downloaded; their original URL is still kept in the dataset.
         """
         if not url:
             return None
@@ -164,10 +188,17 @@ class _ArchivePlan:
         return path
 
 
-def _book_data(
-    db: Session,
-) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-    book_categories = [
+@dataclass
+class _PreparedArchive:
+    section: str
+    sections: dict[str, dict[str, Any]]
+    book_index: list[dict[str, Any]]
+    plan: _ArchivePlan
+    counts: dict[str, int]
+
+
+def _book_categories_data(db: Session) -> list[dict[str, Any]]:
+    return [
         {
             "id": category.id,
             "name": category.name,
@@ -180,44 +211,64 @@ def _book_data(
         )
     ]
 
-    books = []
-    for book in db.query(Book).order_by(Book.order, Book.id).all():
-        chapters = [
-            {
-                "id": chapter.id,
-                "book_id": chapter.book_id,
-                "title": chapter.title,
-                "subtitle": chapter.subtitle,
-                "body": chapter.body,
-                "tags": chapter.tags or [],
-                "order": chapter.order,
-                "visible": chapter.visible,
-                "protected": chapter.protected,
-                "view_count": chapter.view_count,
-                "published_at": _iso(chapter.published_at),
-                "created_at": _iso(chapter.created_at),
-                "updated_at": _iso(chapter.updated_at),
-            }
-            for chapter in book.chapters
-        ]
 
-        books.append(
-            {
-                "id": book.id,
-                "title": book.title,
-                "description": book.description,
-                "tags": book.tags or [],
-                "category_id": book.category_id,
-                "order": book.order,
-                "visible": book.visible,
-                "protected": book.protected,
-                "created_at": _iso(book.created_at),
-                "updated_at": _iso(book.updated_at),
-                "chapters": chapters,
-            }
-        )
+def _book_index_data(db: Session) -> list[dict[str, Any]]:
+    rows = (
+        db.query(Book.id, func.count(Chapter.id))
+        .outerjoin(Chapter, Chapter.book_id == Book.id)
+        .group_by(Book.id, Book.order)
+        .order_by(Book.order, Book.id)
+        .all()
+    )
+    return [
+        {
+            "id": book_id,
+            "path": f"data/books/{book_id}.json",
+            "chapters": int(chapter_count),
+        }
+        for book_id, chapter_count in rows
+    ]
 
-    return book_categories, books
+
+def _chapter_path(book_id: int, chapter_id: int) -> str:
+    return f"data/chapters/{book_id}/{chapter_id}.json"
+
+
+def _chapter_payload(chapter: Chapter) -> dict[str, Any]:
+    return {
+        "id": chapter.id,
+        "book_id": chapter.book_id,
+        "title": chapter.title,
+        "subtitle": chapter.subtitle,
+        "body": chapter.body,
+        "tags": chapter.tags or [],
+        "order": chapter.order,
+        "visible": chapter.visible,
+        "protected": chapter.protected,
+        "view_count": chapter.view_count,
+        "published_at": _iso(chapter.published_at),
+        "created_at": _iso(chapter.created_at),
+        "updated_at": _iso(chapter.updated_at),
+    }
+
+
+def _book_metadata(
+    book: Book,
+    chapter_count: int,
+) -> dict[str, Any]:
+    return {
+        "id": book.id,
+        "title": book.title,
+        "description": book.description,
+        "tags": book.tags or [],
+        "category_id": book.category_id,
+        "order": book.order,
+        "visible": book.visible,
+        "protected": book.protected,
+        "created_at": _iso(book.created_at),
+        "updated_at": _iso(book.updated_at),
+        "chapter_count": chapter_count,
+    }
 
 
 def _illustration_data(
@@ -457,23 +508,33 @@ def _memo_data(db: Session) -> list[dict[str, Any]]:
 def _build_export(
     db: Session,
     section: str,
-) -> tuple[dict[str, Any], _ArchivePlan]:
+) -> _PreparedArchive:
     plan = _ArchivePlan()
-    data: dict[str, Any] = {
-        "schema_version": SCHEMA_VERSION,
-        "site": {
-            "name": SITE_NAME,
-            "description": SITE_DESCRIPTION,
-        },
-    }
+    sections: dict[str, dict[str, Any]] = {}
+    book_index: list[dict[str, Any]] = []
+    counts: dict[str, int] = {}
 
     if section in ("all", "books"):
-        book_categories, books = _book_data(db)
-        data["book_categories"] = book_categories
-        data["books"] = books
+        book_categories = _book_categories_data(db)
+        sections[DATA_BOOK_CATEGORIES] = {
+            "schema_version": SCHEMA_VERSION,
+            "kind": "book_categories",
+            "book_categories": book_categories,
+        }
+        counts["book_categories"] = len(book_categories)
+        book_index = _book_index_data(db)
 
     if section in ("all", "illustrations"):
-        data["illustrations"] = _illustration_data(db, plan)
+        illustrations = _illustration_data(db, plan)
+        sections[DATA_ILLUSTRATIONS] = {
+            "schema_version": SCHEMA_VERSION,
+            "kind": "illustrations",
+            "illustrations": illustrations,
+        }
+        counts["illustrations"] = len(illustrations)
+        counts["illustration_images"] = sum(
+            len(illustration["images"]) for illustration in illustrations
+        )
 
     if section in ("all", "characters"):
         (
@@ -482,27 +543,59 @@ def _build_export(
             locations,
             dolls,
         ) = _character_data(db, plan)
-        data["characters"] = characters
-        data["character_relationships"] = character_relationships
-        data["locations"] = locations
-        data["dolls"] = dolls
+        sections[DATA_CHARACTERS] = {
+            "schema_version": SCHEMA_VERSION,
+            "kind": "characters",
+            "characters": characters,
+            "character_relationships": character_relationships,
+            "locations": locations,
+            "dolls": dolls,
+        }
+        counts["characters"] = len(characters)
+        counts["character_relationships"] = len(character_relationships)
+        counts["locations"] = len(locations)
+        counts["dolls"] = len(dolls)
 
     if section in ("all", "links"):
         links, link_categories = _link_data(db, plan)
-        data["links"] = links
-        data["link_categories"] = link_categories
+        sections[DATA_LINKS] = {
+            "schema_version": SCHEMA_VERSION,
+            "kind": "links",
+            "links": links,
+            "link_categories": link_categories,
+        }
+        counts["links"] = len(links)
+        counts["link_categories"] = len(link_categories)
 
     if section in ("all", "profile"):
-        data["profiles"] = _profile_data(db)
+        profiles = _profile_data(db)
+        sections[DATA_PROFILE] = {
+            "schema_version": SCHEMA_VERSION,
+            "kind": "profile",
+            "profiles": profiles,
+        }
+        counts["profiles"] = len(profiles)
 
     if section in ("all", "memos"):
-        data["memos"] = _memo_data(db)
+        memos = _memo_data(db)
+        sections[DATA_MEMOS] = {
+            "schema_version": SCHEMA_VERSION,
+            "kind": "memos",
+            "memos": memos,
+        }
+        counts["memos"] = len(memos)
 
-    return data, plan
+    return _PreparedArchive(
+        section=section,
+        sections=sections,
+        book_index=book_index,
+        plan=plan,
+        counts=counts,
+    )
 
 
 def _prune_missing_paths(
-    data: dict[str, Any],
+    sections: dict[str, dict[str, Any]],
     completed_paths: set[str],
 ) -> None:
     """Clear references to images that could not be added to the ZIP."""
@@ -512,14 +605,19 @@ def _prune_missing_paths(
             return path
         return None
 
-    for illustration in data.get("illustrations", []):
+    illustrations = sections.get(DATA_ILLUSTRATIONS, {}).get(
+        "illustrations",
+        [],
+    )
+    for illustration in illustrations:
         for image in illustration["images"]:
             image["archive_path"] = keep(image.get("archive_path"))
         illustration["representative_archive_path"] = keep(
             illustration.get("representative_archive_path")
         )
 
-    for character in data.get("characters", []):
+    characters = sections.get(DATA_CHARACTERS, {}).get("characters", [])
+    for character in characters:
         character["thumbnail_archive_path"] = keep(
             character.get("thumbnail_archive_path")
         )
@@ -527,96 +625,75 @@ def _prune_missing_paths(
             character.get("detail_image_archive_path")
         )
 
-    for link in data.get("links", []):
+    links = sections.get(DATA_LINKS, {}).get("links", [])
+    for link in links:
         link["banner_archive_path"] = keep(link.get("banner_archive_path"))
 
 
-def _counts(
-    data: dict[str, Any],
-    completed_files: list[dict[str, Any]],
-) -> dict[str, int]:
-    counts: dict[str, int] = {}
+def _included_keys(section: str) -> list[str]:
+    return list(SECTION_CONTENT_KEYS[section])
 
-    if "book_categories" in data:
-        counts["book_categories"] = len(data["book_categories"])
-    if "books" in data:
-        counts["books"] = len(data["books"])
+
+def _build_manifest(
+    prepared: _PreparedArchive,
+    json_files: list[dict[str, Any]],
+    image_files: list[dict[str, Any]],
+    generated_at: datetime,
+    skipped_books: list[dict[str, str]],
+) -> dict[str, Any]:
+    included = _included_keys(prepared.section)
+    counts = dict(prepared.counts)
+    book_files = [
+        descriptor for descriptor in json_files if "book" in descriptor
+    ]
+
+    if "books" in included:
+        counts["books"] = len(book_files)
         counts["chapters"] = sum(
-            len(book["chapters"]) for book in data["books"]
+            int(descriptor["book"]["chapters"])
+            for descriptor in book_files
         )
-    if "illustrations" in data:
-        counts["illustrations"] = len(data["illustrations"])
-        counts["illustration_images"] = sum(
-            len(illustration["images"])
-            for illustration in data["illustrations"]
-        )
-    if "characters" in data:
-        counts["characters"] = len(data["characters"])
-    if "character_relationships" in data:
-        counts["character_relationships"] = len(
-            data["character_relationships"]
-        )
-    if "locations" in data:
-        counts["locations"] = len(data["locations"])
-    if "dolls" in data:
-        counts["dolls"] = len(data["dolls"])
-    if "links" in data:
-        counts["links"] = len(data["links"])
-    if "link_categories" in data:
-        counts["link_categories"] = len(data["link_categories"])
-    if "profiles" in data:
-        counts["profiles"] = len(data["profiles"])
-    if "memos" in data:
-        counts["memos"] = len(data["memos"])
 
+    completed_files = json_files + image_files
+    counts["json_files"] = len(json_files)
+    counts["image_files"] = len(image_files)
     counts["files"] = len(completed_files)
     counts["file_bytes"] = sum(
         int(descriptor.get("size") or 0)
         for descriptor in completed_files
     )
-    return counts
-
-
-def _build_manifest(
-    data: dict[str, Any],
-    plan: _ArchivePlan,
-    generated_at: datetime,
-    section: str,
-) -> dict[str, Any]:
-    completed_files = [
-        descriptor
-        for descriptor in plan.files
-        if descriptor.get("sha256") is not None
-    ]
 
     return {
         "format": ARCHIVE_FORMAT,
         "schema_version": SCHEMA_VERSION,
         "generated_at": generated_at.isoformat(),
-        "site": data["site"],
+        "site": {
+            "name": SITE_NAME,
+            "description": SITE_DESCRIPTION,
+        },
         "selection": {
-            "key": section,
-            "label": SECTION_LABELS[section],
-            "included": [
-                key for key in CONTENT_KEYS if key in data
-            ],
+            "key": prepared.section,
+            "label": SECTION_LABELS[prepared.section],
+            "included": included,
             "not_included": [
-                key for key in CONTENT_KEYS if key not in data
+                key for key in CONTENT_KEYS if key not in included
             ],
         },
-        "counts": _counts(data, completed_files),
-        "files": [
+        "layout": {
+            "data": "data/",
+            "images": "images/",
+            "chapters": CHAPTER_LAYOUT,
+        },
+        "counts": counts,
+        "books": [
             {
+                **descriptor["book"],
                 "path": descriptor["path"],
-                "source_url": descriptor["url"],
-                "storage": descriptor["storage"],
-                "content_type": descriptor.get("content_type"),
-                "size": descriptor.get("size"),
-                "sha256": descriptor.get("sha256"),
             }
-            for descriptor in completed_files
+            for descriptor in book_files
         ],
-        "skipped_files": plan.skipped,
+        "files": completed_files,
+        "skipped_files": list(prepared.plan.skipped) + skipped_books,
         "excluded": [
             "users",
             "user_sessions",
@@ -634,12 +711,47 @@ def _build_manifest(
 
 def _readme(generated_at: datetime, section: str) -> str:
     label = SECTION_LABELS[section]
-    includes_images = section in (
-        "all",
-        "illustrations",
-        "characters",
-        "links",
-    )
+    included = _included_keys(section)
+    includes_images = any(
+        key in included for key in ("illustrations", "characters", "links")
+    ) or section == "all"
+
+    components = [
+        "- `manifest.json` — 선택 범위, 책 목록, 파일 목록(SHA-256) 인덱스",
+    ]
+    if "book_categories" in included:
+        components.append(
+            "- `data/book_categories.json` — 책 카테고리"
+        )
+    if "books" in included:
+        components.append(
+            "- `data/books/{book_id}.json` — 책 메타데이터와 챕터 인덱스"
+        )
+        components.append(
+            "- `data/chapters/{book_id}/{chapter_id}.json` — 챕터 하나"
+        )
+    if "illustrations" in included:
+        components.append(
+            "- `data/illustrations.json` — 삽화와 이미지 연결 정보"
+        )
+    if "characters" in included:
+        components.append(
+            "- `data/characters.json` — 등장인물·장소·인형·관계"
+        )
+    if "links" in included:
+        components.append(
+            "- `data/links.json` — 링크와 링크 카테고리"
+        )
+    if "profiles" in included:
+        components.append("- `data/profile.json` — 프로필")
+    if "memos" in included:
+        components.append("- `data/memos.json` — 주석")
+    if includes_images:
+        components.append(
+            "- `images/` — 원본 이미지. 각 JSON의 `archive_path`와 "
+            "대응합니다. 이미지가 없으면 폴더가 없을 수 있습니다."
+        )
+
     partial_note = (
         ""
         if section == "all"
@@ -648,12 +760,14 @@ def _readme(generated_at: datetime, section: str) -> str:
             "포함되지 않습니다.\n\n"
         )
     )
-    images_line = (
-        "- `images/` — 원본 이미지. `data.json`의 `archive_path`와 "
-        "대응합니다. 이미지가 없는 범위에서는 폴더가 없을 수 있습니다.\n"
-        if includes_images
+    chapter_note = (
+        "\n챕터는 `data/chapters/{book_id}/{chapter_id}.json`에 하나씩 "
+        "저장됩니다. `manifest.json`의 `layout.chapters`가 이 방식을 "
+        "나타냅니다.\n"
+        if "books" in included
         else ""
     )
+    components_text = "\n".join(components)
 
     return f"""# 어디에도 없는 섬 · 아카이브 v{SCHEMA_VERSION} · {label}
 
@@ -663,9 +777,8 @@ def _readme(generated_at: datetime, section: str) -> str:
 
 {partial_note}## 구성
 
-- `manifest.json` — 규격 버전, 선택 범위, 생성 시각, 파일 목록(SHA-256)
-- `data.json` — 선택한 범위의 기록
-{images_line}
+{components_text}
+{chapter_note}
 ## 규칙
 
 - 모든 `id`는 이 아카이브 안에서 원본 DB의 ID를 유지합니다.
@@ -681,57 +794,17 @@ def _readme(generated_at: datetime, section: str) -> str:
 
 ## 복원·이관
 
-1. `data.json`의 관계(`book_id`, `character_id`, `archive_path`)를 읽어
-   새 스키마에 매핑합니다.
-2. 이미지가 포함된 경우 `images/`의 파일을 새 저장소에 업로드하고, 그
+1. `manifest.json`의 `selection`과 `files`를 확인합니다.
+2. `data/`의 JSON을 읽어 새 스키마에 매핑합니다. 책은
+   `data/books/{{book_id}}.json`의 인덱스와
+   `data/chapters/{{book_id}}/{{chapter_id}}.json`의 챕터를 읽습니다.
+3. 이미지가 포함된 경우 `images/`의 파일을 새 저장소에 업로드하고, 그
    URL을 새 DB에 기록합니다.
-3. 타임스탬프는 원본 DB에 저장된 값을 ISO 8601 문자열로 기록했습니다.
+4. 타임스탬프는 원본 DB에 저장된 값을 ISO 8601 문자열로 기록했습니다.
 
 이 파일의 구조(`schema_version`)를 유지하면 내부 DB를 바꾸더라도 이후
 아카이브를 같은 방식으로 읽을 수 있습니다.
 """
-
-
-class _ZipQueueWriter(io.RawIOBase):
-    """Write ZIP bytes into a queue so the response can stream them."""
-
-    def __init__(
-        self,
-        target: queue.Queue[Any],
-        chunk_size: int = QUEUE_CHUNK_SIZE,
-    ) -> None:
-        self._target = target
-        self._chunk_size = chunk_size
-        self._buffer = bytearray()
-
-    def writable(self) -> bool:
-        return True
-
-    def seekable(self) -> bool:
-        return False
-
-    def _put(self, item: Any) -> None:
-        self._target.put(item, timeout=30)
-
-    def write(self, data: bytes) -> int:
-        if not data:
-            return 0
-
-        self._buffer.extend(data)
-        while len(self._buffer) >= self._chunk_size:
-            chunk = bytes(self._buffer[: self._chunk_size])
-            del self._buffer[: self._chunk_size]
-            self._put(chunk)
-        return len(data)
-
-    def flush(self) -> None:
-        if self._buffer:
-            self._put(bytes(self._buffer))
-            self._buffer.clear()
-
-    def finish(self) -> None:
-        self.flush()
-        self._put(None)
 
 
 def _spool_image(
@@ -779,108 +852,263 @@ def _write_spooled_image(
     descriptor["sha256"] = digest
 
 
-def _stream_zip(
-    data: dict[str, Any],
-    plan: _ArchivePlan,
-    generated_at: datetime,
-    section: str,
-) -> Iterator[bytes]:
-    events: queue.Queue[Any] = queue.Queue(maxsize=8)
+def _write_json_entry(
+    archive: zipfile.ZipFile,
+    path: str,
+    payload: dict[str, Any],
+) -> dict[str, Any]:
+    """Write one JSON file and return its manifest descriptor."""
+    hasher = hashlib.sha256()
+    size = 0
+    encoder = json.JSONEncoder(ensure_ascii=False, indent=2)
 
-    def put(item: Any) -> None:
-        try:
-            events.put(item, timeout=30)
-        except queue.Full:
-            logger.warning("Archive stream stopped accepting data")
+    with archive.open(path, "w") as target:
+        for chunk in encoder.iterencode(payload):
+            encoded = chunk.encode("utf-8")
+            hasher.update(encoded)
+            size += len(encoded)
+            target.write(encoded)
 
-    def producer() -> None:
-        writer = _ZipQueueWriter(events)
+    return {
+        "path": path,
+        "kind": "data",
+        "size": size,
+        "sha256": hasher.hexdigest(),
+    }
 
-        try:
-            with zipfile.ZipFile(
-                writer,
-                "w",
-                zipfile.ZIP_STORED,
-                allowZip64=True,
-            ) as archive:
-                completed_paths: set[str] = set()
 
-                for descriptor in plan.files:
-                    try:
-                        prepared = _spool_image(descriptor["url"])
-                    except Exception as exc:  # noqa: BLE001
-                        logger.warning(
-                            "Skipping archive image %s: %s",
-                            descriptor["url"],
-                            exc,
-                        )
-                        plan.skipped.append(
-                            {
-                                "url": descriptor["url"],
-                                "intended_path": descriptor["path"],
-                                "reason": (
-                                    f"{type(exc).__name__}: {exc}"
-                                )[:300],
-                            }
-                        )
-                        continue
+def _throttle() -> None:
+    if ARCHIVE_THROTTLE_SECONDS > 0:
+        time.sleep(ARCHIVE_THROTTLE_SECONDS)
 
-                    _write_spooled_image(archive, descriptor, prepared)
-                    completed_paths.add(descriptor["path"])
 
-                _prune_missing_paths(data, completed_paths)
-                manifest = _build_manifest(
-                    data,
-                    plan,
-                    generated_at,
-                    section,
-                )
-
-                archive.writestr(
-                    "data.json",
-                    json.dumps(data, ensure_ascii=False, indent=2),
-                    compress_type=zipfile.ZIP_DEFLATED,
-                )
-                archive.writestr(
-                    "manifest.json",
-                    json.dumps(manifest, ensure_ascii=False, indent=2),
-                    compress_type=zipfile.ZIP_DEFLATED,
-                )
-                archive.writestr(
-                    "README.md",
-                    _readme(generated_at, section),
-                    compress_type=zipfile.ZIP_DEFLATED,
-                )
-
-            writer.finish()
-        except BaseException as exc:  # noqa: BLE001
-            logger.exception("Archive export failed")
-            put(exc)
-            put(None)
-
-    thread = threading.Thread(
-        target=producer,
-        name="archive-export",
-        daemon=True,
+def _write_archive(
+    archive: zipfile.ZipFile,
+    prepared: _PreparedArchive,
+    book_db: Session,
+    progress: Callable[[str, int, int], None],
+) -> None:
+    total = (
+        len(prepared.plan.files)
+        + len(prepared.sections)
+        + len(prepared.book_index)
+        + sum(
+            int(item.get("chapters") or 0)
+            for item in prepared.book_index
+        )
+        + 1
     )
-    thread.start()
+    processed = 0
 
-    while True:
-        item = events.get()
-        if item is None:
-            break
-        if isinstance(item, BaseException):
-            raise item
-        yield item
+    progress("images", processed, total)
+    completed_paths: set[str] = set()
+    image_files: list[dict[str, Any]] = []
+
+    for descriptor in prepared.plan.files:
+        try:
+            spooled = _spool_image(descriptor["url"])
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(
+                "Skipping archive image %s: %s",
+                descriptor["url"],
+                exc,
+            )
+            prepared.plan.skipped.append(
+                {
+                    "url": descriptor["url"],
+                    "intended_path": descriptor["path"],
+                    "reason": (
+                        f"{type(exc).__name__}: {exc}"
+                    )[:300],
+                }
+            )
+        else:
+            _write_spooled_image(archive, descriptor, spooled)
+            completed_paths.add(descriptor["path"])
+            image_files.append(
+                {
+                    "path": descriptor["path"],
+                    "kind": "image",
+                    "source_url": descriptor["url"],
+                    "storage": descriptor["storage"],
+                    "content_type": descriptor.get("content_type"),
+                    "size": descriptor.get("size"),
+                    "sha256": descriptor.get("sha256"),
+                }
+            )
+
+        processed += 1
+        progress("images", processed, total)
+        _throttle()
+
+    _prune_missing_paths(prepared.sections, completed_paths)
+
+    json_files: list[dict[str, Any]] = []
+    for path, payload in prepared.sections.items():
+        json_files.append(_write_json_entry(archive, path, payload))
+        processed += 1
+        progress("data", processed, total)
+        _throttle()
+
+    skipped_books: list[dict[str, str]] = []
+    for item in prepared.book_index:
+        book = (
+            book_db.query(Book)
+            .filter(Book.id == item["id"])
+            .one_or_none()
+        )
+        if book is None:
+            skipped_books.append(
+                {
+                    "path": item["path"],
+                    "reason": "book not found",
+                }
+            )
+            processed += 1 + int(item.get("chapters") or 0)
+            progress("books", processed, total)
+            _throttle()
+            continue
+
+        chapter_rows = (
+            book_db.query(Chapter.id, Chapter.title, Chapter.order)
+            .filter(Chapter.book_id == book.id)
+            .order_by(Chapter.order, Chapter.id)
+            .all()
+        )
+        chapter_index = [
+            {
+                "id": chapter_id,
+                "title": title,
+                "order": order,
+                "path": _chapter_path(book.id, chapter_id),
+            }
+            for chapter_id, title, order in chapter_rows
+        ]
+        descriptor = _write_json_entry(
+            archive,
+            item["path"],
+            {
+                "schema_version": SCHEMA_VERSION,
+                "kind": "book",
+                "book": {
+                    **_book_metadata(book, len(chapter_index)),
+                    "chapters": chapter_index,
+                },
+            },
+        )
+        descriptor["book"] = {
+            "id": book.id,
+            "title": book.title,
+            "order": book.order,
+            "chapters": len(chapter_index),
+        }
+        json_files.append(descriptor)
+
+        processed += 1
+        progress("books", processed, total)
+        _throttle()
+
+        chapter_query = (
+            book_db.query(Chapter)
+            .filter(Chapter.book_id == book.id)
+            .order_by(Chapter.order, Chapter.id)
+            .yield_per(50)
+        )
+        for chapter in chapter_query:
+            chapter_descriptor = _write_json_entry(
+                archive,
+                _chapter_path(book.id, chapter.id),
+                {
+                    "schema_version": SCHEMA_VERSION,
+                    "kind": "chapter",
+                    "chapter": _chapter_payload(chapter),
+                },
+            )
+            chapter_descriptor["chapter"] = {
+                "id": chapter.id,
+                "book_id": book.id,
+                "title": chapter.title,
+                "order": chapter.order,
+            }
+            json_files.append(chapter_descriptor)
+
+            processed += 1
+            progress("chapters", processed, total)
+            _throttle()
+
+    progress("finalizing", processed, total)
+    generated_at = datetime.now(timezone.utc)
+    manifest = _build_manifest(
+        prepared,
+        json_files,
+        image_files,
+        generated_at,
+        skipped_books,
+    )
+
+    archive.writestr(
+        "manifest.json",
+        json.dumps(manifest, ensure_ascii=False, indent=2),
+        compress_type=zipfile.ZIP_DEFLATED,
+    )
+    archive.writestr(
+        "README.md",
+        _readme(generated_at, prepared.section),
+        compress_type=zipfile.ZIP_DEFLATED,
+    )
+    progress("finalizing", total, total)
 
 
-@router.get("/export")
-def export_archive(
+def _build_archive_file(
+    section: str,
+    output_path: Path,
+    progress: Callable[[str, int, int], None],
+) -> None:
+    """Build one archive on disk. Runs in the background job worker."""
+
+    db = SessionLocal()
+    try:
+        prepared = _build_export(db, section)
+    finally:
+        db.close()
+
+    with zipfile.ZipFile(
+        output_path,
+        "w",
+        zipfile.ZIP_STORED,
+        allowZip64=True,
+    ) as archive:
+        book_db = SessionLocal()
+        try:
+            _write_archive(
+                archive,
+                prepared,
+                book_db,
+                progress,
+            )
+        finally:
+            book_db.close()
+
+
+_job_manager: ArchiveJobManager | None = None
+
+
+def _get_job_manager() -> ArchiveJobManager:
+    global _job_manager
+    if _job_manager is None:
+        _job_manager = ArchiveJobManager(
+            ARCHIVE_DIR,
+            _build_archive_file,
+        )
+    return _job_manager
+
+
+@router.post("/jobs")
+def create_archive_job(
     section: str = "all",
-    db: Session = Depends(get_db),
-    _user=Depends(require_auth),
+    user=Depends(require_auth),
 ):
-    """Download a portable JSON + original-images archive (admin only)."""
+    """Queue a background archive export (admin only)."""
 
     if section not in SECTION_LABELS:
         raise HTTPException(
@@ -888,22 +1116,63 @@ def export_archive(
             detail="지원하지 않는 내보내기 범위입니다.",
         )
 
-    data, plan = _build_export(db, section)
-    # Everything is converted to plain data. Return the database connection
-    # to the pool before the potentially long image download starts.
-    db.close()
+    try:
+        return _get_job_manager().create(
+            section,
+            SECTION_LABELS[section],
+            user.username,
+        )
+    except ArchiveJobBusy:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="이미 내보내기가 진행 중입니다.",
+        ) from None
 
-    generated_at = datetime.now(timezone.utc)
-    timestamp = generated_at.strftime("%Y%m%d-%H%M%S")
-    filename = f"missing-island-archive-{section}-{timestamp}.zip"
 
-    return StreamingResponse(
-        _stream_zip(data, plan, generated_at, section),
+@router.get("/jobs")
+def list_archive_jobs(user=Depends(require_auth)):
+    """List recent archive jobs for the signed-in admin."""
+
+    return _get_job_manager().list(user.username)
+
+
+@router.get("/jobs/{job_id}")
+def get_archive_job(
+    job_id: str,
+    user=Depends(require_auth),
+):
+    """Return one archive job's status."""
+
+    job = _get_job_manager().get(job_id, user.username)
+    if job is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="내보내기 작업을 찾을 수 없습니다.",
+        )
+    return job
+
+
+@router.get("/jobs/{job_id}/download")
+def download_archive_job(
+    job_id: str,
+    user=Depends(require_auth),
+):
+    """Download a completed archive ZIP (admin only)."""
+
+    found = _get_job_manager().download(job_id, user.username)
+    if found is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="내보내기 파일을 찾을 수 없습니다.",
+        )
+
+    path, filename = found
+    return FileResponse(
+        path,
         media_type="application/zip",
+        filename=filename,
         headers={
-            "Content-Disposition": f'attachment; filename="{filename}"',
             "Cache-Control": "no-store",
             "Pragma": "no-cache",
-            "X-Accel-Buffering": "no",
         },
     )
