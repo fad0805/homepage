@@ -8,6 +8,7 @@ import type { IllustrationDetailItem } from "@/lib/illustration-types";
 import { ServerApiError, serverApiFetch } from "@/lib/server-api";
 
 import { IllustrationDetailGallery } from "./detail-gallery";
+import { IllustrationViewTracker } from "./view-tracker";
 
 import "@/public/styles/illustrations.scss";
 
@@ -83,6 +84,7 @@ export default async function IllustrationDetailPage({
 
   return (
     <div id="illustrations-page" className="illustration-detail-page">
+      <IllustrationViewTracker illustrationId={illustration.id} />
       <Link className="illustration-detail__back" href="/illustrations">
         ← 삽화 목록
       </Link>

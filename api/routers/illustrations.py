@@ -1,3 +1,4 @@
+import hashlib
 from datetime import date
 from pathlib import Path
 
@@ -26,11 +27,13 @@ from crud.illustrations import (
     get_visible_illustrations,
     reorder_illustration_images,
     reorder_illustrations,
+    register_illustration_view,
     set_illustration_representative,
     update_illustration,
 )
 from db.session import get_db
 from schemas.illustrations import (
+    IllustrationAdminDetail,
     IllustrationBulkDelete,
     IllustrationBulkUpdate,
     IllustrationDetail,
@@ -40,7 +43,12 @@ from schemas.illustrations import (
     IllustrationUpdate,
     today_kst,
 )
-from .utils import get_gallery_grants, get_optional_user, require_auth
+from .utils import (
+    get_client_ip,
+    get_gallery_grants,
+    get_optional_user,
+    require_auth,
+)
 
 router = APIRouter()
 
@@ -62,7 +70,7 @@ def read_illustrations(db: Session = Depends(get_db)):
     return get_visible_illustrations(db)
 
 
-@router.get("/admin", response_model=list[IllustrationDetail])
+@router.get("/admin", response_model=list[IllustrationAdminDetail])
 def read_all_illustrations(
     db: Session = Depends(get_db),
     _=Depends(require_auth),
@@ -224,6 +232,23 @@ async def put_illustration_representative(
     except Exception:
         delete_uploaded_file(url)
         raise
+
+
+@router.post("/{illustration_id}/view")
+def post_illustration_view(
+    illustration_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_optional_user),
+):
+    """Count one anonymous view of a public illustration."""
+    ip_hash = hashlib.sha256(get_client_ip(request).encode()).hexdigest()
+    return register_illustration_view(
+        db,
+        illustration_id,
+        ip_hash,
+        count=current_user is None,
+    )
 
 
 @router.get("/{illustration_id}", response_model=IllustrationDetail)

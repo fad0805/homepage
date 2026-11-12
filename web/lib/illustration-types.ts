@@ -24,5 +24,6 @@ export interface IllustrationItem {
 export interface IllustrationDetailItem extends IllustrationItem {
   description: string | null;
   locked?: boolean;
+  view_count?: number;
   images: IllustrationImageItem[];
 }

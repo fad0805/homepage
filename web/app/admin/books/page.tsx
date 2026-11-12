@@ -58,6 +58,7 @@ interface ChapterItem {
   id: number;
   book_id: number;
   updated_at: string | null;
+  view_count: number;
 }
 
 type Notice = { type: "success" | "error"; text: string };
@@ -87,10 +88,12 @@ function sortBooks(books: Book[]) {
 function SortableBookRow({
   book,
   chapterCount,
+  viewCount,
   latestChapterUpdated,
 }: {
   book: Book;
   chapterCount: number;
+  viewCount: number;
   latestChapterUpdated: string | null;
 }) {
   const {
@@ -154,9 +157,10 @@ function SortableBookRow({
             <span className="admin-book-badge">{chapterCount}챕터</span>
           </div>
           <p className="admin-book-card__updated">
+            조회 {viewCount}회
             {latestChapterUpdated
-              ? `최근 게시글 ${formatDateTime(latestChapterUpdated)}`
-              : "게시글 없음"}
+              ? ` · 최근 게시글 ${formatDateTime(latestChapterUpdated)}`
+              : " · 게시글 없음"}
           </p>
         </div>
       </div>
@@ -168,6 +172,7 @@ function SortableBookGroup({
   category,
   books,
   chapterCounts,
+  viewCounts,
   latestChapterUpdates,
   onEditCategory,
   onDeleteCategory,
@@ -175,6 +180,7 @@ function SortableBookGroup({
   category: BookCategory | null;
   books: Book[];
   chapterCounts: Map<number, number>;
+  viewCounts: Map<number, number>;
   latestChapterUpdates: Map<number, string>;
   onEditCategory: (category: BookCategory) => void;
   onDeleteCategory: (category: BookCategory) => void;
@@ -262,6 +268,7 @@ function SortableBookGroup({
                 key={book.id}
                 book={book}
                 chapterCount={chapterCounts.get(book.id) ?? 0}
+                viewCount={viewCounts.get(book.id) ?? 0}
                 latestChapterUpdated={
                   latestChapterUpdates.get(book.id) ?? null
                 }
@@ -444,9 +451,14 @@ export default function AdminBooks() {
 
   const chapterStats = useMemo(() => {
     const counts = new Map<number, number>();
+    const views = new Map<number, number>();
     const latest = new Map<number, string>();
     for (const chapter of chapters) {
       counts.set(chapter.book_id, (counts.get(chapter.book_id) ?? 0) + 1);
+      views.set(
+        chapter.book_id,
+        (views.get(chapter.book_id) ?? 0) + (chapter.view_count ?? 0),
+      );
       if (!chapter.updated_at) continue;
       const current = latest.get(chapter.book_id);
       if (
@@ -456,7 +468,7 @@ export default function AdminBooks() {
         latest.set(chapter.book_id, chapter.updated_at);
       }
     }
-    return { counts, latest };
+    return { counts, views, latest };
   }, [chapters]);
 
   const openCreateBook = () => {
@@ -855,6 +867,7 @@ export default function AdminBooks() {
                   category={group.category}
                   books={group.books}
                   chapterCounts={chapterStats.counts}
+                  viewCounts={chapterStats.views}
                   latestChapterUpdates={chapterStats.latest}
                   onEditCategory={openEditCategory}
                   onDeleteCategory={handleDeleteCategory}

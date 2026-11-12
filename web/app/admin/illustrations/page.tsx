@@ -1461,7 +1461,9 @@ export default function AdminIllustrations() {
                         촬영 {formatDate(item.taken_at)}
                       </p>
                     </div>
-                    <span>{item.image_count}장</span>
+                    <span>
+                      {item.image_count}장 · 조회 {item.view_count ?? 0}회
+                    </span>
                   </div>
                 </article>
               );

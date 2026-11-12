@@ -58,6 +58,12 @@ class IllustrationDetail(IllustrationSummary):
     images: list[IllustrationImageRead] = Field(default_factory=list)
 
 
+class IllustrationAdminDetail(IllustrationDetail):
+    """Admin detail with the private view counter."""
+
+    view_count: int = 0
+
+
 class IllustrationUpdate(BaseModel):
     """Fields the admin can change after uploading an illustration."""
 

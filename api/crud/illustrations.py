@@ -1,4 +1,5 @@
-from datetime import date
+import os
+from datetime import date, datetime, timedelta
 
 from fastapi import HTTPException, status
 from sqlalchemy import func
@@ -6,12 +7,20 @@ from sqlalchemy.orm import Session, selectinload
 
 from core.mastodon import maybe_notify_illustration
 from core.uploads import delete_replaced_upload, delete_uploaded_file
-from models.illustrations import Illustration, IllustrationImage
+from models.illustrations import (
+    Illustration,
+    IllustrationImage,
+    IllustrationView,
+)
 from schemas.illustrations import (
     IllustrationBulkUpdate,
     IllustrationImageReorderRequest,
     IllustrationReorderRequest,
     IllustrationUpdate,
+)
+
+ILLUSTRATION_VIEW_DEDUP_MINUTES = int(
+    os.getenv("ILLUSTRATION_VIEW_DEDUP_MINUTES", "60")
 )
 
 
@@ -60,6 +69,7 @@ def _serialize_summary(illustration: Illustration) -> dict:
         "taken_at": illustration.taken_at,
         "visible": illustration.visible,
         "protected": bool(illustration.protected),
+        "view_count": illustration.view_count or 0,
         "representative_image_id": (
             representative.id if representative else None
         ),
@@ -534,3 +544,61 @@ def delete_illustration(db: Session, illustration_id: int):
     for url in urls:
         delete_uploaded_file(url)
     return True
+
+
+def register_illustration_view(
+    db: Session,
+    illustration_id: int,
+    ip_hash: str,
+    count: bool = True,
+):
+    """Count one public illustration view, deduplicated by IP."""
+    illustration = (
+        db.query(Illustration)
+        .filter(
+            Illustration.id == illustration_id,
+            Illustration.visible.is_(True),
+        )
+        .first()
+    )
+    if not illustration:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="삽화를 찾을 수 없습니다.",
+        )
+
+    if not count:
+        return {"view_count": illustration.view_count or 0}
+
+    now = datetime.utcnow()
+    view = (
+        db.query(IllustrationView)
+        .filter(
+            IllustrationView.illustration_id == illustration_id,
+            IllustrationView.ip_hash == ip_hash,
+        )
+        .first()
+    )
+
+    counted = False
+    if view is None:
+        db.add(
+            IllustrationView(
+                illustration_id=illustration_id,
+                ip_hash=ip_hash,
+                last_viewed_at=now,
+            )
+        )
+        counted = True
+    elif now - view.last_viewed_at >= timedelta(
+        minutes=ILLUSTRATION_VIEW_DEDUP_MINUTES
+    ):
+        view.last_viewed_at = now
+        counted = True
+
+    if counted:
+        illustration.view_count = (illustration.view_count or 0) + 1
+        db.commit()
+        db.refresh(illustration)
+
+    return {"view_count": illustration.view_count or 0}

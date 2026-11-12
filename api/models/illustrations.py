@@ -8,6 +8,7 @@ from sqlalchemy import (
     Integer,
     String,
     Text,
+    UniqueConstraint,
     func,
 )
 from sqlalchemy.orm import relationship
@@ -35,6 +36,12 @@ class Illustration(Base):
         nullable=False,
         default=False,
         server_default="false",
+    )
+    view_count = Column(
+        Integer,
+        nullable=False,
+        default=0,
+        server_default="0",
     )
     mastodon_status_id = Column(String(255), nullable=True)
     mastodon_posted_at = Column(DateTime, nullable=True)
@@ -75,3 +82,24 @@ class IllustrationImage(Base):
 
     def __repr__(self):
         return f"<IllustrationImage(id={self.id}, url='{self.url}')>"
+
+
+class IllustrationView(Base):
+    __tablename__ = "illustration_views"
+    __table_args__ = (
+        UniqueConstraint(
+            "illustration_id",
+            "ip_hash",
+            name="uq_illustration_views_illustration_ip",
+        ),
+    )
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    illustration_id = Column(
+        Integer,
+        ForeignKey("illustrations.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    ip_hash = Column(String(64), nullable=False)
+    last_viewed_at = Column(DateTime, nullable=False, default=func.now())

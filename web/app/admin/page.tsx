@@ -267,7 +267,8 @@ export default function AdminHome() {
           (b.view_count ?? 0) - (a.view_count ?? 0) ||
           timeValue(b.updated_at ?? b.created_at) -
             timeValue(a.updated_at ?? a.created_at),
-      );
+      )
+      .slice(0, 10);
   }, [data]);
 
   const visiblePosts = showAllPosts
@@ -501,7 +502,7 @@ export default function AdminHome() {
               <header className="admin-dashboard-panel__head">
                 <div>
                   <h2>게시글 조회수</h2>
-                  <p>조회수 기준 상위 게시글입니다.</p>
+                  <p>조회수 기준 상위 10개 게시글입니다.</p>
                 </div>
               </header>
               {popularChapters.length ? (
