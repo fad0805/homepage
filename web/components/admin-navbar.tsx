@@ -1,5 +1,4 @@
 "use client";
-import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -8,29 +7,28 @@ import navigation from "@/config/navigation";
 
 
 export const AdminNavbar = () => {
-  interface MenuItem {
-      label: string;
-      href: string;
-  };
-  const menuList = (now: string) => {
-    const menuItems = navigation.admin.items;
-    return menuItems.map((item: MenuItem, index: number) => {
-      return <Link
-          key={index}
-          href={item.href}
-          className={ now === item.href ? "active" : ""}
-      >{item.label}</Link>;
-    });
-  };
-
   const currentPath = usePathname();
-  const [menu, setMenu] = useState(menuList(currentPath));
 
-  useEffect(() => {
-      setMenu(menuList(currentPath));
-  }, [currentPath]);
+  const isActive = (href: string) => {
+    if (href === "/admin") {
+      return currentPath === href;
+    }
+    return currentPath === href || currentPath.startsWith(`${href}/`);
+  };
 
   return <nav id="admin-navbar">
-      { menu }
+      {navigation.admin.rows.map((row, rowIndex) => (
+        <div className="admin-navbar__row" key={rowIndex}>
+          {row.map((item) => (
+            <Link
+              key={item.href}
+              href={item.href}
+              className={isActive(item.href) ? "active" : ""}
+            >
+              {item.label}
+            </Link>
+          ))}
+        </div>
+      ))}
   </nav>;
 };

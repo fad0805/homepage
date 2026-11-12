@@ -1,6 +1,8 @@
 import logging
+import mimetypes
 import os
 import uuid
+from contextlib import contextmanager
 from io import BytesIO
 from pathlib import Path
 from typing import Any
@@ -121,7 +123,12 @@ def _s3_key_from_url(url: str) -> str | None:
 
 def _local_path_from_url(url: str) -> Path | None:
     """Return the local upload path if ``url`` points at the legacy store."""
-    path = urlparse(url).path if url.startswith(("http://", "https://")) else url
+    # Local uploads are stored as relative URLs (``/uploads/...``). Do not
+    # treat an arbitrary external URL with the same path as a local file.
+    if url.startswith(("http://", "https://")):
+        return None
+
+    path = url
     prefix = f"{URL_PREFIX}/"
     if not path.startswith(prefix):
         return None
@@ -149,6 +156,50 @@ def _storage_identity(url: str | None) -> tuple[str, str] | None:
     if key is not None:
         return ("s3", key)
     return None
+
+
+def get_upload_source(url: str | None) -> tuple[str, str] | None:
+    """Return ``(storage, reference)`` for a file stored by this app.
+
+    ``storage`` is ``"local"`` or ``"s3"``; ``reference`` is an absolute path
+    or an S3 object key. External URLs return ``None``.
+    """
+    return _storage_identity(url)
+
+
+@contextmanager
+def open_uploaded_file(url: str):
+    """Yield ``(file, content_type, size)`` for a stored upload.
+
+    Raises ``FileNotFoundError`` when the URL is external or the object is not
+    available. The caller is responsible for reading the file-like object
+    before leaving the context.
+    """
+    source = _storage_identity(url)
+    if source is None:
+        raise FileNotFoundError(url)
+
+    kind, reference = source
+
+    if kind == "local":
+        path = Path(reference)
+        with path.open("rb") as handle:
+            content_type = mimetypes.guess_type(path.name)[0]
+            yield handle, content_type, path.stat().st_size
+        return
+
+    if not _s3_is_configured():
+        raise FileNotFoundError(url)
+
+    response = _get_s3_client().get_object(
+        Bucket=S3_BUCKET,
+        Key=reference,
+    )
+    body = response["Body"]
+    try:
+        yield body, response.get("ContentType"), response.get("ContentLength")
+    finally:
+        body.close()
 
 
 def delete_uploaded_file(url: str | None) -> None:

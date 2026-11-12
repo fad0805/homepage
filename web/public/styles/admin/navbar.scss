@@ -23,6 +23,29 @@ div#content>div>nav {
   }
 }
 
+div#content > .admin-layout > nav#admin-navbar {
+  flex-direction: column;
+  align-items: center;
+  gap: 0.55rem;
+
+  @media (width < 600px) {
+    width: 92%;
+    margin: 1.5rem 0 1rem;
+  }
+}
+
+.admin-navbar__row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 0.45rem 1.5rem;
+
+  @media (width < 600px) {
+    gap: 0.4rem 1rem;
+  }
+}
+
 nav#admin-navbar a {
   color: var(--title-color);
   text-decoration: none;

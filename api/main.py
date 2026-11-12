@@ -12,6 +12,7 @@ from core.config import API_DOCS_ENABLED, ENVIRONMENT
 from core.mastodon import mastodon_publish_loop
 from core.uploads import UPLOAD_DIR, ensure_upload_dir
 from routers import (
+    archive,
     books,
     chapter_drafts,
     chapters,
@@ -91,6 +92,7 @@ async def add_api_security_headers(request: Request, call_next):
 ensure_upload_dir()
 app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
 
+app.include_router(archive.router, prefix="/archive", tags=["archive"])
 app.include_router(characters.router, prefix="/characters", tags=["characters"])
 app.include_router(embeds.router, prefix="/embeds", tags=["embeds"])
 app.include_router(gallery.router, prefix="/gallery", tags=["gallery"])

@@ -9,9 +9,14 @@ interface NaviSection {
   items: NavItem[]
 }
 
+interface AdminNaviSection {
+  title: string
+  rows: NavItem[][]
+}
+
 interface Navigation {
   main: NaviSection
-  admin: NaviSection
+  admin: AdminNaviSection
 }
 
 const navigation: Navigation = {
@@ -28,15 +33,20 @@ const navigation: Navigation = {
   },
   admin: {
     title: "결계 관리자 대시보드",
-    items: [
-      { href: "/admin", label: "대시보드" },
-      { href: "/admin/author", label: "프로필 관리" },
-      { href: "/admin/characters", label: "등장인물 관리" },
-      { href: "/admin/books", label: "책장 관리" },
-      { href: "/admin/illustrations", label: "삽화 관리" },
-      { href: "/admin/gallery", label: "열람 관리" },
-      { href: "/admin/links", label: "놀러가기 관리" },
-      { href: "/admin/connections", label: "연결 관리" },
+    rows: [
+      [
+        { href: "/admin/author", label: "프로필 관리" },
+        { href: "/admin/characters", label: "등장인물 관리" },
+        { href: "/admin/books", label: "책장 관리" },
+        { href: "/admin/illustrations", label: "삽화 관리" },
+        { href: "/admin/links", label: "놀러가기 관리" },
+      ],
+      [
+        { href: "/admin", label: "대시보드" },
+        { href: "/admin/gallery", label: "열람 관리" },
+        { href: "/admin/export", label: "내보내기" },
+        { href: "/admin/connections", label: "연결 관리" },
+      ],
     ],
   },
 };
