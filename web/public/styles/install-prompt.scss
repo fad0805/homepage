@@ -1,0 +1,151 @@
+@use 'sass:color';
+@use 'variables' as *;
+@use './_mixins';
+
+.install-prompt {
+  position: fixed;
+  left: 1.25rem;
+  bottom: 1.25rem;
+  z-index: 80;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.5rem;
+  max-width: min(18rem, calc(100vw - 5.5rem));
+}
+
+.install-prompt__row {
+  display: inline-flex;
+  align-items: stretch;
+  overflow: hidden;
+  border: 1px solid color.change($maintheme, $alpha: 0.55);
+  border-radius: 999px;
+  background: var(--subtheme);
+  box-shadow: 0 0.5rem 1.4rem rgba(0, 0, 0, 0.16);
+  @include mixins.theme-transition();
+}
+
+.install-prompt__action {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.55rem 0.8rem 0.55rem 0.95rem;
+  border: 0;
+  background: transparent;
+  color: var(--title-color);
+  font-size: 0.75rem;
+  font-weight: bold;
+  line-height: 1.2;
+  cursor: pointer;
+  white-space: nowrap;
+
+  &:hover:not(:disabled) {
+    filter: brightness(0.97);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--title-color);
+    outline-offset: -2px;
+  }
+
+  &:disabled {
+    cursor: default;
+    opacity: 0.65;
+  }
+}
+
+.install-prompt__close {
+  align-self: stretch;
+  width: 1.85rem;
+  padding: 0;
+  border: 0;
+  border-left: 1px solid color.change($maintheme, $alpha: 0.55);
+  background: transparent;
+  color: var(--foreground);
+  font-size: 1.05rem;
+  line-height: 1;
+  opacity: 0.5;
+  cursor: pointer;
+
+  &:hover {
+    opacity: 1;
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--title-color);
+    outline-offset: -2px;
+  }
+}
+
+.install-prompt__help {
+  width: 100%;
+  padding: 0.75rem 0.9rem;
+  border: 1px solid color.change($maintheme, $alpha: 0.55);
+  border-radius: 1rem;
+  background: var(--subtheme);
+  box-shadow: 0 0.5rem 1.4rem rgba(0, 0, 0, 0.16);
+  color: var(--foreground);
+  font-size: 0.74rem;
+  line-height: 1.55;
+  box-sizing: border-box;
+  @include mixins.theme-transition();
+
+  p {
+    margin: 0 0 0.55rem;
+  }
+
+  strong {
+    color: var(--title-color);
+    font-weight: bold;
+  }
+
+  button {
+    padding: 0.3rem 0.7rem;
+    border: 1px solid color.change($maintheme, $alpha: 0.7);
+    border-radius: 999px;
+    background: transparent;
+    color: var(--title-color);
+    font-size: 0.7rem;
+    cursor: pointer;
+
+    &:hover {
+      background: color.change($maintheme, $alpha: 0.18);
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--title-color);
+      outline-offset: 2px;
+    }
+  }
+}
+
+[data-theme='dark'] .install-prompt {
+  .install-prompt__row,
+  .install-prompt__help {
+    border-color: rgba(255, 255, 255, 0.18);
+    box-shadow: 0 0.5rem 1.4rem rgba(0, 0, 0, 0.4);
+  }
+
+  .install-prompt__close {
+    border-left-color: rgba(255, 255, 255, 0.18);
+  }
+
+  .install-prompt__action:hover:not(:disabled) {
+    filter: brightness(1.08);
+  }
+
+  .install-prompt__help button {
+    border-color: rgba(255, 255, 255, 0.22);
+
+    &:hover {
+      background: rgba(255, 255, 255, 0.08);
+    }
+  }
+}
+
+@media (max-width: $breakpoint-md) {
+  .install-prompt {
+    left: calc(1rem + env(safe-area-inset-left, 0px));
+    bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
+  }
+}

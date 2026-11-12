@@ -18,6 +18,11 @@ interface ThemeContextValue {
 
 const ThemeContext = createContext<ThemeContextValue | null>(null);
 
+const THEME_COLORS: Record<Theme, string> = {
+    light: "#bedbbb",
+    dark: "#090c0a",
+};
+
 function readStoredTheme(): Theme {
     if (typeof window === "undefined") return "light";
 
@@ -47,6 +52,12 @@ children: React.ReactNode;
 
     useEffect(() => {
         document.documentElement.setAttribute("data-theme", theme);
+
+        document
+            .querySelectorAll('meta[name="theme-color"]')
+            .forEach((meta) =>
+                meta.setAttribute("content", THEME_COLORS[theme]),
+            );
     }, [theme]);
 
     const value = useMemo(() => ({ theme, setTheme }), [theme, setTheme]);
@@ -59,11 +70,19 @@ children: React.ReactNode;
                         (function() {
                             try {
                                 const theme = localStorage.getItem('theme');
-                                if (theme === 'dark') {
+                                const isDark = theme === 'dark';
+
+                                if (isDark) {
                                     document.documentElement.setAttribute('data-theme', 'dark');
                                 } else {
                                     document.documentElement.removeAttribute('data-theme');
                                 }
+
+                                document
+                                    .querySelectorAll('meta[name="theme-color"]')
+                                    .forEach(function(meta) {
+                                        meta.setAttribute('content', isDark ? '#090c0a' : '#bedbbb');
+                                    });
                             } catch (e) {
                                 console.error('Failed to set initial theme:', e);
                             }
