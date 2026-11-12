@@ -85,6 +85,11 @@ export default async function Links() {
                       </span>
                     )}
                     <p>{link.name}</p>
+                    {link.description ? (
+                      <p className="links-banner__description">
+                        {link.description}
+                      </p>
+                    ) : null}
                   </a>
                 ))}
               </div>
