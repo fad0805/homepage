@@ -1061,3 +1061,157 @@
     user-select: all;
   }
 }
+
+@media (max-width: 600px) {
+  .admin-illustrations-modal-backdrop {
+    padding: 0;
+    align-items: stretch;
+  }
+
+  .admin-illustrations-modal {
+    width: 100%;
+    max-width: none;
+    height: 100dvh;
+    max-height: 100dvh;
+    border-radius: 0;
+  }
+
+  .admin-illustrations-modal .admin-modal-header {
+    flex: none;
+    padding: 0.85rem 1rem;
+
+    h2 {
+      font-size: 1rem;
+    }
+  }
+
+  .admin-illustrations-modal .admin-modal-close {
+    min-width: 2.5rem;
+    min-height: 2.5rem;
+  }
+
+  .admin-illustrations-modal .admin-modal-body {
+    flex: 1;
+    min-height: 0;
+    padding: 0.9rem 1rem 1rem;
+    overscroll-behavior: contain;
+  }
+
+  .admin-illustrations-modal__summary {
+    grid-template-columns: 1fr;
+    gap: 0.85rem;
+  }
+
+  .admin-illustrations-modal__cover {
+    align-items: center;
+  }
+
+  .admin-illustrations-modal__cover-image {
+    width: min(100%, 10rem);
+  }
+
+  .admin-illustrations-modal__cover .admin-button {
+    width: min(100%, 10rem);
+    min-height: 2.5rem;
+  }
+
+  .admin-illustrations-modal__fields {
+    gap: 0.7rem;
+  }
+
+  .admin-illustration-card__field {
+    font-size: 0.75rem;
+
+    input,
+    textarea {
+      padding: 0.55rem 0.6rem;
+      font-size: 1rem;
+    }
+
+    &.is-inline {
+      flex-direction: column;
+      align-items: stretch;
+      gap: 0.35rem;
+    }
+  }
+
+  .admin-illustrations-modal__access {
+    gap: 0.5rem;
+  }
+
+  .admin-illustrations-modal__visible {
+    width: 100%;
+    justify-content: space-between;
+    font-size: 0.78rem;
+
+    select {
+      height: 2.5rem;
+      font-size: 1rem;
+    }
+  }
+
+  .admin-illustrations-modal__code {
+    width: 100%;
+
+    .admin-button {
+      flex: 1;
+      min-height: 2.5rem;
+    }
+
+    code {
+      width: 100%;
+      text-align: center;
+    }
+  }
+
+  .admin-illustrations-modal__images-head {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.5rem;
+  }
+
+  .admin-illustrations-modal__images-actions {
+    width: 100%;
+    justify-content: space-between;
+
+    .admin-button {
+      flex: 1;
+      min-height: 2.5rem;
+    }
+  }
+
+  .admin-illustrations-modal__image-list {
+    grid-template-columns: repeat(auto-fill, minmax(5.5rem, 1fr));
+    max-height: 38vh;
+    gap: 0.45rem;
+  }
+
+  .admin-illustrations-modal__image > img {
+    height: 5rem;
+  }
+
+  .admin-illustrations-modal__image-delete {
+    width: 1.8rem;
+    height: 1.8rem;
+  }
+
+  .admin-illustrations-modal__footer {
+    flex: none;
+    flex-wrap: wrap;
+    padding: 0.75rem 1rem calc(0.75rem + env(safe-area-inset-bottom));
+
+    > div {
+      flex: 1;
+      justify-content: flex-end;
+
+      .admin-button {
+        flex: 1;
+        min-height: 2.5rem;
+      }
+    }
+
+    > .admin-button {
+      min-height: 2.5rem;
+    }
+  }
+}

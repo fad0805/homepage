@@ -1528,7 +1528,7 @@ export default function AdminIllustrations() {
 
       {editingItem ? (
         <div
-          className="admin-modal-backdrop"
+          className="admin-modal-backdrop admin-illustrations-modal-backdrop"
           onMouseDown={(event) => {
             if (event.target === event.currentTarget) {
               setEditingItem(null);
