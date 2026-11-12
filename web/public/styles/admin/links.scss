@@ -253,6 +253,11 @@ a.admin-button.primary:visited {
   border-radius: 0.8rem;
   background: var(--admin-card-bg);
   overflow: hidden;
+  cursor: pointer;
+
+  &:hover {
+    border-color: var(--admin-primary);
+  }
 
   &.is-dragging {
     box-shadow: 0 0.5rem 1.2rem rgba(0, 0, 0, 0.18);
@@ -337,36 +342,6 @@ a.admin-button.primary:visited {
   margin: 0;
   font-size: 0.7rem;
   color: var(--admin-muted);
-}
-
-.admin-link-actions {
-  display: flex;
-  gap: 0.3rem;
-  padding: 0 0.65rem 0.65rem;
-
-  button {
-    flex: 1;
-    font-family: inherit;
-    font-size: 0.72rem;
-    padding: 0.3rem 0.4rem;
-    border-radius: 0.45rem;
-    border: 1px solid var(--admin-border);
-    background: transparent;
-    color: var(--foreground);
-    cursor: pointer;
-
-    &:hover {
-      background: rgba(0, 0, 0, 0.06);
-    }
-
-    &.danger {
-      color: #c0392b;
-    }
-  }
-}
-
-[data-theme='dark'] .admin-link-actions button.danger {
-  color: #f08a80;
 }
 
 /* Save bar */
@@ -474,6 +449,25 @@ a.admin-button.primary:visited {
   gap: 0.5rem;
   padding: 0.9rem 1.25rem;
   border-top: 1px solid var(--admin-border);
+}
+
+.admin-link-modal-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  width: 100%;
+}
+
+.admin-link-modal-footer-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-left: auto;
+
+  .admin-button {
+    min-height: 2.4rem;
+  }
 }
 
 /* Form fields */

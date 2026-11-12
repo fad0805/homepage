@@ -195,11 +195,9 @@ function ModalShell({
 function SortableLinkCard({
   link,
   onEdit,
-  onDelete,
 }: {
   link: DraftLink;
   onEdit: (link: DraftLink) => void;
-  onDelete: (link: DraftLink) => void;
 }) {
   const {
     attributes,
@@ -225,6 +223,7 @@ function SortableLinkCard({
       ref={setNodeRef}
       style={style}
       className={`admin-link-card${isDragging ? " is-dragging" : ""}`}
+      onClick={() => onEdit(link)}
     >
       <button
         type="button"
@@ -232,6 +231,7 @@ function SortableLinkCard({
         aria-label={`${link.name} 순서 변경`}
         {...attributes}
         {...listeners}
+        onClick={(event) => event.stopPropagation()}
       >
         ⠿
       </button>
@@ -264,18 +264,6 @@ function SortableLinkCard({
         ) : null}
       </div>
 
-      <div className="admin-link-actions">
-        <button type="button" onClick={() => onEdit(link)}>
-          수정
-        </button>
-        <button
-          type="button"
-          className="danger"
-          onClick={() => onDelete(link)}
-        >
-          삭제
-        </button>
-      </div>
     </article>
   );
 }
@@ -287,7 +275,6 @@ function SortableCategorySection({
   onEditCategory,
   onDeleteCategory,
   onEditLink,
-  onDeleteLink,
 }: {
   category: Category;
   links: DraftLink[];
@@ -295,7 +282,6 @@ function SortableCategorySection({
   onEditCategory: (category: Category) => void;
   onDeleteCategory: (category: Category) => void;
   onEditLink: (link: DraftLink) => void;
-  onDeleteLink: (link: DraftLink) => void;
 }) {
   const {
     attributes,
@@ -377,7 +363,6 @@ function SortableCategorySection({
                 key={link.id}
                 link={link}
                 onEdit={onEditLink}
-                onDelete={onDeleteLink}
               />
             ))}
           </div>
@@ -869,15 +854,16 @@ export default function AdminLinks() {
     closeLinkModal();
   };
 
-  const handleDeleteLink = (link: DraftLink) => {
+  const handleDeleteLink = (link: DraftLink): boolean => {
     if (!window.confirm(`'${link.name}' 링크를 삭제할까요?`)) {
-      return;
+      return false;
     }
     setLinks((prev) => prev.filter((item) => item.id !== link.id));
     if (link.id > 0) {
       setDeletedLinkIds((prev) => [...prev, link.id]);
     }
     setIsDirty(true);
+    return true;
   };
 
   const openCreateCategory = () => {
@@ -1052,7 +1038,6 @@ export default function AdminLinks() {
                   onEditCategory={openEditCategory}
                   onDeleteCategory={handleDeleteCategory}
                   onEditLink={openEditLink}
-                  onDeleteLink={handleDeleteLink}
                 />
               ))}
             </div>
@@ -1065,24 +1050,40 @@ export default function AdminLinks() {
           title={editingLink ? "링크 수정" : "링크 추가"}
           onClose={closeLinkModal}
           footer={
-            <>
-              <button
-                type="button"
-                className="admin-button"
-                onClick={closeLinkModal}
-                disabled={saving}
-              >
-                취소
-              </button>
-              <button
-                type="submit"
-                form="link-form"
-                className="admin-button primary"
-                disabled={saving}
-              >
-                {editingLink ? "적용" : "추가"}
-              </button>
-            </>
+            <div className="admin-link-modal-footer">
+              {editingLink ? (
+                <button
+                  type="button"
+                  className="admin-button danger"
+                  onClick={() => {
+                    if (editingLink && handleDeleteLink(editingLink)) {
+                      closeLinkModal();
+                    }
+                  }}
+                  disabled={saving}
+                >
+                  삭제
+                </button>
+              ) : null}
+              <div className="admin-link-modal-footer-actions">
+                <button
+                  type="button"
+                  className="admin-button"
+                  onClick={closeLinkModal}
+                  disabled={saving}
+                >
+                  취소
+                </button>
+                <button
+                  type="submit"
+                  form="link-form"
+                  className="admin-button primary"
+                  disabled={saving}
+                >
+                  {editingLink ? "적용" : "추가"}
+                </button>
+              </div>
+            </div>
           }
         >
           <form id="link-form" onSubmit={handleLinkSubmit}>
