@@ -1804,35 +1804,33 @@ export default function AdminIllustrations() {
               </div>
             </div>
 
-            <footer className="admin-modal-footer admin-illustrations-modal__footer">
+            <footer className="admin-modal-footer">
               <button
                 type="button"
-                className="admin-button is-danger"
+                className="admin-button danger admin-illustrations-modal__delete"
                 onClick={() => void deleteItem(editingItem)}
                 disabled={deletingId !== null || savingId !== null}
               >
                 {deletingId === editingItem.id ? "삭제 중..." : "삭제"}
               </button>
-              <div>
-                <button
-                  type="button"
-                  className="admin-button"
-                  onClick={() => setEditingItem(null)}
-                  disabled={savingId !== null}
-                >
-                  취소
-                </button>
-                <button
-                  type="button"
-                  className="admin-button primary"
-                  onClick={() => void saveEditing()}
-                  disabled={
-                    savingId !== null || !editingItem.title.trim()
-                  }
-                >
-                  {savingId === editingItem.id ? "저장 중..." : "저장"}
-                </button>
-              </div>
+              <button
+                type="button"
+                className="admin-button"
+                onClick={() => setEditingItem(null)}
+                disabled={savingId !== null}
+              >
+                취소
+              </button>
+              <button
+                type="button"
+                className="admin-button primary"
+                onClick={() => void saveEditing()}
+                disabled={
+                  savingId !== null || !editingItem.title.trim()
+                }
+              >
+                {savingId === editingItem.id ? "저장 중..." : "저장"}
+              </button>
             </footer>
           </div>
         </div>
