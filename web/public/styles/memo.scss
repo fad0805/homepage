@@ -124,7 +124,7 @@
 
 .memo-item {
   min-width: 0;
-  border-bottom: 1px solid color.change($maintheme, $alpha: 0.25);
+  border-bottom: 1px solid color.change($maintheme, $alpha: 0.5);
 
   &:last-child {
     border-bottom: 0;
@@ -146,7 +146,7 @@
 .memo-content {
   flex: 1;
   min-width: 0;
-  margin: 0;
+  margin: auto 0;
   padding: 0.4rem 0;
   color: var(--input-text);
   font-size: 0.9rem;
