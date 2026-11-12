@@ -11,7 +11,6 @@ import hashlib
 import json
 import logging
 import mimetypes
-import re
 import shutil
 import tempfile
 import time
@@ -117,18 +116,6 @@ def _extension_from_url(url: str) -> str:
     return ".bin"
 
 
-def _file_stem(original_name: str | None, identifier: str) -> str:
-    raw = Path(original_name or "").name
-    suffix = Path(raw).suffix
-    if suffix:
-        raw = raw[: -len(suffix)]
-
-    cleaned = re.sub(r"[^\w.\-]+", "-", raw).strip("._-")
-    if not cleaned:
-        return identifier
-    return f"{identifier}-{cleaned[:60]}"
-
-
 def _storage_kind(url: str | None) -> str | None:
     if not url:
         return None
@@ -149,13 +136,13 @@ class _ArchivePlan:
         self,
         url: str | None,
         directory: str,
-        identifier: str,
-        original_name: str | None = None,
     ) -> str | None:
-        """Return an archive path for a stored image, or ``None``.
+        """Return an opaque archive path for a stored image, or ``None``.
 
-        External URLs and files we do not own are intentionally not
-        downloaded; their original URL is still kept in the dataset.
+        The archive filename is derived from the URL hash so original
+        filenames are not exposed in the ZIP. External URLs and files we do
+        not own are intentionally not downloaded; their original URL is
+        still kept in the dataset.
         """
         if not url:
             return None
@@ -169,12 +156,12 @@ class _ArchivePlan:
             return None
 
         extension = _extension_from_url(url)
-        stem = _file_stem(original_name, identifier)
-        path = f"images/{directory}/{stem}{extension}"
+        digest = hashlib.sha256(url.encode("utf-8")).hexdigest()[:32]
+        path = f"images/{directory}/{digest}{extension}"
 
         counter = 2
         while path in self.used_paths:
-            path = f"images/{directory}/{stem}-{counter}{extension}"
+            path = f"images/{directory}/{digest}-{counter}{extension}"
             counter += 1
 
         self.used_paths.add(path)
@@ -293,8 +280,6 @@ def _illustration_data(
                     "archive_path": plan.register(
                         image.url,
                         "illustrations",
-                        str(image.id),
-                        image.original_name,
                     ),
                 }
             )
@@ -302,8 +287,6 @@ def _illustration_data(
         representative_path = plan.register(
             illustration.representative_url,
             "illustrations",
-            f"{illustration.id}-representative",
-            illustration.representative_original_name,
         )
 
         if representative_path is None and illustration.representative_image_id:
@@ -380,13 +363,11 @@ def _character_data(
                 "thumbnail_archive_path": plan.register(
                     character.thumbnail,
                     "characters",
-                    f"{character.id}-thumbnail",
                 ),
                 "detail_image_url": character.detail_image,
                 "detail_image_archive_path": plan.register(
                     character.detail_image,
                     "characters",
-                    f"{character.id}-detail",
                 ),
             }
         )
@@ -450,7 +431,6 @@ def _link_data(
                 "banner_archive_path": plan.register(
                     link.banner_url,
                     "links",
-                    f"{link.id}-banner",
                 ),
                 "category_id": link.category,
                 "description": link.description,
@@ -748,8 +728,9 @@ def _readme(generated_at: datetime, section: str) -> str:
         components.append("- `data/memos.json` — 주석")
     if includes_images:
         components.append(
-            "- `images/` — 원본 이미지. 각 JSON의 `archive_path`와 "
-            "대응합니다. 이미지가 없으면 폴더가 없을 수 있습니다."
+            "- `images/` — 원본 이미지. 파일명은 해시로 저장되며 각 JSON의 "
+            "`archive_path`와 대응합니다. 이미지가 없으면 폴더가 없을 수 "
+            "있습니다."
         )
 
     partial_note = (
