@@ -3,6 +3,7 @@
 import {
   useEffect,
   useMemo,
+  useRef,
   useState,
   type FormEvent,
   type MouseEvent as ReactMouseEvent,
@@ -230,10 +231,44 @@ export default function BooksClient({
   const [chapterPage, setChapterPage] = useState(1);
   const [isMobile, setIsMobile] = useState(initialIsMobile);
   const [now, setNow] = useState(() => Date.now());
+  const viewDepthRef = useRef(0);
+  const initialViewRef = useRef({
+    bookId: activeBookId,
+    chapterId: activeChapterId,
+  });
 
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 60_000);
     return () => clearInterval(timer);
+  }, []);
+
+  // Mobile book/chapter selection does not change the URL, so tag the
+  // current history entry and push one per view. The browser back button can
+  // then walk chapter -> chapter list -> book list instead of leaving /books.
+  useEffect(() => {
+    window.history.replaceState(
+      {
+        ...window.history.state,
+        booksView: initialViewRef.current,
+        booksDepth: 0,
+      },
+      "",
+    );
+
+    const handlePopState = (event: PopStateEvent) => {
+      const view = event.state?.booksView;
+      if (!view) return;
+      viewDepthRef.current =
+        typeof event.state?.booksDepth === "number"
+          ? event.state.booksDepth
+          : 0;
+      setActiveBookId(view.bookId ?? null);
+      setActiveChapterId(view.chapterId ?? null);
+      setChapterPage(1);
+    };
+
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
   }, []);
 
   useEffect(() => {
@@ -393,9 +428,57 @@ export default function BooksClient({
     }
   }, [chapterPage, totalChapterPages]);
 
+  const pushView = (view: {
+    bookId: number | null;
+    chapterId: number | null;
+  }) => {
+    if (!isMobile) return;
+    const depth = viewDepthRef.current + 1;
+    window.history.pushState(
+      {
+        ...window.history.state,
+        booksView: view,
+        booksDepth: depth,
+      },
+      "",
+    );
+    viewDepthRef.current = depth;
+  };
+
+  const goBackTo = (view: {
+    bookId: number | null;
+    chapterId: number | null;
+  }) => {
+    if (viewDepthRef.current > 0) {
+      window.history.back();
+      return;
+    }
+    window.history.replaceState(
+      {
+        ...window.history.state,
+        booksView: view,
+        booksDepth: 0,
+      },
+      "",
+    );
+    setActiveBookId(view.bookId);
+    setActiveChapterId(view.chapterId);
+    setChapterPage(1);
+  };
+
   const selectBook = (bookId: number) => {
+    if (isMobile) {
+      pushView({ bookId, chapterId: null });
+    }
     setActiveBookId(bookId);
     setActiveChapterId(null);
+  };
+
+  const selectChapter = (chapterId: number) => {
+    if (isMobile) {
+      pushView({ bookId: activeBookId, chapterId });
+    }
+    setActiveChapterId(chapterId);
   };
 
   const toggleCategory = (categoryId: number) => {
@@ -505,10 +588,7 @@ export default function BooksClient({
         <button
           type="button"
           className="books-panel__back"
-          onClick={() => {
-            setActiveBookId(null);
-            setActiveChapterId(null);
-          }}
+          onClick={() => goBackTo({ bookId: null, chapterId: null })}
         >
           ← 목차
         </button>
@@ -566,7 +646,7 @@ export default function BooksClient({
               <button
                 type="button"
                 className="books-chapter-link"
-                onClick={() => setActiveChapterId(chapter.id)}
+                onClick={() => selectChapter(chapter.id)}
                 key={chapter.id}
               >
                 <span className="books-chapter-link__main">
@@ -605,7 +685,9 @@ export default function BooksClient({
           <button
             type="button"
             className="books-panel__back"
-            onClick={() => setActiveChapterId(null)}
+            onClick={() =>
+              goBackTo({ bookId: activeBookId, chapterId: null })
+            }
           >
             ← 게시글 목록
           </button>
