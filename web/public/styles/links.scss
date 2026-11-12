@@ -73,7 +73,9 @@
   }
 
   & > p {
+    box-sizing: border-box;
     max-width: 100%;
+    padding: 0 0.35rem;
     overflow-wrap: anywhere;
   }
 }
