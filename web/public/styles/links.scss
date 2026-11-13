@@ -5,7 +5,7 @@
   --links-banner-bg: var(--empty-banner-bg);
   /* The image area keeps the old "no image" surface, slightly brighter. */
   --links-banner-image-bg: #{color.mix(#000, color.adjust($maintheme, $lightness: -10%), 8%)};
-  --links-banner-color: #{color.adjust($maintheme, $lightness: 90%)};
+  --links-banner-color: #fff;
 }
 
 [data-theme='dark'] {
@@ -94,6 +94,17 @@
     line-height: 1.35;
     opacity: 0.75;
     overflow-wrap: anywhere;
+  }
+}
+
+:root:not([data-theme='dark']) .links-banner {
+  .links-banner__name,
+  .links-banner__description {
+    color: #fff;
+  }
+
+  .links-banner__description {
+    opacity: 1;
   }
 }
 
