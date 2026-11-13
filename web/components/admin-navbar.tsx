@@ -1,6 +1,6 @@
 "use client";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 
 import "@/public/styles/admin/navbar.scss";
 import navigation from "@/config/navigation";
@@ -8,6 +8,7 @@ import navigation from "@/config/navigation";
 
 export const AdminNavbar = () => {
   const currentPath = usePathname();
+  const router = useRouter();
 
   const isActive = (href: string) => {
     if (href === "/admin") {
@@ -24,6 +25,14 @@ export const AdminNavbar = () => {
               key={item.href}
               href={item.href}
               className={isActive(item.href) ? "active" : ""}
+              onClick={(event) => {
+                // Only intercept the exact active page. A parent menu such as
+                // /admin/books must still navigate away from /admin/books/123.
+                if (currentPath === item.href) {
+                  event.preventDefault();
+                  router.refresh();
+                }
+              }}
             >
               {item.label}
             </Link>

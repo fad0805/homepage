@@ -1,6 +1,6 @@
 "use client";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 
 import { useAuth } from "@/components/auth-provider";
 
@@ -15,6 +15,7 @@ interface MenuItem {
 
 export const Navbar = () => {
     const currentPath = usePathname();
+    const router = useRouter();
     const { isLoggedIn } = useAuth();
 
     const menuItems = navigation.main.items.filter(
@@ -27,6 +28,15 @@ export const Navbar = () => {
                 key={item.href}
                 href={item.href}
                 className={ currentPath === item.href ? "active" : "" }
+                onClick={(event) => {
+                    // Next.js treats a link to the current URL as a no-op.
+                    // Refetch the server data on a second click while keeping
+                    // the current client-side view state.
+                    if (currentPath === item.href) {
+                        event.preventDefault();
+                        router.refresh();
+                    }
+                }}
             >{item.label}</Link>
         )) }
     </nav>;
