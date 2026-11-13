@@ -1,0 +1,50 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [[ $# -lt 1 ]]; then
+  echo "usage: bin/run-api-python <script.py> [args...]" >&2
+  exit 1
+fi
+
+script="$1"
+shift
+
+if [[ ! -f "$script" ]]; then
+  echo "스크립트를 찾을 수 없습니다: $script" >&2
+  exit 1
+fi
+
+container="${API_CONTAINER:-}"
+if [[ -z "$container" ]]; then
+  container="$(
+    docker ps \
+      --filter label=com.docker.compose.service=api \
+      --format '{{.Names}}' \
+      | head -n 1
+  )"
+fi
+
+if [[ -z "$container" ]]; then
+  echo "API 컨테이너를 찾을 수 없습니다. 먼저 스택을 실행해주세요." >&2
+  echo "  데브: bin/dev.sh" >&2
+  exit 1
+fi
+
+remote="/tmp/$(basename "$script")-$$.py"
+docker cp "$script" "$container:$remote"
+
+cleanup() {
+  docker exec -u root "$container" rm -f "$remote" >/dev/null 2>&1 || true
+}
+trap cleanup EXIT INT TERM
+
+exec_flags=(-i)
+if [[ -t 0 && -t 1 ]]; then
+  exec_flags+=(-t)
+fi
+
+docker exec \
+  -e PYTHONPATH=/app \
+  "${exec_flags[@]}" \
+  "$container" \
+  python "$remote" "$@"
