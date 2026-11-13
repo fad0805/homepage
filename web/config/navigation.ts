@@ -36,8 +36,8 @@ const navigation: Navigation = {
     title: "결계 관리자 대시보드",
     rows: [
       [
-        { href: "/admin/author", label: "프로필 관리", adminOnly: true },
-        { href: "/admin/characters", label: "등장인물 관리", adminOnly: true },
+        { href: "/admin/author", label: "프로필 관리" },
+        { href: "/admin/characters", label: "등장인물 관리" },
         { href: "/admin/books", label: "책장 관리" },
         { href: "/admin/illustrations", label: "삽화 관리" },
         { href: "/admin/links", label: "놀러가기 관리" },

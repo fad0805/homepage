@@ -64,11 +64,13 @@ def _require_owned_illustration(
     db: Session,
     illustration_id: int,
     user,
+    *,
+    allow_admin_delete: bool = False,
 ):
     query = db.query(Illustration).filter(
         Illustration.id == illustration_id
     )
-    if not is_admin(user):
+    if not (allow_admin_delete and is_admin(user)):
         query = query.filter(Illustration.user_id == user.id)
     illustration = query.first()
     if not illustration:
@@ -104,10 +106,7 @@ def read_all_illustrations(
     user=Depends(require_auth),
 ):
     """Return the signed-in user's illustration groups for the admin board."""
-    return get_all_illustrations(
-        db,
-        None if is_admin(user) else user.id,
-    )
+    return get_all_illustrations(db, user.id)
 
 
 @router.post("/bulk", response_model=IllustrationDetail)
@@ -189,11 +188,7 @@ def put_illustration_order(
     user=Depends(require_auth),
 ):
     """Persist the display order of the user's illustration groups."""
-    return reorder_illustrations(
-        db,
-        payload,
-        None if is_admin(user) else user.id,
-    )
+    return reorder_illustrations(db, payload, user.id)
 
 
 @router.patch("/bulk")
@@ -203,11 +198,7 @@ def patch_illustrations_bulk(
     user=Depends(require_auth),
 ):
     """Apply changes to the user's selected groups."""
-    updated = bulk_update_illustrations(
-        db,
-        payload,
-        None if is_admin(user) else user.id,
-    )
+    updated = bulk_update_illustrations(db, payload, user.id)
     return {"updated": updated}
 
 
@@ -340,5 +331,10 @@ def remove_illustration(
     user=Depends(require_auth),
 ):
     """Delete one of the user's groups and all its uploaded files."""
-    _require_owned_illustration(db, illustration_id, user)
+    _require_owned_illustration(
+        db,
+        illustration_id,
+        user,
+        allow_admin_delete=True,
+    )
     return delete_illustration(db, illustration_id)

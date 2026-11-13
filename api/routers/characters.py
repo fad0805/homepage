@@ -29,7 +29,7 @@ from schemas.characters import (
     LocationUpdate,
     UploadResponse,
 )
-from .utils import require_admin
+from .utils import get_optional_user, is_admin, require_admin, require_auth
 
 router = APIRouter()
 
@@ -97,10 +97,21 @@ def remove_location(
 # Characters
 @router.get("/")
 @router.get("")
-def get_characters(db: Session = Depends(get_db)):
+def get_characters(
+    mine: bool = False,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_optional_user),
+):
     """
-    Get all characters.
+    Get all characters, or only the signed-in author's characters.
     """
+    if mine:
+        if current_user is None:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Not authenticated",
+            )
+        return get_all_characters(db, user_id=current_user.id)
     return get_all_characters(db)
 
 
@@ -109,30 +120,30 @@ def get_characters(db: Session = Depends(get_db)):
 def post_character(
     character: CharacterCreate,
     db: Session = Depends(get_db),
-    _=Depends(require_admin),
+    user=Depends(require_auth),
 ):
     """
-    Create a new character.
+    Create a new character owned by the signed-in author.
     """
-    return create_character(db, character)
+    return create_character(db, character, user.id)
 
 
 @router.put("/reorder")
 def put_character_order(
     payload: CharacterReorderRequest,
     db: Session = Depends(get_db),
-    _=Depends(require_admin),
+    user=Depends(require_auth),
 ):
     """
-    Persist the display order of characters.
+    Persist the display order of the author's characters.
     """
-    return reorder_characters(db, payload)
+    return reorder_characters(db, payload, user.id)
 
 
 @router.get("/image-proxy")
 async def proxy_character_image(
     url: str,
-    _=Depends(require_admin),
+    _=Depends(require_auth),
 ):
     """
     Fetch an external image through the API so it can be cropped in the
@@ -201,7 +212,7 @@ async def proxy_character_image(
 @router.post("/upload", response_model=UploadResponse)
 async def upload_character_thumbnail(
     file: UploadFile = File(...),
-    _=Depends(require_admin),
+    _=Depends(require_auth),
 ):
     """
     Upload a thumbnail image and return its public URL.
@@ -223,21 +234,25 @@ def modify_character(
     character_id: int,
     character: CharacterUpdate,
     db: Session = Depends(get_db),
-    _=Depends(require_admin),
+    user=Depends(require_auth),
 ):
     """
-    Update an existing character.
+    Update one of the signed-in author's characters.
     """
-    return update_character(db, character_id, character)
+    return update_character(db, character_id, character, user.id)
 
 
 @router.delete("/{character_id}")
 def remove_character(
     character_id: int,
     db: Session = Depends(get_db),
-    _=Depends(require_admin),
+    user=Depends(require_auth),
 ):
     """
-    Delete a character.
+    Delete a character. Administrators may delete any author's character.
     """
-    return delete_character(db, character_id)
+    return delete_character(
+        db,
+        character_id,
+        None if is_admin(user) else user.id,
+    )

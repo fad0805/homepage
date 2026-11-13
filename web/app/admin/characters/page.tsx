@@ -30,6 +30,7 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 
+import { useAuth } from "@/components/auth-provider";
 import {
   ImageCropModal,
   type CropStageConfig,
@@ -374,6 +375,7 @@ function SortableCharacterCard({
 function SortableLocationSection({
   location,
   characters,
+  canManageLocation,
   onAddCharacter,
   onEditLocation,
   onDeleteLocation,
@@ -381,6 +383,7 @@ function SortableLocationSection({
 }: {
   location: Location;
   characters: DraftCharacter[];
+  canManageLocation: boolean;
   onAddCharacter: (locationId: number) => void;
   onEditLocation: (location: Location) => void;
   onDeleteLocation: (location: Location) => void;
@@ -412,15 +415,17 @@ function SortableLocationSection({
       className={`admin-characters-group${isDragging ? " is-dragging" : ""}`}
     >
       <header className="admin-characters-group-header">
-        <button
-          type="button"
-          className="admin-drag-handle"
-          aria-label={`${location.name} 위치 순서 변경`}
-          {...attributes}
-          {...listeners}
-        >
-          ⠿
-        </button>
+        {canManageLocation ? (
+          <button
+            type="button"
+            className="admin-drag-handle"
+            aria-label={`${location.name} 위치 순서 변경`}
+            {...attributes}
+            {...listeners}
+          >
+            ⠿
+          </button>
+        ) : null}
 
         <h2>
           {location.name}
@@ -436,22 +441,29 @@ function SortableLocationSection({
           <button type="button" onClick={() => onAddCharacter(location.id)}>
             등장인물 추가
           </button>
-          <button type="button" onClick={() => onEditLocation(location)}>
-            이름 변경
-          </button>
-          <button
-            type="button"
-            className="danger"
-            disabled={characters.length > 0}
-            title={
-              characters.length > 0
-                ? "등장인물이 남아 있는 위치는 삭제할 수 없습니다."
-                : undefined
-            }
-            onClick={() => onDeleteLocation(location)}
-          >
-            삭제
-          </button>
+          {canManageLocation ? (
+            <>
+              <button
+                type="button"
+                onClick={() => onEditLocation(location)}
+              >
+                이름 변경
+              </button>
+              <button
+                type="button"
+                className="danger"
+                disabled={characters.length > 0}
+                title={
+                  characters.length > 0
+                    ? "등장인물이 남아 있는 위치는 삭제할 수 없습니다."
+                    : undefined
+                }
+                onClick={() => onDeleteLocation(location)}
+              >
+                삭제
+              </button>
+            </>
+          ) : null}
         </div>
       </header>
 
@@ -486,6 +498,7 @@ function SortableLocationSection({
 }
 
 export default function AdminCharacters() {
+  const { isAdmin } = useAuth();
   const [locations, setLocations] = useState<Location[]>([]);
   const [characters, setCharacters] = useState<DraftCharacter[]>([]);
   const [locationFilter, setLocationFilter] = useState<number | "all">(
@@ -592,7 +605,7 @@ export default function AdminCharacters() {
     try {
       const [locationData, characterData] = await Promise.all([
         apiFetch<Location[]>("/api/characters/locations"),
-        apiFetch<CharacterItem[]>("/api/characters"),
+        apiFetch<CharacterItem[]>("/api/characters?mine=true"),
       ]);
       revokeObjectUrls();
       setLocations(sortLocations(locationData));
@@ -697,6 +710,9 @@ export default function AdminCharacters() {
       const activeData = active.data.current;
 
       if (activeData?.type === LOCATION_TYPE) {
+        if (!isAdmin) {
+          return;
+        }
         const oldIndex = locations.findIndex(
           (location) => `${LOCATION_TYPE}-${location.id}` === active.id,
         );
@@ -747,7 +763,13 @@ export default function AdminCharacters() {
       markLocationReordered(locationId);
       setIsDirty(true);
     },
-    [characters, charactersByLocation, locations, markLocationReordered],
+    [
+      characters,
+      charactersByLocation,
+      isAdmin,
+      locations,
+      markLocationReordered,
+    ],
   );
 
   const uploadImage = useCallback(async (file: File) => {
@@ -1545,13 +1567,15 @@ export default function AdminCharacters() {
           >
             {saving ? "저장 중..." : "변경사항 저장"}
           </button>
-          <button
-            type="button"
-            className="admin-button"
-            onClick={openCreateLocation}
-          >
-            위치 추가
-          </button>
+          {isAdmin ? (
+            <button
+              type="button"
+              className="admin-button"
+              onClick={openCreateLocation}
+            >
+              위치 추가
+            </button>
+          ) : null}
           <button
             type="button"
             className="admin-button"
@@ -1573,7 +1597,9 @@ export default function AdminCharacters() {
         <div className="admin-links-loading">불러오는 중...</div>
       ) : locations.length === 0 ? (
         <p className="admin-links-empty">
-          위치가 없습니다. 먼저 위치를 추가해주세요.
+          {isAdmin
+            ? "위치가 없습니다. 먼저 위치를 추가해주세요."
+            : "위치가 없습니다. 관리자에게 위치 추가를 요청해주세요."}
         </p>
       ) : (
         <DndContext
@@ -1593,6 +1619,7 @@ export default function AdminCharacters() {
                   key={location.id}
                   location={location}
                   characters={charactersByLocation.get(location.id) ?? []}
+                  canManageLocation={isAdmin}
                   onAddCharacter={openCreateCharacter}
                   onEditLocation={openEditLocation}
                   onDeleteLocation={handleDeleteLocation}

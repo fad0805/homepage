@@ -49,8 +49,6 @@ def get_chapters(
     current_user=Depends(get_optional_user),
 ):
     grants = get_gallery_grants(request, db)
-    if current_user is not None and is_admin(current_user):
-        return get_all_chapters(db, include_hidden=True)
     if mine:
         if current_user is None:
             raise HTTPException(
@@ -62,6 +60,8 @@ def get_chapters(
             include_hidden=True,
             owner_user_id=current_user.id,
         )
+    if current_user is not None and is_admin(current_user):
+        return get_all_chapters(db, include_hidden=True)
     return get_all_chapters(
         db,
         include_hidden=current_user is not None,
@@ -78,12 +78,7 @@ def post_chapter(
     db: Session = Depends(get_db),
     user=Depends(require_auth),
 ):
-    return create_chapter(
-        db,
-        payload,
-        user.id,
-        is_admin(user),
-    )
+    return create_chapter(db, payload, user.id)
 
 
 @router.put("/reorder")
@@ -92,11 +87,7 @@ def put_chapter_order(
     db: Session = Depends(get_db),
     user=Depends(require_auth),
 ):
-    return reorder_chapters(
-        db,
-        payload,
-        None if is_admin(user) else user.id,
-    )
+    return reorder_chapters(db, payload, user.id)
 
 
 @router.post("/{chapter_id}/view")
@@ -124,8 +115,6 @@ def get_chapter_detail(
     current_user=Depends(get_optional_user),
 ):
     grants = get_gallery_grants(request, db)
-    if current_user is not None and is_admin(current_user):
-        return get_chapter(db, chapter_id, include_hidden=True)
     if mine:
         if current_user is None:
             raise HTTPException(
@@ -138,6 +127,8 @@ def get_chapter_detail(
             include_hidden=True,
             owner_user_id=current_user.id,
         )
+    if current_user is not None and is_admin(current_user):
+        return get_chapter(db, chapter_id, include_hidden=True)
     return get_chapter(
         db,
         chapter_id,
@@ -155,12 +146,7 @@ def put_chapter(
     db: Session = Depends(get_db),
     user=Depends(require_auth),
 ):
-    return update_chapter(
-        db,
-        chapter_id,
-        payload,
-        None if is_admin(user) else user.id,
-    )
+    return update_chapter(db, chapter_id, payload, user.id)
 
 
 @router.delete("/{chapter_id}")

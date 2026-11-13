@@ -29,6 +29,7 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 
+import { useAuth } from "@/components/auth-provider";
 import { apiFetch } from "@/lib/api";
 import { formatDateTime } from "@/lib/datetime";
 
@@ -174,6 +175,7 @@ function SortableBookGroup({
   chapterCounts,
   viewCounts,
   latestChapterUpdates,
+  canManageCategory,
   onEditCategory,
   onDeleteCategory,
 }: {
@@ -182,6 +184,7 @@ function SortableBookGroup({
   chapterCounts: Map<number, number>;
   viewCounts: Map<number, number>;
   latestChapterUpdates: Map<number, string>;
+  canManageCategory: boolean;
   onEditCategory: (category: BookCategory) => void;
   onDeleteCategory: (category: BookCategory) => void;
 }) {
@@ -217,7 +220,7 @@ function SortableBookGroup({
       className={`admin-books-group${isDragging ? " is-dragging" : ""}`}
     >
       <header className="admin-books-group-header">
-        {category ? (
+        {category && canManageCategory ? (
           <button
             type="button"
             className="admin-drag-handle"
@@ -230,7 +233,7 @@ function SortableBookGroup({
         ) : null}
         <h2>{category ? category.name : "카테고리 없음"}</h2>
         <span className="admin-books-group-count">{books.length}권</span>
-        {category ? (
+        {category && canManageCategory ? (
           <div className="admin-books-group-actions">
             <button
               type="button"
@@ -282,6 +285,7 @@ function SortableBookGroup({
 }
 
 export default function AdminBooks() {
+  const { isAdmin } = useAuth();
   const [books, setBooks] = useState<Book[]>([]);
   const [chapters, setChapters] = useState<ChapterItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -654,6 +658,7 @@ export default function AdminBooks() {
     const activeData = active.data.current;
 
     if (activeData?.type === BOOK_CATEGORY_TYPE) {
+      if (!isAdmin) return;
       const oldIndex = categories.findIndex(
         (category) =>
           `${BOOK_CATEGORY_TYPE}-${category.id}` === active.id,
@@ -710,15 +715,17 @@ export default function AdminBooks() {
     if (!orderDirty || savingOrder) return;
     setSavingOrder(true);
     try {
-      await apiFetch("/api/books/categories/reorder", {
-        method: "PUT",
-        body: JSON.stringify({
-          items: sortedCategories.map((category, order) => ({
-            id: category.id,
-            order,
-          })),
-        }),
-      });
+      if (isAdmin) {
+        await apiFetch("/api/books/categories/reorder", {
+          method: "PUT",
+          body: JSON.stringify({
+            items: sortedCategories.map((category, order) => ({
+              id: category.id,
+              order,
+            })),
+          }),
+        });
+      }
 
       const orderedBooks = groups.flatMap((group) => group.books);
       await apiFetch("/api/books/reorder", {
@@ -801,13 +808,15 @@ export default function AdminBooks() {
           >
             새로고침
           </button>
-          <button
-            type="button"
-            className="admin-button"
-            onClick={openCategoryModal}
-          >
-            카테고리 추가
-          </button>
+          {isAdmin ? (
+            <button
+              type="button"
+              className="admin-button"
+              onClick={openCategoryModal}
+            >
+              카테고리 추가
+            </button>
+          ) : null}
           {orderDirty ? (
             <button
               type="button"
@@ -869,6 +878,7 @@ export default function AdminBooks() {
                   chapterCounts={chapterStats.counts}
                   viewCounts={chapterStats.views}
                   latestChapterUpdates={chapterStats.latest}
+                  canManageCategory={isAdmin}
                   onEditCategory={openEditCategory}
                   onDeleteCategory={handleDeleteCategory}
                 />

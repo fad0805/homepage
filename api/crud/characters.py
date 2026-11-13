@@ -61,6 +61,8 @@ def _serialize_character(character: Character) -> dict:
     location = character.location_relationship
     return {
         "id": character.id,
+        "user_id": character.user_id,
+        "owner": character.user.username if character.user else None,
         "name": character.name,
         "thumbnail": character.thumbnail,
         "detail_image": character.detail_image,
@@ -150,6 +152,7 @@ def _sync_relationships(
     db: Session,
     character: Character,
     items: list[CharacterRelationshipInput],
+    user_id: int,
 ) -> None:
     """Replace the character's outgoing relationship links."""
     db.query(CharacterRelationship).filter(
@@ -163,7 +166,12 @@ def _sync_relationships(
             continue
 
         related = (
-            db.query(Character).filter(Character.id == related_id).first()
+            db.query(Character)
+            .filter(
+                Character.id == related_id,
+                Character.user_id == user_id,
+            )
+            .first()
         )
         if not related:
             raise HTTPException(
@@ -191,10 +199,17 @@ def _get_location_or_404(db: Session, location_id: int) -> Location:
     return location
 
 
-def _next_character_order(db: Session, location_id: int | None) -> int:
+def _next_character_order(
+    db: Session,
+    location_id: int | None,
+    user_id: int,
+) -> int:
     max_order = (
         db.query(func.max(Character.order_in_location))
-        .filter(Character.location_id == location_id)
+        .filter(
+            Character.location_id == location_id,
+            Character.user_id == user_id,
+        )
         .scalar()
     )
     return 0 if max_order is None else max_order + 1
@@ -206,11 +221,11 @@ def _next_location_order(db: Session) -> int:
 
 
 # Character CRUD Operations
-def get_all_characters(db: Session):
+def get_all_characters(db: Session, user_id: int | None = None):
     """
-    Get all characters ordered by location and display order.
+    Get all characters, or only one author's characters.
     """
-    characters = (
+    query = (
         db.query(Character)
         .options(
             selectinload(Character.outgoing_relationships).selectinload(
@@ -224,9 +239,10 @@ def get_all_characters(db: Session):
             Character.order_in_location,
             Character.id,
         )
-        .all()
     )
-    return [_serialize_character(character) for character in characters]
+    if user_id is not None:
+        query = query.filter(Character.user_id == user_id)
+    return [_serialize_character(character) for character in query.all()]
 
 
 def get_character(db: Session, character_id: int):
@@ -257,9 +273,13 @@ def get_character(db: Session, character_id: int):
     return _serialize_character(character)
 
 
-def create_character(db: Session, character: CharacterCreate):
+def create_character(
+    db: Session,
+    character: CharacterCreate,
+    user_id: int,
+):
     """
-    Create a new character.
+    Create a new character owned by the signed-in author.
     """
     data = character.model_dump(
         exclude={
@@ -273,10 +293,15 @@ def create_character(db: Session, character: CharacterCreate):
     if data.get("location_id") is not None:
         _get_location_or_404(db, data["location_id"])
 
+    data["user_id"] = user_id
     data["order_in_location"] = (
         character.order_in_location
         if character.order_in_location is not None
-        else _next_character_order(db, data.get("location_id"))
+        else _next_character_order(
+            db,
+            data.get("location_id"),
+            user_id,
+        )
     )
 
     db_character = Character(**data)
@@ -284,17 +309,34 @@ def create_character(db: Session, character: CharacterCreate):
     db.flush()
     _sync_doll(db, db_character, "head", character.head_doll)
     _sync_doll(db, db_character, "body", character.body_doll)
-    _sync_relationships(db, db_character, character.relationships)
+    _sync_relationships(
+        db,
+        db_character,
+        character.relationships,
+        user_id,
+    )
     db.commit()
     db.refresh(db_character)
     return _serialize_character(db_character)
 
 
-def update_character(db: Session, character_id: int, updated: CharacterUpdate):
+def update_character(
+    db: Session,
+    character_id: int,
+    updated: CharacterUpdate,
+    user_id: int,
+):
     """
-    Update an existing character.
+    Update one of the signed-in author's characters.
     """
-    character = db.query(Character).filter(Character.id == character_id).first()
+    character = (
+        db.query(Character)
+        .filter(
+            Character.id == character_id,
+            Character.user_id == user_id,
+        )
+        .first()
+    )
     if not character:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -321,7 +363,11 @@ def update_character(db: Session, character_id: int, updated: CharacterUpdate):
         and "order_in_location" not in data
         and data["location_id"] != character.location_id
     ):
-        data["order_in_location"] = _next_character_order(db, data["location_id"])
+        data["order_in_location"] = _next_character_order(
+            db,
+            data["location_id"],
+            user_id,
+        )
 
     for key, value in data.items():
         setattr(character, key, value)
@@ -331,7 +377,12 @@ def update_character(db: Session, character_id: int, updated: CharacterUpdate):
     if "body_doll" in updated.model_fields_set:
         _sync_doll(db, character, "body", updated.body_doll)
     if "relationships" in updated.model_fields_set:
-        _sync_relationships(db, character, updated.relationships or [])
+        _sync_relationships(
+            db,
+            character,
+            updated.relationships or [],
+            user_id,
+        )
 
     db.commit()
     db.refresh(character)
@@ -368,11 +419,18 @@ def update_character(db: Session, character_id: int, updated: CharacterUpdate):
     return _serialize_character(character)
 
 
-def delete_character(db: Session, character_id: int):
+def delete_character(
+    db: Session,
+    character_id: int,
+    user_id: int | None = None,
+):
     """
-    Delete a character and its relationship records.
+    Delete a character. Administrators may delete any author's character.
     """
-    character = db.query(Character).filter(Character.id == character_id).first()
+    query = db.query(Character).filter(Character.id == character_id)
+    if user_id is not None:
+        query = query.filter(Character.user_id == user_id)
+    character = query.first()
     if not character:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -429,14 +487,25 @@ def delete_character(db: Session, character_id: int):
     return True
 
 
-def reorder_characters(db: Session, payload: CharacterReorderRequest):
+def reorder_characters(
+    db: Session,
+    payload: CharacterReorderRequest,
+    user_id: int,
+):
     """
-    Persist the order and location of multiple characters in a single transaction.
+    Persist the order and location of the author's characters.
     """
     ids = [item.id for item in payload.items]
     characters = {
         character.id: character
-        for character in db.query(Character).filter(Character.id.in_(ids)).all()
+        for character in (
+            db.query(Character)
+            .filter(
+                Character.id.in_(ids),
+                Character.user_id == user_id,
+            )
+            .all()
+        )
     }
 
     missing = set(ids) - set(characters)

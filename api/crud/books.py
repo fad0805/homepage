@@ -523,13 +523,8 @@ def create_chapter(
     db: Session,
     payload: ChapterCreate,
     user_id: int,
-    is_admin: bool = False,
 ):
-    _get_book_or_404(
-        db,
-        payload.book_id,
-        owner_user_id=None if is_admin else user_id,
-    )
+    _get_book_or_404(db, payload.book_id, owner_user_id=user_id)
     data = payload.model_dump(exclude={"notify_mastodon"})
     data["tags"] = _clean_tags(data.get("tags"))
     data["user_id"] = user_id

@@ -17,6 +17,8 @@ def _serialize_link(link: Link) -> dict:
     category = link.category_relation
     return {
         "id": link.id,
+        "user_id": link.user_id,
+        "owner": link.user.username if link.user else link.owner,
         "name": link.name,
         "banner_url": link.banner_url,
         "url": link.url,
@@ -55,26 +57,39 @@ def _next_category_order(db: Session) -> int:
 
 
 # Link CRUD Operations
-def get_all_links(db: Session, owner: str | None = None):
+def get_all_links(
+    db: Session,
+    user_id: int | None = None,
+    owner: str | None = None,
+):
     """
-    Get all links, or only those owned by one user.
+    Get all links, or only one author's links.
     """
     query = (
         db.query(Link)
         .join(Category, Link.category == Category.id)
         .order_by(Category.order, Category.id, Link.order, Link.id)
     )
-    if owner is not None:
+    if user_id is not None:
+        query = query.filter(Link.user_id == user_id)
+    elif owner is not None:
         query = query.filter(Link.owner == owner)
     return [_serialize_link(link) for link in query.all()]
 
 
-def get_link(db: Session, link_id: int, owner: str | None = None):
+def get_link(
+    db: Session,
+    link_id: int,
+    user_id: int | None = None,
+    owner: str | None = None,
+):
     """
-    Get a single link, optionally scoped to one owner.
+    Get a single link, optionally scoped to one author.
     """
     query = db.query(Link).filter(Link.id == link_id)
-    if owner is not None:
+    if user_id is not None:
+        query = query.filter(Link.user_id == user_id)
+    elif owner is not None:
         query = query.filter(Link.owner == owner)
     link = query.first()
     if not link:
@@ -85,12 +100,18 @@ def get_link(db: Session, link_id: int, owner: str | None = None):
     return _serialize_link(link)
 
 
-def create_link(db: Session, link: LinkCreate, owner: str | None = None):
+def create_link(
+    db: Session,
+    link: LinkCreate,
+    user_id: int,
+    owner: str | None = None,
+):
     """
-    Create a new link in the database.
+    Create a new link owned by the signed-in author.
     """
     data = link.model_dump(exclude={"owner", "order"})
-    data["owner"] = link.owner or owner or "admin"
+    data["user_id"] = user_id
+    data["owner"] = owner or "admin"
     data["order"] = (
         link.order
         if link.order is not None
@@ -108,15 +129,19 @@ def update_link(
     db: Session,
     link_id: int,
     updated_link: LinkUpdate,
-    owner: str | None,
+    user_id: int,
 ):
     """
-    Update one of the owner's links, or any link for admins.
+    Update one of the signed-in author's links.
     """
-    query = db.query(Link).filter(Link.id == link_id)
-    if owner is not None:
-        query = query.filter(Link.owner == owner)
-    link = query.first()
+    link = (
+        db.query(Link)
+        .filter(
+            Link.id == link_id,
+            Link.user_id == user_id,
+        )
+        .first()
+    )
     if not link:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -153,13 +178,17 @@ def update_link(
     return _serialize_link(link)
 
 
-def delete_link(db: Session, link_id: int, owner: str | None):
+def delete_link(
+    db: Session,
+    link_id: int,
+    user_id: int | None = None,
+):
     """
-    Delete one of the owner's links, or any link for admins.
+    Delete a link. Administrators may delete any author's link.
     """
     query = db.query(Link).filter(Link.id == link_id)
-    if owner is not None:
-        query = query.filter(Link.owner == owner)
+    if user_id is not None:
+        query = query.filter(Link.user_id == user_id)
     link = query.first()
     if not link:
         raise HTTPException(
@@ -184,16 +213,23 @@ def delete_link(db: Session, link_id: int, owner: str | None):
 def reorder_links(
     db: Session,
     payload: ReorderRequest,
-    owner: str | None,
+    user_id: int,
 ):
     """
-    Persist the order of one owner's links, or every link for admins.
+    Persist the order of the author's links.
     """
     ids = [item.id for item in payload.items]
-    query = db.query(Link).filter(Link.id.in_(ids))
-    if owner is not None:
-        query = query.filter(Link.owner == owner)
-    links = {link.id: link for link in query.all()}
+    links = {
+        link.id: link
+        for link in (
+            db.query(Link)
+            .filter(
+                Link.id.in_(ids),
+                Link.user_id == user_id,
+            )
+            .all()
+        )
+    }
 
     missing = set(ids) - set(links)
     if missing:

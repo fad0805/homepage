@@ -8,8 +8,6 @@ import { useAuth } from "@/components/auth-provider";
 import '@/public/styles/admin/globals.scss';
 
 const ADMIN_ONLY_PATHS = [
-  "/admin/author",
-  "/admin/characters",
   "/admin/gallery",
   "/admin/export",
   "/admin/connections",

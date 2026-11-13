@@ -35,8 +35,6 @@ def get_books(
     db: Session = Depends(get_db),
     current_user=Depends(get_optional_user),
 ):
-    if current_user is not None and is_admin(current_user):
-        return get_all_books(db, include_hidden=True)
     if mine:
         if current_user is None:
             raise HTTPException(
@@ -48,6 +46,8 @@ def get_books(
             include_hidden=True,
             owner_user_id=current_user.id,
         )
+    if current_user is not None and is_admin(current_user):
+        return get_all_books(db, include_hidden=True)
     return get_all_books(
         db,
         include_hidden=current_user is not None,
@@ -71,11 +71,7 @@ def put_book_order(
     db: Session = Depends(get_db),
     user=Depends(require_auth),
 ):
-    return reorder_books(
-        db,
-        payload,
-        None if is_admin(user) else user.id,
-    )
+    return reorder_books(db, payload, user.id)
 
 
 # Book categories. Static paths must be declared before "/{book_id}".
@@ -128,8 +124,6 @@ def get_book_detail(
     db: Session = Depends(get_db),
     current_user=Depends(get_optional_user),
 ):
-    if current_user is not None and is_admin(current_user):
-        return get_book(db, book_id, include_hidden=True)
     if mine:
         if current_user is None:
             raise HTTPException(
@@ -142,6 +136,8 @@ def get_book_detail(
             include_hidden=True,
             owner_user_id=current_user.id,
         )
+    if current_user is not None and is_admin(current_user):
+        return get_book(db, book_id, include_hidden=True)
     return get_book(
         db,
         book_id,
@@ -157,12 +153,7 @@ def put_book(
     db: Session = Depends(get_db),
     user=Depends(require_auth),
 ):
-    return update_book(
-        db,
-        book_id,
-        payload,
-        None if is_admin(user) else user.id,
-    )
+    return update_book(db, book_id, payload, user.id)
 
 
 @router.delete("/{book_id}")

@@ -6,8 +6,8 @@ import {
   useState,
   type FormEvent,
 } from "react";
-import Link from "next/link";
 
+import { useAuth } from "@/components/auth-provider";
 import { RichTextEditor } from "@/components/rich-text-editor";
 import { profileToHtml, type AuthorProfile } from "@/config/author";
 import { maybeRevalidatePublicContent } from "@/lib/revalidate";
@@ -70,6 +70,7 @@ async function apiFetch<T>(url: string, init: RequestInit = {}): Promise<T> {
 }
 
 export default function AdminProfile() {
+  const { isAdmin } = useAuth();
   const [profile, setProfile] = useState<AuthorProfile | null>(null);
   const [title, setTitle] = useState("");
   const [subtitle, setSubtitle] = useState("");
@@ -77,11 +78,19 @@ export default function AdminProfile() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState<Notice | null>(null);
+  const [othersOpen, setOthersOpen] = useState(false);
+  const [othersLoading, setOthersLoading] = useState(false);
+  const [others, setOthers] = useState<AuthorProfile[]>([]);
+  const [viewingOther, setViewingOther] = useState<AuthorProfile | null>(
+    null,
+  );
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const profiles = await apiFetch<AuthorProfile[]>("/api/profiles");
+      const profiles = await apiFetch<AuthorProfile[]>(
+        "/api/profiles?mine=true",
+      );
       const first = profiles[0];
       const nextTitle = first?.title ?? "";
       const nextSubtitle = first?.subtitle ?? "";
@@ -172,6 +181,80 @@ export default function AdminProfile() {
     }
   };
 
+  const openOtherProfiles = useCallback(async () => {
+    setOthersOpen(true);
+    setViewingOther(null);
+    setOthersLoading(true);
+    try {
+      const data = await apiFetch<AuthorProfile[]>("/api/profiles/others");
+      setOthers(data);
+    } catch (error) {
+      setNotice({
+        type: "error",
+        text:
+          error instanceof Error
+            ? error.message
+            : "다른 사용자 프로필을 불러오지 못했습니다.",
+      });
+    } finally {
+      setOthersLoading(false);
+    }
+  }, []);
+
+  const closeOtherProfiles = useCallback(() => {
+    setOthersOpen(false);
+    setViewingOther(null);
+  }, []);
+
+  const deleteOtherProfile = useCallback(
+    async (target: AuthorProfile) => {
+      if (!target.id) return;
+      if (
+        !window.confirm(
+          `${target.owner ?? "다른 사용자"}의 프로필을 삭제할까요?`,
+        )
+      ) {
+        return;
+      }
+
+      try {
+        await apiFetch(`/api/profiles/${target.id}`, {
+          method: "DELETE",
+        });
+        setOthers((prev) =>
+          prev.filter((item) => item.id !== target.id),
+        );
+        setViewingOther((current) =>
+          current?.id === target.id ? null : current,
+        );
+        setNotice({
+          type: "success",
+          text: "프로필을 삭제했습니다.",
+        });
+      } catch (error) {
+        setNotice({
+          type: "error",
+          text:
+            error instanceof Error
+              ? error.message
+              : "프로필을 삭제하지 못했습니다.",
+        });
+      }
+    },
+    [],
+  );
+
+  useEffect(() => {
+    if (!othersOpen) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        closeOtherProfiles();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [othersOpen, closeOtherProfiles]);
+
   return (
     <div id="admin-author">
       <header className="admin-author-header">
@@ -181,9 +264,15 @@ export default function AdminProfile() {
             작가소개 페이지에 표시할 제목, 서브타이틀, 소개를 편집합니다.
           </p>
         </div>
-        <Link className="admin-button" href="/author" target="_blank">
-          공개 페이지 보기
-        </Link>
+        {isAdmin ? (
+          <button
+            type="button"
+            className="admin-button"
+            onClick={openOtherProfiles}
+          >
+            다른 사용자 프로필 보기
+          </button>
+        ) : null}
       </header>
 
       {notice ? (
@@ -236,6 +325,119 @@ export default function AdminProfile() {
           </div>
         </form>
       )}
+
+      {othersOpen ? (
+        <div
+          className="admin-modal-backdrop"
+          onClick={closeOtherProfiles}
+        >
+          <div
+            className="admin-modal admin-author-others-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="admin-author-others-title"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <header className="admin-modal-header">
+              <h2 id="admin-author-others-title">
+                {viewingOther ? "프로필 조회" : "다른 사용자 프로필"}
+              </h2>
+              <button
+                type="button"
+                className="admin-modal-close"
+                onClick={closeOtherProfiles}
+                aria-label="닫기"
+              >
+                ×
+              </button>
+            </header>
+
+            <div className="admin-modal-body">
+              {viewingOther ? (
+                <article className="admin-author-other-view">
+                  <header>
+                    <strong>{viewingOther.title}</strong>
+                    <span>
+                      {viewingOther.owner ?? "알 수 없는 사용자"}
+                    </span>
+                  </header>
+                  {viewingOther.subtitle ? (
+                    <p className="admin-author-other-subtitle">
+                      {viewingOther.subtitle}
+                    </p>
+                  ) : null}
+                  <div
+                    className="admin-author-other-copy"
+                    dangerouslySetInnerHTML={{
+                      __html: profileToHtml(viewingOther.profile),
+                    }}
+                  />
+                  <p className="admin-author-readonly">
+                    다른 사용자의 프로필은 조회만 할 수 있습니다.
+                  </p>
+                </article>
+              ) : othersLoading ? (
+                <p className="admin-author-loading">
+                  불러오는 중...
+                </p>
+              ) : others.length === 0 ? (
+                <p className="admin-author-empty">
+                  다른 사용자의 프로필이 없습니다.
+                </p>
+              ) : (
+                <ul className="admin-author-other-list">
+                  {others.map((item) => (
+                    <li key={item.id} className="admin-author-other-item">
+                      <div>
+                        <strong>{item.title}</strong>
+                        <span>{item.owner ?? "알 수 없는 사용자"}</span>
+                        {item.subtitle ? (
+                          <p>{item.subtitle}</p>
+                        ) : null}
+                      </div>
+                      <div className="admin-author-other-actions">
+                        <button
+                          type="button"
+                          className="admin-button"
+                          onClick={() => setViewingOther(item)}
+                        >
+                          조회
+                        </button>
+                        <button
+                          type="button"
+                          className="admin-button danger"
+                          onClick={() => deleteOtherProfile(item)}
+                        >
+                          삭제
+                        </button>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+
+            <footer className="admin-modal-footer">
+              {viewingOther ? (
+                <button
+                  type="button"
+                  className="admin-button"
+                  onClick={() => setViewingOther(null)}
+                >
+                  목록으로
+                </button>
+              ) : null}
+              <button
+                type="button"
+                className="admin-button"
+                onClick={closeOtherProfiles}
+              >
+                닫기
+              </button>
+            </footer>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

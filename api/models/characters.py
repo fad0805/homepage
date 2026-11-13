@@ -2,12 +2,19 @@ from sqlalchemy import Boolean, Column, Date, Integer, String, DateTime, Text, F
 from sqlalchemy.orm import relationship
 
 from db.base import Base
+from models.users import User
 
 
 class Character(Base):
     __tablename__ = "characters"
 
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    user_id = Column(
+        Integer,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
     thumbnail = Column(String, nullable=True)
     detail_image = Column(String, nullable=True)
     location_id = Column(Integer, ForeignKey("locations.id"), nullable=True, index=True)
@@ -32,6 +39,7 @@ class Character(Base):
         server_default="auto",
     )
 
+    user = relationship(User)
     location_relationship = relationship("Location", foreign_keys=[location_id])
     head_relationship = relationship("Doll", foreign_keys=[head])
     body_relationship = relationship("Doll", foreign_keys=[body])

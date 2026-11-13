@@ -5,6 +5,8 @@ export const AUTHOR_IMAGE_MAX_HEIGHT_REM = 15.7;
 
 export interface AuthorProfile {
   id?: number;
+  user_id?: number;
+  owner?: string | null;
   title: string;
   subtitle?: string | null;
   profile: string;
