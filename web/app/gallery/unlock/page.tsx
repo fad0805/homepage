@@ -37,12 +37,24 @@ export default async function GalleryUnlockPage({
 }) {
   const params = await searchParams;
   const next = safeNext(params.next);
+  const fromIllustrations = next.startsWith("/illustrations");
+  const fromBooks = next.startsWith("/books");
+  const backHref = fromIllustrations
+    ? "/illustrations"
+    : fromBooks
+      ? "/books"
+      : "/";
+  const backLabel = fromIllustrations
+    ? "← 삽화 목록"
+    : fromBooks
+      ? "← 목차"
+      : "← 처음으로";
 
   return (
     <div id="main" className="auth-page">
       <UnlockForm next={next} />
       <p className="gallery-back">
-        <Link href="/">← 처음으로</Link>
+        <Link href={backHref}>{backLabel}</Link>
       </p>
     </div>
   );
