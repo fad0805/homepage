@@ -38,7 +38,7 @@ from models.links import Link
 from models.memos import Memo
 from models.profiles import Profile
 
-from .utils import require_auth
+from .utils import require_admin
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -1098,7 +1098,7 @@ def _get_job_manager() -> ArchiveJobManager:
 @router.post("/jobs")
 def create_archive_job(
     section: str = "all",
-    user=Depends(require_auth),
+    user=Depends(require_admin),
 ):
     """Queue a background archive export (admin only)."""
 
@@ -1122,7 +1122,7 @@ def create_archive_job(
 
 
 @router.get("/jobs")
-def list_archive_jobs(user=Depends(require_auth)):
+def list_archive_jobs(user=Depends(require_admin)):
     """List recent archive jobs for the signed-in admin."""
 
     return _get_job_manager().list(user.username)
@@ -1131,7 +1131,7 @@ def list_archive_jobs(user=Depends(require_auth)):
 @router.get("/jobs/{job_id}")
 def get_archive_job(
     job_id: str,
-    user=Depends(require_auth),
+    user=Depends(require_admin),
 ):
     """Return one archive job's status."""
 
@@ -1147,7 +1147,7 @@ def get_archive_job(
 @router.get("/jobs/{job_id}/download")
 def download_archive_job(
     job_id: str,
-    user=Depends(require_auth),
+    user=Depends(require_admin),
 ):
     """Download a completed archive ZIP (admin only)."""
 

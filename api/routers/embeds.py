@@ -7,7 +7,7 @@ from fastapi.concurrency import run_in_threadpool
 
 from core.url_safety import validate_external_url
 
-from .utils import require_auth
+from .utils import require_admin
 
 router = APIRouter()
 
@@ -182,7 +182,7 @@ async def _fetch_page(url: str) -> tuple[str, str]:
 @router.get("/preview")
 async def get_page_preview(
     url: str,
-    _=Depends(require_auth),
+    _=Depends(require_admin),
 ):
     """Fetch a page and return OpenGraph-style preview metadata."""
     final_url, html = await _fetch_page(url)

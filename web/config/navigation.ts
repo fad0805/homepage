@@ -2,6 +2,7 @@ interface NavItem {
   href: string
   label: string
   authOnly?: boolean
+  adminOnly?: boolean
 }
 
 interface NaviSection {
@@ -35,17 +36,17 @@ const navigation: Navigation = {
     title: "결계 관리자 대시보드",
     rows: [
       [
-        { href: "/admin/author", label: "프로필 관리" },
-        { href: "/admin/characters", label: "등장인물 관리" },
+        { href: "/admin/author", label: "프로필 관리", adminOnly: true },
+        { href: "/admin/characters", label: "등장인물 관리", adminOnly: true },
         { href: "/admin/books", label: "책장 관리" },
         { href: "/admin/illustrations", label: "삽화 관리" },
         { href: "/admin/links", label: "놀러가기 관리" },
       ],
       [
-        { href: "/admin", label: "대시보드" },
-        { href: "/admin/gallery", label: "열람 관리" },
-        { href: "/admin/export", label: "내보내기" },
-        { href: "/admin/connections", label: "연결 관리" },
+        { href: "/admin", label: "대시보드", adminOnly: true },
+        { href: "/admin/gallery", label: "열람 관리", adminOnly: true },
+        { href: "/admin/export", label: "내보내기", adminOnly: true },
+        { href: "/admin/connections", label: "연결 관리", adminOnly: true },
       ],
     ],
   },

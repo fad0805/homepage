@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from crud.visits import get_visit_stats, normalize_source, record_visit
 from db.session import get_db
-from .utils import get_client_ip, get_optional_user, require_auth
+from .utils import get_client_ip, get_optional_user, require_admin
 
 router = APIRouter()
 
@@ -48,6 +48,6 @@ def post_visit(
 @router.get("/stats")
 def get_stats(
     db: Session = Depends(get_db),
-    _=Depends(require_auth),
+    _=Depends(require_admin),
 ):
     return get_visit_stats(db)

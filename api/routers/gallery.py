@@ -23,7 +23,7 @@ from crud import gallery as gallery_crud
 from db.session import get_db
 from models.books import Book, Chapter
 from models.illustrations import Illustration
-from routers.utils import get_client_ip, require_auth
+from routers.utils import get_client_ip, is_admin, require_admin, require_auth
 from schemas.gallery import (
     GalleryInviteCreate,
     GalleryInviteCreated,
@@ -329,7 +329,9 @@ def create_gallery_invite(
         target = db.get(Book, payload.resource_id)
         book_id = payload.resource_id
 
-    if target is None or target.user_id != user.id:
+    if target is None or (
+        target.user_id != user.id and not is_admin(user)
+    ):
         raise HTTPException(
             status_code=404,
             detail="대상을 찾을 수 없습니다.",
@@ -370,7 +372,7 @@ def create_gallery_invite(
 )
 def read_gallery_invites(
     db: Session = Depends(get_db),
-    _=Depends(require_auth),
+    _=Depends(require_admin),
 ):
     now = datetime.utcnow()
     deleted = gallery_crud.delete_old_revoked_invites(
@@ -398,7 +400,7 @@ def read_gallery_invites(
 def revoke_gallery_invite(
     invite_id: int,
     db: Session = Depends(get_db),
-    _=Depends(require_auth),
+    _=Depends(require_admin),
 ):
     if not gallery_crud.revoke_invite(
         db,
@@ -420,7 +422,7 @@ def revoke_gallery_invite(
 )
 def read_gallery_sessions(
     db: Session = Depends(get_db),
-    _=Depends(require_auth),
+    _=Depends(require_admin),
 ):
     now = datetime.utcnow()
     return [
@@ -449,7 +451,7 @@ def read_gallery_sessions(
 def revoke_gallery_session(
     session_id: int,
     db: Session = Depends(get_db),
-    _=Depends(require_auth),
+    _=Depends(require_admin),
 ):
     """Force one unlocked browser to request a new code."""
     if not gallery_crud.revoke_session(

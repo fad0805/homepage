@@ -29,7 +29,7 @@ from schemas.characters import (
     LocationUpdate,
     UploadResponse,
 )
-from .utils import require_auth
+from .utils import require_admin
 
 router = APIRouter()
 
@@ -49,7 +49,7 @@ def get_locations(db: Session = Depends(get_db)):
 def post_location(
     location: LocationCreate,
     db: Session = Depends(get_db),
-    _=Depends(require_auth),
+    _=Depends(require_admin),
 ):
     """
     Create a new character location.
@@ -61,7 +61,7 @@ def post_location(
 def put_location_order(
     payload: LocationReorderRequest,
     db: Session = Depends(get_db),
-    _=Depends(require_auth),
+    _=Depends(require_admin),
 ):
     """
     Persist the display order of character locations.
@@ -74,7 +74,7 @@ def modify_location(
     location_id: int,
     location: LocationUpdate,
     db: Session = Depends(get_db),
-    _=Depends(require_auth),
+    _=Depends(require_admin),
 ):
     """
     Update an existing character location.
@@ -86,7 +86,7 @@ def modify_location(
 def remove_location(
     location_id: int,
     db: Session = Depends(get_db),
-    _=Depends(require_auth),
+    _=Depends(require_admin),
 ):
     """
     Delete a character location.
@@ -109,7 +109,7 @@ def get_characters(db: Session = Depends(get_db)):
 def post_character(
     character: CharacterCreate,
     db: Session = Depends(get_db),
-    _=Depends(require_auth),
+    _=Depends(require_admin),
 ):
     """
     Create a new character.
@@ -121,7 +121,7 @@ def post_character(
 def put_character_order(
     payload: CharacterReorderRequest,
     db: Session = Depends(get_db),
-    _=Depends(require_auth),
+    _=Depends(require_admin),
 ):
     """
     Persist the display order of characters.
@@ -132,7 +132,7 @@ def put_character_order(
 @router.get("/image-proxy")
 async def proxy_character_image(
     url: str,
-    _=Depends(require_auth),
+    _=Depends(require_admin),
 ):
     """
     Fetch an external image through the API so it can be cropped in the
@@ -201,7 +201,7 @@ async def proxy_character_image(
 @router.post("/upload", response_model=UploadResponse)
 async def upload_character_thumbnail(
     file: UploadFile = File(...),
-    _=Depends(require_auth),
+    _=Depends(require_admin),
 ):
     """
     Upload a thumbnail image and return its public URL.
@@ -223,7 +223,7 @@ def modify_character(
     character_id: int,
     character: CharacterUpdate,
     db: Session = Depends(get_db),
-    _=Depends(require_auth),
+    _=Depends(require_admin),
 ):
     """
     Update an existing character.
@@ -235,7 +235,7 @@ def modify_character(
 def remove_character(
     character_id: int,
     db: Session = Depends(get_db),
-    _=Depends(require_auth),
+    _=Depends(require_admin),
 ):
     """
     Delete a character.

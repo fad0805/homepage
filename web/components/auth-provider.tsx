@@ -13,6 +13,7 @@ import {
 
 interface AuthContextValue {
   isLoggedIn: boolean;
+  isAdmin: boolean;
   ready: boolean;
   refresh: () => Promise<boolean>;
 }
@@ -25,6 +26,7 @@ async function fetchMe() {
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [ready, setReady] = useState(false);
   const startedRef = useRef(false);
 
@@ -38,11 +40,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         response = await fetchMe();
       }
 
-      const nextValue = response.ok;
-      setIsLoggedIn(nextValue);
-      return nextValue;
+      if (!response.ok) {
+        setIsLoggedIn(false);
+        setIsAdmin(false);
+        return false;
+      }
+
+      const data = (await response.json().catch(() => null)) as {
+        role?: unknown;
+      } | null;
+      setIsLoggedIn(true);
+      setIsAdmin(data?.role === "admin");
+      return true;
     } catch {
       setIsLoggedIn(false);
+      setIsAdmin(false);
       return false;
     } finally {
       setReady(true);
@@ -56,8 +68,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [refresh]);
 
   const value = useMemo(
-    () => ({ isLoggedIn, ready, refresh }),
-    [isLoggedIn, ready, refresh],
+    () => ({ isLoggedIn, isAdmin, ready, refresh }),
+    [isLoggedIn, isAdmin, ready, refresh],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

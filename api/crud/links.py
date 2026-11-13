@@ -108,16 +108,15 @@ def update_link(
     db: Session,
     link_id: int,
     updated_link: LinkUpdate,
-    owner: str,
+    owner: str | None,
 ):
     """
-    Update one of the owner's links.
+    Update one of the owner's links, or any link for admins.
     """
-    link = (
-        db.query(Link)
-        .filter(Link.id == link_id, Link.owner == owner)
-        .first()
-    )
+    query = db.query(Link).filter(Link.id == link_id)
+    if owner is not None:
+        query = query.filter(Link.owner == owner)
+    link = query.first()
     if not link:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -154,15 +153,14 @@ def update_link(
     return _serialize_link(link)
 
 
-def delete_link(db: Session, link_id: int, owner: str):
+def delete_link(db: Session, link_id: int, owner: str | None):
     """
-    Delete one of the owner's links.
+    Delete one of the owner's links, or any link for admins.
     """
-    link = (
-        db.query(Link)
-        .filter(Link.id == link_id, Link.owner == owner)
-        .first()
-    )
+    query = db.query(Link).filter(Link.id == link_id)
+    if owner is not None:
+        query = query.filter(Link.owner == owner)
+    link = query.first()
     if not link:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -186,20 +184,16 @@ def delete_link(db: Session, link_id: int, owner: str):
 def reorder_links(
     db: Session,
     payload: ReorderRequest,
-    owner: str,
+    owner: str | None,
 ):
     """
-    Persist the order of one owner's links in a single transaction.
+    Persist the order of one owner's links, or every link for admins.
     """
     ids = [item.id for item in payload.items]
-    links = {
-        link.id: link
-        for link in (
-            db.query(Link)
-            .filter(Link.id.in_(ids), Link.owner == owner)
-            .all()
-        )
-    }
+    query = db.query(Link).filter(Link.id.in_(ids))
+    if owner is not None:
+        query = query.filter(Link.owner == owner)
+    links = {link.id: link for link in query.all()}
 
     missing = set(ids) - set(links)
     if missing:

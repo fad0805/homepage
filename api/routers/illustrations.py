@@ -47,6 +47,7 @@ from .utils import (
     get_client_ip,
     get_gallery_grants,
     get_optional_user,
+    is_admin,
     require_auth,
 )
 
@@ -62,16 +63,14 @@ def _parse_tags(value: str | None) -> list[str]:
 def _require_owned_illustration(
     db: Session,
     illustration_id: int,
-    user_id: int,
+    user,
 ):
-    illustration = (
-        db.query(Illustration)
-        .filter(
-            Illustration.id == illustration_id,
-            Illustration.user_id == user_id,
-        )
-        .first()
+    query = db.query(Illustration).filter(
+        Illustration.id == illustration_id
     )
+    if not is_admin(user):
+        query = query.filter(Illustration.user_id == user.id)
+    illustration = query.first()
     if not illustration:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -91,6 +90,8 @@ def read_illustrations(
     current_user=Depends(get_optional_user),
 ):
     """Return public illustrations plus the viewer's own hidden ones."""
+    if current_user is not None and is_admin(current_user):
+        return get_visible_illustrations(db, include_hidden=True)
     return get_visible_illustrations(
         db,
         viewer_user_id=current_user.id if current_user else None,
@@ -103,7 +104,10 @@ def read_all_illustrations(
     user=Depends(require_auth),
 ):
     """Return the signed-in user's illustration groups for the admin board."""
-    return get_all_illustrations(db, user.id)
+    return get_all_illustrations(
+        db,
+        None if is_admin(user) else user.id,
+    )
 
 
 @router.post("/bulk", response_model=IllustrationDetail)
@@ -146,6 +150,9 @@ async def upload_illustrations(
         )
     normalized_description = (description or "").strip() or None
 
+    if illustration_id is not None:
+        _require_owned_illustration(db, illustration_id, user)
+
     uploaded: list[str] = []
     try:
         for file in files:
@@ -182,7 +189,11 @@ def put_illustration_order(
     user=Depends(require_auth),
 ):
     """Persist the display order of the user's illustration groups."""
-    return reorder_illustrations(db, payload, user.id)
+    return reorder_illustrations(
+        db,
+        payload,
+        None if is_admin(user) else user.id,
+    )
 
 
 @router.patch("/bulk")
@@ -192,7 +203,11 @@ def patch_illustrations_bulk(
     user=Depends(require_auth),
 ):
     """Apply changes to the user's selected groups."""
-    updated = bulk_update_illustrations(db, payload, user.id)
+    updated = bulk_update_illustrations(
+        db,
+        payload,
+        None if is_admin(user) else user.id,
+    )
     return {"updated": updated}
 
 
@@ -203,7 +218,11 @@ def delete_illustrations_bulk(
     user=Depends(require_auth),
 ):
     """Delete the user's selected groups and their files."""
-    deleted = bulk_delete_illustrations(db, payload.ids, user.id)
+    deleted = bulk_delete_illustrations(
+        db,
+        payload.ids,
+        None if is_admin(user) else user.id,
+    )
     return {"deleted": deleted}
 
 
@@ -218,7 +237,7 @@ def put_illustration_image_order(
     user=Depends(require_auth),
 ):
     """Persist the order of photos inside one of the user's groups."""
-    _require_owned_illustration(db, illustration_id, user.id)
+    _require_owned_illustration(db, illustration_id, user)
     return reorder_illustration_images(db, illustration_id, payload)
 
 
@@ -233,7 +252,7 @@ def remove_illustration_image(
     user=Depends(require_auth),
 ):
     """Delete one photo from one of the user's groups."""
-    _require_owned_illustration(db, illustration_id, user.id)
+    _require_owned_illustration(db, illustration_id, user)
     return delete_illustration_image(db, illustration_id, image_id)
 
 
@@ -248,7 +267,7 @@ async def put_illustration_representative(
     user=Depends(require_auth),
 ):
     """Upload a separately cropped representative image."""
-    _require_owned_illustration(db, illustration_id, user.id)
+    _require_owned_illustration(db, illustration_id, user)
     url = await save_banner(file, folder="illustrations")
     try:
         return set_illustration_representative(
@@ -287,6 +306,12 @@ def read_illustration(
 ):
     """Return a single illustration, hiding images until it is unlocked."""
     grants = get_gallery_grants(request, db)
+    if current_user is not None and is_admin(current_user):
+        return get_visible_illustration(
+            db,
+            illustration_id,
+            include_hidden=True,
+        )
     return get_visible_illustration(
         db,
         illustration_id,
@@ -304,7 +329,7 @@ def modify_illustration(
     user=Depends(require_auth),
 ):
     """Update one of the user's illustrations."""
-    _require_owned_illustration(db, illustration_id, user.id)
+    _require_owned_illustration(db, illustration_id, user)
     return update_illustration(db, illustration_id, payload)
 
 
@@ -315,5 +340,5 @@ def remove_illustration(
     user=Depends(require_auth),
 ):
     """Delete one of the user's groups and all its uploaded files."""
-    _require_owned_illustration(db, illustration_id, user.id)
+    _require_owned_illustration(db, illustration_id, user)
     return delete_illustration(db, illustration_id)

@@ -107,10 +107,13 @@ def _group_query(db: Session):
 def get_visible_illustrations(
     db: Session,
     viewer_user_id: int | None = None,
+    include_hidden: bool = False,
 ):
-    """Return public groups plus the viewer's own hidden groups."""
+    """Return public groups, own hidden groups, or every group for admins."""
     query = _group_query(db)
-    if viewer_user_id is None:
+    if include_hidden and viewer_user_id is None:
+        pass
+    elif viewer_user_id is None:
         query = query.filter(Illustration.visible.is_(True))
     else:
         query = query.filter(
@@ -162,8 +165,14 @@ def get_visible_illustration(
             detail="삽화를 찾을 수 없습니다.",
         )
 
+    is_admin_view = (
+        include_hidden
+        and owner_user_id is None
+        and viewer_user_id is None
+    )
     is_owner = (
-        owner_user_id is not None
+        is_admin_view
+        or owner_user_id is not None
         or (
             viewer_user_id is not None
             and illustration.user_id == viewer_user_id
@@ -177,12 +186,16 @@ def get_visible_illustration(
     return _serialize_detail(illustration, locked=locked)
 
 
-def get_all_illustrations(db: Session, owner_user_id: int):
-    """Return the admin board for one user's illustration groups."""
+def get_all_illustrations(
+    db: Session,
+    owner_user_id: int | None,
+):
+    """Return the admin board for one user, or every group for admins."""
+    query = _group_query(db)
+    if owner_user_id is not None:
+        query = query.filter(Illustration.user_id == owner_user_id)
     illustrations = (
-        _group_query(db)
-        .filter(Illustration.user_id == owner_user_id)
-        .order_by(
+        query.order_by(
             Illustration.order.asc(),
             Illustration.created_at.desc(),
             Illustration.id.desc(),
@@ -450,18 +463,15 @@ def reorder_illustration_images(
 def reorder_illustrations(
     db: Session,
     payload: IllustrationReorderRequest,
-    owner_user_id: int,
+    owner_user_id: int | None,
 ):
-    """Persist the display order of one user's illustration groups."""
+    """Persist the display order of one user's or every group's order."""
     ids = [item.id for item in payload.items]
+    query = db.query(Illustration).filter(Illustration.id.in_(ids))
+    if owner_user_id is not None:
+        query = query.filter(Illustration.user_id == owner_user_id)
     illustrations = {
-        illustration.id: illustration
-        for illustration in db.query(Illustration)
-        .filter(
-            Illustration.id.in_(ids),
-            Illustration.user_id == owner_user_id,
-        )
-        .all()
+        illustration.id: illustration for illustration in query.all()
     }
 
     missing = set(ids) - set(illustrations)
@@ -485,7 +495,7 @@ def reorder_illustrations(
 def bulk_update_illustrations(
     db: Session,
     payload: IllustrationBulkUpdate,
-    owner_user_id: int,
+    owner_user_id: int | None,
 ):
     """Apply visibility or shooting date changes to many groups at once."""
     ids = set(payload.ids)
@@ -496,14 +506,10 @@ def bulk_update_illustrations(
         exclude_unset=True,
         exclude={"ids"},
     )
-    illustrations = (
-        db.query(Illustration)
-        .filter(
-            Illustration.id.in_(ids),
-            Illustration.user_id == owner_user_id,
-        )
-        .all()
-    )
+    query = db.query(Illustration).filter(Illustration.id.in_(ids))
+    if owner_user_id is not None:
+        query = query.filter(Illustration.user_id == owner_user_id)
+    illustrations = query.all()
     if not illustrations:
         return 0
 
@@ -530,21 +536,17 @@ def bulk_update_illustrations(
 def bulk_delete_illustrations(
     db: Session,
     ids: list[int],
-    owner_user_id: int,
+    owner_user_id: int | None,
 ):
     """Delete one user's illustration groups and all their files."""
     selected_ids = set(ids)
     if not selected_ids:
         return 0
 
-    illustrations = (
-        _group_query(db)
-        .filter(
-            Illustration.id.in_(selected_ids),
-            Illustration.user_id == owner_user_id,
-        )
-        .all()
-    )
+    query = _group_query(db).filter(Illustration.id.in_(selected_ids))
+    if owner_user_id is not None:
+        query = query.filter(Illustration.user_id == owner_user_id)
+    illustrations = query.all()
     if not illustrations:
         return 0
 

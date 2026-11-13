@@ -4,11 +4,16 @@ import { usePathname, useRouter } from "next/navigation";
 
 import "@/public/styles/admin/navbar.scss";
 import navigation from "@/config/navigation";
+import { useAuth } from "@/components/auth-provider";
 
 
 export const AdminNavbar = () => {
   const currentPath = usePathname();
   const router = useRouter();
+  const { isAdmin } = useAuth();
+  const rows = navigation.admin.rows
+    .map((row) => row.filter((item) => !item.adminOnly || isAdmin))
+    .filter((row) => row.length > 0);
 
   const isActive = (href: string) => {
     if (href === "/admin") {
@@ -18,7 +23,7 @@ export const AdminNavbar = () => {
   };
 
   return <nav id="admin-navbar">
-      {navigation.admin.rows.map((row, rowIndex) => (
+      {rows.map((row, rowIndex) => (
         <div className="admin-navbar__row" key={rowIndex}>
           {row.map((item) => (
             <Link

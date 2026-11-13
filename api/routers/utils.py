@@ -436,3 +436,18 @@ async def require_auth(
             headers={"WWW-Authenticate": "Bearer"},
         )
     return user
+
+
+def is_admin(user) -> bool:
+    """True when the signed-in user can manage every user's content."""
+    return getattr(user, "role", None) == "admin"
+
+
+async def require_admin(user=Depends(require_auth)):
+    """Dependency for global management endpoints."""
+    if not is_admin(user):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="관리자 권한이 필요합니다.",
+        )
+    return user

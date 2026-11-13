@@ -7,6 +7,7 @@ const API_BASE = (
 
 export interface CurrentUser {
   username: string;
+  role: string;
 }
 
 /**
@@ -45,9 +46,13 @@ export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
     const data = (await response.json()) as {
       success?: boolean;
       user?: unknown;
+      role?: unknown;
     };
     if (data.success && typeof data.user === "string") {
-      return { username: data.user };
+      return {
+        username: data.user,
+        role: data.role === "admin" ? "admin" : "user",
+      };
     }
   } catch (error) {
     console.error("Failed to check the current user.", error);

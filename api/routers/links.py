@@ -24,7 +24,7 @@ from schemas.links import (
     CategoryReorderRequest,
     UploadResponse,
 )
-from .utils import get_optional_user, require_auth
+from .utils import get_optional_user, is_admin, require_admin, require_auth
 
 router = APIRouter()
 
@@ -44,7 +44,7 @@ def get_link_categories(db: Session = Depends(get_db)):
 def post_link_category(
     category: Category,
     db: Session = Depends(get_db),
-    _=Depends(require_auth),
+    _=Depends(require_admin),
 ):
     """
     Create a new link category.
@@ -56,7 +56,7 @@ def post_link_category(
 def put_link_category_order(
     payload: CategoryReorderRequest,
     db: Session = Depends(get_db),
-    _=Depends(require_auth),
+    _=Depends(require_admin),
 ):
     """
     Persist the display order of link categories.
@@ -69,7 +69,7 @@ def modify_link_category(
     category_id: int,
     category: Category,
     db: Session = Depends(get_db),
-    _=Depends(require_auth),
+    _=Depends(require_admin),
 ):
     """
     Update an existing link category.
@@ -81,7 +81,7 @@ def modify_link_category(
 def remove_link_category(
     category_id: int,
     db: Session = Depends(get_db),
-    _=Depends(require_auth),
+    _=Depends(require_admin),
 ):
     """
     Delete a link category.
@@ -100,6 +100,8 @@ def get_links(
     """
     Get all links, or only the signed-in user's links.
     """
+    if current_user is not None and is_admin(current_user):
+        return get_all_links(db)
     if mine:
         if current_user is None:
             raise HTTPException(
@@ -132,7 +134,11 @@ def put_link_order(
     """
     Persist the display order of the user's links.
     """
-    return reorder_links(db, payload, user.username)
+    return reorder_links(
+        db,
+        payload,
+        None if is_admin(user) else user.username,
+    )
 
 
 @router.post("/upload", response_model=UploadResponse)
@@ -157,6 +163,8 @@ def get_link_detail(
     """
     Get a single link, or one of the signed-in user's links.
     """
+    if current_user is not None and is_admin(current_user):
+        return get_link(db, link_id)
     if mine:
         if current_user is None:
             raise HTTPException(
@@ -177,7 +185,12 @@ def modify_link(
     """
     Update one of the user's links.
     """
-    return update_link(db, link_id, link, user.username)
+    return update_link(
+        db,
+        link_id,
+        link,
+        None if is_admin(user) else user.username,
+    )
 
 
 @router.delete("/{link_id}")
@@ -189,4 +202,8 @@ def remove_link(
     """
     Delete one of the user's links.
     """
-    return delete_link(db, link_id, user.username)
+    return delete_link(
+        db,
+        link_id,
+        None if is_admin(user) else user.username,
+    )

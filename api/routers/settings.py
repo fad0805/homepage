@@ -19,7 +19,7 @@ from schemas.settings import (
     MastodonTestStatusResult,
 )
 
-from .utils import require_auth
+from .utils import require_admin
 
 router = APIRouter()
 
@@ -27,7 +27,7 @@ router = APIRouter()
 @router.get("/mastodon", response_model=MastodonSettingsRead)
 def get_mastodon(
     db: Session = Depends(get_db),
-    _=Depends(require_auth),
+    _=Depends(require_admin),
 ):
     """Return the saved Mastodon integration settings."""
     return read_mastodon_settings(db)
@@ -37,7 +37,7 @@ def get_mastodon(
 def put_mastodon(
     payload: MastodonSettingsUpdate,
     db: Session = Depends(get_db),
-    _=Depends(require_auth),
+    _=Depends(require_admin),
 ):
     """Save the Mastodon instance and access token."""
     return update_mastodon_settings(db, payload)
@@ -47,7 +47,7 @@ def put_mastodon(
 def test_mastodon(
     payload: MastodonTestRequest,
     db: Session = Depends(get_db),
-    _=Depends(require_auth),
+    _=Depends(require_admin),
 ):
     """Verify the credentials without changing the saved settings."""
     settings = get_mastodon_settings(db)
@@ -96,7 +96,7 @@ def test_mastodon(
 @router.post("/mastodon/test-status", response_model=MastodonTestStatusResult)
 def test_mastodon_status(
     db: Session = Depends(get_db),
-    _=Depends(require_auth),
+    _=Depends(require_admin),
 ):
     """Post a visible test status using the saved credentials."""
     settings = get_mastodon_settings(db)

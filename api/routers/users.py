@@ -33,6 +33,7 @@ from crud.users import (
     record_signin_history,
 )
 from db.session import get_db
+from models.users import User
 from schemas.users import UserCreate
 
 router = APIRouter()
@@ -66,10 +67,15 @@ def create_admin_for_dev():
         try:
             signup(username='admin', password='admin', db=db)
         except HTTPException as e:
-            if e.status_code == 400:
-                pass
-            else:
+            if e.status_code != 400:
                 raise e
+
+        # The development seed account is always an administrator.
+        admin = db.query(User).filter(User.username == 'admin').first()
+        if admin is not None and admin.role != 'admin':
+            admin.role = 'admin'
+            db.commit()
+
 
 @router.post("/signin")
 async def signin(
@@ -220,7 +226,11 @@ def get_current_user(
     )
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-    return {"success": True, "user": user.username}
+    return {
+        "success": True,
+        "user": user.username,
+        "role": user.role,
+    }
 
 
 @router.get("/me/status")
@@ -241,4 +251,8 @@ def get_current_user_status(
     )
     if not user:
         raise HTTPException(status_code=401, detail="Not authenticated")
-    return {"success": True, "user": user.username}
+    return {
+        "success": True,
+        "user": user.username,
+        "role": user.role,
+    }

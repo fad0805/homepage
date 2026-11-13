@@ -8,6 +8,13 @@ class User(Base):
     id = Column(Integer, primary_key=True, index=True)
     username = Column(String(50), unique=True, index=True, nullable=False)
     hashed_password = Column(String(128), nullable=False)
+    # "admin" can manage every user's content; "user" is limited to its own.
+    role = Column(
+        String(20),
+        nullable=False,
+        default="user",
+        server_default="user",
+    )
     created_at = Column(DateTime, default=func.now())
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
 
