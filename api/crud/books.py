@@ -243,9 +243,10 @@ def get_book(
     return _serialize_book(book)
 
 
-def create_book(db: Session, payload: BookCreate):
+def create_book(db: Session, payload: BookCreate, user_id: int):
     data = payload.model_dump()
     data["tags"] = _clean_tags(data.get("tags"))
+    data["user_id"] = user_id
     if data.get("category_id") is not None:
         _get_book_category_or_404(db, data["category_id"])
     book = Book(**data)
@@ -402,10 +403,11 @@ def _chapter_is_public(chapter: Chapter) -> bool:
     return published_at <= datetime.utcnow()
 
 
-def create_chapter(db: Session, payload: ChapterCreate):
+def create_chapter(db: Session, payload: ChapterCreate, user_id: int):
     _get_book_or_404(db, payload.book_id)
     data = payload.model_dump(exclude={"notify_mastodon"})
     data["tags"] = _clean_tags(data.get("tags"))
+    data["user_id"] = user_id
     chapter = Chapter(**data)
     db.add(chapter)
     db.commit()

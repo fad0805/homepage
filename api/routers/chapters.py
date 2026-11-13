@@ -60,9 +60,9 @@ def get_chapters(
 def post_chapter(
     payload: ChapterCreate,
     db: Session = Depends(get_db),
-    _=Depends(require_auth),
+    user=Depends(require_auth),
 ):
-    return create_chapter(db, payload)
+    return create_chapter(db, payload, user.id)
 
 
 @router.put("/reorder")

@@ -201,19 +201,20 @@ def _book_categories_data(db: Session) -> list[dict[str, Any]]:
 
 def _book_index_data(db: Session) -> list[dict[str, Any]]:
     rows = (
-        db.query(Book.id, func.count(Chapter.id))
+        db.query(Book.id, Book.user_id, func.count(Chapter.id))
         .outerjoin(Chapter, Chapter.book_id == Book.id)
-        .group_by(Book.id, Book.order)
+        .group_by(Book.id, Book.user_id, Book.order)
         .order_by(Book.order, Book.id)
         .all()
     )
     return [
         {
             "id": book_id,
+            "user_id": user_id,
             "path": f"data/books/{book_id}.json",
             "chapters": int(chapter_count),
         }
-        for book_id, chapter_count in rows
+        for book_id, user_id, chapter_count in rows
     ]
 
 
@@ -224,6 +225,8 @@ def _chapter_path(book_id: int, chapter_id: int) -> str:
 def _chapter_payload(chapter: Chapter) -> dict[str, Any]:
     return {
         "id": chapter.id,
+        "user_id": chapter.user_id,
+        "user": chapter.user.username if chapter.user else None,
         "book_id": chapter.book_id,
         "title": chapter.title,
         "subtitle": chapter.subtitle,
@@ -245,6 +248,8 @@ def _book_metadata(
 ) -> dict[str, Any]:
     return {
         "id": book.id,
+        "user_id": book.user_id,
+        "user": book.user.username if book.user else None,
         "title": book.title,
         "description": book.description,
         "tags": book.tags or [],

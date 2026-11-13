@@ -42,9 +42,9 @@ def get_books(
 def post_book(
     payload: BookCreate,
     db: Session = Depends(get_db),
-    _=Depends(require_auth),
+    user=Depends(require_auth),
 ):
-    return create_book(db, payload)
+    return create_book(db, payload, user.id)
 
 
 @router.put("/reorder")

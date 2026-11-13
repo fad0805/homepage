@@ -13,6 +13,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import relationship
 
 from db.base import Base
+from models.users import User
 
 
 class BookCategory(Base):
@@ -29,6 +30,12 @@ class Book(Base):
     __tablename__ = "books"
 
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    user_id = Column(
+        Integer,
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     title = Column(String, nullable=False)
     description = Column(Text, nullable=True)
     tags = Column(JSON, nullable=False, default=list)
@@ -51,6 +58,7 @@ class Book(Base):
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
 
     category_relation = relationship("BookCategory", back_populates="books")
+    user = relationship(User)
 
     chapters = relationship(
         "Chapter",
@@ -64,6 +72,12 @@ class Chapter(Base):
     __tablename__ = "chapters"
 
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    user_id = Column(
+        Integer,
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     book_id = Column(
         Integer,
         ForeignKey("books.id", ondelete="CASCADE"),
@@ -97,6 +111,7 @@ class Chapter(Base):
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
 
     book = relationship("Book", back_populates="chapters")
+    user = relationship(User)
 
 
 class ChapterView(Base):
