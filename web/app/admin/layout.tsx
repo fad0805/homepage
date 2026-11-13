@@ -39,7 +39,14 @@ export default function RootLayout({
     }
   }, [ready, isLoggedIn, isAdmin, blocked, router]);
 
-  if (ready && isLoggedIn && !isAdmin && blocked) {
+  // Do not render admin content until the role check has finished. This
+  // prevents a non-admin from briefly seeing the dashboard or admin-only
+  // pages before the client redirect runs.
+  if (!ready || !isLoggedIn) {
+    return null;
+  }
+
+  if (!isAdmin && blocked) {
     return null;
   }
 
