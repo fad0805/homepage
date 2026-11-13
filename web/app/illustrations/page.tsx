@@ -8,6 +8,7 @@ import {
 import { getGalleryGrants } from "@/lib/gallery-auth";
 import type { IllustrationItem } from "@/lib/illustration-types";
 import { serverApiFetch } from "@/lib/server-api";
+import { matchesAllTokens, searchTokens } from "@/lib/search";
 import { getCurrentUser } from "@/lib/server-auth";
 
 import { IllustrationGrid } from "./illustration-grid";
@@ -166,7 +167,7 @@ export default async function IllustrationsPage({
 }) {
   const params = await searchParams;
   const q = (firstParam(params.q) ?? "").trim().slice(0, 100);
-  const normalizedQuery = q.toLowerCase();
+  const queryTokens = searchTokens(q);
   const requestedPage = parsePage(params.page);
   const sort = parseSort(params.sort);
   const filterBasis = parseFilter(params.filter);
@@ -202,13 +203,12 @@ export default async function IllustrationsPage({
     failed = true;
   }
 
-  const searched = normalizedQuery
-    ? illustrations.filter(
-        (item) =>
-          item.title.toLowerCase().includes(normalizedQuery) ||
-          (item.tags ?? []).some((tag) =>
-            tag.toLowerCase().includes(normalizedQuery),
-          ),
+  const searched = queryTokens.length
+    ? illustrations.filter((item) =>
+        matchesAllTokens(
+          [item.title, ...(item.tags ?? [])],
+          queryTokens,
+        ),
       )
     : illustrations;
 

@@ -16,6 +16,7 @@ import { ImageLightbox, type LightboxImage } from "@/components/image-lightbox";
 import { Pagination } from "@/components/pagination";
 import { RssSubscribe } from "@/components/rss-subscribe";
 import { formatDateTime } from "@/lib/datetime";
+import { matchesAllTokens, searchTokens } from "@/lib/search";
 import type { Book, BookCategory, Chapter } from "./types";
 
 import "@/public/styles/books.scss";
@@ -337,26 +338,31 @@ export default function BooksClient({
   }, [visibleChapters]);
 
   const filteredBooks = useMemo(() => {
-    const query = searchQuery.trim().toLowerCase();
-    if (!query) return visibleBooks;
+    const tokens = searchTokens(searchQuery);
+    if (tokens.length === 0) return visibleBooks;
 
-    const matches = (value: string | null | undefined) =>
-      (value ?? "").toLowerCase().includes(query);
-    const chapterMatches = (chapter: Chapter) =>
-      matches(chapter.title) ||
-      matches(chapter.subtitle) ||
-      chapter.tags.some(matches);
+    const chapterValues = new Map<number, string[]>();
+    for (const chapter of visibleChapters) {
+      const values = chapterValues.get(chapter.book_id) ?? [];
+      values.push(
+        chapter.title,
+        chapter.subtitle ?? "",
+        ...(chapter.tags ?? []),
+      );
+      chapterValues.set(chapter.book_id, values);
+    }
 
-    return visibleBooks.filter(
-      (book) =>
-        matches(book.title) ||
-        matches(book.description) ||
-        matches(book.category?.name) ||
-        book.tags.some(matches) ||
-        visibleChapters.some(
-          (chapter) =>
-            chapter.book_id === book.id && chapterMatches(chapter),
-        ),
+    return visibleBooks.filter((book) =>
+      matchesAllTokens(
+        [
+          book.title,
+          book.description,
+          book.category?.name,
+          ...(book.tags ?? []),
+          ...(chapterValues.get(book.id) ?? []),
+        ],
+        tokens,
+      ),
     );
   }, [visibleBooks, searchQuery, visibleChapters]);
 
@@ -398,16 +404,18 @@ export default function BooksClient({
     const bookChapters = visibleChapters.filter(
       (chapter) => chapter.book_id === activeBook.id,
     );
-    const query = searchQuery.trim().toLowerCase();
-    if (!query) return bookChapters;
+    const tokens = searchTokens(searchQuery);
+    if (tokens.length === 0) return bookChapters;
 
-    const matches = (value: string | null | undefined) =>
-      (value ?? "").toLowerCase().includes(query);
-    return bookChapters.filter(
-      (chapter) =>
-        matches(chapter.title) ||
-        matches(chapter.subtitle) ||
-        chapter.tags.some(matches),
+    return bookChapters.filter((chapter) =>
+      matchesAllTokens(
+        [
+          chapter.title,
+          chapter.subtitle,
+          ...(chapter.tags ?? []),
+        ],
+        tokens,
+      ),
     );
   }, [activeBook, searchQuery, visibleChapters]);
 

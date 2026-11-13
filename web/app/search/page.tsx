@@ -4,6 +4,7 @@ import Link from "next/link";
 import { formatDate, formatDateTime } from "@/lib/datetime";
 import type { IllustrationItem } from "@/lib/illustration-types";
 import { serverApiFetch } from "@/lib/server-api";
+import { matchesAllTokens, searchTokens } from "@/lib/search";
 import { getCurrentUser } from "@/lib/server-auth";
 import type { Book, Chapter } from "../books/types";
 
@@ -30,19 +31,12 @@ function normalize(value: string) {
   return value.trim().toLowerCase();
 }
 
-function matchValues(
+function matchAll(
   values: Array<string | null | undefined>,
-  query: string,
+  tags: string[] | undefined,
+  tokens: string[],
 ) {
-  return values.some((value) =>
-    (value ?? "").toLowerCase().includes(query),
-  );
-}
-
-function matchTags(tags: string[] | undefined, query: string) {
-  return (tags ?? []).some((tag) =>
-    tag.toLowerCase().includes(query),
-  );
+  return matchesAllTokens([...values, ...(tags ?? [])], tokens);
 }
 
 function dateValue(value: string | null) {
@@ -88,7 +82,8 @@ export default async function SearchPage({
 }) {
   const params = await searchParams;
   const q = (firstParam(params.q) ?? "").trim().slice(0, MAX_QUERY_LENGTH);
-  const query = normalize(q);
+  const normalizedQuery = normalize(q);
+  const queryTokens = searchTokens(normalizedQuery);
 
   let books: Book[] = [];
   let chapters: Chapter[] = [];
@@ -129,27 +124,27 @@ export default async function SearchPage({
         new Date(chapter.published_at).getTime() <= now),
   );
 
-  const matchedBooks = query
-    ? visibleBooks.filter(
-        (book) =>
-          matchValues(
-            [book.title, book.description, book.category?.name],
-            query,
-          ) || matchTags(book.tags, query),
+  const matchedBooks = queryTokens.length
+    ? visibleBooks.filter((book) =>
+        matchAll(
+          [book.title, book.description, book.category?.name],
+          book.tags,
+          queryTokens,
+        ),
       )
     : [];
-  const matchedChapters = query
-    ? visibleChapters.filter(
-        (chapter) =>
-          matchValues([chapter.title, chapter.subtitle], query) ||
-          matchTags(chapter.tags, query),
+  const matchedChapters = queryTokens.length
+    ? visibleChapters.filter((chapter) =>
+        matchAll(
+          [chapter.title, chapter.subtitle],
+          chapter.tags,
+          queryTokens,
+        ),
       )
     : [];
-  const matchedIllustrations = query
-    ? illustrations.filter(
-        (item) =>
-          matchValues([item.title], query) ||
-          matchTags(item.tags, query),
+  const matchedIllustrations = queryTokens.length
+    ? illustrations.filter((item) =>
+        matchAll([item.title], item.tags, queryTokens),
       )
     : [];
 
@@ -183,7 +178,7 @@ export default async function SearchPage({
           />
           <button type="submit">검색</button>
         </form>
-        {query ? (
+        {queryTokens.length > 0 ? (
           <p className="search-summary">
             <strong>‘{q}’</strong> 검색 결과 {total}건
           </p>
@@ -196,7 +191,7 @@ export default async function SearchPage({
 
       {failed ? (
         <p className="search-state">검색 결과를 불러오지 못했습니다.</p>
-      ) : !query ? null : total === 0 ? (
+      ) : queryTokens.length === 0 ? null : total === 0 ? (
         <p className="search-state">검색 결과가 없습니다.</p>
       ) : (
         <>
