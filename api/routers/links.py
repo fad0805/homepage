@@ -24,7 +24,7 @@ from schemas.links import (
     CategoryReorderRequest,
     UploadResponse,
 )
-from .utils import get_optional_user, is_admin, require_admin, require_auth
+from .utils import get_optional_user, is_admin, require_auth
 
 router = APIRouter()
 
@@ -33,35 +33,38 @@ router = APIRouter()
 # Static paths must be declared before "/{link_id}" so they are not
 # captured by the dynamic route.
 @router.get("/categories")
-def get_link_categories(db: Session = Depends(get_db)):
+def get_link_categories(
+    db: Session = Depends(get_db),
+    user=Depends(require_auth),
+):
     """
-    Get all link categories.
+    Get the signed-in author's link categories.
     """
-    return get_all_link_categories(db)
+    return get_all_link_categories(db, user.id)
 
 
 @router.post("/categories")
 def post_link_category(
     category: Category,
     db: Session = Depends(get_db),
-    _=Depends(require_admin),
+    user=Depends(require_auth),
 ):
     """
     Create a new link category.
     """
-    return create_link_category(db, category)
+    return create_link_category(db, category, user.id)
 
 
 @router.put("/categories/reorder")
 def put_link_category_order(
     payload: CategoryReorderRequest,
     db: Session = Depends(get_db),
-    _=Depends(require_admin),
+    user=Depends(require_auth),
 ):
     """
-    Persist the display order of link categories.
+    Persist the display order of the signed-in author's categories.
     """
-    return reorder_link_categories(db, payload)
+    return reorder_link_categories(db, payload, user.id)
 
 
 @router.put("/categories/{category_id}")
@@ -69,24 +72,24 @@ def modify_link_category(
     category_id: int,
     category: Category,
     db: Session = Depends(get_db),
-    _=Depends(require_admin),
+    user=Depends(require_auth),
 ):
     """
-    Update an existing link category.
+    Update one of the signed-in author's link categories.
     """
-    return update_link_category(db, category_id, category)
+    return update_link_category(db, category_id, category, user.id)
 
 
 @router.delete("/categories/{category_id}")
 def remove_link_category(
     category_id: int,
     db: Session = Depends(get_db),
-    _=Depends(require_admin),
+    user=Depends(require_auth),
 ):
     """
-    Delete a link category.
+    Delete one of the signed-in author's link categories.
     """
-    return delete_link_category(db, category_id)
+    return delete_link_category(db, category_id, user.id)
 
 
 # Links

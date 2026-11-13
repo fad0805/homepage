@@ -189,8 +189,19 @@ def _sync_relationships(
         )
 
 
-def _get_location_or_404(db: Session, location_id: int) -> Location:
-    location = db.query(Location).filter(Location.id == location_id).first()
+def _get_location_or_404(
+    db: Session,
+    location_id: int,
+    user_id: int,
+) -> Location:
+    location = (
+        db.query(Location)
+        .filter(
+            Location.id == location_id,
+            Location.user_id == user_id,
+        )
+        .first()
+    )
     if not location:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -215,8 +226,12 @@ def _next_character_order(
     return 0 if max_order is None else max_order + 1
 
 
-def _next_location_order(db: Session) -> int:
-    max_order = db.query(func.max(Location.order)).scalar()
+def _next_location_order(db: Session, user_id: int) -> int:
+    max_order = (
+        db.query(func.max(Location.order))
+        .filter(Location.user_id == user_id)
+        .scalar()
+    )
     return 0 if max_order is None else max_order + 1
 
 
@@ -291,7 +306,7 @@ def create_character(
     )
 
     if data.get("location_id") is not None:
-        _get_location_or_404(db, data["location_id"])
+        _get_location_or_404(db, data["location_id"], user_id)
 
     data["user_id"] = user_id
     data["order_in_location"] = (
@@ -356,7 +371,7 @@ def update_character(
         data.pop("layout", None)
 
     if "location_id" in data and data["location_id"] is not None:
-        _get_location_or_404(db, data["location_id"])
+        _get_location_or_404(db, data["location_id"], user_id)
 
     if (
         "location_id" in data
@@ -519,6 +534,7 @@ def reorder_characters(
         for item in payload.items:
             character = characters[item.id]
             if item.location_id is not None:
+                _get_location_or_404(db, item.location_id, user_id)
                 character.location_id = item.location_id
             character.order_in_location = item.order_in_location
         db.commit()
@@ -530,22 +546,34 @@ def reorder_characters(
 
 
 # Character Location CRUD Operations
-def get_all_locations(db: Session):
+def get_all_locations(db: Session, user_id: int):
     """
-    Get all character locations ordered by display order.
+    Get the signed-in author's character locations.
     """
-    locations = db.query(Location).order_by(Location.order, Location.id).all()
+    locations = (
+        db.query(Location)
+        .filter(Location.user_id == user_id)
+        .order_by(Location.order, Location.id)
+        .all()
+    )
     return [_serialize_location(location) for location in locations]
 
 
-def create_location(db: Session, location: LocationCreate):
+def create_location(
+    db: Session,
+    location: LocationCreate,
+    user_id: int,
+):
     """
-    Create a new character location.
+    Create a new character location owned by the signed-in author.
     """
     order = (
-        location.order if location.order is not None else _next_location_order(db)
+        location.order
+        if location.order is not None
+        else _next_location_order(db, user_id)
     )
     db_location = Location(
+        user_id=user_id,
         name=location.name,
         description=location.description,
         order=order,
@@ -556,16 +584,16 @@ def create_location(db: Session, location: LocationCreate):
     return _serialize_location(db_location)
 
 
-def update_location(db: Session, location_id: int, updated: LocationUpdate):
+def update_location(
+    db: Session,
+    location_id: int,
+    updated: LocationUpdate,
+    user_id: int,
+):
     """
-    Update an existing character location.
+    Update one of the signed-in author's locations.
     """
-    location = db.query(Location).filter(Location.id == location_id).first()
-    if not location:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Does not exist location",
-        )
+    location = _get_location_or_404(db, location_id, user_id)
 
     for key, value in updated.model_dump(exclude_unset=True).items():
         setattr(location, key, value)
@@ -575,16 +603,15 @@ def update_location(db: Session, location_id: int, updated: LocationUpdate):
     return _serialize_location(location)
 
 
-def delete_location(db: Session, location_id: int):
+def delete_location(
+    db: Session,
+    location_id: int,
+    user_id: int,
+):
     """
-    Delete a character location.
+    Delete one of the signed-in author's locations.
     """
-    location = db.query(Location).filter(Location.id == location_id).first()
-    if not location:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Does not exist location",
-        )
+    location = _get_location_or_404(db, location_id, user_id)
 
     character_count = (
         db.query(Character).filter(Character.location_id == location_id).count()
@@ -603,14 +630,25 @@ def delete_location(db: Session, location_id: int):
     return True
 
 
-def reorder_locations(db: Session, payload: LocationReorderRequest):
+def reorder_locations(
+    db: Session,
+    payload: LocationReorderRequest,
+    user_id: int,
+):
     """
-    Persist the display order of multiple locations in a single transaction.
+    Persist the display order of the signed-in author's locations.
     """
     ids = [item.id for item in payload.items]
     locations = {
         location.id: location
-        for location in db.query(Location).filter(Location.id.in_(ids)).all()
+        for location in (
+            db.query(Location)
+            .filter(
+                Location.id.in_(ids),
+                Location.user_id == user_id,
+            )
+            .all()
+        )
     }
 
     missing = set(ids) - set(locations)

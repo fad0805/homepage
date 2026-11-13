@@ -193,15 +193,7 @@ def _book_categories_data(
 ) -> list[dict[str, Any]]:
     query = db.query(BookCategory)
     if user_id is not None:
-        # Categories are shared, so only include the ones this author uses.
-        query = query.filter(
-            BookCategory.id.in_(
-                db.query(Book.category_id).filter(
-                    Book.user_id == user_id,
-                    Book.category_id.is_not(None),
-                )
-            )
-        )
+        query = query.filter(BookCategory.user_id == user_id)
     return [
         {
             "id": category.id,
@@ -439,14 +431,7 @@ def _character_data(
 
     location_query = db.query(Location)
     if user_id is not None:
-        location_ids = {
-            character.location_id
-            for character in character_rows
-            if character.location_id is not None
-        }
-        location_query = location_query.filter(
-            Location.id.in_(location_ids)
-        )
+        location_query = location_query.filter(Location.user_id == user_id)
     locations = [
         {
             "id": location.id,
@@ -515,9 +500,8 @@ def _link_data(
 
     category_query = db.query(LinkCategory)
     if user_id is not None:
-        category_ids = {link.category for link in link_rows}
         category_query = category_query.filter(
-            LinkCategory.id.in_(category_ids)
+            LinkCategory.user_id == user_id
         )
     link_categories = [
         {

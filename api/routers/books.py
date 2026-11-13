@@ -23,7 +23,7 @@ from schemas.books import (
     BookReorderRequest,
     BookUpdate,
 )
-from .utils import get_optional_user, is_admin, require_admin, require_auth
+from .utils import get_optional_user, is_admin, require_auth
 
 router = APIRouter()
 
@@ -76,26 +76,29 @@ def put_book_order(
 
 # Book categories. Static paths must be declared before "/{book_id}".
 @router.get("/categories")
-def get_book_categories(db: Session = Depends(get_db)):
-    return get_all_book_categories(db)
+def get_book_categories(
+    db: Session = Depends(get_db),
+    user=Depends(require_auth),
+):
+    return get_all_book_categories(db, user.id)
 
 
 @router.post("/categories")
 def post_book_category(
     payload: BookCategoryCreate,
     db: Session = Depends(get_db),
-    _=Depends(require_admin),
+    user=Depends(require_auth),
 ):
-    return create_book_category(db, payload)
+    return create_book_category(db, payload, user.id)
 
 
 @router.put("/categories/reorder")
 def put_book_category_order(
     payload: BookCategoryReorderRequest,
     db: Session = Depends(get_db),
-    _=Depends(require_admin),
+    user=Depends(require_auth),
 ):
-    return reorder_book_categories(db, payload)
+    return reorder_book_categories(db, payload, user.id)
 
 
 @router.put("/categories/{category_id}")
@@ -103,18 +106,18 @@ def put_book_category(
     category_id: int,
     payload: BookCategoryUpdate,
     db: Session = Depends(get_db),
-    _=Depends(require_admin),
+    user=Depends(require_auth),
 ):
-    return update_book_category(db, category_id, payload)
+    return update_book_category(db, category_id, payload, user.id)
 
 
 @router.delete("/categories/{category_id}")
 def remove_book_category(
     category_id: int,
     db: Session = Depends(get_db),
-    _=Depends(require_admin),
+    user=Depends(require_auth),
 ):
-    return delete_book_category(db, category_id)
+    return delete_book_category(db, category_id, user.id)
 
 
 @router.get("/{book_id}")

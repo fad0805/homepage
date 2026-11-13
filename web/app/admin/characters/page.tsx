@@ -30,7 +30,6 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 
-import { useAuth } from "@/components/auth-provider";
 import {
   ImageCropModal,
   type CropStageConfig,
@@ -498,7 +497,6 @@ function SortableLocationSection({
 }
 
 export default function AdminCharacters() {
-  const { isAdmin } = useAuth();
   const [locations, setLocations] = useState<Location[]>([]);
   const [characters, setCharacters] = useState<DraftCharacter[]>([]);
   const [locationFilter, setLocationFilter] = useState<number | "all">(
@@ -710,9 +708,6 @@ export default function AdminCharacters() {
       const activeData = active.data.current;
 
       if (activeData?.type === LOCATION_TYPE) {
-        if (!isAdmin) {
-          return;
-        }
         const oldIndex = locations.findIndex(
           (location) => `${LOCATION_TYPE}-${location.id}` === active.id,
         );
@@ -766,7 +761,6 @@ export default function AdminCharacters() {
     [
       characters,
       charactersByLocation,
-      isAdmin,
       locations,
       markLocationReordered,
     ],
@@ -1567,15 +1561,13 @@ export default function AdminCharacters() {
           >
             {saving ? "저장 중..." : "변경사항 저장"}
           </button>
-          {isAdmin ? (
-            <button
-              type="button"
-              className="admin-button"
-              onClick={openCreateLocation}
-            >
-              위치 추가
-            </button>
-          ) : null}
+          <button
+            type="button"
+            className="admin-button"
+            onClick={openCreateLocation}
+          >
+            위치 추가
+          </button>
           <button
             type="button"
             className="admin-button"
@@ -1597,9 +1589,7 @@ export default function AdminCharacters() {
         <div className="admin-links-loading">불러오는 중...</div>
       ) : locations.length === 0 ? (
         <p className="admin-links-empty">
-          {isAdmin
-            ? "위치가 없습니다. 먼저 위치를 추가해주세요."
-            : "위치가 없습니다. 관리자에게 위치 추가를 요청해주세요."}
+          위치가 없습니다. 먼저 위치를 추가해주세요.
         </p>
       ) : (
         <DndContext
@@ -1619,7 +1609,7 @@ export default function AdminCharacters() {
                   key={location.id}
                   location={location}
                   characters={charactersByLocation.get(location.id) ?? []}
-                  canManageLocation={isAdmin}
+                  canManageLocation
                   onAddCharacter={openCreateCharacter}
                   onEditLocation={openEditLocation}
                   onDeleteLocation={handleDeleteLocation}

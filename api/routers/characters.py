@@ -29,7 +29,7 @@ from schemas.characters import (
     LocationUpdate,
     UploadResponse,
 )
-from .utils import get_optional_user, is_admin, require_admin, require_auth
+from .utils import get_optional_user, is_admin, require_auth
 
 router = APIRouter()
 
@@ -38,35 +38,38 @@ router = APIRouter()
 # Static paths must be declared before "/{character_id}" so they are not
 # captured by the dynamic route.
 @router.get("/locations")
-def get_locations(db: Session = Depends(get_db)):
+def get_locations(
+    db: Session = Depends(get_db),
+    user=Depends(require_auth),
+):
     """
-    Get all character locations.
+    Get the signed-in author's character locations.
     """
-    return get_all_locations(db)
+    return get_all_locations(db, user.id)
 
 
 @router.post("/locations")
 def post_location(
     location: LocationCreate,
     db: Session = Depends(get_db),
-    _=Depends(require_admin),
+    user=Depends(require_auth),
 ):
     """
     Create a new character location.
     """
-    return create_location(db, location)
+    return create_location(db, location, user.id)
 
 
 @router.put("/locations/reorder")
 def put_location_order(
     payload: LocationReorderRequest,
     db: Session = Depends(get_db),
-    _=Depends(require_admin),
+    user=Depends(require_auth),
 ):
     """
-    Persist the display order of character locations.
+    Persist the display order of the signed-in author's locations.
     """
-    return reorder_locations(db, payload)
+    return reorder_locations(db, payload, user.id)
 
 
 @router.put("/locations/{location_id}")
@@ -74,24 +77,24 @@ def modify_location(
     location_id: int,
     location: LocationUpdate,
     db: Session = Depends(get_db),
-    _=Depends(require_admin),
+    user=Depends(require_auth),
 ):
     """
-    Update an existing character location.
+    Update one of the signed-in author's locations.
     """
-    return update_location(db, location_id, location)
+    return update_location(db, location_id, location, user.id)
 
 
 @router.delete("/locations/{location_id}")
 def remove_location(
     location_id: int,
     db: Session = Depends(get_db),
-    _=Depends(require_admin),
+    user=Depends(require_auth),
 ):
     """
-    Delete a character location.
+    Delete one of the signed-in author's locations.
     """
-    return delete_location(db, location_id)
+    return delete_location(db, location_id, user.id)
 
 
 # Characters

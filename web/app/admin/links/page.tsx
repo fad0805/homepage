@@ -30,7 +30,6 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 
-import { useAuth } from "@/components/auth-provider";
 import { maybeRevalidatePublicContent } from "@/lib/revalidate";
 
 import "@/public/styles/admin/links.scss";
@@ -385,7 +384,6 @@ function SortableCategorySection({
 }
 
 export default function AdminLinks() {
-  const { isAdmin } = useAuth();
   const [categories, setCategories] = useState<Category[]>([]);
   const [links, setLinks] = useState<DraftLink[]>([]);
   const [categoryFilter, setCategoryFilter] = useState<number | "all">(
@@ -542,9 +540,6 @@ export default function AdminLinks() {
       const activeData = active.data.current;
 
       if (activeData?.type === CATEGORY_TYPE) {
-        if (!isAdmin) {
-          return;
-        }
         const oldIndex = categories.findIndex(
           (category) => `${CATEGORY_TYPE}-${category.id}` === active.id,
         );
@@ -594,7 +589,7 @@ export default function AdminLinks() {
       });
       setIsDirty(true);
     },
-    [categories, isAdmin, links, linksByCategory],
+    [categories, links, linksByCategory],
   );
 
   const uploadBanner = useCallback(async (file: File) => {
@@ -1102,15 +1097,13 @@ export default function AdminLinks() {
           >
             {saving ? "저장 중..." : "변경사항 저장"}
           </button>
-          {isAdmin ? (
-            <button
-              type="button"
-              className="admin-button"
-              onClick={openCreateCategory}
-            >
-              카테고리 추가
-            </button>
-          ) : null}
+          <button
+            type="button"
+            className="admin-button"
+            onClick={openCreateCategory}
+          >
+            카테고리 추가
+          </button>
           <button
             type="button"
             className="admin-button"
@@ -1132,9 +1125,7 @@ export default function AdminLinks() {
         <div className="admin-links-loading">불러오는 중...</div>
       ) : categories.length === 0 ? (
         <p className="admin-links-empty">
-          {isAdmin
-            ? "카테고리가 없습니다. 먼저 카테고리를 추가해주세요."
-            : "카테고리가 없습니다. 관리자에게 카테고리 추가를 요청해주세요."}
+          카테고리가 없습니다. 먼저 카테고리를 추가해주세요.
         </p>
       ) : (
         <DndContext
@@ -1154,7 +1145,7 @@ export default function AdminLinks() {
                   key={category.id}
                   category={category}
                   links={linksByCategory.get(category.id) ?? []}
-                  canManageCategory={isAdmin}
+                  canManageCategory
                   onAddLink={openCreateLink}
                   onEditCategory={openEditCategory}
                   onDeleteCategory={handleDeleteCategory}

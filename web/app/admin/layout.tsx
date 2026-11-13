@@ -2,6 +2,7 @@
 import React, { useEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { AdminNavbar } from '@/components/admin-navbar';
+import { AdminLogoutButton } from '@/components/admin-logout-button';
 
 import { useAuth } from "@/components/auth-provider";
 
@@ -27,7 +28,7 @@ export default function RootLayout({
       return;
     }
     if (ready && isLoggedIn && !isAdmin && blocked) {
-      router.replace('/admin/books');
+      router.replace('/admin/author');
     }
   }, [ready, isLoggedIn, isAdmin, blocked, router]);
 
@@ -46,6 +47,9 @@ export default function RootLayout({
     <div className="admin-layout">
       <AdminNavbar />
       {children}
+      <div className="admin-account-bar">
+        <AdminLogoutButton />
+      </div>
     </div>
   );
 }

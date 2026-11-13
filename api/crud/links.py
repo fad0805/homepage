@@ -51,9 +51,34 @@ def _next_link_order(db: Session, category_id: int) -> int:
     return 0 if max_order is None else max_order + 1
 
 
-def _next_category_order(db: Session) -> int:
-    max_order = db.query(func.max(Category.order)).scalar()
+def _next_category_order(db: Session, user_id: int) -> int:
+    max_order = (
+        db.query(func.max(Category.order))
+        .filter(Category.user_id == user_id)
+        .scalar()
+    )
     return 0 if max_order is None else max_order + 1
+
+
+def _get_link_category_or_404(
+    db: Session,
+    category_id: int,
+    user_id: int,
+) -> Category:
+    category = (
+        db.query(Category)
+        .filter(
+            Category.id == category_id,
+            Category.user_id == user_id,
+        )
+        .first()
+    )
+    if not category:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Does not exist link's category",
+        )
+    return category
 
 
 # Link CRUD Operations
@@ -109,6 +134,7 @@ def create_link(
     """
     Create a new link owned by the signed-in author.
     """
+    _get_link_category_or_404(db, link.category, user_id)
     data = link.model_dump(exclude={"owner", "order"})
     data["user_id"] = user_id
     data["owner"] = owner or "admin"
@@ -151,6 +177,8 @@ def update_link(
     old_banner_url = link.banner_url
 
     data = updated_link.model_dump(exclude_unset=True)
+    if "category" in data:
+        _get_link_category_or_404(db, data["category"], user_id)
     if (
         "category" in data
         and "order" not in data
@@ -242,6 +270,7 @@ def reorder_links(
         for item in payload.items:
             link = links[item.id]
             if item.category is not None:
+                _get_link_category_or_404(db, item.category, user_id)
                 link.category = item.category
             link.order = item.order
         db.commit()
@@ -253,40 +282,49 @@ def reorder_links(
 
 
 # Link Categories CRUD Operations
-def get_all_link_categories(db: Session):
+def get_all_link_categories(db: Session, user_id: int):
     """
-    Get all link categories ordered by their display order.
+    Get the signed-in author's link categories.
     """
-    categories = db.query(Category).order_by(Category.order, Category.id).all()
+    categories = (
+        db.query(Category)
+        .filter(Category.user_id == user_id)
+        .order_by(Category.order, Category.id)
+        .all()
+    )
     return [_serialize_category(category) for category in categories]
 
 
-def create_link_category(db: Session, category: CategorySchema):
+def create_link_category(
+    db: Session,
+    category: CategorySchema,
+    user_id: int,
+):
     """
-    Create a new category in the database.
+    Create a new category owned by the signed-in author.
     """
     order = (
         category.order
         if category.order is not None
-        else _next_category_order(db)
+        else _next_category_order(db, user_id)
     )
-    db_category = Category(name=category.name, order=order)
+    db_category = Category(user_id=user_id, name=category.name, order=order)
     db.add(db_category)
     db.commit()
     db.refresh(db_category)
     return _serialize_category(db_category)
 
 
-def update_link_category(db: Session, category_id: int, updated_category: CategorySchema):
+def update_link_category(
+    db: Session,
+    category_id: int,
+    updated_category: CategorySchema,
+    user_id: int,
+):
     """
-    Update an existing category in the database.
+    Update one of the signed-in author's categories.
     """
-    category = db.query(Category).filter(Category.id == category_id).first()
-    if not category:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Does not exist link's category",
-        )
+    category = _get_link_category_or_404(db, category_id, user_id)
 
     category.name = updated_category.name
     if updated_category.order is not None:
@@ -297,16 +335,15 @@ def update_link_category(db: Session, category_id: int, updated_category: Catego
     return _serialize_category(category)
 
 
-def delete_link_category(db: Session, category_id: int):
+def delete_link_category(
+    db: Session,
+    category_id: int,
+    user_id: int,
+):
     """
-    Delete a category from the database.
+    Delete one of the signed-in author's categories.
     """
-    category = db.query(Category).filter(Category.id == category_id).first()
-    if not category:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Does not exist link's category",
-        )
+    category = _get_link_category_or_404(db, category_id, user_id)
 
     link_count = db.query(Link).filter(Link.category == category_id).count()
     if link_count > 0:
@@ -323,14 +360,25 @@ def delete_link_category(db: Session, category_id: int):
     return True
 
 
-def reorder_link_categories(db: Session, payload: CategoryReorderRequest):
+def reorder_link_categories(
+    db: Session,
+    payload: CategoryReorderRequest,
+    user_id: int,
+):
     """
-    Persist the order of multiple categories in a single transaction.
+    Persist the order of the signed-in author's categories.
     """
     ids = [item.id for item in payload.items]
     categories = {
         category.id: category
-        for category in db.query(Category).filter(Category.id.in_(ids)).all()
+        for category in (
+            db.query(Category)
+            .filter(
+                Category.id.in_(ids),
+                Category.user_id == user_id,
+            )
+            .all()
+        )
     }
 
     missing = set(ids) - set(categories)

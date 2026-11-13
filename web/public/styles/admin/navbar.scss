@@ -59,3 +59,33 @@ nav#admin-navbar a {
     color: var(--admin-navbar-active-color);
   }
 }
+
+
+div#content > .admin-layout > .admin-account-bar {
+  display: flex;
+  justify-content: flex-end;
+  width: 80%;
+  margin: 0 0 1.25rem;
+
+  @media (width < 600px) {
+    width: 92%;
+    margin-bottom: 1rem;
+  }
+}
+
+.admin-account-logout {
+  padding: 0.28rem 0.55rem;
+  border: 1px solid transparent;
+  border-radius: 0.55rem;
+  background: transparent;
+  color: var(--admin-muted);
+  font-family: inherit;
+  font-size: 0.72rem;
+  cursor: pointer;
+  opacity: 0.8;
+
+  &:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+}

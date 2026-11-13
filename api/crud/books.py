@@ -76,11 +76,14 @@ def _serialize_book_category(category: BookCategory) -> dict:
 
 
 def _get_book_category_or_404(
-    db: Session, category_id: int
+    db: Session, category_id: int, user_id: int
 ) -> BookCategory:
     category = (
         db.query(BookCategory)
-        .filter(BookCategory.id == category_id)
+        .filter(
+            BookCategory.id == category_id,
+            BookCategory.user_id == user_id,
+        )
         .first()
     )
     if not category:
@@ -91,15 +94,20 @@ def _get_book_category_or_404(
     return category
 
 
-def _next_book_category_order(db: Session) -> int:
-    max_order = db.query(func.max(BookCategory.order)).scalar()
+def _next_book_category_order(db: Session, user_id: int) -> int:
+    max_order = (
+        db.query(func.max(BookCategory.order))
+        .filter(BookCategory.user_id == user_id)
+        .scalar()
+    )
     return 0 if max_order is None else max_order + 1
 
 
 # Book Categories CRUD
-def get_all_book_categories(db: Session):
+def get_all_book_categories(db: Session, user_id: int):
     categories = (
         db.query(BookCategory)
+        .filter(BookCategory.user_id == user_id)
         .order_by(BookCategory.order, BookCategory.id)
         .all()
     )
@@ -108,7 +116,11 @@ def get_all_book_categories(db: Session):
     ]
 
 
-def create_book_category(db: Session, payload: BookCategoryCreate):
+def create_book_category(
+    db: Session,
+    payload: BookCategoryCreate,
+    user_id: int,
+):
     name = payload.name.strip()
     if not name:
         raise HTTPException(
@@ -119,9 +131,9 @@ def create_book_category(db: Session, payload: BookCategoryCreate):
     order = (
         payload.order
         if payload.order is not None
-        else _next_book_category_order(db)
+        else _next_book_category_order(db, user_id)
     )
-    category = BookCategory(name=name, order=order)
+    category = BookCategory(user_id=user_id, name=name, order=order)
     db.add(category)
     db.commit()
     db.refresh(category)
@@ -129,9 +141,12 @@ def create_book_category(db: Session, payload: BookCategoryCreate):
 
 
 def update_book_category(
-    db: Session, category_id: int, payload: BookCategoryUpdate
+    db: Session,
+    category_id: int,
+    payload: BookCategoryUpdate,
+    user_id: int,
 ):
-    category = _get_book_category_or_404(db, category_id)
+    category = _get_book_category_or_404(db, category_id, user_id)
     data = payload.model_dump(exclude_unset=True)
     if "name" in data:
         name = (data["name"] or "").strip()
@@ -149,8 +164,12 @@ def update_book_category(
     return _serialize_book_category(category)
 
 
-def delete_book_category(db: Session, category_id: int):
-    category = _get_book_category_or_404(db, category_id)
+def delete_book_category(
+    db: Session,
+    category_id: int,
+    user_id: int,
+):
+    category = _get_book_category_or_404(db, category_id, user_id)
     book_count = (
         db.query(Book).filter(Book.category_id == category_id).count()
     )
@@ -169,13 +188,18 @@ def delete_book_category(db: Session, category_id: int):
 
 
 def reorder_book_categories(
-    db: Session, payload: BookCategoryReorderRequest
+    db: Session,
+    payload: BookCategoryReorderRequest,
+    user_id: int,
 ):
     ids = [item.id for item in payload.items]
     categories = {
         category.id: category
         for category in db.query(BookCategory)
-        .filter(BookCategory.id.in_(ids))
+        .filter(
+            BookCategory.id.in_(ids),
+            BookCategory.user_id == user_id,
+        )
         .all()
     }
     missing = set(ids) - set(categories)
@@ -278,7 +302,7 @@ def create_book(db: Session, payload: BookCreate, user_id: int):
     data["tags"] = _clean_tags(data.get("tags"))
     data["user_id"] = user_id
     if data.get("category_id") is not None:
-        _get_book_category_or_404(db, data["category_id"])
+        _get_book_category_or_404(db, data["category_id"], user_id)
     book = Book(**data)
     db.add(book)
     db.commit()
@@ -306,7 +330,11 @@ def update_book(
     if "tags" in data:
         data["tags"] = _clean_tags(data["tags"])
     if data.get("category_id") is not None:
-        _get_book_category_or_404(db, data["category_id"])
+        _get_book_category_or_404(
+            db,
+            data["category_id"],
+            book.user_id,
+        )
     for key, value in data.items():
         setattr(book, key, value)
     db.commit()

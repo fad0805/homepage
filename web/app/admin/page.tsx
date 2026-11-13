@@ -128,7 +128,6 @@ export default function AdminHome() {
   const [error, setError] = useState<string | null>(null);
   const [now, setNow] = useState<number | null>(null);
   const [showAllPosts, setShowAllPosts] = useState(false);
-  const [loggingOut, setLoggingOut] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -157,19 +156,6 @@ export default function AdminHome() {
   useEffect(() => {
     load();
   }, [load]);
-
-  const handleLogout = useCallback(async () => {
-    if (loggingOut) return;
-    setLoggingOut(true);
-    try {
-      await fetch("/api/users/signout", {
-        method: "POST",
-        credentials: "include",
-      });
-    } finally {
-      window.location.href = "/signin";
-    }
-  }, [loggingOut]);
 
   useEffect(() => {
     setNow(Date.now());
@@ -292,16 +278,6 @@ export default function AdminHome() {
           <p className="admin-dashboard-subtitle">
             책과 챕터, 등장인물과 링크의 현황을 한눈에 확인하세요.
           </p>
-        </div>
-        <div className="admin-dashboard-actions admin-dashboard-actions--header">
-          <button
-            type="button"
-            className="admin-button admin-dashboard-logout"
-            onClick={handleLogout}
-            disabled={loggingOut}
-          >
-            {loggingOut ? "로그아웃 중..." : "로그아웃"}
-          </button>
         </div>
       </header>
 
@@ -588,17 +564,6 @@ export default function AdminHome() {
           </div>
         </>
       ) : null}
-
-      <div className="admin-dashboard-actions admin-dashboard-actions--mobile">
-        <button
-          type="button"
-          className="admin-button admin-dashboard-logout"
-          onClick={handleLogout}
-          disabled={loggingOut}
-        >
-          {loggingOut ? "로그아웃 중..." : "로그아웃"}
-        </button>
-      </div>
     </div>
   );
 }

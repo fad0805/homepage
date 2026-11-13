@@ -8,10 +8,17 @@ from models.users import User
 class Category(Base):
     __tablename__ = "links-categories"
     id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(
+        Integer,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
     name = Column(String(255), nullable=False)
     order = Column(Integer, nullable=False, default=0, server_default="0")
 
     links = relationship("Link", back_populates="category_relation")
+    user = relationship(User)
 
 class Link(Base):
     __tablename__ = "links"
