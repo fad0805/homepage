@@ -3,13 +3,14 @@ import Link from "next/link";
 
 import {
   dateInputValue,
-  formatDate,
   todayDateInputValue,
 } from "@/lib/datetime";
+import { getGalleryGrants } from "@/lib/gallery-auth";
 import type { IllustrationItem } from "@/lib/illustration-types";
 import { serverApiFetch } from "@/lib/server-api";
 import { getCurrentUser } from "@/lib/server-auth";
 
+import { IllustrationGrid } from "./illustration-grid";
 import { IllustrationSearch } from "./illustration-search";
 
 import "@/public/styles/illustrations.scss";
@@ -213,6 +214,10 @@ export default async function IllustrationsPage({
       )
     : illustrations;
 
+  const unlockedIllustrationIds = currentUser
+    ? null
+    : [...(await getGalleryGrants()).illustrations];
+
   const filtered = filterIllustrations(
     searched,
     filterBasis,
@@ -317,55 +322,18 @@ export default async function IllustrationsPage({
         </p>
       ) : (
         <>
-          <div className="illustrations-grid">
-            {visible.map((item) => (
-              <article className="illustration-card" key={item.id}>
-                <Link
-                  className="illustration-card__link"
-                  href={`/illustrations/${item.id}`}
-                >
-                  <div className="illustration-card__thumb">
-                    {item.representative_url ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={item.representative_url}
-                        alt={item.title}
-                        loading="lazy"
-                        decoding="async"
-                      />
-                    ) : (
-                      <span className="illustration-card__empty">
-                        이미지 없음
-                      </span>
-                    )}
-                    {item.image_count > 1 ? (
-                      <span className="illustration-card__count">
-                        {item.image_count}장
-                      </span>
-                    ) : null}
-                    {item.visible === false ? (
-                      <span className="illustration-card__private">
-                        비공개
-                      </span>
-                    ) : null}
-                    {item.visible !== false && item.protected ? (
-                      <span className="illustration-card__protected">
-                        보호
-                      </span>
-                    ) : null}
-                  </div>
-                  <div className="illustration-card__body">
-                    <p className="illustration-card__title">
-                      {item.title}
-                    </p>
-                    <p className="illustration-card__meta">
-                      촬영 {formatDate(item.taken_at)}
-                    </p>
-                  </div>
-                </Link>
-              </article>
-            ))}
-          </div>
+          <IllustrationGrid
+            items={visible.map((item) => ({
+              id: item.id,
+              title: item.title,
+              taken_at: item.taken_at,
+              representative_url: item.representative_url,
+              image_count: item.image_count,
+              visible: item.visible,
+              protected: item.protected,
+            }))}
+            unlockedIds={unlockedIllustrationIds}
+          />
 
           {totalPages > 1 ? (
             <nav

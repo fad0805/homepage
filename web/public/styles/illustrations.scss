@@ -742,3 +742,126 @@
     flex-wrap: nowrap;
   }
 }
+
+.illustration-unlock-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 130;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background: rgba(0, 0, 0, 0.45);
+}
+
+.illustration-unlock-modal {
+  width: min(24rem, 100%);
+  padding: 1.1rem 1.2rem 1rem;
+  border-radius: 1rem;
+  background: var(--subtheme);
+  color: var(--foreground);
+  box-shadow: 0 1.5rem 3rem rgba(0, 0, 0, 0.3);
+
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 0.6rem;
+
+    h2 {
+      margin: 0;
+      color: var(--title-color);
+      font-size: 1.05rem;
+      line-height: 1.35;
+    }
+  }
+
+  > p {
+    margin: 0 0 0.8rem;
+    font-size: 0.82rem;
+    opacity: 0.8;
+  }
+
+  form {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+  }
+
+  input {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 0.55rem 0.65rem;
+    border: 1px solid rgba(0, 0, 0, 0.16);
+    border-radius: 0.5rem;
+    background: var(--input-background);
+    color: var(--foreground);
+    font-family: inherit;
+    font-size: 1rem;
+    letter-spacing: 0.05em;
+    text-align: center;
+
+    &:focus {
+      outline: 2px solid var(--title-color);
+      outline-offset: 1px;
+    }
+  }
+}
+
+[data-theme='dark'] .illustration-unlock-modal input {
+  border-color: rgba(255, 255, 255, 0.18);
+}
+
+.illustration-unlock-close {
+  border: 0;
+  background: transparent;
+  color: var(--foreground);
+  font-size: 1.4rem;
+  line-height: 1;
+  opacity: 0.6;
+  cursor: pointer;
+}
+
+.illustration-unlock-error {
+  margin: 0;
+  color: #d9534f;
+  font-size: 0.78rem;
+  text-align: center;
+}
+
+.illustration-unlock-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.4rem;
+
+  button {
+    padding: 0.45rem 0.8rem;
+    border: 1px solid rgba(0, 0, 0, 0.16);
+    border-radius: 0.5rem;
+    background: transparent;
+    color: var(--foreground);
+    font-family: inherit;
+    font-size: 0.8rem;
+    cursor: pointer;
+  }
+
+  button[type='submit'] {
+    border-color: transparent;
+    background: var(--title-color);
+    color: #fff;
+  }
+
+  button:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
+}
+
+[data-theme='dark'] .illustration-unlock-actions button {
+  border-color: rgba(255, 255, 255, 0.18);
+}
+
+[data-theme='dark'] .illustration-unlock-actions button[type='submit'] {
+  border-color: transparent;
+}
