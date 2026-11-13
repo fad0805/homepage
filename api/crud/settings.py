@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from core.mastodon import (
     MastodonError,
     clear_pending_chapters_outside_scope,
+    detect_service,
     get_mastodon_settings,
     get_or_create_mastodon_settings,
     normalize_instance_url,
@@ -14,15 +15,18 @@ from models.books import Book
 from schemas.settings import MastodonSettingsUpdate
 
 
-def read_mastodon_settings(db: Session) -> dict:
-    return serialize_mastodon_settings(get_mastodon_settings(db))
+def read_mastodon_settings(db: Session, user_id: int) -> dict:
+    return serialize_mastodon_settings(
+        get_mastodon_settings(db, user_id)
+    )
 
 
 def update_mastodon_settings(
     db: Session,
     payload: MastodonSettingsUpdate,
+    user_id: int,
 ) -> dict:
-    settings = get_or_create_mastodon_settings(db)
+    settings = get_or_create_mastodon_settings(db, user_id)
 
     if payload.enabled is not None:
         settings.enabled = payload.enabled
@@ -76,8 +80,23 @@ def update_mastodon_settings(
             ) from error
 
     token = (payload.access_token or "").strip()
+    credentials_changed = bool(token) or payload.instance_url is not None
     if token:
         settings.access_token = token
+
+    if (
+        (credentials_changed or payload.enabled is True)
+        and settings.instance_url
+        and settings.access_token
+    ):
+        try:
+            provider, _account = detect_service(settings)
+        except MastodonError as error:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=str(error),
+            ) from error
+        settings.provider = provider
 
     if settings.enabled and (
         not settings.instance_url or not settings.access_token
@@ -85,8 +104,8 @@ def update_mastodon_settings(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=(
-                "마스토돈 자동 게시를 켜려면 인스턴스 주소와 액세스 "
-                "토큰을 모두 입력해주세요."
+                "마스토돈/미스키 자동 게시를 켜려면 인스턴스 주소와 "
+                "액세스 토큰을 모두 입력해주세요."
             ),
         )
 

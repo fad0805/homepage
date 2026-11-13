@@ -3,10 +3,10 @@ from sqlalchemy.orm import Session
 
 from core.mastodon import (
     MastodonError,
+    detect_service,
     get_mastodon_settings,
     normalize_instance_url,
     post_status,
-    verify_credentials,
 )
 from crud.settings import read_mastodon_settings, update_mastodon_settings
 from db.session import get_db
@@ -27,30 +27,30 @@ router = APIRouter()
 @router.get("/mastodon", response_model=MastodonSettingsRead)
 def get_mastodon(
     db: Session = Depends(get_db),
-    _=Depends(require_admin),
+    user=Depends(require_admin),
 ):
-    """Return the saved Mastodon integration settings."""
-    return read_mastodon_settings(db)
+    """Return the signed-in admin's social integration settings."""
+    return read_mastodon_settings(db, user.id)
 
 
 @router.put("/mastodon", response_model=MastodonSettingsRead)
 def put_mastodon(
     payload: MastodonSettingsUpdate,
     db: Session = Depends(get_db),
-    _=Depends(require_admin),
+    user=Depends(require_admin),
 ):
-    """Save the Mastodon instance and access token."""
-    return update_mastodon_settings(db, payload)
+    """Save the Mastodon/Misskey instance and access token."""
+    return update_mastodon_settings(db, payload, user.id)
 
 
 @router.post("/mastodon/test", response_model=MastodonTestResult)
 def test_mastodon(
     payload: MastodonTestRequest,
     db: Session = Depends(get_db),
-    _=Depends(require_admin),
+    user=Depends(require_admin),
 ):
     """Verify the credentials without changing the saved settings."""
-    settings = get_mastodon_settings(db)
+    settings = get_mastodon_settings(db, user.id)
     instance_url = payload.instance_url
     if instance_url is None and settings is not None:
         instance_url = settings.instance_url
@@ -78,38 +78,40 @@ def test_mastodon(
     )
 
     try:
-        account = verify_credentials(probe)
+        provider, account = detect_service(probe)
     except MastodonError as error:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(error),
         ) from error
 
+    service_name = "미스키" if provider == "misskey" else "마스토돈"
     return {
         "ok": True,
+        "provider": provider,
         "account": account.get("account"),
         "display_name": account.get("display_name"),
-        "message": "마스토돈 계정에 연결되었습니다.",
+        "message": f"{service_name} 계정에 연결되었습니다.",
     }
 
 
 @router.post("/mastodon/test-status", response_model=MastodonTestStatusResult)
 def test_mastodon_status(
     db: Session = Depends(get_db),
-    _=Depends(require_admin),
+    user=Depends(require_admin),
 ):
     """Post a visible test status using the saved credentials."""
-    settings = get_mastodon_settings(db)
+    settings = get_mastodon_settings(db, user.id)
     if not settings or not settings.instance_url or not settings.access_token:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="마스토돈 연결 정보를 먼저 저장해주세요.",
+            detail="연결 정보를 먼저 저장해주세요.",
         )
 
     try:
         status_id = post_status(
             settings,
-            "마스토돈 알림 연결 테스트입니다.",
+            "소셜 알림 연결 테스트입니다.",
         )
     except MastodonError as error:
         raise HTTPException(

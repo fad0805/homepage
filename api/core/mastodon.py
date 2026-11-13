@@ -50,31 +50,38 @@ def normalize_site_url(value: str | None) -> str | None:
     return f"{parsed.scheme}://{parsed.netloc}".rstrip("/")
 
 
-def get_mastodon_settings(db: Session) -> MastodonSettings | None:
-    return (
-        db.query(MastodonSettings)
-        .order_by(
-            MastodonSettings.updated_at.desc(),
-            MastodonSettings.id.desc(),
-        )
-        .first()
-    )
+def get_mastodon_settings(
+    db: Session,
+    user_id: int | None = None,
+) -> MastodonSettings | None:
+    query = db.query(MastodonSettings)
+    if user_id is not None:
+        query = query.filter(MastodonSettings.user_id == user_id)
+    return query.order_by(
+        MastodonSettings.updated_at.desc(),
+        MastodonSettings.id.desc(),
+    ).first()
 
 
-def get_or_create_mastodon_settings(db: Session) -> MastodonSettings:
-    settings = get_mastodon_settings(db)
+def get_or_create_mastodon_settings(
+    db: Session,
+    user_id: int,
+) -> MastodonSettings:
+    settings = get_mastodon_settings(db, user_id)
     if settings is None:
-        settings = MastodonSettings(enabled=False)
+        settings = MastodonSettings(enabled=False, user_id=user_id)
         db.add(settings)
         db.commit()
         db.refresh(settings)
         return settings
 
-    # Older builds could create more than one row when two reads raced.
-    # Keep the most recently saved row and discard the stale copies.
+    # Keep the most recently saved row for this user and discard stale copies.
     duplicates = (
         db.query(MastodonSettings)
-        .filter(MastodonSettings.id != settings.id)
+        .filter(
+            MastodonSettings.user_id == user_id,
+            MastodonSettings.id != settings.id,
+        )
         .all()
     )
     if duplicates:
@@ -94,8 +101,14 @@ def serialize_mastodon_settings(
 ) -> dict:
     token = (settings.access_token or "") if settings else ""
     scope = _notify_scope(settings)
+    provider = (
+        settings.provider
+        if settings and settings.provider in ("mastodon", "misskey")
+        else "mastodon"
+    )
     return {
         "enabled": bool(settings.enabled) if settings else False,
+        "provider": provider,
         "instance_url": settings.instance_url if settings else None,
         "site_url": settings.site_url if settings else None,
         "visibility": (
@@ -155,6 +168,7 @@ def clear_pending_chapters_outside_scope(
 ) -> int:
     """Drop scheduled chapter notifications excluded by the new scope."""
     query = db.query(Chapter).filter(
+        Chapter.user_id == settings.user_id,
         Chapter.mastodon_pending.is_(True),
         Chapter.mastodon_status_id.is_(None),
     )
@@ -237,13 +251,17 @@ def _request_error(response: httpx.Response) -> str:
         payload = None
     if isinstance(payload, dict):
         error = payload.get("error") or payload.get("error_description")
+        if isinstance(error, dict):
+            message = error.get("message") or error.get("code")
+            if isinstance(message, str) and message.strip():
+                return message.strip()
         if isinstance(error, str) and error.strip():
             return error.strip()
     if response.status_code == 401:
         return "액세스 토큰이 올바르지 않습니다."
     if response.status_code == 403:
         return "액세스 토큰에 게시 권한이 없습니다."
-    return f"마스토돈 요청에 실패했습니다. ({response.status_code})"
+    return f"서버 요청에 실패했습니다. ({response.status_code})"
 
 
 def _request(
@@ -252,10 +270,11 @@ def _request(
     path: str,
     **kwargs,
 ) -> httpx.Response:
+    """Send a Mastodon API request with a bearer token."""
     instance = normalize_instance_url(settings.instance_url)
     token = (settings.access_token or "").strip()
     if not instance or not token:
-        raise MastodonError("마스토돈 연결 정보를 먼저 저장해주세요.")
+        raise MastodonError("연결 정보를 먼저 저장해주세요.")
 
     try:
         with httpx.Client(timeout=REQUEST_TIMEOUT) as client:
@@ -272,7 +291,31 @@ def _request(
         ) from error
 
 
-def verify_credentials(settings: MastodonSettings) -> dict:
+def _misskey_request(
+    settings: MastodonSettings,
+    path: str,
+    payload: dict | None = None,
+) -> httpx.Response:
+    """Send a Misskey API request with the token in the request body."""
+    instance = normalize_instance_url(settings.instance_url)
+    token = (settings.access_token or "").strip()
+    if not instance or not token:
+        raise MastodonError("연결 정보를 먼저 저장해주세요.")
+
+    body = dict(payload or {})
+    body["i"] = token
+
+    try:
+        with httpx.Client(timeout=REQUEST_TIMEOUT) as client:
+            return client.post(f"{instance}{path}", json=body)
+    except httpx.HTTPError as error:
+        logger.warning("Misskey request failed: %s", error)
+        raise MastodonError(
+            "미스키 서버에 연결하지 못했습니다. 인스턴스 주소를 확인해주세요."
+        ) from error
+
+
+def verify_mastodon_credentials(settings: MastodonSettings) -> dict:
     response = _request(
         settings,
         "GET",
@@ -287,7 +330,72 @@ def verify_credentials(settings: MastodonSettings) -> dict:
     }
 
 
-def post_status(settings: MastodonSettings, text: str) -> str:
+def verify_misskey_credentials(settings: MastodonSettings) -> dict:
+    response = _misskey_request(settings, "/api/i")
+    if response.status_code != 200:
+        raise MastodonError(_request_error(response))
+    data = response.json()
+    return {
+        "account": data.get("username") or data.get("name"),
+        "display_name": data.get("name") or None,
+    }
+
+
+def _detect_instance_software(
+    settings: MastodonSettings,
+) -> str | None:
+    """Guess the instance software without using the access token."""
+    instance = normalize_instance_url(settings.instance_url)
+    if not instance:
+        return None
+
+    try:
+        with httpx.Client(timeout=REQUEST_TIMEOUT) as client:
+            mastodon = client.get(f"{instance}/api/v1/instance")
+            if mastodon.status_code == 200:
+                data = mastodon.json()
+                if isinstance(data, dict) and (
+                    "uri" in data or "version" in data
+                ):
+                    return "mastodon"
+
+            misskey = client.post(f"{instance}/api/meta", json={})
+            if misskey.status_code == 200:
+                data = misskey.json()
+                if isinstance(data, dict) and (
+                    "version" in data or "name" in data
+                ):
+                    return "misskey"
+    except (httpx.HTTPError, ValueError):
+        return None
+    return None
+
+
+def detect_service(
+    settings: MastodonSettings,
+) -> tuple[str, dict]:
+    """Detect whether the instance/token belongs to Mastodon or Misskey."""
+    software = _detect_instance_software(settings)
+    provider = software or "mastodon"
+
+    verifiers = {
+        "mastodon": verify_mastodon_credentials,
+        "misskey": verify_misskey_credentials,
+    }
+    try:
+        return provider, verifiers[provider](settings)
+    except MastodonError as primary_error:
+        other = "misskey" if provider == "mastodon" else "mastodon"
+        try:
+            return other, verifiers[other](settings)
+        except MastodonError:
+            raise primary_error
+
+
+def _post_mastodon_status(
+    settings: MastodonSettings,
+    text: str,
+) -> str:
     visibility = (
         settings.visibility
         if settings.visibility in ("public", "unlisted", "private")
@@ -308,12 +416,52 @@ def post_status(settings: MastodonSettings, text: str) -> str:
     return str(status_id)
 
 
+def _post_misskey_status(
+    settings: MastodonSettings,
+    text: str,
+) -> str:
+    visibility = {
+        "public": "public",
+        "unlisted": "home",
+        "private": "followers",
+    }.get(settings.visibility, "public")
+    response = _misskey_request(
+        settings,
+        "/api/notes/create",
+        {"text": text, "visibility": visibility},
+    )
+    if response.status_code not in (200, 201):
+        raise MastodonError(_request_error(response))
+    data = response.json()
+    note = data.get("createdNote") or {}
+    status_id = note.get("id") or data.get("id")
+    if not status_id:
+        raise MastodonError("미스키 게시물 ID를 받지 못했습니다.")
+    return str(status_id)
+
+
+def post_status(settings: MastodonSettings, text: str) -> str:
+    provider = (
+        settings.provider
+        if settings.provider in ("mastodon", "misskey")
+        else "mastodon"
+    )
+    if provider == "misskey":
+        return _post_misskey_status(settings, text)
+    return _post_mastodon_status(settings, text)
+
+
 def maybe_notify_chapter(db: Session, chapter: Chapter) -> bool:
     """Post a chapter notification once, or mark it as scheduled.
 
     Returns True when a Mastodon status was created.
     """
-    settings = get_mastodon_settings(db)
+    settings = get_mastodon_settings(db, user_id=chapter.user_id)
+    if settings is None:
+        if chapter.mastodon_pending:
+            chapter.mastodon_pending = False
+            db.commit()
+        return False
     if not _settings_ready(settings):
         return False
 
@@ -389,7 +537,10 @@ def maybe_notify_illustration(
     illustration: Illustration,
 ) -> bool:
     """Post an illustration notification once when it becomes public."""
-    settings = get_mastodon_settings(db)
+    settings = get_mastodon_settings(
+        db,
+        user_id=illustration.user_id,
+    )
     if not _settings_ready(settings):
         return False
     if not _illustration_notify_allowed(settings):
@@ -423,30 +574,25 @@ def publish_pending_chapters() -> int:
     db = SessionLocal()
     posted = 0
     try:
-        settings = get_mastodon_settings(db)
-        if not _settings_ready(settings):
-            return 0
-
         now = datetime.utcnow()
-        scope = _notify_scope(settings)
-        if scope == "illustrations":
-            return 0
-
-        query = db.query(Chapter).filter(
-            Chapter.mastodon_pending.is_(True),
-            Chapter.mastodon_status_id.is_(None),
-            Chapter.visible.is_(True),
-            (Chapter.published_at.is_(None))
-            | (Chapter.published_at <= now),
+        # Each chapter is notified through its own author's connection, so a
+        # user's account never announces another user's content.
+        enabled_user_ids = db.query(MastodonSettings.user_id).filter(
+            MastodonSettings.enabled.is_(True),
+            MastodonSettings.instance_url.isnot(None),
+            MastodonSettings.access_token.isnot(None),
         )
-        if scope == "book":
-            if settings.notify_book_id is None:
-                return 0
-            query = query.filter(
-                Chapter.book_id == settings.notify_book_id
-            )
         chapters = (
-            query.order_by(
+            db.query(Chapter)
+            .filter(
+                Chapter.mastodon_pending.is_(True),
+                Chapter.mastodon_status_id.is_(None),
+                Chapter.visible.is_(True),
+                Chapter.user_id.in_(enabled_user_ids),
+                (Chapter.published_at.is_(None))
+                | (Chapter.published_at <= now),
+            )
+            .order_by(
                 Chapter.published_at.asc(),
                 Chapter.id.asc(),
             )

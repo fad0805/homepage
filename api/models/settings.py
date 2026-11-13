@@ -22,6 +22,18 @@ class MastodonSettings(Base):
         default=False,
         server_default="false",
     )
+    provider = Column(
+        String(20),
+        nullable=False,
+        default="mastodon",
+        server_default="mastodon",
+    )
+    user_id = Column(
+        Integer,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
     instance_url = Column(String(255), nullable=True)
     access_token = Column(Text, nullable=True)
     site_url = Column(String(255), nullable=True)

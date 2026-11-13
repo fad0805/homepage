@@ -5,12 +5,14 @@ from pydantic import BaseModel, Field
 
 MastodonVisibility = Literal["public", "unlisted", "private"]
 MastodonNotifyScope = Literal["all", "books", "book", "illustrations"]
+MastodonProvider = Literal["mastodon", "misskey"]
 
 
 class MastodonSettingsRead(BaseModel):
     """Admin-facing Mastodon settings without exposing the access token."""
 
     enabled: bool
+    provider: MastodonProvider = "mastodon"
     instance_url: str | None = None
     site_url: str | None = None
     visibility: MastodonVisibility = "public"
@@ -42,6 +44,7 @@ class MastodonTestRequest(BaseModel):
 
 class MastodonTestResult(BaseModel):
     ok: bool
+    provider: MastodonProvider = "mastodon"
     account: str | None = None
     display_name: str | None = None
     message: str | None = None

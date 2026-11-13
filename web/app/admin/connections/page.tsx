@@ -9,9 +9,11 @@ import "@/public/styles/admin/connections.scss";
 
 type MastodonVisibility = "public" | "unlisted" | "private";
 type MastodonNotifyScope = "all" | "books" | "book" | "illustrations";
+type MastodonProvider = "mastodon" | "misskey";
 
 interface MastodonSettings {
   enabled: boolean;
+  provider: MastodonProvider;
   instance_url: string | null;
   site_url: string | null;
   visibility: MastodonVisibility;
@@ -29,6 +31,7 @@ interface BookOption {
 
 interface MastodonTestResult {
   ok: boolean;
+  provider: MastodonProvider;
   account: string | null;
   display_name: string | null;
   message: string | null;
@@ -39,6 +42,8 @@ type Notice = { type: "success" | "error"; text: string };
 export default function AdminConnections() {
   const [enabled, setEnabled] = useState(false);
   const [enabledTouched, setEnabledTouched] = useState(false);
+  const [provider, setProvider] =
+    useState<MastodonProvider>("mastodon");
   const [instanceUrl, setInstanceUrl] = useState("");
   const [siteUrl, setSiteUrl] = useState("");
   const [visibility, setVisibility] =
@@ -83,6 +88,7 @@ export default function AdminConnections() {
       ]);
       setEnabled(data.enabled);
       setEnabledTouched(false);
+      setProvider(data.provider ?? "mastodon");
       setInstanceUrl(data.instance_url ?? "");
       setSiteUrl(data.site_url || window.location.origin);
       setVisibility(data.visibility ?? "public");
@@ -142,6 +148,7 @@ export default function AdminConnections() {
       );
       setEnabled(data.enabled);
       setEnabledTouched(false);
+      setProvider(data.provider ?? "mastodon");
       setInstanceUrl(data.instance_url ?? "");
       setSiteUrl(data.site_url ?? "");
       setVisibility(data.visibility ?? "public");
@@ -181,8 +188,11 @@ export default function AdminConnections() {
       );
       const name = result.account
         ? `@${result.account}`
-        : result.display_name || "마스토돈 계정";
-      notify("success", `${name} 연결에 성공했습니다.`);
+        : result.display_name || "계정";
+      const serviceName =
+        result.provider === "misskey" ? "미스키" : "마스토돈";
+      setProvider(result.provider);
+      notify("success", `${serviceName} ${name} 연결에 성공했습니다.`);
     } catch (error) {
       notify(
         "error",
@@ -229,9 +239,10 @@ export default function AdminConnections() {
         <div>
           <h1>연결 관리</h1>
           <p className="admin-connections-hint">
-            목차나 삽화를 발행하면 마스토돈 계정에 자동으로 알림을
-            게시합니다. 예약 발행한 목차는 발행 시각에 맞춰
-            게시됩니다.
+            액세스 토큰을 저장하면 마스토돈 또는 미스키를 자동으로
+            인식해 목차·삽화 발행 알림을 게시합니다. 알림은 로그인한
+            사용자 본인의 콘텐츠에만 적용됩니다. 예약 발행한 목차는
+            발행 시각에 맞춰 게시됩니다.
           </p>
         </div>
       </header>
@@ -255,10 +266,10 @@ export default function AdminConnections() {
         <form className="admin-connections-card" onSubmit={handleSave}>
           <div className="admin-connections-card__header">
             <div>
-              <h2>마스토돈 알림 API</h2>
+              <h2>마스토돈 / 미스키 알림 API</h2>
               <p>
-                인스턴스와 액세스 토큰을 저장하면 발행 알림이
-                활성화됩니다.
+                인스턴스와 액세스 토큰을 저장하면 서비스를 자동으로
+                인식해 발행 알림이 활성화됩니다.
               </p>
             </div>
             <label className="admin-connections-toggle">
@@ -279,13 +290,13 @@ export default function AdminConnections() {
             <input
               value={instanceUrl}
               onChange={(event) => setInstanceUrl(event.target.value)}
-              placeholder="예: mastodon.social"
+              placeholder="예: mastodon.social 또는 misskey.io"
               autoComplete="off"
             />
           </label>
 
           <label className="admin-field">
-            <span>액세스 토큰</span>
+            <span>액세스 토큰 (마스토돈/미스키)</span>
             <input
               type="password"
               value={accessToken}
@@ -293,13 +304,15 @@ export default function AdminConnections() {
               placeholder={
                 hasAccessToken
                   ? "저장된 토큰 사용 중 · 변경할 때만 입력"
-                  : "마스토돈 액세스 토큰"
+                  : "마스토돈 또는 미스키 액세스 토큰"
               }
               autoComplete="new-password"
             />
           </label>
 
           <p className="admin-connections-token-status">
+            인식된 서비스: {provider === "misskey" ? "미스키" : "마스토돈"}
+            {" · "}
             {hasAccessToken
               ? `저장된 토큰: ${tokenHint ?? "••••"}`
               : "저장된 토큰이 없습니다."}
@@ -350,7 +363,7 @@ export default function AdminConnections() {
               <option value="all">전체 (목차 + 삽화)</option>
               <option value="books">목차 전체</option>
               <option value="book">목차 내 특정 책</option>
-              <option value="illustrations">삽화만</option>
+              <option value="illustrations">삽화 전체</option>
             </select>
           </label>
           <p className="admin-connections-help">
@@ -411,14 +424,17 @@ export default function AdminConnections() {
             <h3>액세스 토큰 발급 방법</h3>
             <ol>
               <li>
-                마스토돈에서 설정 → 개발 → 새 애플리케이션을 만듭니다.
+                마스토돈: 설정 → 개발 → 새 애플리케이션에서{" "}
+                <code>write:statuses</code>,{" "}
+                <code>read:accounts</code> 권한으로 발급합니다.
               </li>
               <li>
-                권한에 <code>write:statuses</code>,{" "}
-                <code>read:accounts</code>를 선택합니다.
+                미스키: 설정 → API → 액세스 토큰에서 노트 작성 권한을
+                포함해 발급합니다.
               </li>
               <li>
-                생성된 액세스 토큰을 위 입력란에 붙여넣고 저장합니다.
+                발급된 토큰을 위 입력란에 붙여넣고 저장하면 서비스를
+                자동으로 인식합니다.
               </li>
             </ol>
           </div>
