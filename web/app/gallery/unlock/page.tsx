@@ -39,7 +39,7 @@ export default async function GalleryUnlockPage({
   const next = safeNext(params.next);
 
   return (
-    <div id="main">
+    <div id="main" className="auth-page">
       <UnlockForm next={next} />
       <p className="gallery-back">
         <Link href="/">← 처음으로</Link>

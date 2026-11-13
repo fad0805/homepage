@@ -42,7 +42,7 @@ export default function Signin() {
   };
 
   return (
-    <div id="main">
+    <div id="main" className="auth-page">
       <form onSubmit={handleSubmit}>
         <h2>관리자 로그인</h2>
         <div className="info"></div>
