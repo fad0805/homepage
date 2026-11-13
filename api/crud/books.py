@@ -46,6 +46,7 @@ def _serialize_book(book: Book) -> dict:
     category = book.category_relation
     return {
         "id": book.id,
+        "user_id": book.user_id,
         "title": book.title,
         "description": book.description,
         "tags": book.tags or [],
@@ -219,6 +220,7 @@ def _serialize_chapter(chapter: Chapter, locked: bool = False) -> dict:
     book = chapter.book
     return {
         "id": chapter.id,
+        "user_id": chapter.user_id,
         "book_id": chapter.book_id,
         "title": chapter.title,
         "subtitle": chapter.subtitle,

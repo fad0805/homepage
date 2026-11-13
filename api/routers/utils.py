@@ -1,4 +1,5 @@
 import hmac
+import os
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Optional
@@ -29,7 +30,39 @@ from crud.users import (
     get_user_session_by_token,
 )
 from db.session import get_db
-from models.users import UserSession
+from models.users import User, UserSession
+
+
+def get_default_author_id(db: Session) -> int | None:
+    """Return the author whose content currently powers the public site.
+
+    The multi-author public routing is not in place yet, so public views stay
+    on one author. ``DEFAULT_AUTHOR_ID`` can pin it explicitly; otherwise the
+    first account (the existing admin author) is used.
+    """
+    configured = (os.getenv("DEFAULT_AUTHOR_ID") or "").strip()
+    if configured:
+        try:
+            configured_id = int(configured)
+        except ValueError:
+            configured_id = None
+        if configured_id is not None:
+            user = db.query(User).filter(User.id == configured_id).first()
+            if user is not None:
+                return user.id
+
+    user = db.query(User).order_by(User.id.asc()).first()
+    return user.id if user is not None else None
+
+
+def filter_by_author(
+    items: list[dict],
+    author_id: int | None,
+) -> list[dict]:
+    """Keep public payloads that belong to the selected author."""
+    if author_id is None:
+        return []
+    return [item for item in items if item.get("user_id") == author_id]
 
 
 @dataclass(frozen=True)

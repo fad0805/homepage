@@ -20,7 +20,9 @@ from schemas.books import (
     ChapterUpdate,
 )
 from .utils import (
+    filter_by_author,
     get_client_ip,
+    get_default_author_id,
     get_gallery_grants,
     get_optional_user,
     is_admin,
@@ -61,14 +63,16 @@ def get_chapters(
             owner_user_id=current_user.id,
         )
     if current_user is not None and is_admin(current_user):
-        return get_all_chapters(db, include_hidden=True)
-    return get_all_chapters(
-        db,
-        include_hidden=current_user is not None,
-        granted_chapters=grants.chapters,
-        granted_books=grants.books,
-        viewer_user_id=current_user.id if current_user else None,
-    )
+        chapters = get_all_chapters(db, include_hidden=True)
+    else:
+        chapters = get_all_chapters(
+            db,
+            include_hidden=current_user is not None,
+            granted_chapters=grants.chapters,
+            granted_books=grants.books,
+            viewer_user_id=current_user.id if current_user else None,
+        )
+    return filter_by_author(chapters, get_default_author_id(db))
 
 
 @router.post("/")
@@ -128,15 +132,22 @@ def get_chapter_detail(
             owner_user_id=current_user.id,
         )
     if current_user is not None and is_admin(current_user):
-        return get_chapter(db, chapter_id, include_hidden=True)
-    return get_chapter(
-        db,
-        chapter_id,
-        include_hidden=current_user is not None,
-        granted_chapters=grants.chapters,
-        granted_books=grants.books,
-        viewer_user_id=current_user.id if current_user else None,
-    )
+        chapter = get_chapter(db, chapter_id, include_hidden=True)
+    else:
+        chapter = get_chapter(
+            db,
+            chapter_id,
+            include_hidden=current_user is not None,
+            granted_chapters=grants.chapters,
+            granted_books=grants.books,
+            viewer_user_id=current_user.id if current_user else None,
+        )
+    if chapter.get("user_id") != get_default_author_id(db):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Does not exist chapter",
+        )
+    return chapter
 
 
 @router.put("/{chapter_id}")

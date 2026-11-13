@@ -58,6 +58,7 @@ def _serialize_summary(illustration: Illustration) -> dict:
     )
     return {
         "id": illustration.id,
+        "user_id": illustration.user_id,
         "title": illustration.title,
         "description": illustration.description,
         "tags": illustration.tags or [],

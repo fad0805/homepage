@@ -29,7 +29,12 @@ from schemas.characters import (
     LocationUpdate,
     UploadResponse,
 )
-from .utils import get_optional_user, is_admin, require_auth
+from .utils import (
+    get_default_author_id,
+    get_optional_user,
+    is_admin,
+    require_auth,
+)
 
 router = APIRouter()
 
@@ -115,7 +120,10 @@ def get_characters(
                 detail="Not authenticated",
             )
         return get_all_characters(db, user_id=current_user.id)
-    return get_all_characters(db)
+    author_id = get_default_author_id(db)
+    if author_id is None:
+        return []
+    return get_all_characters(db, user_id=author_id)
 
 
 @router.post("/")
@@ -227,9 +235,15 @@ async def upload_character_thumbnail(
 @router.get("/{character_id}")
 def get_character_detail(character_id: int, db: Session = Depends(get_db)):
     """
-    Get a single character.
+    Get a single public character from the default author.
     """
-    return get_character(db, character_id)
+    character = get_character(db, character_id)
+    if character.get("user_id") != get_default_author_id(db):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Does not exist character",
+        )
+    return character
 
 
 @router.put("/{character_id}")

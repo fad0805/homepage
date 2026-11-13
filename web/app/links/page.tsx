@@ -17,39 +17,38 @@ interface LinkItem {
   banner_url: string | null;
   description: string | null;
   order: number;
-  category: Category;
+  category: Category | null;
 }
 
 export default async function Links() {
-  let categories: Category[] = [];
   let links: LinkItem[] = [];
   let failed = false;
 
   try {
-    [categories, links] = await Promise.all([
-      serverApiFetch<Category[]>("/links/categories", {
-        tags: ["links"],
-      }),
-      serverApiFetch<LinkItem[]>("/links", {
-        tags: ["links"],
-      }),
-    ]);
+    links = await serverApiFetch<LinkItem[]>("/links", {
+      tags: ["links"],
+    });
   } catch (error) {
     console.error(error);
     failed = true;
   }
 
-  const sortedCategories = [...categories].sort(
-    (a, b) => a.order - b.order || a.id - b.id,
-  );
-  const grouped = sortedCategories
+  const categoriesById = new Map<number, Category>();
+  for (const link of links) {
+    const category = link.category;
+    if (category && !categoriesById.has(category.id)) {
+      categoriesById.set(category.id, category);
+    }
+  }
+
+  const grouped = [...categoriesById.values()]
+    .sort((a, b) => a.order - b.order || a.id - b.id)
     .map((category) => ({
       category,
       items: links
-        .filter((link) => link.category.id === category.id)
+        .filter((link) => link.category?.id === category.id)
         .sort((a, b) => a.order - b.order || a.id - b.id),
-    }))
-    .filter((group) => group.items.length > 0);
+    }));
 
   return (
     <div id="links-page">

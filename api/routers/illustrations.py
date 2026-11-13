@@ -44,7 +44,9 @@ from schemas.illustrations import (
     today_kst,
 )
 from .utils import (
+    filter_by_author,
     get_client_ip,
+    get_default_author_id,
     get_gallery_grants,
     get_optional_user,
     is_admin,
@@ -93,10 +95,15 @@ def read_illustrations(
 ):
     """Return public illustrations plus the viewer's own hidden ones."""
     if current_user is not None and is_admin(current_user):
-        return get_visible_illustrations(db, include_hidden=True)
-    return get_visible_illustrations(
-        db,
-        viewer_user_id=current_user.id if current_user else None,
+        illustrations = get_visible_illustrations(db, include_hidden=True)
+    else:
+        illustrations = get_visible_illustrations(
+            db,
+            viewer_user_id=current_user.id if current_user else None,
+        )
+    return filter_by_author(
+        illustrations,
+        get_default_author_id(db),
     )
 
 
@@ -298,18 +305,25 @@ def read_illustration(
     """Return a single illustration, hiding images until it is unlocked."""
     grants = get_gallery_grants(request, db)
     if current_user is not None and is_admin(current_user):
-        return get_visible_illustration(
+        illustration = get_visible_illustration(
             db,
             illustration_id,
             include_hidden=True,
         )
-    return get_visible_illustration(
-        db,
-        illustration_id,
-        include_hidden=current_user is not None,
-        granted_illustrations=grants.illustrations,
-        viewer_user_id=current_user.id if current_user else None,
-    )
+    else:
+        illustration = get_visible_illustration(
+            db,
+            illustration_id,
+            include_hidden=current_user is not None,
+            granted_illustrations=grants.illustrations,
+            viewer_user_id=current_user.id if current_user else None,
+        )
+    if illustration.get("user_id") != get_default_author_id(db):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="삽화를 찾을 수 없습니다.",
+        )
+    return illustration
 
 
 @router.put("/{illustration_id}", response_model=IllustrationDetail)

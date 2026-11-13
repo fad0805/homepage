@@ -26,44 +26,44 @@ interface CharacterItem {
 }
 
 export default async function Characters() {
-  let locations: CharacterLocation[] = [];
   let characters: CharacterItem[] = [];
   let failed = false;
 
   try {
-    [locations, characters] = await Promise.all([
-      serverApiFetch<CharacterLocation[]>("/characters/locations", {
-        tags: ["characters"],
-      }),
-      serverApiFetch<CharacterItem[]>("/characters", {
-        tags: ["characters"],
-      }),
-    ]);
+    characters = await serverApiFetch<CharacterItem[]>("/characters", {
+      tags: ["characters"],
+    });
   } catch (error) {
     console.error(error);
     failed = true;
   }
 
-  const sortedLocations = [...locations].sort(
-    (a, b) => a.order - b.order || a.id - b.id,
+  const visibleCharacters = characters.filter(
+    (character) =>
+      character.visible !== false &&
+      character.is_my_doll === true &&
+      character.location !== null,
   );
-  const grouped = sortedLocations
+  const locationsById = new Map<number, CharacterLocation>();
+  for (const character of visibleCharacters) {
+    const location = character.location;
+    if (location && !locationsById.has(location.id)) {
+      locationsById.set(location.id, location);
+    }
+  }
+
+  const grouped = [...locationsById.values()]
+    .sort((a, b) => a.order - b.order || a.id - b.id)
     .map((location) => ({
       location,
-      characters: characters
-        .filter(
-          (character) =>
-            character.visible !== false &&
-            character.is_my_doll === true &&
-            character.location_id === location.id,
-        )
+      characters: visibleCharacters
+        .filter((character) => character.location_id === location.id)
         .sort(
           (a, b) =>
             (a.order_in_location ?? 0) - (b.order_in_location ?? 0) ||
             a.id - b.id,
         ),
-    }))
-    .filter((group) => group.characters.length > 0);
+    }));
 
   return (
     <div id="characters-list">

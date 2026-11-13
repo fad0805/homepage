@@ -11,7 +11,13 @@ from crud.profiles import (
     update_profile,
 )
 from schemas.profiles import ProfileCreate, ProfileUpdate
-from .utils import get_optional_user, is_admin, require_admin, require_auth
+from .utils import (
+    get_default_author_id,
+    get_optional_user,
+    is_admin,
+    require_admin,
+    require_auth,
+)
 
 router = APIRouter()
 
@@ -52,15 +58,24 @@ def get_profiles(
                 detail="Not authenticated",
             )
         return get_all_profiles(db, user_id=current_user.id)
-    return get_all_profiles(db)
+    author_id = get_default_author_id(db)
+    if author_id is None:
+        return []
+    return get_all_profiles(db, user_id=author_id)
 
 
 @router.get("/{profile_id}")
 def get_profile_detail(profile_id: int, db: Session = Depends(get_db)):
     """
-    Get a single profile.
+    Get a single public profile from the default author.
     """
-    return get_profile(db, profile_id)
+    profile = get_profile(db, profile_id)
+    if profile.get("user_id") != get_default_author_id(db):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Profile not found",
+        )
+    return profile
 
 
 @router.post("/")

@@ -23,7 +23,13 @@ from schemas.books import (
     BookReorderRequest,
     BookUpdate,
 )
-from .utils import get_optional_user, is_admin, require_auth
+from .utils import (
+    filter_by_author,
+    get_default_author_id,
+    get_optional_user,
+    is_admin,
+    require_auth,
+)
 
 router = APIRouter()
 
@@ -47,12 +53,14 @@ def get_books(
             owner_user_id=current_user.id,
         )
     if current_user is not None and is_admin(current_user):
-        return get_all_books(db, include_hidden=True)
-    return get_all_books(
-        db,
-        include_hidden=current_user is not None,
-        viewer_user_id=current_user.id if current_user else None,
-    )
+        books = get_all_books(db, include_hidden=True)
+    else:
+        books = get_all_books(
+            db,
+            include_hidden=current_user is not None,
+            viewer_user_id=current_user.id if current_user else None,
+        )
+    return filter_by_author(books, get_default_author_id(db))
 
 
 @router.post("/")
@@ -140,13 +148,20 @@ def get_book_detail(
             owner_user_id=current_user.id,
         )
     if current_user is not None and is_admin(current_user):
-        return get_book(db, book_id, include_hidden=True)
-    return get_book(
-        db,
-        book_id,
-        include_hidden=current_user is not None,
-        viewer_user_id=current_user.id if current_user else None,
-    )
+        book = get_book(db, book_id, include_hidden=True)
+    else:
+        book = get_book(
+            db,
+            book_id,
+            include_hidden=current_user is not None,
+            viewer_user_id=current_user.id if current_user else None,
+        )
+    if book.get("user_id") != get_default_author_id(db):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Does not exist book",
+        )
+    return book
 
 
 @router.put("/{book_id}")
