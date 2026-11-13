@@ -1,4 +1,13 @@
-from sqlalchemy import Boolean, Column, DateTime, Integer, String, Text, func
+from sqlalchemy import (
+    Boolean,
+    Column,
+    DateTime,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+    func,
+)
 
 from db.base import Base
 
@@ -21,6 +30,18 @@ class MastodonSettings(Base):
         nullable=False,
         default="public",
         server_default="public",
+    )
+    notify_scope = Column(
+        String(20),
+        nullable=False,
+        default="all",
+        server_default="all",
+    )
+    notify_book_id = Column(
+        Integer,
+        ForeignKey("books.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
     )
     created_at = Column(DateTime, default=func.now(), nullable=False)
     updated_at = Column(

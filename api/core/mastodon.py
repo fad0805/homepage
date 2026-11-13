@@ -15,6 +15,7 @@ logger = logging.getLogger("uvicorn.error")
 
 STATUS_LIMIT = 500
 REQUEST_TIMEOUT = 15.0
+NOTIFY_SCOPES = {"all", "books", "book", "illustrations"}
 
 
 class MastodonError(Exception):
@@ -83,10 +84,16 @@ def get_or_create_mastodon_settings(db: Session) -> MastodonSettings:
     return settings
 
 
+def _notify_scope(settings: MastodonSettings | None) -> str:
+    scope = settings.notify_scope if settings else None
+    return scope if scope in NOTIFY_SCOPES else "all"
+
+
 def serialize_mastodon_settings(
     settings: MastodonSettings | None,
 ) -> dict:
     token = (settings.access_token or "") if settings else ""
+    scope = _notify_scope(settings)
     return {
         "enabled": bool(settings.enabled) if settings else False,
         "instance_url": settings.instance_url if settings else None,
@@ -99,6 +106,12 @@ def serialize_mastodon_settings(
                 "private",
             )
             else "public"
+        ),
+        "notify_scope": scope,
+        "notify_book_id": (
+            settings.notify_book_id
+            if settings and scope == "book"
+            else None
         ),
         "has_access_token": bool(token),
         "access_token_hint": f"••••{token[-4:]}" if token else None,
@@ -113,6 +126,60 @@ def _settings_ready(settings: MastodonSettings | None) -> bool:
         and settings.instance_url
         and settings.access_token
     )
+
+
+def _chapter_notify_allowed(
+    settings: MastodonSettings,
+    chapter: Chapter,
+) -> bool:
+    scope = _notify_scope(settings)
+    if scope == "all":
+        return True
+    if scope == "books":
+        return True
+    if scope == "book":
+        return (
+            settings.notify_book_id is not None
+            and chapter.book_id == settings.notify_book_id
+        )
+    return False
+
+
+def _illustration_notify_allowed(settings: MastodonSettings) -> bool:
+    return _notify_scope(settings) in ("all", "illustrations")
+
+
+def clear_pending_chapters_outside_scope(
+    db: Session,
+    settings: MastodonSettings,
+) -> int:
+    """Drop scheduled chapter notifications excluded by the new scope."""
+    query = db.query(Chapter).filter(
+        Chapter.mastodon_pending.is_(True),
+        Chapter.mastodon_status_id.is_(None),
+    )
+    scope = _notify_scope(settings)
+
+    if scope in ("all", "books"):
+        return 0
+    if scope == "illustrations":
+        return query.update(
+            {Chapter.mastodon_pending: False},
+            synchronize_session=False,
+        )
+    if scope == "book":
+        if settings.notify_book_id is None:
+            return query.update(
+                {Chapter.mastodon_pending: False},
+                synchronize_session=False,
+            )
+        return query.filter(
+            Chapter.book_id != settings.notify_book_id
+        ).update(
+            {Chapter.mastodon_pending: False},
+            synchronize_session=False,
+        )
+    return 0
 
 
 def _site_base(settings: MastodonSettings) -> str:
@@ -250,6 +317,12 @@ def maybe_notify_chapter(db: Session, chapter: Chapter) -> bool:
     if not _settings_ready(settings):
         return False
 
+    if not _chapter_notify_allowed(settings, chapter):
+        if chapter.mastodon_pending:
+            chapter.mastodon_pending = False
+            db.commit()
+        return False
+
     if chapter.book is not None and chapter.book.visible is False:
         if chapter.mastodon_pending:
             chapter.mastodon_pending = False
@@ -319,6 +392,8 @@ def maybe_notify_illustration(
     settings = get_mastodon_settings(db)
     if not _settings_ready(settings):
         return False
+    if not _illustration_notify_allowed(settings):
+        return False
     if illustration.visible is False or illustration.mastodon_status_id:
         return False
 
@@ -353,16 +428,28 @@ def publish_pending_chapters() -> int:
             return 0
 
         now = datetime.utcnow()
-        chapters = (
-            db.query(Chapter)
-            .filter(
-                Chapter.mastodon_pending.is_(True),
-                Chapter.mastodon_status_id.is_(None),
-                Chapter.visible.is_(True),
-                (Chapter.published_at.is_(None))
-                | (Chapter.published_at <= now),
+        scope = _notify_scope(settings)
+        if scope == "illustrations":
+            return 0
+
+        query = db.query(Chapter).filter(
+            Chapter.mastodon_pending.is_(True),
+            Chapter.mastodon_status_id.is_(None),
+            Chapter.visible.is_(True),
+            (Chapter.published_at.is_(None))
+            | (Chapter.published_at <= now),
+        )
+        if scope == "book":
+            if settings.notify_book_id is None:
+                return 0
+            query = query.filter(
+                Chapter.book_id == settings.notify_book_id
             )
-            .order_by(Chapter.published_at.asc(), Chapter.id.asc())
+        chapters = (
+            query.order_by(
+                Chapter.published_at.asc(),
+                Chapter.id.asc(),
+            )
             .limit(20)
             .all()
         )

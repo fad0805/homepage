@@ -3,12 +3,14 @@ from sqlalchemy.orm import Session
 
 from core.mastodon import (
     MastodonError,
+    clear_pending_chapters_outside_scope,
     get_mastodon_settings,
     get_or_create_mastodon_settings,
     normalize_instance_url,
     normalize_site_url,
     serialize_mastodon_settings,
 )
+from models.books import Book
 from schemas.settings import MastodonSettingsUpdate
 
 
@@ -27,6 +29,31 @@ def update_mastodon_settings(
 
     if payload.visibility is not None:
         settings.visibility = payload.visibility
+
+    if payload.notify_scope is not None:
+        settings.notify_scope = payload.notify_scope
+
+    if settings.notify_scope == "book":
+        if "notify_book_id" in payload.model_fields_set:
+            target_book_id = payload.notify_book_id
+        else:
+            target_book_id = settings.notify_book_id
+
+        if target_book_id is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="알림 대상을 특정 책으로 설정하려면 책을 선택해주세요.",
+            )
+
+        target_book = db.get(Book, target_book_id)
+        if target_book is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="알림 대상 책을 찾을 수 없습니다.",
+            )
+        settings.notify_book_id = target_book.id
+    else:
+        settings.notify_book_id = None
 
     if payload.instance_url is not None:
         try:
@@ -62,6 +89,8 @@ def update_mastodon_settings(
                 "토큰을 모두 입력해주세요."
             ),
         )
+
+    clear_pending_chapters_outside_scope(db, settings)
 
     db.commit()
     db.refresh(settings)

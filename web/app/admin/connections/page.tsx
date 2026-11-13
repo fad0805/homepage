@@ -8,15 +8,23 @@ import { formatDateTime } from "@/lib/datetime";
 import "@/public/styles/admin/connections.scss";
 
 type MastodonVisibility = "public" | "unlisted" | "private";
+type MastodonNotifyScope = "all" | "books" | "book" | "illustrations";
 
 interface MastodonSettings {
   enabled: boolean;
   instance_url: string | null;
   site_url: string | null;
   visibility: MastodonVisibility;
+  notify_scope: MastodonNotifyScope;
+  notify_book_id: number | null;
   has_access_token: boolean;
   access_token_hint: string | null;
   updated_at: string | null;
+}
+
+interface BookOption {
+  id: number;
+  title: string;
 }
 
 interface MastodonTestResult {
@@ -35,6 +43,11 @@ export default function AdminConnections() {
   const [siteUrl, setSiteUrl] = useState("");
   const [visibility, setVisibility] =
     useState<MastodonVisibility>("public");
+  const [notifyScope, setNotifyScope] =
+    useState<MastodonNotifyScope>("all");
+  const [notifyBookId, setNotifyBookId] = useState<number | null>(null);
+  const [books, setBooks] = useState<BookOption[]>([]);
+  const [booksLoading, setBooksLoading] = useState(true);
   const [accessToken, setAccessToken] = useState("");
   const [hasAccessToken, setHasAccessToken] = useState(false);
   const [tokenHint, setTokenHint] = useState<string | null>(null);
@@ -62,15 +75,20 @@ export default function AdminConnections() {
 
   const load = useCallback(async () => {
     setLoading(true);
+    setBooksLoading(true);
     try {
-      const data = await apiFetch<MastodonSettings>(
-        "/api/settings/mastodon",
-      );
+      const [data, bookData] = await Promise.all([
+        apiFetch<MastodonSettings>("/api/settings/mastodon"),
+        apiFetch<BookOption[]>("/api/books").catch(() => []),
+      ]);
       setEnabled(data.enabled);
       setEnabledTouched(false);
       setInstanceUrl(data.instance_url ?? "");
       setSiteUrl(data.site_url || window.location.origin);
       setVisibility(data.visibility ?? "public");
+      setNotifyScope(data.notify_scope ?? "all");
+      setNotifyBookId(data.notify_book_id ?? null);
+      setBooks(bookData);
       setHasAccessToken(data.has_access_token);
       setTokenHint(data.access_token_hint);
       setUpdatedAt(data.updated_at);
@@ -83,6 +101,7 @@ export default function AdminConnections() {
       );
     } finally {
       setLoading(false);
+      setBooksLoading(false);
     }
   }, [notify]);
 
@@ -94,12 +113,20 @@ export default function AdminConnections() {
     event.preventDefault();
     if (saving) return;
 
+    if (notifyScope === "book" && notifyBookId === null) {
+      notify("error", "알림 대상 책을 선택해주세요.");
+      return;
+    }
+
     setSaving(true);
     try {
       const payload: Record<string, unknown> = {
         instance_url: instanceUrl.trim() || null,
         site_url: siteUrl.trim() || null,
         visibility,
+        notify_scope: notifyScope,
+        notify_book_id:
+          notifyScope === "book" ? notifyBookId : null,
         access_token: accessToken.trim() || null,
       };
       if (enabledTouched) {
@@ -118,6 +145,8 @@ export default function AdminConnections() {
       setInstanceUrl(data.instance_url ?? "");
       setSiteUrl(data.site_url ?? "");
       setVisibility(data.visibility ?? "public");
+      setNotifyScope(data.notify_scope ?? "all");
+      setNotifyBookId(data.notify_book_id ?? null);
       setHasAccessToken(data.has_access_token);
       setTokenHint(data.access_token_hint);
       setUpdatedAt(data.updated_at);
@@ -307,6 +336,50 @@ export default function AdminConnections() {
             공개는 누구나 볼 수 있고, 미공개는 공개 타임라인에서
             제외됩니다. 팔로워만은 팔로워에게만 표시됩니다.
           </p>
+
+          <label className="admin-field">
+            <span>자동 알림 대상</span>
+            <select
+              value={notifyScope}
+              onChange={(event) =>
+                setNotifyScope(
+                  event.target.value as MastodonNotifyScope,
+                )
+              }
+            >
+              <option value="all">전체 (목차 + 삽화)</option>
+              <option value="books">목차 전체</option>
+              <option value="book">목차 내 특정 책</option>
+              <option value="illustrations">삽화만</option>
+            </select>
+          </label>
+          <p className="admin-connections-help">
+            선택한 범위의 콘텐츠만 마스토돈에 자동으로 알립니다.
+          </p>
+
+          {notifyScope === "book" ? (
+            <label className="admin-field">
+              <span>알림 대상 책</span>
+              <select
+                value={notifyBookId ?? ""}
+                onChange={(event) =>
+                  setNotifyBookId(
+                    event.target.value
+                      ? Number(event.target.value)
+                      : null,
+                  )
+                }
+                disabled={booksLoading}
+              >
+                <option value="">책 선택</option>
+                {books.map((book) => (
+                  <option key={book.id} value={book.id}>
+                    {book.title}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null}
 
           <div className="admin-connections-actions">
             <button
