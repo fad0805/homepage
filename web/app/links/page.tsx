@@ -73,18 +73,20 @@ export default async function Links() {
                     target="_blank"
                     rel="noreferrer"
                   >
-                    {link.banner_url ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={link.banner_url} alt={link.name} />
-                    ) : (
-                      <span
-                        className="links-banner__placeholder"
-                        aria-hidden="true"
-                      >
-                        이미지 없음
-                      </span>
-                    )}
-                    <p>{link.name}</p>
+                    <div className="links-banner__image">
+                      {link.banner_url ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={link.banner_url} alt={link.name} />
+                      ) : (
+                        <span
+                          className="links-banner__placeholder"
+                          aria-hidden="true"
+                        >
+                          이미지 없음
+                        </span>
+                      )}
+                    </div>
+                    <p className="links-banner__name">{link.name}</p>
                     {link.description ? (
                       <p className="links-banner__description">
                         {link.description}

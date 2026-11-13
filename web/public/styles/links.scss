@@ -3,11 +3,15 @@
 
 :root {
   --links-banner-bg: var(--empty-banner-bg);
+  /* The image area keeps the old "no image" surface, slightly brighter. */
+  --links-banner-image-bg: #{color.mix(#000, color.adjust($maintheme, $lightness: -10%), 8%)};
   --links-banner-color: #{color.adjust($maintheme, $lightness: 90%)};
 }
 
 [data-theme='dark'] {
   --links-banner-bg: var(--empty-banner-bg);
+  /* The image area keeps the old "no image" surface, slightly darker. */
+  --links-banner-image-bg: #{color.mix(#000, color.adjust($maintheme, $lightness: -40%, $saturation: -10%), 28%)};
   --links-banner-color: #{color.adjust($maintheme, $lightness: 10%)};
 }
 
@@ -79,6 +83,10 @@
     overflow-wrap: anywhere;
   }
 
+  & > .links-banner__name {
+    padding-top: 0.3rem;
+  }
+
   .links-banner__description {
     margin: 0.15rem 0 0.35rem;
     padding: 0 0.35rem;
@@ -87,6 +95,16 @@
     opacity: 0.75;
     overflow-wrap: anywhere;
   }
+}
+
+.links-banner__image {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  background: var(--links-banner-image-bg);
+  border-start-end-radius: 1rem;
+  overflow: hidden;
 }
 
 .links-banner img {
@@ -106,6 +124,6 @@
   width: 200px;
   height: 40px;
   border-start-end-radius: 1rem;
-  background: rgba(0, 0, 0, 0.14);
+  background: transparent;
   font-size: 0.7rem;
 }
