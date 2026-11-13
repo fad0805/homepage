@@ -6,6 +6,7 @@ from sqlalchemy import (
     Integer,
     String,
     Text,
+    UniqueConstraint,
     func,
 )
 
@@ -21,6 +22,12 @@ class MastodonSettings(Base):
         nullable=False,
         default=False,
         server_default="false",
+    )
+    name = Column(
+        String(100),
+        nullable=False,
+        default="알림 설정",
+        server_default="알림 설정",
     )
     provider = Column(
         String(20),
@@ -62,3 +69,30 @@ class MastodonSettings(Base):
         onupdate=func.now(),
         nullable=False,
     )
+
+
+class NotificationDelivery(Base):
+    """One successful notification sent to one connection profile."""
+
+    __tablename__ = "notification_deliveries"
+    __table_args__ = (
+        UniqueConstraint(
+            "settings_id",
+            "content_type",
+            "content_id",
+            name="uq_notification_deliveries_target",
+        ),
+    )
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    settings_id = Column(
+        Integer,
+        ForeignKey("mastodon_settings.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    content_type = Column(String(20), nullable=False, index=True)
+    content_id = Column(Integer, nullable=False, index=True)
+    status_id = Column(String(255), nullable=True)
+    posted_at = Column(DateTime, default=func.now(), nullable=False)
+    created_at = Column(DateTime, default=func.now(), nullable=False)

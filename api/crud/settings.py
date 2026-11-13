@@ -3,30 +3,80 @@ from sqlalchemy.orm import Session
 
 from core.mastodon import (
     MastodonError,
-    clear_pending_chapters_outside_scope,
     detect_service,
-    get_mastodon_settings,
-    get_or_create_mastodon_settings,
     normalize_instance_url,
     normalize_site_url,
     serialize_mastodon_settings,
 )
 from models.books import Book
-from schemas.settings import MastodonSettingsUpdate
+from models.settings import MastodonSettings
+from schemas.settings import MastodonSettingsCreate, MastodonSettingsUpdate
 
 
-def read_mastodon_settings(db: Session, user_id: int) -> dict:
-    return serialize_mastodon_settings(
-        get_mastodon_settings(db, user_id)
+def list_mastodon_settings(db: Session, user_id: int) -> list[dict]:
+    profiles = (
+        db.query(MastodonSettings)
+        .filter(MastodonSettings.user_id == user_id)
+        .order_by(MastodonSettings.id.asc())
+        .all()
     )
+    return [serialize_mastodon_settings(profile) for profile in profiles]
+
+
+def get_mastodon_settings_by_id(
+    db: Session,
+    settings_id: int,
+    user_id: int,
+) -> MastodonSettings:
+    profile = (
+        db.query(MastodonSettings)
+        .filter(
+            MastodonSettings.id == settings_id,
+            MastodonSettings.user_id == user_id,
+        )
+        .first()
+    )
+    if profile is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="알림 설정을 찾을 수 없습니다.",
+        )
+    return profile
+
+
+def create_mastodon_settings(
+    db: Session,
+    payload: MastodonSettingsCreate,
+    user_id: int,
+) -> dict:
+    name = payload.name.strip() or "알림 설정"
+    profile = MastodonSettings(
+        user_id=user_id,
+        name=name,
+        enabled=False,
+    )
+    db.add(profile)
+    db.commit()
+    db.refresh(profile)
+    return serialize_mastodon_settings(profile)
 
 
 def update_mastodon_settings(
     db: Session,
+    settings_id: int,
     payload: MastodonSettingsUpdate,
     user_id: int,
 ) -> dict:
-    settings = get_or_create_mastodon_settings(db, user_id)
+    settings = get_mastodon_settings_by_id(db, settings_id, user_id)
+
+    if payload.name is not None:
+        name = payload.name.strip()
+        if not name:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="알림 설정 이름을 입력해주세요.",
+            )
+        settings.name = name
 
     if payload.enabled is not None:
         settings.enabled = payload.enabled
@@ -59,9 +109,10 @@ def update_mastodon_settings(
     else:
         settings.notify_book_id = None
 
+    instance_changed = False
     if payload.instance_url is not None:
         try:
-            settings.instance_url = normalize_instance_url(
+            next_instance = normalize_instance_url(
                 payload.instance_url
             )
         except MastodonError as error:
@@ -69,6 +120,8 @@ def update_mastodon_settings(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=str(error),
             ) from error
+        instance_changed = next_instance != settings.instance_url
+        settings.instance_url = next_instance
 
     if payload.site_url is not None:
         try:
@@ -80,7 +133,7 @@ def update_mastodon_settings(
             ) from error
 
     token = (payload.access_token or "").strip()
-    credentials_changed = bool(token) or payload.instance_url is not None
+    credentials_changed = bool(token) or instance_changed
     if token:
         settings.access_token = token
 
@@ -109,8 +162,17 @@ def update_mastodon_settings(
             ),
         )
 
-    clear_pending_chapters_outside_scope(db, settings)
-
     db.commit()
     db.refresh(settings)
     return serialize_mastodon_settings(settings)
+
+
+def delete_mastodon_settings(
+    db: Session,
+    settings_id: int,
+    user_id: int,
+) -> bool:
+    settings = get_mastodon_settings_by_id(db, settings_id, user_id)
+    db.delete(settings)
+    db.commit()
+    return True

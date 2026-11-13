@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from models.books import Chapter
 from models.illustrations import Illustration
-from models.settings import MastodonSettings
+from models.settings import MastodonSettings, NotificationDelivery
 from models.users import User
 
 logger = logging.getLogger("uvicorn.error")
@@ -51,47 +51,6 @@ def normalize_site_url(value: str | None) -> str | None:
     return f"{parsed.scheme}://{parsed.netloc}".rstrip("/")
 
 
-def get_mastodon_settings(
-    db: Session,
-    user_id: int | None = None,
-) -> MastodonSettings | None:
-    query = db.query(MastodonSettings)
-    if user_id is not None:
-        query = query.filter(MastodonSettings.user_id == user_id)
-    return query.order_by(
-        MastodonSettings.updated_at.desc(),
-        MastodonSettings.id.desc(),
-    ).first()
-
-
-def get_or_create_mastodon_settings(
-    db: Session,
-    user_id: int,
-) -> MastodonSettings:
-    settings = get_mastodon_settings(db, user_id)
-    if settings is None:
-        settings = MastodonSettings(enabled=False, user_id=user_id)
-        db.add(settings)
-        db.commit()
-        db.refresh(settings)
-        return settings
-
-    # Keep the most recently saved row for this user and discard stale copies.
-    duplicates = (
-        db.query(MastodonSettings)
-        .filter(
-            MastodonSettings.user_id == user_id,
-            MastodonSettings.id != settings.id,
-        )
-        .all()
-    )
-    if duplicates:
-        for duplicate in duplicates:
-            db.delete(duplicate)
-        db.commit()
-    return settings
-
-
 def _ready_settings(db: Session):
     return db.query(MastodonSettings).filter(
         MastodonSettings.enabled.is_(True),
@@ -100,31 +59,51 @@ def _ready_settings(db: Session):
     )
 
 
-def get_admin_fallback_settings(
+def list_active_notification_profiles(
     db: Session,
-) -> MastodonSettings | None:
-    """Return an administrator connection that can notify all users."""
+) -> list[MastodonSettings]:
+    """Return every enabled admin connection that should receive alerts."""
     return (
         _ready_settings(db)
         .join(User, MastodonSettings.user_id == User.id)
         .filter(User.role == "admin")
         .order_by(
-            MastodonSettings.updated_at.desc(),
-            MastodonSettings.id.desc(),
+            MastodonSettings.id.asc(),
         )
-        .first()
+        .all()
     )
 
 
-def get_notification_settings(
+def _delivered_profiles(
     db: Session,
-    content_user_id: int,
-) -> MastodonSettings | None:
-    """Prefer the author's own connection, then fall back to an admin one."""
-    settings = get_mastodon_settings(db, content_user_id)
-    if _settings_ready(settings):
-        return settings
-    return get_admin_fallback_settings(db) or settings
+    content_type: str,
+    content_id: int,
+) -> set[int]:
+    return {
+        row[0]
+        for row in db.query(NotificationDelivery.settings_id).filter(
+            NotificationDelivery.content_type == content_type,
+            NotificationDelivery.content_id == content_id,
+        )
+    }
+
+
+def _record_delivery(
+    db: Session,
+    settings_id: int,
+    content_type: str,
+    content_id: int,
+    status_id: str,
+) -> None:
+    db.add(
+        NotificationDelivery(
+            settings_id=settings_id,
+            content_type=content_type,
+            content_id=content_id,
+            status_id=status_id,
+            posted_at=datetime.utcnow(),
+        )
+    )
 
 
 def _notify_scope(settings: MastodonSettings | None) -> str:
@@ -143,6 +122,8 @@ def serialize_mastodon_settings(
         else "mastodon"
     )
     return {
+        "id": settings.id if settings else 0,
+        "name": settings.name if settings else "알림 설정",
         "enabled": bool(settings.enabled) if settings else False,
         "provider": provider,
         "instance_url": settings.instance_url if settings else None,
@@ -196,40 +177,6 @@ def _chapter_notify_allowed(
 
 def _illustration_notify_allowed(settings: MastodonSettings) -> bool:
     return _notify_scope(settings) in ("all", "illustrations")
-
-
-def clear_pending_chapters_outside_scope(
-    db: Session,
-    settings: MastodonSettings,
-) -> int:
-    """Drop scheduled chapter notifications excluded by the new scope."""
-    query = db.query(Chapter).filter(
-        Chapter.user_id == settings.user_id,
-        Chapter.mastodon_pending.is_(True),
-        Chapter.mastodon_status_id.is_(None),
-    )
-    scope = _notify_scope(settings)
-
-    if scope in ("all", "books"):
-        return 0
-    if scope == "illustrations":
-        return query.update(
-            {Chapter.mastodon_pending: False},
-            synchronize_session=False,
-        )
-    if scope == "book":
-        if settings.notify_book_id is None:
-            return query.update(
-                {Chapter.mastodon_pending: False},
-                synchronize_session=False,
-            )
-        return query.filter(
-            Chapter.book_id != settings.notify_book_id
-        ).update(
-            {Chapter.mastodon_pending: False},
-            synchronize_session=False,
-        )
-    return 0
 
 
 def _site_base(settings: MastodonSettings) -> str:
@@ -488,32 +435,21 @@ def post_status(settings: MastodonSettings, text: str) -> str:
 
 
 def maybe_notify_chapter(db: Session, chapter: Chapter) -> bool:
-    """Post a chapter notification once, or mark it as scheduled.
+    """Post a chapter notification to every matching profile.
 
-    Returns True when a Mastodon status was created.
+    Returns True when at least one notification was created.
     """
-    settings = get_notification_settings(db, chapter.user_id)
-    if settings is None:
-        if chapter.mastodon_pending:
-            chapter.mastodon_pending = False
-            db.commit()
-        return False
-    if not _settings_ready(settings):
-        return False
+    delivered = _delivered_profiles(db, "chapter", chapter.id)
 
-    if not _chapter_notify_allowed(settings, chapter):
+    # Content posted before multiple profiles existed has no delivery rows.
+    # Do not send it again just because a new profile was added.
+    if chapter.mastodon_status_id and not delivered:
         if chapter.mastodon_pending:
             chapter.mastodon_pending = False
             db.commit()
         return False
 
     if chapter.book is not None and chapter.book.visible is False:
-        if chapter.mastodon_pending:
-            chapter.mastodon_pending = False
-            db.commit()
-        return False
-
-    if chapter.mastodon_status_id:
         if chapter.mastodon_pending:
             chapter.mastodon_pending = False
             db.commit()
@@ -551,53 +487,109 @@ def maybe_notify_chapter(db: Session, chapter: Chapter) -> bool:
             db.commit()
         return False
 
-    try:
-        status_id = post_status(settings, _chapter_text(settings, chapter))
-    except MastodonError as error:
-        logger.warning(
-            "Could not post chapter %s to Mastodon: %s",
-            chapter.id,
-            error,
-        )
+    profiles = list_active_notification_profiles(db)
+    matched_profiles = [
+        profile
+        for profile in profiles
+        if profile.id not in delivered
+        and _chapter_notify_allowed(profile, chapter)
+    ]
+    if not matched_profiles:
+        if chapter.mastodon_pending:
+            chapter.mastodon_pending = False
+            db.commit()
         return False
 
-    chapter.mastodon_status_id = status_id
-    chapter.mastodon_posted_at = datetime.utcnow()
-    chapter.mastodon_pending = False
-    db.commit()
-    return True
+    posted_any = False
+    last_status_id = None
+    for profile in matched_profiles:
+        try:
+            status_id = post_status(
+                profile,
+                _chapter_text(profile, chapter),
+            )
+        except MastodonError as error:
+            logger.warning(
+                "Could not post chapter %s to %s: %s",
+                chapter.id,
+                profile.name or profile.id,
+                error,
+            )
+            continue
+
+        _record_delivery(
+            db,
+            profile.id,
+            "chapter",
+            chapter.id,
+            status_id,
+        )
+        delivered.add(profile.id)
+        posted_any = True
+        last_status_id = status_id
+
+    if posted_any:
+        chapter.mastodon_status_id = last_status_id
+        chapter.mastodon_posted_at = datetime.utcnow()
+        chapter.mastodon_pending = False
+        db.commit()
+    return posted_any
 
 
 def maybe_notify_illustration(
     db: Session,
     illustration: Illustration,
 ) -> bool:
-    """Post an illustration notification once when it becomes public."""
-    settings = get_notification_settings(db, illustration.user_id)
-    if not _settings_ready(settings):
+    """Post an illustration notification to every matching profile."""
+    delivered = _delivered_profiles(db, "illustration", illustration.id)
+
+    if illustration.mastodon_status_id and not delivered:
         return False
-    if not _illustration_notify_allowed(settings):
-        return False
-    if illustration.visible is False or illustration.mastodon_status_id:
+    if illustration.visible is False:
         return False
 
-    try:
-        status_id = post_status(
-            settings,
-            _illustration_text(settings, illustration),
-        )
-    except MastodonError as error:
-        logger.warning(
-            "Could not post illustration %s to Mastodon: %s",
+    profiles = list_active_notification_profiles(db)
+    if not profiles:
+        return False
+
+    posted_any = False
+    last_status_id = None
+    for profile in profiles:
+        if profile.id in delivered:
+            continue
+        if not _illustration_notify_allowed(profile):
+            continue
+
+        try:
+            status_id = post_status(
+                profile,
+                _illustration_text(profile, illustration),
+            )
+        except MastodonError as error:
+            logger.warning(
+                "Could not post illustration %s to %s: %s",
+                illustration.id,
+                profile.name or profile.id,
+                error,
+            )
+            continue
+
+        _record_delivery(
+            db,
+            profile.id,
+            "illustration",
             illustration.id,
-            error,
+            status_id,
         )
-        return False
+        delivered.add(profile.id)
+        posted_any = True
+        last_status_id = status_id
 
-    illustration.mastodon_status_id = status_id
-    illustration.mastodon_posted_at = datetime.utcnow()
-    db.commit()
-    return True
+    if posted_any:
+        illustration.mastodon_status_id = last_status_id
+        illustration.mastodon_posted_at = datetime.utcnow()
+        db.commit()
+    return posted_any
 
 
 def publish_pending_chapters() -> int:
@@ -608,23 +600,16 @@ def publish_pending_chapters() -> int:
     posted = 0
     try:
         now = datetime.utcnow()
-        fallback_settings = get_admin_fallback_settings(db)
-        query = db.query(Chapter).filter(
-            Chapter.mastodon_pending.is_(True),
-            Chapter.mastodon_status_id.is_(None),
-            Chapter.visible.is_(True),
-            (Chapter.published_at.is_(None))
-            | (Chapter.published_at <= now),
-        )
-        if fallback_settings is None:
-            # Without an admin fallback, only authors with their own ready
-            # connection can be announced.
-            enabled_user_ids = _ready_settings(db).with_entities(
-                MastodonSettings.user_id
-            )
-            query = query.filter(Chapter.user_id.in_(enabled_user_ids))
         chapters = (
-            query.order_by(
+            db.query(Chapter)
+            .filter(
+                Chapter.mastodon_pending.is_(True),
+                Chapter.mastodon_status_id.is_(None),
+                Chapter.visible.is_(True),
+                (Chapter.published_at.is_(None))
+                | (Chapter.published_at <= now),
+            )
+            .order_by(
                 Chapter.published_at.asc(),
                 Chapter.id.asc(),
             )

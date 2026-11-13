@@ -9,8 +9,10 @@ MastodonProvider = Literal["mastodon", "misskey"]
 
 
 class MastodonSettingsRead(BaseModel):
-    """Admin-facing Mastodon settings without exposing the access token."""
+    """Admin-facing notification profile without exposing its token."""
 
+    id: int
+    name: str = "알림 설정"
     enabled: bool
     provider: MastodonProvider = "mastodon"
     instance_url: str | None = None
@@ -23,9 +25,16 @@ class MastodonSettingsRead(BaseModel):
     updated_at: datetime | None = None
 
 
-class MastodonSettingsUpdate(BaseModel):
-    """Fields the admin can change on the Mastodon integration."""
+class MastodonSettingsCreate(BaseModel):
+    """A new notification profile."""
 
+    name: str = Field(default="알림 설정", max_length=100)
+
+
+class MastodonSettingsUpdate(BaseModel):
+    """Fields the admin can change on one notification profile."""
+
+    name: str | None = Field(default=None, max_length=100)
     enabled: bool | None = None
     instance_url: str | None = Field(default=None, max_length=255)
     access_token: str | None = Field(default=None, max_length=2000)
@@ -36,8 +45,9 @@ class MastodonSettingsUpdate(BaseModel):
 
 
 class MastodonTestRequest(BaseModel):
-    """Unsaved credentials to test before storing them."""
+    """Credentials to test, optionally using a saved profile's token."""
 
+    settings_id: int | None = None
     instance_url: str | None = Field(default=None, max_length=255)
     access_token: str | None = Field(default=None, max_length=2000)
 

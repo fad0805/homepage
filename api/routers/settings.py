@@ -4,14 +4,20 @@ from sqlalchemy.orm import Session
 from core.mastodon import (
     MastodonError,
     detect_service,
-    get_mastodon_settings,
     normalize_instance_url,
     post_status,
 )
-from crud.settings import read_mastodon_settings, update_mastodon_settings
+from crud.settings import (
+    create_mastodon_settings,
+    delete_mastodon_settings,
+    get_mastodon_settings_by_id,
+    list_mastodon_settings,
+    update_mastodon_settings,
+)
 from db.session import get_db
 from models.settings import MastodonSettings
 from schemas.settings import (
+    MastodonSettingsCreate,
     MastodonSettingsRead,
     MastodonSettingsUpdate,
     MastodonTestRequest,
@@ -24,23 +30,25 @@ from .utils import require_admin
 router = APIRouter()
 
 
-@router.get("/mastodon", response_model=MastodonSettingsRead)
-def get_mastodon(
+@router.get("/mastodon", response_model=list[MastodonSettingsRead])
+@router.get("/mastodon/", response_model=list[MastodonSettingsRead], include_in_schema=False)
+def get_mastodon_profiles(
     db: Session = Depends(get_db),
     user=Depends(require_admin),
 ):
-    """Return the signed-in admin's social integration settings."""
-    return read_mastodon_settings(db, user.id)
+    """Return the signed-in admin's notification profiles."""
+    return list_mastodon_settings(db, user.id)
 
 
-@router.put("/mastodon", response_model=MastodonSettingsRead)
-def put_mastodon(
-    payload: MastodonSettingsUpdate,
+@router.post("/mastodon", response_model=MastodonSettingsRead)
+@router.post("/mastodon/", response_model=MastodonSettingsRead, include_in_schema=False)
+def create_mastodon_profile(
+    payload: MastodonSettingsCreate,
     db: Session = Depends(get_db),
     user=Depends(require_admin),
 ):
-    """Save the Mastodon/Misskey instance and access token."""
-    return update_mastodon_settings(db, payload, user.id)
+    """Create a new notification profile."""
+    return create_mastodon_settings(db, payload, user.id)
 
 
 @router.post("/mastodon/test", response_model=MastodonTestResult)
@@ -49,14 +57,22 @@ def test_mastodon(
     db: Session = Depends(get_db),
     user=Depends(require_admin),
 ):
-    """Verify the credentials without changing the saved settings."""
-    settings = get_mastodon_settings(db, user.id)
-    instance_url = payload.instance_url
-    if instance_url is None and settings is not None:
-        instance_url = settings.instance_url
+    """Verify credentials without changing any saved profile."""
+    saved = (
+        get_mastodon_settings_by_id(
+            db,
+            payload.settings_id,
+            user.id,
+        )
+        if payload.settings_id is not None
+        else None
+    )
+    instance_url = payload.instance_url or (
+        saved.instance_url if saved is not None else None
+    )
     access_token = (payload.access_token or "").strip()
-    if not access_token and settings is not None:
-        access_token = (settings.access_token or "").strip()
+    if not access_token and saved is not None:
+        access_token = (saved.access_token or "").strip()
 
     try:
         normalized_instance = normalize_instance_url(instance_url)
@@ -95,14 +111,18 @@ def test_mastodon(
     }
 
 
-@router.post("/mastodon/test-status", response_model=MastodonTestStatusResult)
+@router.post(
+    "/mastodon/{settings_id}/test-status",
+    response_model=MastodonTestStatusResult,
+)
 def test_mastodon_status(
+    settings_id: int,
     db: Session = Depends(get_db),
     user=Depends(require_admin),
 ):
-    """Post a visible test status using the saved credentials."""
-    settings = get_mastodon_settings(db, user.id)
-    if not settings or not settings.instance_url or not settings.access_token:
+    """Post a visible test status using one saved profile."""
+    settings = get_mastodon_settings_by_id(db, settings_id, user.id)
+    if not settings.instance_url or not settings.access_token:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="연결 정보를 먼저 저장해주세요.",
@@ -124,3 +144,30 @@ def test_mastodon_status(
         "status_id": status_id,
         "message": "테스트 알림을 게시했습니다.",
     }
+
+
+@router.put("/mastodon/{settings_id}", response_model=MastodonSettingsRead)
+def put_mastodon_profile(
+    settings_id: int,
+    payload: MastodonSettingsUpdate,
+    db: Session = Depends(get_db),
+    user=Depends(require_admin),
+):
+    """Update one of the signed-in admin's notification profiles."""
+    return update_mastodon_settings(
+        db,
+        settings_id,
+        payload,
+        user.id,
+    )
+
+
+@router.delete("/mastodon/{settings_id}")
+def remove_mastodon_profile(
+    settings_id: int,
+    db: Session = Depends(get_db),
+    user=Depends(require_admin),
+):
+    """Delete one of the signed-in admin's notification profiles."""
+    delete_mastodon_settings(db, settings_id, user.id)
+    return {"success": True}
