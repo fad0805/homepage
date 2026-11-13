@@ -1,6 +1,6 @@
 import hashlib
 
-from fastapi import APIRouter, Depends, File, Request, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
 from sqlalchemy.orm import Session
 
 from core.uploads import save_banner
@@ -43,15 +43,28 @@ async def upload_chapter_image(
 @router.get("")
 def get_chapters(
     request: Request,
+    mine: bool = False,
     db: Session = Depends(get_db),
     current_user=Depends(get_optional_user),
 ):
     grants = get_gallery_grants(request, db)
+    if mine:
+        if current_user is None:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Not authenticated",
+            )
+        return get_all_chapters(
+            db,
+            include_hidden=True,
+            owner_user_id=current_user.id,
+        )
     return get_all_chapters(
         db,
         include_hidden=current_user is not None,
         granted_chapters=grants.chapters,
         granted_books=grants.books,
+        viewer_user_id=current_user.id if current_user else None,
     )
 
 
@@ -69,9 +82,9 @@ def post_chapter(
 def put_chapter_order(
     payload: ChapterReorderRequest,
     db: Session = Depends(get_db),
-    _=Depends(require_auth),
+    user=Depends(require_auth),
 ):
-    return reorder_chapters(db, payload)
+    return reorder_chapters(db, payload, user.id)
 
 
 @router.post("/{chapter_id}/view")
@@ -94,16 +107,30 @@ def post_chapter_view(
 def get_chapter_detail(
     chapter_id: int,
     request: Request,
+    mine: bool = False,
     db: Session = Depends(get_db),
     current_user=Depends(get_optional_user),
 ):
     grants = get_gallery_grants(request, db)
+    if mine:
+        if current_user is None:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Not authenticated",
+            )
+        return get_chapter(
+            db,
+            chapter_id,
+            include_hidden=True,
+            owner_user_id=current_user.id,
+        )
     return get_chapter(
         db,
         chapter_id,
         include_hidden=current_user is not None,
         granted_chapters=grants.chapters,
         granted_books=grants.books,
+        viewer_user_id=current_user.id if current_user else None,
     )
 
 
@@ -112,15 +139,15 @@ def put_chapter(
     chapter_id: int,
     payload: ChapterUpdate,
     db: Session = Depends(get_db),
-    _=Depends(require_auth),
+    user=Depends(require_auth),
 ):
-    return update_chapter(db, chapter_id, payload)
+    return update_chapter(db, chapter_id, payload, user.id)
 
 
 @router.delete("/{chapter_id}")
 def remove_chapter(
     chapter_id: int,
     db: Session = Depends(get_db),
-    _=Depends(require_auth),
+    user=Depends(require_auth),
 ):
-    return delete_chapter(db, chapter_id)
+    return delete_chapter(db, chapter_id, user.id)

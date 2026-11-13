@@ -312,7 +312,7 @@ def gallery_status(
 def create_gallery_invite(
     payload: GalleryInviteCreate,
     db: Session = Depends(get_db),
-    _=Depends(require_auth),
+    user=Depends(require_auth),
 ):
     """Generate a one-time code for one illustration, chapter or book."""
     illustration_id = None
@@ -329,7 +329,7 @@ def create_gallery_invite(
         target = db.get(Book, payload.resource_id)
         book_id = payload.resource_id
 
-    if target is None:
+    if target is None or target.user_id != user.id:
         raise HTTPException(
             status_code=404,
             detail="대상을 찾을 수 없습니다.",

@@ -438,7 +438,7 @@ export default function AdminLinks() {
     try {
       const [categoryData, linkData] = await Promise.all([
         apiFetch<Category[]>("/api/links/categories"),
-        apiFetch<LinkItem[]>("/api/links"),
+        apiFetch<LinkItem[]>("/api/links?mine=true"),
       ]);
       revokeObjectUrls();
       setCategories(sortCategories(categoryData));

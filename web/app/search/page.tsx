@@ -98,15 +98,18 @@ export default async function SearchPage({
 
   try {
     [books, chapters, illustrations] = await Promise.all([
-      serverApiFetch<Book[]>("/books", { tags: ["books"] }),
-      serverApiFetch<Chapter[]>("/chapters", { tags: ["chapters"] }),
-      currentUser
-        ? serverApiFetch<IllustrationItem[]>("/illustrations/admin", {
-            auth: true,
-          })
-        : serverApiFetch<IllustrationItem[]>("/illustrations", {
-            tags: ["illustrations"],
-          }),
+      serverApiFetch<Book[]>("/books", {
+        tags: ["books"],
+        auth: Boolean(currentUser),
+      }),
+      serverApiFetch<Chapter[]>("/chapters", {
+        tags: ["chapters"],
+        auth: Boolean(currentUser),
+      }),
+      serverApiFetch<IllustrationItem[]>("/illustrations", {
+        tags: ["illustrations"],
+        auth: Boolean(currentUser),
+      }),
     ]);
   } catch (error) {
     console.error(error);

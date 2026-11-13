@@ -136,10 +136,10 @@ export default function AdminHome() {
     try {
       const [books, chapters, characters, links, visits] =
         await Promise.all([
-          apiFetch<Book[]>("/api/books"),
-          apiFetch<ChapterItem[]>("/api/chapters"),
+          apiFetch<Book[]>("/api/books?mine=true"),
+          apiFetch<ChapterItem[]>("/api/chapters?mine=true"),
           apiFetch<CharacterItem[]>("/api/characters"),
-          apiFetch<LinkItem[]>("/api/links"),
+          apiFetch<LinkItem[]>("/api/links?mine=true"),
           apiFetch<VisitStats>("/api/visits/stats"),
         ]);
       setData({ books, chapters, characters, links, visits });

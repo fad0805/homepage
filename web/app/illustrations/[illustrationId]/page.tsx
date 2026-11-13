@@ -3,7 +3,6 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { formatDate, formatDateTime } from "@/lib/datetime";
-import { isIllustrationUnlocked } from "@/lib/gallery-auth";
 import type { IllustrationDetailItem } from "@/lib/illustration-types";
 import { ServerApiError, serverApiFetch } from "@/lib/server-api";
 import { getCurrentUser } from "@/lib/server-auth";
@@ -58,12 +57,7 @@ export default async function IllustrationDetailPage({
     }
   }
 
-  if (
-    illustration &&
-    illustration.protected &&
-    id !== null &&
-    !(await isIllustrationUnlocked(id))
-  ) {
+  if (illustration?.locked) {
     redirect(
       `/gallery/unlock?next=${encodeURIComponent(
         `/illustrations/${illustrationId}`,

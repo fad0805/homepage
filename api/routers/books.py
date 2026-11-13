@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from crud.books import (
@@ -31,10 +31,26 @@ router = APIRouter()
 @router.get("/")
 @router.get("")
 def get_books(
+    mine: bool = False,
     db: Session = Depends(get_db),
     current_user=Depends(get_optional_user),
 ):
-    return get_all_books(db, include_hidden=current_user is not None)
+    if mine:
+        if current_user is None:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Not authenticated",
+            )
+        return get_all_books(
+            db,
+            include_hidden=True,
+            owner_user_id=current_user.id,
+        )
+    return get_all_books(
+        db,
+        include_hidden=current_user is not None,
+        viewer_user_id=current_user.id if current_user else None,
+    )
 
 
 @router.post("/")
@@ -51,9 +67,9 @@ def post_book(
 def put_book_order(
     payload: BookReorderRequest,
     db: Session = Depends(get_db),
-    _=Depends(require_auth),
+    user=Depends(require_auth),
 ):
-    return reorder_books(db, payload)
+    return reorder_books(db, payload, user.id)
 
 
 # Book categories. Static paths must be declared before "/{book_id}".
@@ -102,13 +118,27 @@ def remove_book_category(
 @router.get("/{book_id}")
 def get_book_detail(
     book_id: int,
+    mine: bool = False,
     db: Session = Depends(get_db),
     current_user=Depends(get_optional_user),
 ):
+    if mine:
+        if current_user is None:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Not authenticated",
+            )
+        return get_book(
+            db,
+            book_id,
+            include_hidden=True,
+            owner_user_id=current_user.id,
+        )
     return get_book(
         db,
         book_id,
         include_hidden=current_user is not None,
+        viewer_user_id=current_user.id if current_user else None,
     )
 
 
@@ -117,15 +147,15 @@ def put_book(
     book_id: int,
     payload: BookUpdate,
     db: Session = Depends(get_db),
-    _=Depends(require_auth),
+    user=Depends(require_auth),
 ):
-    return update_book(db, book_id, payload)
+    return update_book(db, book_id, payload, user.id)
 
 
 @router.delete("/{book_id}")
 def remove_book(
     book_id: int,
     db: Session = Depends(get_db),
-    _=Depends(require_auth),
+    user=Depends(require_auth),
 ):
-    return delete_book(db, book_id)
+    return delete_book(db, book_id, user.id)

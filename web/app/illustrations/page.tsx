@@ -190,15 +190,13 @@ export default async function IllustrationsPage({
   const currentUser = await getCurrentUser();
 
   try {
-    illustrations = currentUser
-      ? await serverApiFetch<IllustrationItem[]>(
-          "/illustrations/admin",
-          { auth: true },
-        )
-      : await serverApiFetch<IllustrationItem[]>(
-          "/illustrations",
-          { tags: ["illustrations"] },
-        );
+    illustrations = await serverApiFetch<IllustrationItem[]>(
+      "/illustrations",
+      {
+        tags: ["illustrations"],
+        auth: Boolean(currentUser),
+      },
+    );
   } catch (error) {
     console.error(error);
     failed = true;

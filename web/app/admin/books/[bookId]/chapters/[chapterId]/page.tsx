@@ -202,9 +202,9 @@ export default function AdminChapterEdit() {
     lastSavedSignatureRef.current = null;
     try {
       const [bookData, chapterData, bookList, draftData] = await Promise.all([
-        apiFetch<Book>(`/api/books/${bookId}`),
-        apiFetch<ChapterItem[]>("/api/chapters"),
-        apiFetch<Book[]>("/api/books"),
+        apiFetch<Book>(`/api/books/${bookId}?mine=true`),
+        apiFetch<ChapterItem[]>("/api/chapters?mine=true"),
+        apiFetch<Book[]>("/api/books?mine=true"),
         draftKey
           ? apiFetch<ChapterDraft | null>(
               `/api/chapter-drafts/${encodeURIComponent(draftKey)}`,

@@ -31,6 +31,7 @@ from crud.illustrations import (
     update_illustration,
 )
 from db.session import get_db
+from models.illustrations import Illustration
 from schemas.illustrations import (
     IllustrationAdminDetail,
     IllustrationBulkDelete,
@@ -58,24 +59,51 @@ def _parse_tags(value: str | None) -> list[str]:
     return [tag.strip() for tag in (value or "").split(",") if tag.strip()]
 
 
+def _require_owned_illustration(
+    db: Session,
+    illustration_id: int,
+    user_id: int,
+):
+    illustration = (
+        db.query(Illustration)
+        .filter(
+            Illustration.id == illustration_id,
+            Illustration.user_id == user_id,
+        )
+        .first()
+    )
+    if not illustration:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="삽화를 찾을 수 없습니다.",
+        )
+    return illustration
+
+
 @router.get("", response_model=list[IllustrationListItem])
 @router.get(
     "/",
     response_model=list[IllustrationListItem],
     include_in_schema=False,
 )
-def read_illustrations(db: Session = Depends(get_db)):
-    """Return the public illustration gallery."""
-    return get_visible_illustrations(db)
+def read_illustrations(
+    db: Session = Depends(get_db),
+    current_user=Depends(get_optional_user),
+):
+    """Return public illustrations plus the viewer's own hidden ones."""
+    return get_visible_illustrations(
+        db,
+        viewer_user_id=current_user.id if current_user else None,
+    )
 
 
 @router.get("/admin", response_model=list[IllustrationAdminDetail])
 def read_all_illustrations(
     db: Session = Depends(get_db),
-    _=Depends(require_auth),
+    user=Depends(require_auth),
 ):
-    """Return every illustration group for the admin board."""
-    return get_all_illustrations(db)
+    """Return the signed-in user's illustration groups for the admin board."""
+    return get_all_illustrations(db, user.id)
 
 
 @router.post("/bulk", response_model=IllustrationDetail)
@@ -151,20 +179,20 @@ async def upload_illustrations(
 def put_illustration_order(
     payload: IllustrationReorderRequest,
     db: Session = Depends(get_db),
-    _=Depends(require_auth),
+    user=Depends(require_auth),
 ):
-    """Persist the display order of illustration groups."""
-    return reorder_illustrations(db, payload)
+    """Persist the display order of the user's illustration groups."""
+    return reorder_illustrations(db, payload, user.id)
 
 
 @router.patch("/bulk")
 def patch_illustrations_bulk(
     payload: IllustrationBulkUpdate,
     db: Session = Depends(get_db),
-    _=Depends(require_auth),
+    user=Depends(require_auth),
 ):
-    """Apply visibility or shooting date changes to selected groups."""
-    updated = bulk_update_illustrations(db, payload)
+    """Apply changes to the user's selected groups."""
+    updated = bulk_update_illustrations(db, payload, user.id)
     return {"updated": updated}
 
 
@@ -172,10 +200,10 @@ def patch_illustrations_bulk(
 def delete_illustrations_bulk(
     payload: IllustrationBulkDelete,
     db: Session = Depends(get_db),
-    _=Depends(require_auth),
+    user=Depends(require_auth),
 ):
-    """Delete selected illustration groups and their files."""
-    deleted = bulk_delete_illustrations(db, payload.ids)
+    """Delete the user's selected groups and their files."""
+    deleted = bulk_delete_illustrations(db, payload.ids, user.id)
     return {"deleted": deleted}
 
 
@@ -187,9 +215,10 @@ def put_illustration_image_order(
     illustration_id: int,
     payload: IllustrationImageReorderRequest,
     db: Session = Depends(get_db),
-    _=Depends(require_auth),
+    user=Depends(require_auth),
 ):
-    """Persist the order of photos inside one illustration."""
+    """Persist the order of photos inside one of the user's groups."""
+    _require_owned_illustration(db, illustration_id, user.id)
     return reorder_illustration_images(db, illustration_id, payload)
 
 
@@ -201,9 +230,10 @@ def remove_illustration_image(
     illustration_id: int,
     image_id: int,
     db: Session = Depends(get_db),
-    _=Depends(require_auth),
+    user=Depends(require_auth),
 ):
-    """Delete one photo from an illustration group."""
+    """Delete one photo from one of the user's groups."""
+    _require_owned_illustration(db, illustration_id, user.id)
     return delete_illustration_image(db, illustration_id, image_id)
 
 
@@ -215,9 +245,10 @@ async def put_illustration_representative(
     illustration_id: int,
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
-    _=Depends(require_auth),
+    user=Depends(require_auth),
 ):
     """Upload a separately cropped representative image."""
+    _require_owned_illustration(db, illustration_id, user.id)
     url = await save_banner(file, folder="illustrations")
     try:
         return set_illustration_representative(
@@ -261,6 +292,7 @@ def read_illustration(
         illustration_id,
         include_hidden=current_user is not None,
         granted_illustrations=grants.illustrations,
+        viewer_user_id=current_user.id if current_user else None,
     )
 
 
@@ -269,9 +301,10 @@ def modify_illustration(
     illustration_id: int,
     payload: IllustrationUpdate,
     db: Session = Depends(get_db),
-    _=Depends(require_auth),
+    user=Depends(require_auth),
 ):
-    """Update an illustration caption, dates, visibility or cover image."""
+    """Update one of the user's illustrations."""
+    _require_owned_illustration(db, illustration_id, user.id)
     return update_illustration(db, illustration_id, payload)
 
 
@@ -279,7 +312,8 @@ def modify_illustration(
 def remove_illustration(
     illustration_id: int,
     db: Session = Depends(get_db),
-    _=Depends(require_auth),
+    user=Depends(require_auth),
 ):
-    """Delete an illustration group and all its uploaded files."""
+    """Delete one of the user's groups and all its uploaded files."""
+    _require_owned_illustration(db, illustration_id, user.id)
     return delete_illustration(db, illustration_id)

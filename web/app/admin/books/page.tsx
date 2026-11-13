@@ -333,8 +333,8 @@ export default function AdminBooks() {
     setLoading(true);
     try {
       const [bookData, chapterData, categoryData] = await Promise.all([
-        apiFetch<Book[]>("/api/books"),
-        apiFetch<ChapterItem[]>("/api/chapters"),
+        apiFetch<Book[]>("/api/books?mine=true"),
+        apiFetch<ChapterItem[]>("/api/chapters?mine=true"),
         apiFetch<BookCategory[]>("/api/books/categories"),
       ]);
       setBooks(sortBooks(bookData));

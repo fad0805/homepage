@@ -55,24 +55,28 @@ def _next_category_order(db: Session) -> int:
 
 
 # Link CRUD Operations
-def get_all_links(db: Session):
+def get_all_links(db: Session, owner: str | None = None):
     """
-    Get all links from the database.
+    Get all links, or only those owned by one user.
     """
-    links = (
+    query = (
         db.query(Link)
         .join(Category, Link.category == Category.id)
         .order_by(Category.order, Category.id, Link.order, Link.id)
-        .all()
     )
-    return [_serialize_link(link) for link in links]
+    if owner is not None:
+        query = query.filter(Link.owner == owner)
+    return [_serialize_link(link) for link in query.all()]
 
 
-def get_link(db: Session, link_id: int):
+def get_link(db: Session, link_id: int, owner: str | None = None):
     """
-    Get a single link from the database.
+    Get a single link, optionally scoped to one owner.
     """
-    link = db.query(Link).filter(Link.id == link_id).first()
+    query = db.query(Link).filter(Link.id == link_id)
+    if owner is not None:
+        query = query.filter(Link.owner == owner)
+    link = query.first()
     if not link:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -100,11 +104,20 @@ def create_link(db: Session, link: LinkCreate, owner: str | None = None):
     return _serialize_link(db_link)
 
 
-def update_link(db: Session, link_id: int, updated_link: LinkUpdate):
+def update_link(
+    db: Session,
+    link_id: int,
+    updated_link: LinkUpdate,
+    owner: str,
+):
     """
-    Update an existing link in the database.
+    Update one of the owner's links.
     """
-    link = db.query(Link).filter(Link.id == link_id).first()
+    link = (
+        db.query(Link)
+        .filter(Link.id == link_id, Link.owner == owner)
+        .first()
+    )
     if not link:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -141,11 +154,15 @@ def update_link(db: Session, link_id: int, updated_link: LinkUpdate):
     return _serialize_link(link)
 
 
-def delete_link(db: Session, link_id: int):
+def delete_link(db: Session, link_id: int, owner: str):
     """
-    Delete a link from the database.
+    Delete one of the owner's links.
     """
-    link = db.query(Link).filter(Link.id == link_id).first()
+    link = (
+        db.query(Link)
+        .filter(Link.id == link_id, Link.owner == owner)
+        .first()
+    )
     if not link:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -166,14 +183,22 @@ def delete_link(db: Session, link_id: int):
     return True
 
 
-def reorder_links(db: Session, payload: ReorderRequest):
+def reorder_links(
+    db: Session,
+    payload: ReorderRequest,
+    owner: str,
+):
     """
-    Persist the order of multiple links in a single transaction.
+    Persist the order of one owner's links in a single transaction.
     """
     ids = [item.id for item in payload.items]
     links = {
         link.id: link
-        for link in db.query(Link).filter(Link.id.in_(ids)).all()
+        for link in (
+            db.query(Link)
+            .filter(Link.id.in_(ids), Link.owner == owner)
+            .all()
+        )
     }
 
     missing = set(ids) - set(links)

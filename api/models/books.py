@@ -32,8 +32,8 @@ class Book(Base):
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
     user_id = Column(
         Integer,
-        ForeignKey("users.id", ondelete="SET NULL"),
-        nullable=True,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
         index=True,
     )
     title = Column(String, nullable=False)
@@ -74,8 +74,8 @@ class Chapter(Base):
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
     user_id = Column(
         Integer,
-        ForeignKey("users.id", ondelete="SET NULL"),
-        nullable=True,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
         index=True,
     )
     book_id = Column(

@@ -13,8 +13,8 @@ class Memo(Base):
     owner = Column(String(50), nullable=True, index=True)
     user_id = Column(
         Integer,
-        ForeignKey("users.id", ondelete="SET NULL"),
-        nullable=True,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
         index=True,
     )
     content = Column(String(500), nullable=False, default="")

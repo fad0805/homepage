@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, File, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from sqlalchemy.orm import Session
 
 from core.uploads import save_banner
@@ -24,7 +24,7 @@ from schemas.links import (
     CategoryReorderRequest,
     UploadResponse,
 )
-from .utils import require_auth
+from .utils import get_optional_user, require_auth
 
 router = APIRouter()
 
@@ -92,10 +92,21 @@ def remove_link_category(
 # Links
 @router.get("/")
 @router.get("")
-def get_links(db: Session = Depends(get_db)):
+def get_links(
+    mine: bool = False,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_optional_user),
+):
     """
-    Get all links.
+    Get all links, or only the signed-in user's links.
     """
+    if mine:
+        if current_user is None:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Not authenticated",
+            )
+        return get_all_links(db, owner=current_user.username)
     return get_all_links(db)
 
 
@@ -116,12 +127,12 @@ def post_link(
 def put_link_order(
     payload: ReorderRequest,
     db: Session = Depends(get_db),
-    _=Depends(require_auth),
+    user=Depends(require_auth),
 ):
     """
-    Persist the display order of links.
+    Persist the display order of the user's links.
     """
-    return reorder_links(db, payload)
+    return reorder_links(db, payload, user.username)
 
 
 @router.post("/upload", response_model=UploadResponse)
@@ -137,10 +148,22 @@ async def upload_link_banner(
 
 
 @router.get("/{link_id}")
-def get_link_detail(link_id: int, db: Session = Depends(get_db)):
+def get_link_detail(
+    link_id: int,
+    mine: bool = False,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_optional_user),
+):
     """
-    Get a single link.
+    Get a single link, or one of the signed-in user's links.
     """
+    if mine:
+        if current_user is None:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Not authenticated",
+            )
+        return get_link(db, link_id, owner=current_user.username)
     return get_link(db, link_id)
 
 
@@ -149,21 +172,21 @@ def modify_link(
     link_id: int,
     link: LinkUpdate,
     db: Session = Depends(get_db),
-    _=Depends(require_auth),
+    user=Depends(require_auth),
 ):
     """
-    Update an existing link.
+    Update one of the user's links.
     """
-    return update_link(db, link_id, link)
+    return update_link(db, link_id, link, user.username)
 
 
 @router.delete("/{link_id}")
 def remove_link(
     link_id: int,
     db: Session = Depends(get_db),
-    _=Depends(require_auth),
+    user=Depends(require_auth),
 ):
     """
-    Delete a link.
+    Delete one of the user's links.
     """
-    return delete_link(db, link_id)
+    return delete_link(db, link_id, user.username)

@@ -26,8 +26,8 @@ class Illustration(Base):
     owner = Column(String(50), nullable=True, index=True)
     user_id = Column(
         Integer,
-        ForeignKey("users.id", ondelete="SET NULL"),
-        nullable=True,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
         index=True,
     )
     title = Column(String(255), nullable=False)

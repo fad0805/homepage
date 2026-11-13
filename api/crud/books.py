@@ -2,7 +2,7 @@ import os
 from datetime import datetime, timedelta, timezone
 
 from fastapi import HTTPException, status
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from core.mastodon import maybe_notify_chapter
@@ -220,10 +220,26 @@ def _serialize_chapter(chapter: Chapter, locked: bool = False) -> dict:
 
 
 # Book CRUD
-def get_all_books(db: Session, *, include_hidden: bool = False):
+def get_all_books(
+    db: Session,
+    *,
+    include_hidden: bool = False,
+    viewer_user_id: int | None = None,
+    owner_user_id: int | None = None,
+):
     query = db.query(Book)
-    if not include_hidden:
+    if owner_user_id is not None:
+        query = query.filter(Book.user_id == owner_user_id)
+    elif not include_hidden:
         query = query.filter(Book.visible.is_(True))
+    elif viewer_user_id is not None:
+        # Public viewers see all public books plus only their own hidden ones.
+        query = query.filter(
+            or_(
+                Book.visible.is_(True),
+                Book.user_id == viewer_user_id,
+            )
+        )
     books = query.order_by(Book.order, Book.id).all()
     return [_serialize_book(book) for book in books]
 
@@ -233,9 +249,23 @@ def get_book(
     book_id: int,
     *,
     include_hidden: bool = False,
+    viewer_user_id: int | None = None,
+    owner_user_id: int | None = None,
 ):
-    book = db.query(Book).filter(Book.id == book_id).first()
-    if not book or (not include_hidden and book.visible is False):
+    query = db.query(Book).filter(Book.id == book_id)
+    if owner_user_id is not None:
+        query = query.filter(Book.user_id == owner_user_id)
+    elif not include_hidden:
+        query = query.filter(Book.visible.is_(True))
+    elif viewer_user_id is not None:
+        query = query.filter(
+            or_(
+                Book.visible.is_(True),
+                Book.user_id == viewer_user_id,
+            )
+        )
+    book = query.first()
+    if not book:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Does not exist book",
@@ -256,8 +286,17 @@ def create_book(db: Session, payload: BookCreate, user_id: int):
     return _serialize_book(book)
 
 
-def update_book(db: Session, book_id: int, payload: BookUpdate):
-    book = db.query(Book).filter(Book.id == book_id).first()
+def update_book(
+    db: Session,
+    book_id: int,
+    payload: BookUpdate,
+    owner_user_id: int,
+):
+    book = (
+        db.query(Book)
+        .filter(Book.id == book_id, Book.user_id == owner_user_id)
+        .first()
+    )
     if not book:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -276,8 +315,12 @@ def update_book(db: Session, book_id: int, payload: BookUpdate):
     return _serialize_book(book)
 
 
-def delete_book(db: Session, book_id: int):
-    book = db.query(Book).filter(Book.id == book_id).first()
+def delete_book(db: Session, book_id: int, owner_user_id: int):
+    book = (
+        db.query(Book)
+        .filter(Book.id == book_id, Book.user_id == owner_user_id)
+        .first()
+    )
     if not book:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -288,11 +331,22 @@ def delete_book(db: Session, book_id: int):
     return True
 
 
-def reorder_books(db: Session, payload: BookReorderRequest):
+def reorder_books(
+    db: Session,
+    payload: BookReorderRequest,
+    owner_user_id: int,
+):
     ids = [item.id for item in payload.items]
     books = {
         book.id: book
-        for book in db.query(Book).filter(Book.id.in_(ids)).all()
+        for book in (
+            db.query(Book)
+            .filter(
+                Book.id.in_(ids),
+                Book.user_id == owner_user_id,
+            )
+            .all()
+        )
     }
     missing = set(ids) - set(books)
     if missing:
@@ -326,8 +380,10 @@ def get_all_chapters(
     include_hidden: bool = False,
     granted_chapters: frozenset[int] = frozenset(),
     granted_books: frozenset[int] = frozenset(),
+    viewer_user_id: int | None = None,
+    owner_user_id: int | None = None,
 ):
-    chapters = (
+    query = (
         db.query(Chapter)
         .join(Book, Chapter.book_id == Book.id)
         .order_by(
@@ -336,16 +392,33 @@ def get_all_chapters(
             Chapter.order,
             Chapter.id,
         )
-        .all()
     )
+    if owner_user_id is not None:
+        query = query.filter(Chapter.user_id == owner_user_id)
 
     result = []
-    for chapter in chapters:
-        if not include_hidden and not _chapter_is_public(chapter):
+    for chapter in query.all():
+        is_own = (
+            viewer_user_id is not None
+            and (
+                chapter.user_id == viewer_user_id
+                or (
+                    chapter.book is not None
+                    and chapter.book.user_id == viewer_user_id
+                )
+            )
+        )
+        if owner_user_id is None and not is_own and not _chapter_is_public(
+            chapter
+        ):
             continue
+
+        unlocked = owner_user_id is not None or (
+            include_hidden and is_own
+        )
         locked = (
             False
-            if include_hidden
+            if unlocked
             else _chapter_is_locked(chapter, granted_chapters, granted_books)
         )
         result.append(_serialize_chapter(chapter, locked=locked))
@@ -359,25 +432,55 @@ def get_chapter(
     include_hidden: bool = False,
     granted_chapters: frozenset[int] = frozenset(),
     granted_books: frozenset[int] = frozenset(),
+    viewer_user_id: int | None = None,
+    owner_user_id: int | None = None,
 ):
-    chapter = db.query(Chapter).filter(Chapter.id == chapter_id).first()
-    if not chapter or (
-        not include_hidden and not _chapter_is_public(chapter)
+    query = db.query(Chapter).filter(Chapter.id == chapter_id)
+    if owner_user_id is not None:
+        query = query.filter(Chapter.user_id == owner_user_id)
+    chapter = query.first()
+    if not chapter:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Does not exist chapter",
+        )
+
+    is_own = (
+        viewer_user_id is not None
+        and (
+            chapter.user_id == viewer_user_id
+            or (
+                chapter.book is not None
+                and chapter.book.user_id == viewer_user_id
+            )
+        )
+    )
+    if owner_user_id is None and not is_own and not _chapter_is_public(
+        chapter
     ):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Does not exist chapter",
         )
+
+    unlocked = owner_user_id is not None or (include_hidden and is_own)
     locked = (
         False
-        if include_hidden
+        if unlocked
         else _chapter_is_locked(chapter, granted_chapters, granted_books)
     )
     return _serialize_chapter(chapter, locked=locked)
 
 
-def _get_book_or_404(db: Session, book_id: int) -> Book:
-    book = db.query(Book).filter(Book.id == book_id).first()
+def _get_book_or_404(
+    db: Session,
+    book_id: int,
+    owner_user_id: int | None = None,
+) -> Book:
+    query = db.query(Book).filter(Book.id == book_id)
+    if owner_user_id is not None:
+        query = query.filter(Book.user_id == owner_user_id)
+    book = query.first()
     if not book:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -404,7 +507,7 @@ def _chapter_is_public(chapter: Chapter) -> bool:
 
 
 def create_chapter(db: Session, payload: ChapterCreate, user_id: int):
-    _get_book_or_404(db, payload.book_id)
+    _get_book_or_404(db, payload.book_id, owner_user_id=user_id)
     data = payload.model_dump(exclude={"notify_mastodon"})
     data["tags"] = _clean_tags(data.get("tags"))
     data["user_id"] = user_id
@@ -429,8 +532,20 @@ def _reorder_chapters_by_created_at(db: Session, book_id: int) -> None:
         chapter.order = index
 
 
-def update_chapter(db: Session, chapter_id: int, payload: ChapterUpdate):
-    chapter = db.query(Chapter).filter(Chapter.id == chapter_id).first()
+def update_chapter(
+    db: Session,
+    chapter_id: int,
+    payload: ChapterUpdate,
+    owner_user_id: int,
+):
+    chapter = (
+        db.query(Chapter)
+        .filter(
+            Chapter.id == chapter_id,
+            Chapter.user_id == owner_user_id,
+        )
+        .first()
+    )
     if not chapter:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -439,7 +554,11 @@ def update_chapter(db: Session, chapter_id: int, payload: ChapterUpdate):
 
     data = payload.model_dump(exclude_unset=True)
     if "book_id" in data and data["book_id"] is not None:
-        _get_book_or_404(db, data["book_id"])
+        _get_book_or_404(
+            db,
+            data["book_id"],
+            owner_user_id=owner_user_id,
+        )
     if "tags" in data:
         data["tags"] = _clean_tags(data["tags"])
 
@@ -524,8 +643,19 @@ def register_chapter_view(
     return {"view_count": chapter.view_count or 0}
 
 
-def delete_chapter(db: Session, chapter_id: int):
-    chapter = db.query(Chapter).filter(Chapter.id == chapter_id).first()
+def delete_chapter(
+    db: Session,
+    chapter_id: int,
+    owner_user_id: int,
+):
+    chapter = (
+        db.query(Chapter)
+        .filter(
+            Chapter.id == chapter_id,
+            Chapter.user_id == owner_user_id,
+        )
+        .first()
+    )
     if not chapter:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -536,11 +666,22 @@ def delete_chapter(db: Session, chapter_id: int):
     return True
 
 
-def reorder_chapters(db: Session, payload: ChapterReorderRequest):
+def reorder_chapters(
+    db: Session,
+    payload: ChapterReorderRequest,
+    owner_user_id: int,
+):
     ids = [item.id for item in payload.items]
     chapters = {
         chapter.id: chapter
-        for chapter in db.query(Chapter).filter(Chapter.id.in_(ids)).all()
+        for chapter in (
+            db.query(Chapter)
+            .filter(
+                Chapter.id.in_(ids),
+                Chapter.user_id == owner_user_id,
+            )
+            .all()
+        )
     }
     missing = set(ids) - set(chapters)
     if missing:
@@ -553,7 +694,14 @@ def reorder_chapters(db: Session, payload: ChapterReorderRequest):
     if book_ids:
         existing_books = {
             book.id
-            for book in db.query(Book).filter(Book.id.in_(book_ids)).all()
+            for book in (
+                db.query(Book)
+                .filter(
+                    Book.id.in_(book_ids),
+                    Book.user_id == owner_user_id,
+                )
+                .all()
+            )
         }
         missing_books = book_ids - existing_books
         if missing_books:

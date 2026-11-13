@@ -136,10 +136,10 @@ export default function AdminBookDetail() {
     try {
       const [bookData, chapterData, categoryData, bookList] =
         await Promise.all([
-          apiFetch<Book>(`/api/books/${bookId}`),
-          apiFetch<ChapterItem[]>("/api/chapters"),
+          apiFetch<Book>(`/api/books/${bookId}?mine=true`),
+          apiFetch<ChapterItem[]>("/api/chapters?mine=true"),
           apiFetch<BookCategory[]>("/api/books/categories"),
-          apiFetch<Book[]>("/api/books"),
+          apiFetch<Book[]>("/api/books?mine=true"),
         ]);
       setBook(bookData);
       setTitle(bookData.title);
@@ -259,7 +259,7 @@ export default function AdminBookDetail() {
 
     setBulkWorking(true);
     try {
-      const allChapters = await apiFetch<ChapterItem[]>("/api/chapters");
+      const allChapters = await apiFetch<ChapterItem[]>("/api/chapters?mine=true");
       const targetOrders = allChapters
         .filter((item) => item.book_id === bulkTargetBookId)
         .map((item) => item.order);
@@ -315,7 +315,7 @@ export default function AdminBookDetail() {
 
     setBulkWorking(true);
     try {
-      const allChapters = await apiFetch<ChapterItem[]>("/api/chapters");
+      const allChapters = await apiFetch<ChapterItem[]>("/api/chapters?mine=true");
       const targetOrders = allChapters
         .filter((item) => item.book_id === bulkTargetBookId)
         .map((item) => item.order);

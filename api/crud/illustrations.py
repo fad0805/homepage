@@ -2,7 +2,7 @@ import os
 from datetime import date, datetime, timedelta
 
 from fastapi import HTTPException, status
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session, selectinload
 
 from core.mastodon import maybe_notify_illustration
@@ -104,12 +104,23 @@ def _group_query(db: Session):
     return db.query(Illustration).options(selectinload(Illustration.images))
 
 
-def get_visible_illustrations(db: Session):
-    """Return only public illustration groups."""
+def get_visible_illustrations(
+    db: Session,
+    viewer_user_id: int | None = None,
+):
+    """Return public groups plus the viewer's own hidden groups."""
+    query = _group_query(db)
+    if viewer_user_id is None:
+        query = query.filter(Illustration.visible.is_(True))
+    else:
+        query = query.filter(
+            or_(
+                Illustration.visible.is_(True),
+                Illustration.user_id == viewer_user_id,
+            )
+        )
     illustrations = (
-        _group_query(db)
-        .filter(Illustration.visible.is_(True))
-        .order_by(
+        query.order_by(
             Illustration.order.asc(),
             Illustration.created_at.desc(),
             Illustration.id.desc(),
@@ -128,11 +139,22 @@ def get_visible_illustration(
     *,
     include_hidden: bool = False,
     granted_illustrations: frozenset[int] = frozenset(),
+    viewer_user_id: int | None = None,
+    owner_user_id: int | None = None,
 ):
     """Return one illustration, masking its images while it stays locked."""
     query = _group_query(db).filter(Illustration.id == illustration_id)
-    if not include_hidden:
+    if owner_user_id is not None:
+        query = query.filter(Illustration.user_id == owner_user_id)
+    elif not include_hidden:
         query = query.filter(Illustration.visible.is_(True))
+    elif viewer_user_id is not None:
+        query = query.filter(
+            or_(
+                Illustration.visible.is_(True),
+                Illustration.user_id == viewer_user_id,
+            )
+        )
     illustration = query.first()
     if not illustration:
         raise HTTPException(
@@ -140,18 +162,26 @@ def get_visible_illustration(
             detail="삽화를 찾을 수 없습니다.",
         )
 
+    is_owner = (
+        owner_user_id is not None
+        or (
+            viewer_user_id is not None
+            and illustration.user_id == viewer_user_id
+        )
+    )
     locked = (
-        not include_hidden
-        and bool(illustration.protected)
+        bool(illustration.protected)
+        and not is_owner
         and illustration.id not in granted_illustrations
     )
     return _serialize_detail(illustration, locked=locked)
 
 
-def get_all_illustrations(db: Session):
-    """Return every illustration group for the admin board."""
+def get_all_illustrations(db: Session, owner_user_id: int):
+    """Return the admin board for one user's illustration groups."""
     illustrations = (
         _group_query(db)
+        .filter(Illustration.user_id == owner_user_id)
         .order_by(
             Illustration.order.asc(),
             Illustration.created_at.desc(),
@@ -420,13 +450,17 @@ def reorder_illustration_images(
 def reorder_illustrations(
     db: Session,
     payload: IllustrationReorderRequest,
+    owner_user_id: int,
 ):
-    """Persist the display order of illustration groups."""
+    """Persist the display order of one user's illustration groups."""
     ids = [item.id for item in payload.items]
     illustrations = {
         illustration.id: illustration
         for illustration in db.query(Illustration)
-        .filter(Illustration.id.in_(ids))
+        .filter(
+            Illustration.id.in_(ids),
+            Illustration.user_id == owner_user_id,
+        )
         .all()
     }
 
@@ -451,6 +485,7 @@ def reorder_illustrations(
 def bulk_update_illustrations(
     db: Session,
     payload: IllustrationBulkUpdate,
+    owner_user_id: int,
 ):
     """Apply visibility or shooting date changes to many groups at once."""
     ids = set(payload.ids)
@@ -463,7 +498,10 @@ def bulk_update_illustrations(
     )
     illustrations = (
         db.query(Illustration)
-        .filter(Illustration.id.in_(ids))
+        .filter(
+            Illustration.id.in_(ids),
+            Illustration.user_id == owner_user_id,
+        )
         .all()
     )
     if not illustrations:
@@ -489,15 +527,22 @@ def bulk_update_illustrations(
     return len(illustrations)
 
 
-def bulk_delete_illustrations(db: Session, ids: list[int]):
-    """Delete several illustration groups and all their files."""
+def bulk_delete_illustrations(
+    db: Session,
+    ids: list[int],
+    owner_user_id: int,
+):
+    """Delete one user's illustration groups and all their files."""
     selected_ids = set(ids)
     if not selected_ids:
         return 0
 
     illustrations = (
         _group_query(db)
-        .filter(Illustration.id.in_(selected_ids))
+        .filter(
+            Illustration.id.in_(selected_ids),
+            Illustration.user_id == owner_user_id,
+        )
         .all()
     )
     if not illustrations:
