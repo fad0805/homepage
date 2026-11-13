@@ -172,6 +172,7 @@ export default function AdminIllustrations() {
   const modalFileInputRef = useRef<HTMLInputElement>(null);
   const createRepresentativeInputRef = useRef<HTMLInputElement>(null);
   const modalRepresentativeInputRef = useRef<HTMLInputElement>(null);
+  const handledEditParamRef = useRef(false);
   const today = todayDateInputValue();
 
   useEffect(() => {
@@ -480,7 +481,7 @@ export default function AdminIllustrations() {
     }
   };
 
-  const openEdit = (item: IllustrationDetailItem) => {
+  const openEdit = useCallback((item: IllustrationDetailItem) => {
     setEditingItem({
       ...item,
       images: [...item.images],
@@ -489,7 +490,31 @@ export default function AdminIllustrations() {
     setModalNotice(null);
     setModalDragIndex(null);
     setModalDragOverIndex(null);
-  };
+  }, []);
+
+  useEffect(() => {
+    if (handledEditParamRef.current || items.length === 0) {
+      return;
+    }
+
+    const raw = new URLSearchParams(window.location.search).get("edit");
+    if (!raw) {
+      return;
+    }
+
+    const requested = Number(raw);
+    if (!Number.isFinite(requested)) {
+      return;
+    }
+
+    const item = items.find((entry) => entry.id === requested);
+    if (!item) {
+      return;
+    }
+
+    handledEditParamRef.current = true;
+    openEdit(item);
+  }, [items, openEdit]);
 
   const updateEditing = (patch: Partial<IllustrationDetailItem>) => {
     setEditingItem((current) =>

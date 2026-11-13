@@ -6,6 +6,7 @@ import { formatDate, formatDateTime } from "@/lib/datetime";
 import { isIllustrationUnlocked } from "@/lib/gallery-auth";
 import type { IllustrationDetailItem } from "@/lib/illustration-types";
 import { ServerApiError, serverApiFetch } from "@/lib/server-api";
+import { getCurrentUser } from "@/lib/server-auth";
 
 import { IllustrationDetailGallery } from "./detail-gallery";
 import { IllustrationViewTracker } from "./view-tracker";
@@ -81,13 +82,24 @@ export default async function IllustrationDetailPage({
   }
 
   const title = illustration.title;
+  const currentUser = await getCurrentUser();
 
   return (
     <div id="illustrations-page" className="illustration-detail-page">
       <IllustrationViewTracker illustrationId={illustration.id} />
-      <Link className="illustration-detail__back" href="/illustrations">
-        ← 삽화 목록
-      </Link>
+      <div className="illustration-detail__actions">
+        <Link className="illustration-detail__back" href="/illustrations">
+          ← 삽화 목록
+        </Link>
+        {currentUser ? (
+          <Link
+            className="illustration-detail__edit"
+            href={`/admin/illustrations?edit=${illustration.id}`}
+          >
+            수정
+          </Link>
+        ) : null}
+      </div>
 
       <article className="illustration-detail">
         <IllustrationDetailGallery images={illustration.images} />
