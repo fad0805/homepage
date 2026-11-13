@@ -137,7 +137,7 @@ export default function AdminConnections() {
     try {
       const [profileData, bookData] = await Promise.all([
         apiFetch<MastodonProfile[]>("/api/settings/mastodon"),
-        apiFetch<BookOption[]>("/api/books").catch(() => []),
+        apiFetch<BookOption[]>("/api/books?mine=true").catch(() => []),
       ]);
       setProfiles(profileData);
       setBooks(bookData);

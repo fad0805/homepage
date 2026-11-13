@@ -25,7 +25,7 @@ from schemas.settings import (
     MastodonTestStatusResult,
 )
 
-from .utils import require_admin
+from .utils import require_auth
 
 router = APIRouter()
 
@@ -34,9 +34,9 @@ router = APIRouter()
 @router.get("/mastodon/", response_model=list[MastodonSettingsRead], include_in_schema=False)
 def get_mastodon_profiles(
     db: Session = Depends(get_db),
-    user=Depends(require_admin),
+    user=Depends(require_auth),
 ):
-    """Return the signed-in admin's notification profiles."""
+    """Return the signed-in user's notification profiles."""
     return list_mastodon_settings(db, user.id)
 
 
@@ -45,7 +45,7 @@ def get_mastodon_profiles(
 def create_mastodon_profile(
     payload: MastodonSettingsCreate,
     db: Session = Depends(get_db),
-    user=Depends(require_admin),
+    user=Depends(require_auth),
 ):
     """Create a new notification profile."""
     return create_mastodon_settings(db, payload, user.id)
@@ -55,7 +55,7 @@ def create_mastodon_profile(
 def test_mastodon(
     payload: MastodonTestRequest,
     db: Session = Depends(get_db),
-    user=Depends(require_admin),
+    user=Depends(require_auth),
 ):
     """Verify credentials without changing any saved profile."""
     saved = (
@@ -118,7 +118,7 @@ def test_mastodon(
 def test_mastodon_status(
     settings_id: int,
     db: Session = Depends(get_db),
-    user=Depends(require_admin),
+    user=Depends(require_auth),
 ):
     """Post a visible test status using one saved profile."""
     settings = get_mastodon_settings_by_id(db, settings_id, user.id)
@@ -151,9 +151,9 @@ def put_mastodon_profile(
     settings_id: int,
     payload: MastodonSettingsUpdate,
     db: Session = Depends(get_db),
-    user=Depends(require_admin),
+    user=Depends(require_auth),
 ):
-    """Update one of the signed-in admin's notification profiles."""
+    """Update one of the signed-in user's notification profiles."""
     return update_mastodon_settings(
         db,
         settings_id,
@@ -166,8 +166,8 @@ def put_mastodon_profile(
 def remove_mastodon_profile(
     settings_id: int,
     db: Session = Depends(get_db),
-    user=Depends(require_admin),
+    user=Depends(require_auth),
 ):
-    """Delete one of the signed-in admin's notification profiles."""
+    """Delete one of the signed-in user's notification profiles."""
     delete_mastodon_settings(db, settings_id, user.id)
     return {"success": True}

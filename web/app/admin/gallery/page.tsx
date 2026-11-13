@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 
 import { Pagination } from "@/components/pagination";
+import { useAuth } from "@/components/auth-provider";
 import { apiFetch } from "@/lib/api";
 import { formatDateTime } from "@/lib/datetime";
 
@@ -68,6 +69,7 @@ function resourceLabel(resource: GalleryResource | null) {
 }
 
 export default function AdminGalleryPage() {
+  const { isAdmin } = useAuth();
   const [invites, setInvites] = useState<GalleryInvite[]>([]);
   const [sessions, setSessions] = useState<GallerySession[]>([]);
   const [invitePage, setInvitePage] = useState(1);
@@ -113,7 +115,15 @@ export default function AdminGalleryPage() {
   }
 
   async function revokeSession(id: number) {
-    if (!window.confirm("이 브라우저의 열람 권한을 폐기할까요?")) return;
+    if (
+      !window.confirm(
+        isAdmin
+          ? "이 브라우저의 열람 권한을 폐기할까요?"
+          : "내 콘텐츠에 대한 이 브라우저의 열람 권한을 폐기할까요?",
+      )
+    ) {
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
@@ -141,8 +151,10 @@ export default function AdminGalleryPage() {
       <header>
         <h2>열람 관리</h2>
         <p>
-          발급 기록과 열람 중인 브라우저를 확인하고 폐기할 수 있습니다.
-          새 비밀번호는 각 삽화·게시물·책 관리 화면에서 발급합니다.
+          {isAdmin
+            ? "발급 기록과 열람 중인 브라우저를 확인하고 폐기할 수 있습니다."
+            : "내가 발급한 기록과 내 콘텐츠를 열람 중인 브라우저를 확인할 수 있습니다."}
+          {" "}새 비밀번호는 각 삽화·게시물·책 관리 화면에서 발급합니다.
           폐기된 기록은 30일 뒤 자동으로 삭제됩니다.
         </p>
       </header>

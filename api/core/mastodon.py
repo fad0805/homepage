@@ -11,7 +11,6 @@ from sqlalchemy.orm import Session
 from models.books import Chapter
 from models.illustrations import Illustration
 from models.settings import MastodonSettings, NotificationDelivery
-from models.users import User
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -62,17 +61,13 @@ def _ready_settings(db: Session):
 
 def list_active_notification_profiles(
     db: Session,
+    user_id: int | None = None,
 ) -> list[MastodonSettings]:
-    """Return every enabled admin connection that should receive alerts."""
-    return (
-        _ready_settings(db)
-        .join(User, MastodonSettings.user_id == User.id)
-        .filter(User.role == "admin")
-        .order_by(
-            MastodonSettings.id.asc(),
-        )
-        .all()
-    )
+    """Return enabled connections, optionally for one content owner."""
+    query = _ready_settings(db)
+    if user_id is not None:
+        query = query.filter(MastodonSettings.user_id == user_id)
+    return query.order_by(MastodonSettings.id.asc()).all()
 
 
 def _delivered_profiles(
@@ -546,7 +541,7 @@ def maybe_notify_chapter(db: Session, chapter: Chapter) -> bool:
             db.commit()
         return False
 
-    profiles = list_active_notification_profiles(db)
+    profiles = list_active_notification_profiles(db, chapter.user_id)
     matched_profiles = [
         profile
         for profile in profiles
@@ -607,7 +602,7 @@ def maybe_notify_illustration(
     if illustration.visible is False:
         return False
 
-    profiles = list_active_notification_profiles(db)
+    profiles = list_active_notification_profiles(db, illustration.user_id)
     if not profiles:
         return False
 

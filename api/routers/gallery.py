@@ -23,7 +23,7 @@ from crud import gallery as gallery_crud
 from db.session import get_db
 from models.books import Book, Chapter
 from models.illustrations import Illustration
-from routers.utils import get_client_ip, is_admin, require_admin, require_auth
+from routers.utils import get_client_ip, is_admin, require_auth
 from schemas.gallery import (
     GalleryInviteCreate,
     GalleryInviteCreated,
@@ -147,6 +147,30 @@ def _grant_resource(grant):
             grant.book,
         )
     return None
+
+
+def _grant_owner_id(grant) -> int | None:
+    if grant.illustration_id is not None and grant.illustration is not None:
+        return grant.illustration.user_id
+    if grant.chapter_id is not None and grant.chapter is not None:
+        return grant.chapter.user_id
+    if grant.book_id is not None and grant.book is not None:
+        return grant.book.user_id
+    return None
+
+
+def _session_resources(session, owner_user_id: int | None):
+    resources = []
+    for grant in session.grants:
+        if (
+            owner_user_id is not None
+            and _grant_owner_id(grant) != owner_user_id
+        ):
+            continue
+        resource = _grant_resource(grant)
+        if resource is not None:
+            resources.append(resource)
+    return resources
 
 
 @router.post("/unlock")
@@ -350,6 +374,7 @@ def create_gallery_invite(
         book_id,
         note,
         expires_at,
+        user.id,
     )
     db.commit()
 
@@ -372,12 +397,14 @@ def create_gallery_invite(
 )
 def read_gallery_invites(
     db: Session = Depends(get_db),
-    _=Depends(require_admin),
+    user=Depends(require_auth),
 ):
+    owner_user_id = None if is_admin(user) else user.id
     now = datetime.utcnow()
     deleted = gallery_crud.delete_old_revoked_invites(
         db,
         now - timedelta(days=GALLERY_INVITE_RETENTION_DAYS),
+        owner_user_id,
     )
     if deleted:
         db.commit()
@@ -392,7 +419,7 @@ def read_gallery_invites(
             "revoked_at": invite.revoked_at,
             "status": _invite_status(invite, now),
         }
-        for invite in gallery_crud.list_invites(db)
+        for invite in gallery_crud.list_invites(db, owner_user_id)
     ]
 
 
@@ -400,12 +427,14 @@ def read_gallery_invites(
 def revoke_gallery_invite(
     invite_id: int,
     db: Session = Depends(get_db),
-    _=Depends(require_admin),
+    user=Depends(require_auth),
 ):
+    owner_user_id = None if is_admin(user) else user.id
     if not gallery_crud.revoke_invite(
         db,
         invite_id,
         datetime.utcnow(),
+        owner_user_id,
     ):
         db.rollback()
         raise HTTPException(
@@ -422,8 +451,9 @@ def revoke_gallery_invite(
 )
 def read_gallery_sessions(
     db: Session = Depends(get_db),
-    _=Depends(require_admin),
+    user=Depends(require_auth),
 ):
+    owner_user_id = None if is_admin(user) else user.id
     now = datetime.utcnow()
     return [
         {
@@ -435,15 +465,9 @@ def read_gallery_sessions(
             "ip_address": session.ip_address,
             "user_agent": session.user_agent,
             "status": _session_status(session, now),
-            "resources": [
-                resource
-                for resource in (
-                    _grant_resource(grant) for grant in session.grants
-                )
-                if resource is not None
-            ],
+            "resources": _session_resources(session, owner_user_id),
         }
-        for session in gallery_crud.list_sessions(db)
+        for session in gallery_crud.list_sessions(db, owner_user_id)
     ]
 
 
@@ -451,14 +475,25 @@ def read_gallery_sessions(
 def revoke_gallery_session(
     session_id: int,
     db: Session = Depends(get_db),
-    _=Depends(require_admin),
+    user=Depends(require_auth),
 ):
-    """Force one unlocked browser to request a new code."""
-    if not gallery_crud.revoke_session(
-        db,
-        session_id,
-        datetime.utcnow(),
-    ):
+    """Revoke a browser's access to this author's resources."""
+    now = datetime.utcnow()
+    if is_admin(user):
+        revoked = gallery_crud.revoke_session(
+            db,
+            session_id,
+            now,
+        )
+    else:
+        revoked = gallery_crud.revoke_session_grants(
+            db,
+            session_id,
+            user.id,
+            now,
+        )
+
+    if not revoked:
         db.rollback()
         raise HTTPException(
             status_code=404,

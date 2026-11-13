@@ -17,8 +17,10 @@ def create_invite(
     book_id: int | None,
     note: str | None,
     expires_at: datetime,
+    user_id: int,
 ) -> GalleryInvite:
     invite = GalleryInvite(
+        user_id=user_id,
         code_hash=code_hash,
         illustration_id=illustration_id,
         chapter_id=chapter_id,
@@ -39,14 +41,19 @@ def get_invite_by_hash(db: Session, code_hash: str) -> GalleryInvite | None:
     )
 
 
-def list_invites(db: Session) -> list[GalleryInvite]:
+def list_invites(
+    db: Session,
+    owner_user_id: int | None = None,
+) -> list[GalleryInvite]:
+    query = db.query(GalleryInvite).options(
+        selectinload(GalleryInvite.illustration),
+        selectinload(GalleryInvite.chapter),
+        selectinload(GalleryInvite.book),
+    )
+    if owner_user_id is not None:
+        query = query.filter(GalleryInvite.user_id == owner_user_id)
     return (
-        db.query(GalleryInvite)
-        .options(
-            selectinload(GalleryInvite.illustration),
-            selectinload(GalleryInvite.chapter),
-            selectinload(GalleryInvite.book),
-        )
+        query
         .order_by(GalleryInvite.created_at.desc(), GalleryInvite.id.desc())
         .all()
     )
@@ -79,30 +86,35 @@ def consume_invite(
 
 
 def delete_old_revoked_invites(
-    db: Session, cutoff: datetime
+    db: Session,
+    cutoff: datetime,
+    owner_user_id: int | None = None,
 ) -> int:
     """Remove revoked codes that are older than the retention window."""
-    return (
-        db.query(GalleryInvite)
-        .filter(
-            GalleryInvite.revoked_at.isnot(None),
-            GalleryInvite.revoked_at < cutoff,
-        )
-        .delete(synchronize_session=False)
+    query = db.query(GalleryInvite).filter(
+        GalleryInvite.revoked_at.isnot(None),
+        GalleryInvite.revoked_at < cutoff,
     )
+    if owner_user_id is not None:
+        query = query.filter(GalleryInvite.user_id == owner_user_id)
+    return query.delete(synchronize_session=False)
 
 
-def revoke_invite(db: Session, invite_id: int, now: datetime) -> bool:
-    updated = (
-        db.query(GalleryInvite)
-        .filter(
-            GalleryInvite.id == invite_id,
-            GalleryInvite.revoked_at.is_(None),
-        )
-        .update(
-            {GalleryInvite.revoked_at: now},
-            synchronize_session=False,
-        )
+def revoke_invite(
+    db: Session,
+    invite_id: int,
+    now: datetime,
+    owner_user_id: int | None = None,
+) -> bool:
+    query = db.query(GalleryInvite).filter(
+        GalleryInvite.id == invite_id,
+        GalleryInvite.revoked_at.is_(None),
+    )
+    if owner_user_id is not None:
+        query = query.filter(GalleryInvite.user_id == owner_user_id)
+    updated = query.update(
+        {GalleryInvite.revoked_at: now},
+        synchronize_session=False,
     )
     return bool(updated)
 
@@ -173,8 +185,21 @@ def add_grant(
     return grant
 
 
-def list_sessions(db: Session) -> list[GallerySession]:
-    return (
+def _grant_owner_id(grant: GallerySessionGrant) -> int | None:
+    if grant.illustration_id is not None and grant.illustration is not None:
+        return grant.illustration.user_id
+    if grant.chapter_id is not None and grant.chapter is not None:
+        return grant.chapter.user_id
+    if grant.book_id is not None and grant.book is not None:
+        return grant.book.user_id
+    return None
+
+
+def list_sessions(
+    db: Session,
+    owner_user_id: int | None = None,
+) -> list[GallerySession]:
+    sessions = (
         db.query(GallerySession)
         .options(
             selectinload(GallerySession.grants).selectinload(
@@ -190,6 +215,17 @@ def list_sessions(db: Session) -> list[GallerySession]:
         .order_by(GallerySession.created_at.desc(), GallerySession.id.desc())
         .all()
     )
+    if owner_user_id is None:
+        return sessions
+
+    return [
+        session
+        for session in sessions
+        if any(
+            _grant_owner_id(grant) == owner_user_id
+            for grant in session.grants
+        )
+    ]
 
 
 def revoke_session(db: Session, session_id: int, now: datetime) -> bool:
@@ -205,3 +241,52 @@ def revoke_session(db: Session, session_id: int, now: datetime) -> bool:
         )
     )
     return bool(updated)
+
+
+def revoke_session_grants(
+    db: Session,
+    session_id: int,
+    owner_user_id: int,
+    now: datetime,
+) -> bool:
+    """Remove only this author's resources from a browser session."""
+    session = (
+        db.query(GallerySession)
+        .options(
+            selectinload(GallerySession.grants).selectinload(
+                GallerySessionGrant.illustration
+            ),
+            selectinload(GallerySession.grants).selectinload(
+                GallerySessionGrant.chapter
+            ),
+            selectinload(GallerySession.grants).selectinload(
+                GallerySessionGrant.book
+            ),
+        )
+        .filter(GallerySession.id == session_id)
+        .first()
+    )
+    if session is None:
+        return False
+
+    owned = [
+        grant
+        for grant in session.grants
+        if _grant_owner_id(grant) == owner_user_id
+    ]
+    if not owned:
+        return False
+
+    for grant in owned:
+        db.delete(grant)
+    db.flush()
+
+    remaining = (
+        db.query(GallerySessionGrant)
+        .filter(GallerySessionGrant.session_id == session_id)
+        .count()
+    )
+    if remaining == 0 and session.revoked_at is None:
+        session.revoked_at = now
+
+    return True

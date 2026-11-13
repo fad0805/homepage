@@ -100,7 +100,7 @@ def update_mastodon_settings(
             )
 
         target_book = db.get(Book, target_book_id)
-        if target_book is None:
+        if target_book is None or target_book.user_id != user_id:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="알림 대상 책을 찾을 수 없습니다.",

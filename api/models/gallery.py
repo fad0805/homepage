@@ -12,6 +12,7 @@ from sqlalchemy.orm import relationship
 from db.base import Base
 from models.books import Book, Chapter
 from models.illustrations import Illustration
+from models.users import User
 
 
 class GalleryInvite(Base):
@@ -20,6 +21,12 @@ class GalleryInvite(Base):
     __tablename__ = "gallery_invites"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(
+        Integer,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
     code_hash = Column(String(64), unique=True, index=True, nullable=False)
     illustration_id = Column(
         Integer,
@@ -49,6 +56,7 @@ class GalleryInvite(Base):
     illustration = relationship(Illustration)
     chapter = relationship(Chapter)
     book = relationship(Book)
+    user = relationship(User)
 
 
 class GallerySession(Base):

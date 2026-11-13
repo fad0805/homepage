@@ -7,16 +7,8 @@ import { useAuth } from "@/components/auth-provider";
 
 import '@/public/styles/admin/globals.scss';
 
-const ADMIN_ONLY_PATHS = [
-  "/admin/gallery",
-  "/admin/connections",
-];
-
 function isAdminOnlyPath(pathname: string) {
-  if (pathname === "/admin") return true;
-  return ADMIN_ONLY_PATHS.some(
-    (path) => pathname === path || pathname.startsWith(`${path}/`),
-  );
+  return pathname === "/admin";
 }
 
 export default function RootLayout({
