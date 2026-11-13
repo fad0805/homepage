@@ -118,6 +118,7 @@ function parseTags(value: string) {
 
 export default function AdminIllustrations() {
   const [items, setItems] = useState<IllustrationDetailItem[]>([]);
+  const [uploadOpen, setUploadOpen] = useState(false);
   const [files, setFiles] = useState<File[]>([]);
   const [previews, setPreviews] = useState<Preview[]>([]);
   const [title, setTitle] = useState("");
@@ -1035,15 +1036,47 @@ export default function AdminIllustrations() {
         </p>
       ) : null}
 
-      <section className="admin-illustrations-upload">
-        <div className="admin-illustrations-upload__head">
+      <section
+        className={`admin-illustrations-upload${
+          uploadOpen ? " is-open" : ""
+        }`}
+        onClick={
+          uploadOpen ? undefined : () => setUploadOpen(true)
+        }
+      >
+        <div
+          className="admin-illustrations-upload__head"
+          role="button"
+          tabIndex={0}
+          aria-expanded={uploadOpen}
+          onClick={(event) => {
+            event.stopPropagation();
+            setUploadOpen((open) => !open);
+          }}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" || event.key === " ") {
+              event.preventDefault();
+              setUploadOpen((open) => !open);
+            }
+          }}
+        >
           <div>
             <h2>새 삽화 올리기</h2>
             <p>선택한 사진들은 하나의 삽화로 묶입니다.</p>
           </div>
-          <span>{files.length} / {MAX_FILES}</span>
+          <span className="admin-illustrations-upload__indicator">
+            {files.length} / {MAX_FILES}
+            <span
+              className="admin-illustrations-upload__chevron"
+              aria-hidden="true"
+            >
+              {uploadOpen ? "▲" : "▼"}
+            </span>
+          </span>
         </div>
 
+        {uploadOpen ? (
+          <>
         <div
           className="admin-illustrations-picker"
           onDragOver={(event) => event.preventDefault()}
@@ -1266,6 +1299,8 @@ export default function AdminIllustrations() {
                 : `${files.length}장으로 삽화 만들기`}
             </button>
           </div>
+        ) : null}
+          </>
         ) : null}
       </section>
 
