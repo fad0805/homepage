@@ -9,6 +9,8 @@ import {
 import type { IllustrationItem } from "@/lib/illustration-types";
 import { serverApiFetch } from "@/lib/server-api";
 
+import { IllustrationSearch } from "./illustration-search";
+
 import "@/public/styles/illustrations.scss";
 
 export const dynamic = "force-dynamic";
@@ -135,12 +137,14 @@ function pageHref(
   filterBasis: SortKey,
   from: string | null,
   to: string | null,
+  q: string | null = null,
 ) {
   const params = new URLSearchParams();
   if (sort !== "taken") params.set("sort", sort);
   if (filterBasis !== "taken") params.set("filter", filterBasis);
   if (from) params.set("from", from);
   if (to) params.set("to", to);
+  if (q) params.set("q", q);
   if (page > 1) params.set("page", String(page));
   const query = params.toString();
   return query ? `/illustrations?${query}` : "/illustrations";
@@ -155,9 +159,12 @@ export default async function IllustrationsPage({
     filter?: string | string[];
     from?: string | string[];
     to?: string | string[];
+    q?: string | string[];
   }>;
 }) {
   const params = await searchParams;
+  const q = (firstParam(params.q) ?? "").trim().slice(0, 100);
+  const normalizedQuery = q.toLowerCase();
   const requestedPage = parsePage(params.page);
   const sort = parseSort(params.sort);
   const filterBasis = parseFilter(params.filter);
@@ -189,8 +196,18 @@ export default async function IllustrationsPage({
     failed = true;
   }
 
+  const searched = normalizedQuery
+    ? illustrations.filter(
+        (item) =>
+          item.title.toLowerCase().includes(normalizedQuery) ||
+          (item.tags ?? []).some((tag) =>
+            tag.toLowerCase().includes(normalizedQuery),
+          ),
+      )
+    : illustrations;
+
   const filtered = filterIllustrations(
-    illustrations,
+    searched,
     filterBasis,
     from,
     to,
@@ -216,54 +233,65 @@ export default async function IllustrationsPage({
               {sort !== "taken" ? (
                 <input type="hidden" name="sort" value={sort} />
               ) : null}
-              <label className="illustrations-filter__basis">
-                <span>범위</span>
-                <select name="filter" defaultValue={filterBasis}>
-                  <option value="taken">촬영일</option>
-                  <option value="created">등록일</option>
-                </select>
-              </label>
-              <label>
-                <span>시작일</span>
-                <input
-                  type="date"
-                  name="from"
-                  max={today}
-                  defaultValue={from ?? ""}
+              {q ? <input type="hidden" name="q" value={q} /> : null}
+              <div className="illustrations-filter__range">
+                <label className="illustrations-filter__basis">
+                  <span>범위</span>
+                  <select name="filter" defaultValue={filterBasis}>
+                    <option value="taken">촬영일</option>
+                    <option value="created">등록일</option>
+                  </select>
+                </label>
+                <label>
+                  <span>시작일</span>
+                  <input
+                    type="date"
+                    name="from"
+                    max={today}
+                    defaultValue={from ?? ""}
+                  />
+                </label>
+                <span className="illustrations-filter__dash">~</span>
+                <label>
+                  <span>종료일</span>
+                  <input
+                    type="date"
+                    name="to"
+                    max={today}
+                    defaultValue={defaultEndDate}
+                  />
+                </label>
+                <button type="submit">조회</button>
+                <IllustrationSearch
+                  query={q}
+                  sort={sort}
+                  filterBasis={filterBasis}
+                  from={from}
+                  to={to}
+                  today={today}
                 />
-              </label>
-              <span className="illustrations-filter__dash">~</span>
-              <label>
-                <span>종료일</span>
-                <input
-                  type="date"
-                  name="to"
-                  max={today}
-                  defaultValue={defaultEndDate}
-                />
-              </label>
-              <button type="submit">조회</button>
-              {hasRange ? (
-                <Link
-                  className="illustrations-filter__reset"
-                  href={pageHref(1, sort, filterBasis, null, null)}
-                >
-                  초기화
-                </Link>
-              ) : null}
+                {hasRange || q ? (
+                  <Link
+                    className="illustrations-filter__reset"
+                    href={pageHref(1, sort, filterBasis, null, null, null)}
+                  >
+                    초기화
+                  </Link>
+                ) : null}
+              </div>
             </form>
 
             <nav className="illustrations-sort" aria-label="삽화 정렬">
               <span>정렬</span>
               <Link
                 className={sort === "taken" ? "is-active" : ""}
-                href={pageHref(1, "taken", filterBasis, from, to)}
+                href={pageHref(1, "taken", filterBasis, from, to, q)}
               >
                 촬영일
               </Link>
               <Link
                 className={sort === "created" ? "is-active" : ""}
-                href={pageHref(1, "created", filterBasis, from, to)}
+                href={pageHref(1, "created", filterBasis, from, to, q)}
               >
                 등록일
               </Link>
@@ -330,7 +358,7 @@ export default async function IllustrationsPage({
               {page > 1 ? (
                 <Link
                   className="illustrations-pagination__button"
-                  href={pageHref(page - 1, sort, filterBasis, from, to)}
+                  href={pageHref(page - 1, sort, filterBasis, from, to, q)}
                 >
                   이전
                 </Link>
@@ -353,7 +381,7 @@ export default async function IllustrationsPage({
                     className={`illustrations-pagination__button${
                       value === page ? " is-active" : ""
                     }`}
-                    href={pageHref(value, sort, filterBasis, from, to)}
+                    href={pageHref(value, sort, filterBasis, from, to, q)}
                     aria-current={value === page ? "page" : undefined}
                     key={value}
                   >
@@ -365,7 +393,7 @@ export default async function IllustrationsPage({
               {page < totalPages ? (
                 <Link
                   className="illustrations-pagination__button"
-                  href={pageHref(page + 1, sort, filterBasis, from, to)}
+                  href={pageHref(page + 1, sort, filterBasis, from, to, q)}
                 >
                   다음
                 </Link>
