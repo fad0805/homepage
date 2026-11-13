@@ -887,3 +887,44 @@ a.admin-dashboard-book:visited {
     font-size: 0.55rem;
   }
 }
+
+/* Archive export scope selector */
+.admin-export-scope {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  align-self: flex-start;
+  margin-left: auto;
+
+  label {
+    color: var(--admin-muted);
+    font-size: 0.68rem;
+  }
+
+  select {
+    min-width: 11rem;
+    padding: 0.45rem 0.65rem;
+    border: 1px solid var(--admin-border);
+    border-radius: 0.55rem;
+    background: var(--input-background);
+    color: var(--foreground);
+    font-family: inherit;
+    font-size: 0.78rem;
+    cursor: pointer;
+
+    &:disabled {
+      cursor: default;
+      opacity: 0.7;
+    }
+  }
+}
+
+@media (max-width: 560px) {
+  .admin-export-scope {
+    order: 2;
+    flex-basis: 100%;
+    width: 100%;
+    margin-left: 0;
+    align-self: stretch;
+  }
+}

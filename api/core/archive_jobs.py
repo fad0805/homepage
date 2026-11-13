@@ -18,7 +18,7 @@ from core.config import ARCHIVE_RETENTION_HOURS
 logger = logging.getLogger("uvicorn.error")
 
 ProgressCallback = Callable[[str, int, int], None]
-ArchiveBuilder = Callable[[str, Path, ProgressCallback], None]
+ArchiveBuilder = Callable[[str, Path, ProgressCallback, int | None], None]
 
 
 class ArchiveJobBusy(Exception):
@@ -51,6 +51,9 @@ class ArchiveJobManager:
         section: str,
         label: str,
         owner: str,
+        *,
+        user_id: int | None = None,
+        scope_label: str = "전체",
     ) -> dict[str, Any]:
         with self._lock:
             active = self._find_active()
@@ -64,6 +67,8 @@ class ArchiveJobManager:
                 "owner": owner,
                 "section": section,
                 "label": label,
+                "scope_user_id": user_id,
+                "scope_label": scope_label,
                 "status": "queued",
                 "created_at": now.isoformat(),
                 "started_at": None,
@@ -172,7 +177,12 @@ class ArchiveJobManager:
                 self._save(current)
 
         try:
-            self._builder(meta["section"], temp_path, progress)
+            self._builder(
+                meta["section"],
+                temp_path,
+                progress,
+                meta.get("scope_user_id"),
+            )
             os.replace(temp_path, final_path)
             size = final_path.stat().st_size
 

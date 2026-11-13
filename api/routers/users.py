@@ -21,6 +21,7 @@ from routers.utils import (
     get_current_user_from_token,
     get_optional_user,
     get_session_id_from_payload,
+    require_admin,
 )
 from crud.users import (
     create_user,
@@ -75,6 +76,24 @@ def create_admin_for_dev():
         if admin is not None and admin.role != 'admin':
             admin.role = 'admin'
             db.commit()
+
+
+@router.get("")
+@router.get("/")
+def list_users(
+    db: Session = Depends(get_db),
+    current_user=Depends(require_admin),
+):
+    """List users for admin selection controls."""
+    return [
+        {
+            "id": user.id,
+            "username": user.username,
+            "role": user.role,
+            "is_self": user.id == current_user.id,
+        }
+        for user in db.query(User).order_by(User.id).all()
+    ]
 
 
 @router.post("/signin")

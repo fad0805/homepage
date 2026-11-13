@@ -23,13 +23,13 @@ from urllib.parse import urlparse
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import FileResponse
-from sqlalchemy import func
+from sqlalchemy import and_, func
 from sqlalchemy.orm import Session
 
 from core.archive_jobs import ArchiveJobBusy, ArchiveJobManager
 from core.config import ARCHIVE_DIR, ARCHIVE_THROTTLE_SECONDS
 from core.uploads import get_upload_source, open_uploaded_file
-from db.session import SessionLocal
+from db.session import SessionLocal, get_db
 from models.books import Book, BookCategory, Chapter
 from models.characters import Character, CharacterRelationship, Doll, Location
 from models.illustrations import Illustration
@@ -37,8 +37,9 @@ from models.links import Category as LinkCategory
 from models.links import Link
 from models.memos import Memo
 from models.profiles import Profile
+from models.users import User
 
-from .utils import require_admin
+from .utils import is_admin, require_auth
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -182,27 +183,52 @@ class _PreparedArchive:
     book_index: list[dict[str, Any]]
     plan: _ArchivePlan
     counts: dict[str, int]
+    user_id: int | None
+    scope_label: str
 
 
-def _book_categories_data(db: Session) -> list[dict[str, Any]]:
+def _book_categories_data(
+    db: Session,
+    user_id: int | None,
+) -> list[dict[str, Any]]:
+    query = db.query(BookCategory)
+    if user_id is not None:
+        # Categories are shared, so only include the ones this author uses.
+        query = query.filter(
+            BookCategory.id.in_(
+                db.query(Book.category_id).filter(
+                    Book.user_id == user_id,
+                    Book.category_id.is_not(None),
+                )
+            )
+        )
     return [
         {
             "id": category.id,
             "name": category.name,
             "order": category.order,
         }
-        for category in (
-            db.query(BookCategory)
-            .order_by(BookCategory.order, BookCategory.id)
-            .all()
-        )
+        for category in query.order_by(
+            BookCategory.order,
+            BookCategory.id,
+        ).all()
     ]
 
 
-def _book_index_data(db: Session) -> list[dict[str, Any]]:
+def _book_index_data(
+    db: Session,
+    user_id: int | None,
+) -> list[dict[str, Any]]:
+    chapter_join = Chapter.book_id == Book.id
+    query = db.query(Book.id, Book.user_id, func.count(Chapter.id))
+    if user_id is not None:
+        chapter_join = and_(
+            chapter_join,
+            Chapter.user_id == user_id,
+        )
+        query = query.filter(Book.user_id == user_id)
     rows = (
-        db.query(Book.id, Book.user_id, func.count(Chapter.id))
-        .outerjoin(Chapter, Chapter.book_id == Book.id)
+        query.outerjoin(Chapter, chapter_join)
         .group_by(Book.id, Book.user_id, Book.order)
         .order_by(Book.order, Book.id)
         .all()
@@ -266,13 +292,16 @@ def _book_metadata(
 def _illustration_data(
     db: Session,
     plan: _ArchivePlan,
+    user_id: int | None,
 ) -> list[dict[str, Any]]:
+    query = db.query(Illustration)
+    if user_id is not None:
+        query = query.filter(Illustration.user_id == user_id)
     illustrations = []
-    for illustration in (
-        db.query(Illustration)
-        .order_by(Illustration.order, Illustration.id)
-        .all()
-    ):
+    for illustration in query.order_by(
+        Illustration.order,
+        Illustration.id,
+    ).all():
         images = []
         for image in illustration.images:
             images.append(
@@ -339,14 +368,22 @@ def _illustration_data(
 def _character_data(
     db: Session,
     plan: _ArchivePlan,
+    user_id: int | None,
 ) -> tuple[
     list[dict[str, Any]],
     list[dict[str, Any]],
     list[dict[str, Any]],
     list[dict[str, Any]],
 ]:
+    character_query = db.query(Character)
+    if user_id is not None:
+        character_query = character_query.filter(
+            Character.user_id == user_id
+        )
     characters = []
-    for character in db.query(Character).order_by(Character.id).all():
+    character_rows = character_query.order_by(Character.id).all()
+    character_ids = [character.id for character in character_rows]
+    for character in character_rows:
         characters.append(
             {
                 "id": character.id,
@@ -379,6 +416,14 @@ def _character_data(
             }
         )
 
+    relationship_query = db.query(CharacterRelationship)
+    if user_id is not None:
+        relationship_query = relationship_query.filter(
+            CharacterRelationship.character_id.in_(character_ids),
+            CharacterRelationship.related_character_id.in_(
+                character_ids
+            ),
+        )
     character_relationships = [
         {
             "id": relationship.id,
@@ -387,13 +432,21 @@ def _character_data(
             "relationship_type": relationship.relationship_type,
             "established": _iso(relationship.established),
         }
-        for relationship in (
-            db.query(CharacterRelationship)
-            .order_by(CharacterRelationship.id)
-            .all()
-        )
+        for relationship in relationship_query.order_by(
+            CharacterRelationship.id
+        ).all()
     ]
 
+    location_query = db.query(Location)
+    if user_id is not None:
+        location_ids = {
+            character.location_id
+            for character in character_rows
+            if character.location_id is not None
+        }
+        location_query = location_query.filter(
+            Location.id.in_(location_ids)
+        )
     locations = [
         {
             "id": location.id,
@@ -401,13 +454,21 @@ def _character_data(
             "description": location.description,
             "order": location.order,
         }
-        for location in (
-            db.query(Location)
-            .order_by(Location.order, Location.id)
-            .all()
-        )
+        for location in location_query.order_by(
+            Location.order,
+            Location.id,
+        ).all()
     ]
 
+    doll_query = db.query(Doll)
+    if user_id is not None:
+        doll_ids = {
+            doll_id
+            for character in character_rows
+            for doll_id in (character.head, character.body)
+            if doll_id is not None
+        }
+        doll_query = doll_query.filter(Doll.id.in_(doll_ids))
     dolls = [
         {
             "id": doll.id,
@@ -416,7 +477,7 @@ def _character_data(
             "size": doll.size,
             "skin_tone": doll.skin_tone,
         }
-        for doll in db.query(Doll).order_by(Doll.id).all()
+        for doll in doll_query.order_by(Doll.id).all()
     ]
 
     return characters, character_relationships, locations, dolls
@@ -425,9 +486,14 @@ def _character_data(
 def _link_data(
     db: Session,
     plan: _ArchivePlan,
+    user_id: int | None,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    link_query = db.query(Link)
+    if user_id is not None:
+        link_query = link_query.filter(Link.user_id == user_id)
     links = []
-    for link in db.query(Link).order_by(Link.order, Link.id).all():
+    link_rows = link_query.order_by(Link.order, Link.id).all()
+    for link in link_rows:
         links.append(
             {
                 "id": link.id,
@@ -447,37 +513,56 @@ def _link_data(
             }
         )
 
+    category_query = db.query(LinkCategory)
+    if user_id is not None:
+        category_ids = {link.category for link in link_rows}
+        category_query = category_query.filter(
+            LinkCategory.id.in_(category_ids)
+        )
     link_categories = [
         {
             "id": category.id,
             "name": category.name,
             "order": category.order,
         }
-        for category in (
-            db.query(LinkCategory)
-            .order_by(LinkCategory.order, LinkCategory.id)
-            .all()
-        )
+        for category in category_query.order_by(
+            LinkCategory.order,
+            LinkCategory.id,
+        ).all()
     ]
 
     return links, link_categories
 
 
-def _profile_data(db: Session) -> list[dict[str, Any]]:
+def _profile_data(
+    db: Session,
+    user_id: int | None,
+) -> list[dict[str, Any]]:
+    query = db.query(Profile)
+    if user_id is not None:
+        query = query.filter(Profile.user_id == user_id)
     return [
         {
             "id": profile.id,
+            "user_id": profile.user_id,
+            "user": profile.user.username if profile.user else None,
             "title": profile.title,
             "subtitle": profile.subtitle,
             "profile": profile.profile,
             "created_at": _iso(profile.created_at),
             "updated_at": _iso(profile.updated_at),
         }
-        for profile in db.query(Profile).order_by(Profile.id).all()
+        for profile in query.order_by(Profile.id).all()
     ]
 
 
-def _memo_data(db: Session) -> list[dict[str, Any]]:
+def _memo_data(
+    db: Session,
+    user_id: int | None,
+) -> list[dict[str, Any]]:
+    query = db.query(Memo)
+    if user_id is not None:
+        query = query.filter(Memo.user_id == user_id)
     return [
         {
             "id": memo.id,
@@ -490,31 +575,38 @@ def _memo_data(db: Session) -> list[dict[str, Any]]:
             "created_at": _iso(memo.created_at),
             "updated_at": _iso(memo.updated_at),
         }
-        for memo in db.query(Memo).order_by(Memo.id).all()
+        for memo in query.order_by(Memo.id).all()
     ]
 
 
 def _build_export(
     db: Session,
     section: str,
+    user_id: int | None,
 ) -> _PreparedArchive:
+    scope_user = db.get(User, user_id) if user_id is not None else None
+    scope_label = (
+        scope_user.username
+        if scope_user is not None
+        else ("전체" if user_id is None else f"user {user_id}")
+    )
     plan = _ArchivePlan()
     sections: dict[str, dict[str, Any]] = {}
     book_index: list[dict[str, Any]] = []
     counts: dict[str, int] = {}
 
     if section in ("all", "books"):
-        book_categories = _book_categories_data(db)
+        book_categories = _book_categories_data(db, user_id)
         sections[DATA_BOOK_CATEGORIES] = {
             "schema_version": SCHEMA_VERSION,
             "kind": "book_categories",
             "book_categories": book_categories,
         }
         counts["book_categories"] = len(book_categories)
-        book_index = _book_index_data(db)
+        book_index = _book_index_data(db, user_id)
 
     if section in ("all", "illustrations"):
-        illustrations = _illustration_data(db, plan)
+        illustrations = _illustration_data(db, plan, user_id)
         sections[DATA_ILLUSTRATIONS] = {
             "schema_version": SCHEMA_VERSION,
             "kind": "illustrations",
@@ -531,7 +623,7 @@ def _build_export(
             character_relationships,
             locations,
             dolls,
-        ) = _character_data(db, plan)
+        ) = _character_data(db, plan, user_id)
         sections[DATA_CHARACTERS] = {
             "schema_version": SCHEMA_VERSION,
             "kind": "characters",
@@ -546,7 +638,7 @@ def _build_export(
         counts["dolls"] = len(dolls)
 
     if section in ("all", "links"):
-        links, link_categories = _link_data(db, plan)
+        links, link_categories = _link_data(db, plan, user_id)
         sections[DATA_LINKS] = {
             "schema_version": SCHEMA_VERSION,
             "kind": "links",
@@ -557,7 +649,7 @@ def _build_export(
         counts["link_categories"] = len(link_categories)
 
     if section in ("all", "profile"):
-        profiles = _profile_data(db)
+        profiles = _profile_data(db, user_id)
         sections[DATA_PROFILE] = {
             "schema_version": SCHEMA_VERSION,
             "kind": "profile",
@@ -566,7 +658,7 @@ def _build_export(
         counts["profiles"] = len(profiles)
 
     if section in ("all", "memos"):
-        memos = _memo_data(db)
+        memos = _memo_data(db, user_id)
         sections[DATA_MEMOS] = {
             "schema_version": SCHEMA_VERSION,
             "kind": "memos",
@@ -580,6 +672,8 @@ def _build_export(
         book_index=book_index,
         plan=plan,
         counts=counts,
+        user_id=user_id,
+        scope_label=scope_label,
     )
 
 
@@ -663,6 +757,10 @@ def _build_manifest(
         "selection": {
             "key": prepared.section,
             "label": SECTION_LABELS[prepared.section],
+            "scope": {
+                "user_id": prepared.user_id,
+                "user": prepared.scope_label,
+            },
             "included": included,
             "not_included": [
                 key for key in CONTENT_KEYS if key not in included
@@ -698,7 +796,11 @@ def _build_manifest(
     }
 
 
-def _readme(generated_at: datetime, section: str) -> str:
+def _readme(
+    generated_at: datetime,
+    section: str,
+    scope_label: str,
+) -> str:
     label = SECTION_LABELS[section]
     included = _included_keys(section)
     includes_images = any(
@@ -762,8 +864,8 @@ def _readme(generated_at: datetime, section: str) -> str:
     return f"""# 어디에도 없는 섬 · 아카이브 v{SCHEMA_VERSION} · {label}
 
 이 ZIP은 Missing Island의 **{label}** 범위 기록을 특정 데이터베이스
-구조와 무관한 형식으로 보존한 아카이브입니다. 생성 시각:
-{generated_at.isoformat()}
+구조와 무관한 형식으로 보존한 아카이브입니다. 내보내기 대상:
+**{scope_label}**. 생성 시각: {generated_at.isoformat()}
 
 {partial_note}## 구성
 
@@ -879,6 +981,7 @@ def _write_archive(
     prepared: _PreparedArchive,
     book_db: Session,
     progress: Callable[[str, int, int], None],
+    user_id: int | None,
 ) -> None:
     total = (
         len(prepared.plan.files)
@@ -961,12 +1064,19 @@ def _write_archive(
             _throttle()
             continue
 
-        chapter_rows = (
-            book_db.query(Chapter.id, Chapter.title, Chapter.order)
-            .filter(Chapter.book_id == book.id)
-            .order_by(Chapter.order, Chapter.id)
-            .all()
-        )
+        chapter_query = book_db.query(
+            Chapter.id,
+            Chapter.title,
+            Chapter.order,
+        ).filter(Chapter.book_id == book.id)
+        if user_id is not None:
+            chapter_query = chapter_query.filter(
+                Chapter.user_id == user_id
+            )
+        chapter_rows = chapter_query.order_by(
+            Chapter.order,
+            Chapter.id,
+        ).all()
         chapter_index = [
             {
                 "id": chapter_id,
@@ -1000,13 +1110,17 @@ def _write_archive(
         progress("books", processed, total)
         _throttle()
 
-        chapter_query = (
-            book_db.query(Chapter)
-            .filter(Chapter.book_id == book.id)
-            .order_by(Chapter.order, Chapter.id)
-            .yield_per(50)
+        chapter_query = book_db.query(Chapter).filter(
+            Chapter.book_id == book.id
         )
-        for chapter in chapter_query:
+        if user_id is not None:
+            chapter_query = chapter_query.filter(
+                Chapter.user_id == user_id
+            )
+        for chapter in chapter_query.order_by(
+            Chapter.order,
+            Chapter.id,
+        ).yield_per(50):
             chapter_descriptor = _write_json_entry(
                 archive,
                 _chapter_path(book.id, chapter.id),
@@ -1045,7 +1159,7 @@ def _write_archive(
     )
     archive.writestr(
         "README.md",
-        _readme(generated_at, prepared.section),
+        _readme(generated_at, prepared.section, prepared.scope_label),
         compress_type=zipfile.ZIP_DEFLATED,
     )
     progress("finalizing", total, total)
@@ -1055,12 +1169,13 @@ def _build_archive_file(
     section: str,
     output_path: Path,
     progress: Callable[[str, int, int], None],
+    user_id: int | None,
 ) -> None:
     """Build one archive on disk. Runs in the background job worker."""
 
     db = SessionLocal()
     try:
-        prepared = _build_export(db, section)
+        prepared = _build_export(db, section, user_id)
     finally:
         db.close()
 
@@ -1077,6 +1192,7 @@ def _build_archive_file(
                 prepared,
                 book_db,
                 progress,
+                user_id,
             )
         finally:
             book_db.close()
@@ -1098,9 +1214,11 @@ def _get_job_manager() -> ArchiveJobManager:
 @router.post("/jobs")
 def create_archive_job(
     section: str = "all",
-    user=Depends(require_admin),
+    user_id: int | None = None,
+    db: Session = Depends(get_db),
+    user=Depends(require_auth),
 ):
-    """Queue a background archive export (admin only)."""
+    """Queue an archive export for the signed-in user or an admin target."""
 
     if section not in SECTION_LABELS:
         raise HTTPException(
@@ -1108,11 +1226,38 @@ def create_archive_job(
             detail="지원하지 않는 내보내기 범위입니다.",
         )
 
+    if is_admin(user):
+        if user_id is None:
+            scope_user_id = None
+            scope_label = "전체"
+            label = SECTION_LABELS[section]
+        else:
+            target = db.get(User, user_id)
+            if target is None:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="내보낼 사용자를 찾을 수 없습니다.",
+                )
+            scope_user_id = target.id
+            scope_label = target.username
+            label = f"{SECTION_LABELS[section]} · {target.username}"
+    else:
+        if user_id is not None and user_id != user.id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="다른 사용자의 기록은 내보낼 수 없습니다.",
+            )
+        scope_user_id = user.id
+        scope_label = user.username
+        label = f"{SECTION_LABELS[section]} · {user.username}"
+
     try:
         return _get_job_manager().create(
             section,
-            SECTION_LABELS[section],
+            label,
             user.username,
+            user_id=scope_user_id,
+            scope_label=scope_label,
         )
     except ArchiveJobBusy:
         raise HTTPException(
@@ -1122,8 +1267,8 @@ def create_archive_job(
 
 
 @router.get("/jobs")
-def list_archive_jobs(user=Depends(require_admin)):
-    """List recent archive jobs for the signed-in admin."""
+def list_archive_jobs(user=Depends(require_auth)):
+    """List the signed-in user's recent archive jobs."""
 
     return _get_job_manager().list(user.username)
 
@@ -1131,9 +1276,9 @@ def list_archive_jobs(user=Depends(require_admin)):
 @router.get("/jobs/{job_id}")
 def get_archive_job(
     job_id: str,
-    user=Depends(require_admin),
+    user=Depends(require_auth),
 ):
-    """Return one archive job's status."""
+    """Return one of the signed-in user's archive jobs."""
 
     job = _get_job_manager().get(job_id, user.username)
     if job is None:
@@ -1147,9 +1292,9 @@ def get_archive_job(
 @router.get("/jobs/{job_id}/download")
 def download_archive_job(
     job_id: str,
-    user=Depends(require_admin),
+    user=Depends(require_auth),
 ):
-    """Download a completed archive ZIP (admin only)."""
+    """Download one of the signed-in user's completed archive ZIPs."""
 
     found = _get_job_manager().download(job_id, user.username)
     if found is None:
