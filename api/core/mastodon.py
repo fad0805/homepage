@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from models.books import Chapter
 from models.illustrations import Illustration
 from models.settings import MastodonSettings
+from models.users import User
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -89,6 +90,41 @@ def get_or_create_mastodon_settings(
             db.delete(duplicate)
         db.commit()
     return settings
+
+
+def _ready_settings(db: Session):
+    return db.query(MastodonSettings).filter(
+        MastodonSettings.enabled.is_(True),
+        MastodonSettings.instance_url.isnot(None),
+        MastodonSettings.access_token.isnot(None),
+    )
+
+
+def get_admin_fallback_settings(
+    db: Session,
+) -> MastodonSettings | None:
+    """Return an administrator connection that can notify all users."""
+    return (
+        _ready_settings(db)
+        .join(User, MastodonSettings.user_id == User.id)
+        .filter(User.role == "admin")
+        .order_by(
+            MastodonSettings.updated_at.desc(),
+            MastodonSettings.id.desc(),
+        )
+        .first()
+    )
+
+
+def get_notification_settings(
+    db: Session,
+    content_user_id: int,
+) -> MastodonSettings | None:
+    """Prefer the author's own connection, then fall back to an admin one."""
+    settings = get_mastodon_settings(db, content_user_id)
+    if _settings_ready(settings):
+        return settings
+    return get_admin_fallback_settings(db) or settings
 
 
 def _notify_scope(settings: MastodonSettings | None) -> str:
@@ -456,7 +492,7 @@ def maybe_notify_chapter(db: Session, chapter: Chapter) -> bool:
 
     Returns True when a Mastodon status was created.
     """
-    settings = get_mastodon_settings(db, user_id=chapter.user_id)
+    settings = get_notification_settings(db, chapter.user_id)
     if settings is None:
         if chapter.mastodon_pending:
             chapter.mastodon_pending = False
@@ -537,10 +573,7 @@ def maybe_notify_illustration(
     illustration: Illustration,
 ) -> bool:
     """Post an illustration notification once when it becomes public."""
-    settings = get_mastodon_settings(
-        db,
-        user_id=illustration.user_id,
-    )
+    settings = get_notification_settings(db, illustration.user_id)
     if not _settings_ready(settings):
         return False
     if not _illustration_notify_allowed(settings):
@@ -575,24 +608,23 @@ def publish_pending_chapters() -> int:
     posted = 0
     try:
         now = datetime.utcnow()
-        # Each chapter is notified through its own author's connection, so a
-        # user's account never announces another user's content.
-        enabled_user_ids = db.query(MastodonSettings.user_id).filter(
-            MastodonSettings.enabled.is_(True),
-            MastodonSettings.instance_url.isnot(None),
-            MastodonSettings.access_token.isnot(None),
+        fallback_settings = get_admin_fallback_settings(db)
+        query = db.query(Chapter).filter(
+            Chapter.mastodon_pending.is_(True),
+            Chapter.mastodon_status_id.is_(None),
+            Chapter.visible.is_(True),
+            (Chapter.published_at.is_(None))
+            | (Chapter.published_at <= now),
         )
-        chapters = (
-            db.query(Chapter)
-            .filter(
-                Chapter.mastodon_pending.is_(True),
-                Chapter.mastodon_status_id.is_(None),
-                Chapter.visible.is_(True),
-                Chapter.user_id.in_(enabled_user_ids),
-                (Chapter.published_at.is_(None))
-                | (Chapter.published_at <= now),
+        if fallback_settings is None:
+            # Without an admin fallback, only authors with their own ready
+            # connection can be announced.
+            enabled_user_ids = _ready_settings(db).with_entities(
+                MastodonSettings.user_id
             )
-            .order_by(
+            query = query.filter(Chapter.user_id.in_(enabled_user_ids))
+        chapters = (
+            query.order_by(
                 Chapter.published_at.asc(),
                 Chapter.id.asc(),
             )
