@@ -157,7 +157,15 @@ function ChapterDetail({
   return (
     <article className="chapter-detail">
       <p className="chapter-detail__book">{bookTitle}</p>
-      <h2 className="chapter-detail__title">{chapter.title}</h2>
+      <h2 className="chapter-detail__title">
+        {chapter.title}
+        {chapter.visible === false ? (
+          <span className="books-private-badge">비공개</span>
+        ) : null}
+        {chapter.visible !== false && chapter.protected ? (
+          <span className="books-protected-badge">보호</span>
+        ) : null}
+      </h2>
       {chapter.subtitle ? (
         <p className="chapter-detail__subtitle">{chapter.subtitle}</p>
       ) : null}
@@ -291,9 +299,9 @@ export default function BooksClient({
   const visibleBooks = useMemo(
     () =>
       books
-        .filter((book) => book.visible !== false)
+        .filter((book) => isLoggedIn || book.visible !== false)
         .sort((a, b) => a.order - b.order || a.id - b.id),
-    [books],
+    [books, isLoggedIn],
   );
 
   const categoryList = useMemo(() => {
@@ -312,12 +320,12 @@ export default function BooksClient({
       chapters
         .filter(
           (chapter) =>
-            chapter.visible !== false &&
+            (isLoggedIn || chapter.visible !== false) &&
             (!chapter.published_at ||
               new Date(chapter.published_at).getTime() <= now),
         )
         .sort(compareChaptersByCreatedDesc),
-    [chapters, now],
+    [chapters, isLoggedIn, now],
   );
 
   const chapterCounts = useMemo(() => {
@@ -566,6 +574,16 @@ export default function BooksClient({
                         <span className="books-book-button__main">
                           <span className="books-book-button__title">
                             {book.title}
+                            {book.visible === false ? (
+                              <span className="books-private-badge">
+                                비공개
+                              </span>
+                            ) : null}
+                            {book.visible !== false && book.protected ? (
+                              <span className="books-protected-badge">
+                                보호
+                              </span>
+                            ) : null}
                           </span>
                         </span>
                         <span className="books-book-button__count">
@@ -595,7 +613,15 @@ export default function BooksClient({
       ) : null}
       <header className="books-panel__header">
         <div>
-          <h2>{activeBook.title}</h2>
+          <h2>
+            {activeBook.title}
+            {activeBook.visible === false ? (
+              <span className="books-private-badge">비공개</span>
+            ) : null}
+            {activeBook.visible !== false && activeBook.protected ? (
+              <span className="books-protected-badge">보호</span>
+            ) : null}
+          </h2>
           {activeBook.description ? (
             <p>{activeBook.description}</p>
           ) : null}
@@ -652,6 +678,12 @@ export default function BooksClient({
                 <span className="books-chapter-link__main">
                   <span className="books-chapter-link__title">
                     {chapter.title}
+                    {chapter.visible === false ? (
+                      <span className="books-private-badge">비공개</span>
+                    ) : null}
+                    {chapter.visible !== false && chapter.protected ? (
+                      <span className="books-protected-badge">보호</span>
+                    ) : null}
                   </span>
                 </span>
                 <span className="books-chapter-link__time">

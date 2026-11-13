@@ -4,6 +4,7 @@ import Link from "next/link";
 import { formatDate, formatDateTime } from "@/lib/datetime";
 import type { IllustrationItem } from "@/lib/illustration-types";
 import { serverApiFetch } from "@/lib/server-api";
+import { getCurrentUser } from "@/lib/server-auth";
 import type { Book, Chapter } from "../books/types";
 
 import "@/public/styles/search.scss";
@@ -93,26 +94,33 @@ export default async function SearchPage({
   let chapters: Chapter[] = [];
   let illustrations: IllustrationItem[] = [];
   let failed = false;
+  const currentUser = await getCurrentUser();
 
   try {
     [books, chapters, illustrations] = await Promise.all([
       serverApiFetch<Book[]>("/books", { tags: ["books"] }),
       serverApiFetch<Chapter[]>("/chapters", { tags: ["chapters"] }),
-      serverApiFetch<IllustrationItem[]>("/illustrations", {
-        tags: ["illustrations"],
-      }),
+      currentUser
+        ? serverApiFetch<IllustrationItem[]>("/illustrations/admin", {
+            auth: true,
+          })
+        : serverApiFetch<IllustrationItem[]>("/illustrations", {
+            tags: ["illustrations"],
+          }),
     ]);
   } catch (error) {
     console.error(error);
     failed = true;
   }
 
-  const visibleBooks = books.filter((book) => book.visible !== false);
+  const visibleBooks = currentUser
+    ? books
+    : books.filter((book) => book.visible !== false);
   const bookMap = new Map(visibleBooks.map((book) => [book.id, book]));
   const now = Date.now();
   const visibleChapters = chapters.filter(
     (chapter) =>
-      chapter.visible !== false &&
+      (currentUser || chapter.visible !== false) &&
       bookMap.has(chapter.book_id) &&
       (!chapter.published_at ||
         new Date(chapter.published_at).getTime() <= now),

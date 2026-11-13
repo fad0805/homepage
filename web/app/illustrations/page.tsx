@@ -8,6 +8,7 @@ import {
 } from "@/lib/datetime";
 import type { IllustrationItem } from "@/lib/illustration-types";
 import { serverApiFetch } from "@/lib/server-api";
+import { getCurrentUser } from "@/lib/server-auth";
 
 import { IllustrationSearch } from "./illustration-search";
 
@@ -185,12 +186,18 @@ export default async function IllustrationsPage({
 
   let illustrations: IllustrationItem[] = [];
   let failed = false;
+  const currentUser = await getCurrentUser();
 
   try {
-    illustrations = await serverApiFetch<IllustrationItem[]>(
-      "/illustrations",
-      { tags: ["illustrations"] },
-    );
+    illustrations = currentUser
+      ? await serverApiFetch<IllustrationItem[]>(
+          "/illustrations/admin",
+          { auth: true },
+        )
+      : await serverApiFetch<IllustrationItem[]>(
+          "/illustrations",
+          { tags: ["illustrations"] },
+        );
   } catch (error) {
     console.error(error);
     failed = true;
@@ -334,6 +341,16 @@ export default async function IllustrationsPage({
                     {item.image_count > 1 ? (
                       <span className="illustration-card__count">
                         {item.image_count}장
+                      </span>
+                    ) : null}
+                    {item.visible === false ? (
+                      <span className="illustration-card__private">
+                        비공개
+                      </span>
+                    ) : null}
+                    {item.visible !== false && item.protected ? (
+                      <span className="illustration-card__protected">
+                        보호
                       </span>
                     ) : null}
                   </div>

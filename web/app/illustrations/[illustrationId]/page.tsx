@@ -37,6 +37,7 @@ export default async function IllustrationDetailPage({
 }) {
   const { illustrationId } = await params;
   const id = parseId(illustrationId);
+  const currentUser = await getCurrentUser();
 
   let illustration: IllustrationDetailItem | null = null;
   let errorMessage = "삽화를 찾을 수 없습니다.";
@@ -82,7 +83,6 @@ export default async function IllustrationDetailPage({
   }
 
   const title = illustration.title;
-  const currentUser = await getCurrentUser();
 
   return (
     <div id="illustrations-page" className="illustration-detail-page">

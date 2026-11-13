@@ -896,3 +896,42 @@
   color: #d9534f;
   font-size: 0.9rem;
 }
+
+.books-private-badge {
+  display: inline-block;
+  margin-left: 0.35rem;
+  padding: 0.05rem 0.4rem;
+  border: 1px solid rgba(0, 0, 0, 0.18);
+  border-radius: 999px;
+  color: var(--title-color);
+  font-family: GowunDodum, Arial, Helvetica, sans-serif;
+  font-size: 0.58rem;
+  font-weight: 600;
+  line-height: 1.5;
+  vertical-align: middle;
+  opacity: 0.8;
+}
+
+[data-theme='dark'] .books-private-badge {
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.books-protected-badge {
+  display: inline-block;
+  margin-left: 0.35rem;
+  padding: 0.05rem 0.4rem;
+  border: 1px solid rgba(160, 106, 18, 0.35);
+  border-radius: 999px;
+  color: #a06a12;
+  font-family: GowunDodum, Arial, Helvetica, sans-serif;
+  font-size: 0.58rem;
+  font-weight: 600;
+  line-height: 1.5;
+  vertical-align: middle;
+  opacity: 0.9;
+}
+
+[data-theme='dark'] .books-protected-badge {
+  border-color: rgba(224, 176, 98, 0.35);
+  color: #e0b062;
+}

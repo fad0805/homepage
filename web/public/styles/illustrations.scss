@@ -391,6 +391,30 @@
   line-height: 1.5;
 }
 
+.illustration-card__private {
+  position: absolute;
+  top: 0.55rem;
+  left: 0.55rem;
+  padding: 0.15rem 0.45rem;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.62);
+  color: #fff;
+  font-size: 0.66rem;
+  line-height: 1.5;
+}
+
+.illustration-card__protected {
+  position: absolute;
+  top: 0.55rem;
+  right: 0.55rem;
+  padding: 0.15rem 0.45rem;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.62);
+  color: #fff;
+  font-size: 0.66rem;
+  line-height: 1.5;
+}
+
 .illustration-card__empty {
   display: flex;
   align-items: center;
