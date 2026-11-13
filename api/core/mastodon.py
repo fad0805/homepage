@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import os
+import re
 from datetime import datetime, timezone
 from urllib.parse import urlparse
 
@@ -199,6 +200,52 @@ def _trim_status(text: str) -> str:
     return value[: STATUS_LIMIT - 1].rstrip() + "…"
 
 
+def _normalize_hashtag(tag: str) -> str | None:
+    """Turn an arbitrary tag into a hashtag that Mastodon/Misskey accept."""
+    value = (tag or "").strip().lstrip("#")
+    value = re.sub(r"[^\w가-힣]", "", value, flags=re.UNICODE)
+    if not value:
+        return None
+    return f"#{value}"
+
+
+def _hashtag_line(tags: list[str] | None) -> str:
+    result: list[str] = []
+    seen: set[str] = set()
+    for tag in tags or []:
+        hashtag = _normalize_hashtag(tag)
+        if hashtag is None:
+            continue
+        key = hashtag.casefold()
+        if key in seen:
+            continue
+        seen.add(key)
+        result.append(hashtag)
+    return " ".join(result)
+
+
+def _append_hashtags(
+    text: str,
+    tags: list[str] | None,
+) -> str:
+    """Append the content's tags as hashtags without exceeding the limit."""
+    hashtags = _hashtag_line(tags)
+    if not hashtags:
+        return _trim_status(text)
+
+    base = text.strip()
+    separator = "\n\n"
+    if len(base) + len(separator) + len(hashtags) <= STATUS_LIMIT:
+        return f"{base}{separator}{hashtags}"
+
+    available = STATUS_LIMIT - len(separator) - len(hashtags)
+    if available <= 1:
+        return _trim_status(hashtags)
+
+    trimmed = base[: available - 1].rstrip() + "…"
+    return f"{trimmed}{separator}{hashtags}"
+
+
 def _chapter_text(settings: MastodonSettings, chapter: Chapter) -> str:
     base = _site_base(settings)
     lines = ["새 목차가 발행되었습니다.", "", chapter.title]
@@ -209,7 +256,7 @@ def _chapter_text(settings: MastodonSettings, chapter: Chapter) -> str:
         lines.append(
             f"{base}/books?book={chapter.book_id}&chapter={chapter.id}"
         )
-    return _trim_status("\n".join(lines))
+    return _append_hashtags("\n".join(lines), chapter.tags or [])
 
 
 def _illustration_text(
@@ -224,7 +271,10 @@ def _illustration_text(
             lines.extend(["", description])
     if base:
         lines.append(f"{base}/illustrations/{illustration.id}")
-    return _trim_status("\n".join(lines))
+    return _append_hashtags(
+        "\n".join(lines),
+        illustration.tags or [],
+    )
 
 
 def _request_error(response: httpx.Response) -> str:
