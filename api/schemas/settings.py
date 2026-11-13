@@ -5,7 +5,7 @@ from pydantic import BaseModel, Field
 
 MastodonVisibility = Literal["public", "unlisted", "private"]
 MastodonNotifyScope = Literal["all", "books", "book", "illustrations"]
-MastodonProvider = Literal["mastodon", "misskey"]
+MastodonProvider = Literal["mastodon", "misskey", "writ"]
 
 
 class MastodonSettingsRead(BaseModel):

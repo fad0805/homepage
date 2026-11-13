@@ -16,7 +16,7 @@ import "@/public/styles/admin/connections.scss";
 
 type MastodonVisibility = "public" | "unlisted" | "private";
 type MastodonNotifyScope = "all" | "books" | "book" | "illustrations";
-type MastodonProvider = "mastodon" | "misskey";
+type MastodonProvider = "mastodon" | "misskey" | "writ";
 
 interface MastodonProfile {
   id: number;
@@ -79,7 +79,9 @@ function toDraft(profile: MastodonProfile): ProfileDraft {
 }
 
 function serviceName(provider: MastodonProvider) {
-  return provider === "misskey" ? "미스키" : "마스토돈";
+  if (provider === "misskey") return "미스키";
+  if (provider === "writ") return "WRIT";
+  return "마스토돈";
 }
 
 function scopeLabel(
@@ -569,7 +571,7 @@ export default function AdminConnections() {
               </label>
 
               <label className="admin-field">
-                <span>액세스 토큰 (마스토돈/미스키)</span>
+                <span>액세스 토큰 (마스토돈/미스키/WRIT)</span>
                 <input
                   type="password"
                   value={draft.access_token}
@@ -579,7 +581,7 @@ export default function AdminConnections() {
                   placeholder={
                     draft.has_access_token
                       ? "저장된 토큰 사용 중 · 변경할 때만 입력"
-                      : "마스토돈 또는 미스키 액세스 토큰"
+                      : "마스토돈, 미스키 또는 WRIT 액세스 토큰"
                   }
                   autoComplete="new-password"
                 />
@@ -722,6 +724,12 @@ export default function AdminConnections() {
                   <li>
                     미스키: 설정 → API → 액세스 토큰에서 노트 작성
                     권한을 포함해 발급합니다.
+                  </li>
+                  <li>
+                    WRIT: 설정 → 개발에서 앱을 만들고{" "}
+                    <code>write:statuses</code>,{" "}
+                    <code>read:accounts</code> 권한의 토큰을
+                    발급합니다.
                   </li>
                   <li>
                     발급된 토큰을 위 입력란에 붙여넣고 저장하면

@@ -119,7 +119,11 @@ def serialize_mastodon_settings(
     scope = _notify_scope(settings)
     provider = (
         settings.provider
-        if settings and settings.provider in ("mastodon", "misskey")
+        if settings and settings.provider in (
+            "mastodon",
+            "misskey",
+            "writ",
+        )
         else "mastodon"
     )
     return {
@@ -387,10 +391,12 @@ def _detect_instance_software(
             mastodon = client.get(f"{instance}/api/v1/instance")
             if mastodon.status_code == 200:
                 data = mastodon.json()
-                if isinstance(data, dict) and (
-                    "uri" in data or "version" in data
-                ):
-                    return "mastodon"
+                if isinstance(data, dict):
+                    version = str(data.get("version") or "")
+                    if "writ" in version.lower():
+                        return "writ"
+                    if "uri" in data or "version" in data:
+                        return "mastodon"
 
             misskey = client.post(f"{instance}/api/meta", json={})
             if misskey.status_code == 200:
@@ -413,11 +419,14 @@ def detect_service(
 
     verifiers = {
         "mastodon": verify_mastodon_credentials,
+        "writ": verify_mastodon_credentials,
         "misskey": verify_misskey_credentials,
     }
     try:
         return provider, verifiers[provider](settings)
     except MastodonError as primary_error:
+        if provider == "writ":
+            raise primary_error
         other = "misskey" if provider == "mastodon" else "mastodon"
         try:
             return other, verifiers[other](settings)
@@ -476,7 +485,7 @@ def _post_misskey_status(
 def post_status(settings: MastodonSettings, text: str) -> str:
     provider = (
         settings.provider
-        if settings.provider in ("mastodon", "misskey")
+        if settings.provider in ("mastodon", "misskey", "writ")
         else "mastodon"
     )
     if provider == "misskey":
