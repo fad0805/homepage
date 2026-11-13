@@ -24,7 +24,7 @@ def read_memos(
     """
     Get all one-line memos belonging to the current user.
     """
-    return get_memos(db, user.username)
+    return get_memos(db, user.id)
 
 
 @router.post("", response_model=MemoRead)
@@ -37,7 +37,7 @@ def add_memo(
     """
     Create a one-line memo for the current user.
     """
-    return create_memo(db, user.username, memo)
+    return create_memo(db, user.id, memo)
 
 
 @router.put("/{memo_id}", response_model=MemoRead)
@@ -50,7 +50,7 @@ def modify_memo(
     """
     Update one of the current user's one-line memos.
     """
-    return update_memo(db, user.username, memo_id, memo)
+    return update_memo(db, user.id, memo_id, memo)
 
 
 @router.delete("/{memo_id}")
@@ -62,4 +62,4 @@ def remove_memo(
     """
     Delete one of the current user's one-line memos.
     """
-    return delete_memo(db, user.username, memo_id)
+    return delete_memo(db, user.id, memo_id)

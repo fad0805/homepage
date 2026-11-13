@@ -197,7 +197,7 @@ def _next_illustration_order(db: Session) -> int:
 
 def create_illustration_group(
     db: Session,
-    owner: str,
+    user_id: int,
     title: str,
     uploads: list[str],
     description: str | None = None,
@@ -207,7 +207,7 @@ def create_illustration_group(
 ):
     """Create one illustration group from a batch of images."""
     group = Illustration(
-        owner=owner,
+        user_id=user_id,
         title=title,
         description=description,
         tags=_clean_tags(tags),

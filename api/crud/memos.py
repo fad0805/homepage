@@ -15,12 +15,12 @@ def _utcnow() -> datetime:
     return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
-def _delete_expired(db: Session, owner: str) -> None:
+def _delete_expired(db: Session, user_id: int) -> None:
     """Remove this user's unpinned memos whose 24-hour window has ended."""
     deleted = (
         db.query(Memo)
         .filter(
-            Memo.owner == owner,
+            Memo.user_id == user_id,
             Memo.pinned.is_(False),
             Memo.expires_at <= _utcnow(),
         )
@@ -30,7 +30,7 @@ def _delete_expired(db: Session, owner: str) -> None:
         db.commit()
 
 
-def get_memos(db: Session, owner: str):
+def get_memos(db: Session, user_id: int):
     """
     Get all current one-line memos belonging to the given user.
 
@@ -38,26 +38,26 @@ def get_memos(db: Session, owner: str):
     newest-first order. Unpinned memos are kept for one day from creation and
     are removed lazily whenever the list is read.
     """
-    _delete_expired(db, owner)
+    _delete_expired(db, user_id)
     pinned = (
         db.query(Memo)
-        .filter(Memo.owner == owner, Memo.pinned.is_(True))
+        .filter(Memo.user_id == user_id, Memo.pinned.is_(True))
         .order_by(Memo.created_at.asc(), Memo.id.asc())
         .all()
     )
     unpinned = (
         db.query(Memo)
-        .filter(Memo.owner == owner, Memo.pinned.is_(False))
+        .filter(Memo.user_id == user_id, Memo.pinned.is_(False))
         .order_by(Memo.created_at.desc(), Memo.id.desc())
         .all()
     )
     return [*pinned, *unpinned]
 
 
-def _get_owned_memo(db: Session, owner: str, memo_id: int):
+def _get_owned_memo(db: Session, user_id: int, memo_id: int):
     memo = (
         db.query(Memo)
-        .filter(Memo.id == memo_id, Memo.owner == owner)
+        .filter(Memo.id == memo_id, Memo.user_id == user_id)
         .first()
     )
     if not memo:
@@ -68,7 +68,7 @@ def _get_owned_memo(db: Session, owner: str, memo_id: int):
     return memo
 
 
-def create_memo(db: Session, owner: str, memo: MemoCreate):
+def create_memo(db: Session, user_id: int, memo: MemoCreate):
     """
     Create a one-line memo for the given user.
     """
@@ -80,7 +80,7 @@ def create_memo(db: Session, owner: str, memo: MemoCreate):
         )
 
     db_memo = Memo(
-        owner=owner,
+        user_id=user_id,
         content=content,
         pinned=False,
         expires_at=_utcnow() + MEMO_TTL,
@@ -93,7 +93,7 @@ def create_memo(db: Session, owner: str, memo: MemoCreate):
 
 def update_memo(
     db: Session,
-    owner: str,
+    user_id: int,
     memo_id: int,
     memo: MemoUpdate,
 ):
@@ -109,8 +109,8 @@ def update_memo(
             detail="수정할 내용이 없습니다.",
         )
 
-    _delete_expired(db, owner)
-    db_memo = _get_owned_memo(db, owner, memo_id)
+    _delete_expired(db, user_id)
+    db_memo = _get_owned_memo(db, user_id, memo_id)
     original_updated_at = db_memo.updated_at
 
     if memo.content is not None:
@@ -138,12 +138,12 @@ def update_memo(
     return db_memo
 
 
-def delete_memo(db: Session, owner: str, memo_id: int):
+def delete_memo(db: Session, user_id: int, memo_id: int):
     """
     Delete a one-line memo belonging to the given user.
     """
-    _delete_expired(db, owner)
-    db_memo = _get_owned_memo(db, owner, memo_id)
+    _delete_expired(db, user_id)
+    db_memo = _get_owned_memo(db, user_id, memo_id)
     db.delete(db_memo)
     db.commit()
     return True

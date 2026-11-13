@@ -127,7 +127,7 @@ async def upload_illustrations(
         if illustration_id is None:
             return create_illustration_group(
                 db,
-                owner=getattr(user, "username", "admin"),
+                user_id=user.id,
                 title=normalized_title,
                 description=normalized_description,
                 tags=_parse_tags(tags),

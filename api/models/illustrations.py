@@ -14,13 +14,22 @@ from sqlalchemy import (
 from sqlalchemy.orm import relationship
 
 from db.base import Base
+from models.users import User
 
 
 class Illustration(Base):
     __tablename__ = "illustrations"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    owner = Column(String(50), nullable=False, index=True)
+    # Legacy username string. New rows use user_id; this stays until the
+    # existing data has been mapped to users.
+    owner = Column(String(50), nullable=True, index=True)
+    user_id = Column(
+        Integer,
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     title = Column(String(255), nullable=False)
     description = Column(Text, nullable=True)
     tags = Column(JSON, nullable=False, default=list)
@@ -58,6 +67,7 @@ class Illustration(Base):
         cascade="all, delete-orphan",
         order_by="IllustrationImage.order, IllustrationImage.id",
     )
+    user = relationship(User)
 
     def __repr__(self):
         return f"<Illustration(id={self.id}, owner='{self.owner}')>"

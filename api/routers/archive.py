@@ -310,6 +310,12 @@ def _illustration_data(
         illustrations.append(
             {
                 "id": illustration.id,
+                "user_id": illustration.user_id,
+                "user": (
+                    illustration.user.username
+                    if illustration.user
+                    else None
+                ),
                 "owner": illustration.owner,
                 "title": illustration.title,
                 "description": illustration.description,
@@ -475,6 +481,8 @@ def _memo_data(db: Session) -> list[dict[str, Any]]:
     return [
         {
             "id": memo.id,
+            "user_id": memo.user_id,
+            "user": memo.user.username if memo.user else None,
             "owner": memo.owner,
             "content": memo.content,
             "pinned": memo.pinned,
