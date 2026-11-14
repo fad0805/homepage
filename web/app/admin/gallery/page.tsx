@@ -113,12 +113,18 @@ export default function AdminGalleryPage() {
     void refresh();
   }, [refresh]);
 
-  async function revokeInvite(id: number) {
-    if (!window.confirm("이 비밀번호를 폐기할까요?")) return;
+  async function revokeInvite(invite: GalleryInvite) {
+    const message =
+      invite.status === "used"
+        ? "이미 사용된 발급 기록을 폐기할까요? 이미 열린 열람 권한은 유지됩니다."
+        : "이 비밀번호를 폐기할까요?";
+    if (!window.confirm(message)) return;
     setBusy(true);
     setError(null);
     try {
-      await apiFetch(`/api/gallery/invites/${id}`, { method: "DELETE" });
+      await apiFetch(`/api/gallery/invites/${invite.id}`, {
+        method: "DELETE",
+      });
       await refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "폐기하지 못했습니다.");
@@ -168,7 +174,9 @@ export default function AdminGalleryPage() {
             ? "모든 사용자의 발급 기록과 열람 중인 브라우저를 확인하고 폐기할 수 있습니다."
             : "내가 발급한 기록과 내 콘텐츠를 열람 중인 브라우저를 확인할 수 있습니다."}
           {" "}새 비밀번호는 각 삽화·게시물·책 관리 화면에서 발급합니다.
-          폐기된 기록은 30일 뒤 자동으로 삭제됩니다.
+          사용된 발급 기록을 폐기해도 이미 열린 열람 권한은 유지되며,
+          열람 중인 브라우저에서 폐기할 수 있습니다. 폐기된 기록은 30일
+          뒤 자동으로 삭제됩니다.
         </p>
       </header>
 
@@ -214,12 +222,10 @@ export default function AdminGalleryPage() {
                     <td>{formatDateTime(invite.expires_at)}</td>
                     <td>{formatDateTime(invite.used_at)}</td>
                     <td>
-                      {(isAdmin
-                        ? invite.status !== "revoked"
-                        : invite.status === "unused") ? (
+                      {invite.status !== "revoked" ? (
                         <button
                           type="button"
-                          onClick={() => revokeInvite(invite.id)}
+                          onClick={() => revokeInvite(invite)}
                           disabled={busy}
                         >
                           폐기
