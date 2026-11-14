@@ -46,6 +46,25 @@ div#content > .admin-layout > nav#admin-navbar {
   }
 }
 
+#container.site-layout--collapsible
+  .admin-layout
+  > nav#admin-navbar {
+  display: block;
+  width: calc(100% - 2.5rem);
+  margin-top: 2.1rem;
+  margin-left: 2.5rem;
+  box-sizing: border-box;
+
+  .admin-navbar__row + .admin-navbar__row {
+    margin-top: 0.55rem;
+  }
+}
+
+#container.site-layout--collapsible .admin-navbar__row {
+  justify-content: flex-start;
+  width: 100%;
+}
+
 nav#admin-navbar a {
   color: var(--title-color);
   text-decoration: none;

@@ -1,3 +1,4 @@
+@use 'sass:color';
 @use 'variables' as *;
 
 /* Appearance presets change the shell structure only. Color tokens,
@@ -283,8 +284,10 @@ body:not(:has(.admin-layout)) #container.site-layout--side * {
     max((100vw - 980px) / 2, 2vw) + 4rem
   );
 
-  width: 100%;
+  width: calc(100% - 4rem);
   max-width: none;
+  margin-right: 0;
+  margin-left: auto;
   padding: 6.75rem 0 0;
   height: 100vh;
   height: 100dvh;
@@ -518,7 +521,29 @@ body:not(:has(.admin-layout)) #container.site-layout--side * {
 }
 
 html[data-appearance='collapsible'] .theme-toggle {
-  bottom: calc(4.75rem + env(safe-area-inset-bottom, 0px));
+  right: auto;
+  bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
+  left: calc(1rem + env(safe-area-inset-left, 0px));
+  border-color: color.change($maintheme, $alpha: 0.5);
+  background: color.change($subtheme, $alpha: 0.38);
+  color: var(--title-color);
+  box-shadow: 0 0.45rem 1.1rem rgba(0, 0, 0, 0.1);
+
+  &:hover {
+    filter: none;
+    background: color.change($subtheme, $alpha: 0.58);
+  }
+
+  [data-theme='dark'] & {
+    border-color: rgba(255, 255, 255, 0.16);
+    background: rgba(255, 255, 255, 0.07);
+    color: var(--foreground);
+    box-shadow: 0 0.45rem 1.1rem rgba(0, 0, 0, 0.38);
+
+    &:hover {
+      background: rgba(255, 255, 255, 0.12);
+    }
+  }
 }
 
 @media (min-width: ($breakpoint-md + 1)) {

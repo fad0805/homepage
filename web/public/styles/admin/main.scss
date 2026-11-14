@@ -11,6 +11,10 @@ div#admin-main {
   min-height: 50vh;
 }
 
+#container.site-layout--collapsible div#admin-main {
+  padding: 1rem 2.5rem 4rem;
+}
+
 /* Header */
 .admin-dashboard-header {
   display: flex;
@@ -926,5 +930,11 @@ a.admin-dashboard-book:visited {
     width: 100%;
     margin-left: 0;
     align-self: stretch;
+  }
+}
+
+@media (max-width: 560px) {
+  #container.site-layout--collapsible div#admin-main {
+    padding: 1.25rem 1rem 4rem;
   }
 }
