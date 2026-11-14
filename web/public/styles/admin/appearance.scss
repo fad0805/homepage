@@ -19,6 +19,7 @@
 }
 
 [data-theme='dark'] #admin-appearance {
+  --admin-appearance-card-body-bg: #c1dcc6;
   --admin-card-bg: #{color.adjust($dark-bg-sub, $lightness: 4%)};
   --admin-border: #{color.adjust($dark-bg-sub, $lightness: 12%)};
   --admin-muted: #{color.adjust($dark-text, $lightness: -28%)};
