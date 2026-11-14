@@ -18,6 +18,7 @@ import { formatDateTime } from "@/lib/datetime";
 import "@/public/styles/admin/books.scss";
 
 const DRAFT_AUTOSAVE_DELAY_MS = 2000;
+const CHAPTER_SAVED_NOTICE_KEY = "admin-chapter-saved";
 
 interface Book {
   id: number;
@@ -160,6 +161,16 @@ export default function AdminChapterEdit() {
     },
     [],
   );
+
+  useEffect(() => {
+    if (
+      window.sessionStorage.getItem(CHAPTER_SAVED_NOTICE_KEY) !== "1"
+    ) {
+      return;
+    }
+    window.sessionStorage.removeItem(CHAPTER_SAVED_NOTICE_KEY);
+    notify("success", "저장했습니다.");
+  }, [chapterIdParam, notify]);
 
   const requestDeleteDraft = useCallback(async () => {
     if (!draftKey) return;
@@ -618,7 +629,7 @@ export default function AdminChapterEdit() {
     setSaving(true);
     try {
       if (isNew) {
-        await apiFetch("/api/chapters", {
+        const created = await apiFetch<ChapterItem>("/api/chapters", {
           method: "POST",
           body: JSON.stringify({
             book_id: nextBookId,
@@ -632,24 +643,59 @@ export default function AdminChapterEdit() {
             published_at: publishedAtValue,
           }),
         });
-      } else if (chapter) {
-        await apiFetch(`/api/chapters/${chapter.id}`, {
-          method: "PUT",
-          body: JSON.stringify({
-            book_id: nextBookId,
-            title: nextTitle,
-            subtitle: subtitle.trim() || null,
-            body: nextBody,
-            tags: parseTags(tagsInput),
-            order,
-            visible,
-            protected: chapterProtected,
-            published_at: publishedAtValue,
-          }),
-        });
+        await deleteDraft();
+        window.sessionStorage.setItem(CHAPTER_SAVED_NOTICE_KEY, "1");
+        router.replace(
+          `/admin/books/${created.book_id}/chapters/${created.id}`,
+        );
+        return;
       }
-      await deleteDraft();
-      router.push(`/admin/books/${nextBookId}`);
+
+      if (chapter) {
+        const updated = await apiFetch<ChapterItem>(
+          `/api/chapters/${chapter.id}`,
+          {
+            method: "PUT",
+            body: JSON.stringify({
+              book_id: nextBookId,
+              title: nextTitle,
+              subtitle: subtitle.trim() || null,
+              body: nextBody,
+              tags: parseTags(tagsInput),
+              order,
+              visible,
+              protected: chapterProtected,
+              published_at: publishedAtValue,
+            }),
+          },
+        );
+        await deleteDraft();
+
+        const nextTagsInput = (updated.tags ?? []).join(", ");
+        const nextPublishedAt = toDatetimeLocal(updated.published_at);
+        setChapter(updated);
+        setAllChapters((items) =>
+          items.map((item) => (item.id === updated.id ? updated : item)),
+        );
+        setTitle(updated.title);
+        setSubtitle(updated.subtitle ?? "");
+        setBody(updated.body ?? "");
+        setTagsInput(nextTagsInput);
+        setVisible(updated.visible !== false);
+        setChapterProtected(updated.protected === true);
+        setPublishedAt(nextPublishedAt);
+        setTargetBookId(updated.book_id);
+        lastSavedSignatureRef.current = getDraftSignature({
+          title: updated.title,
+          subtitle: updated.subtitle ?? "",
+          body: updated.body ?? "",
+          tagsInput: nextTagsInput,
+          visible: updated.visible !== false,
+          publishedAt: nextPublishedAt,
+          targetBookId: updated.book_id,
+        });
+        notify("success", "저장했습니다.");
+      }
     } catch (error) {
       notify(
         "error",
