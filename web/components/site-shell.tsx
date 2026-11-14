@@ -43,6 +43,8 @@ export function SiteShell({
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [drawerPinned, setDrawerPinned] = useState(false);
   const drawerRef = useRef<HTMLDivElement>(null);
+  const topbarRef = useRef<HTMLElement>(null);
+  const rightHoverArmedRef = useRef(true);
 
   const isSide = layoutKey === "side";
   const isBottom = layoutKey === "collapsible";
@@ -53,12 +55,36 @@ export function SiteShell({
   const closeDrawer = () => {
     setDrawerOpen(false);
     setDrawerPinned(false);
+    rightHoverArmedRef.current = false;
   };
 
   useEffect(() => {
     setDrawerOpen(false);
     setDrawerPinned(false);
+    rightHoverArmedRef.current = false;
   }, [pathname]);
+
+  useEffect(() => {
+    if (!isDrawer || drawerOpen) return;
+
+    const handleMouseMove = (event: MouseEvent) => {
+      const topbar = topbarRef.current;
+      if (!topbar) return;
+
+      const edge = topbar.getBoundingClientRect().right;
+      if (event.clientX < edge) {
+        rightHoverArmedRef.current = true;
+        return;
+      }
+
+      if (!rightHoverArmedRef.current) return;
+      setDrawerOpen(true);
+      setDrawerPinned(false);
+    };
+
+    window.addEventListener("mousemove", handleMouseMove);
+    return () => window.removeEventListener("mousemove", handleMouseMove);
+  }, [isDrawer, drawerOpen]);
 
   useEffect(() => {
     if (!drawerOpen || drawerPinned) return;
@@ -68,8 +94,15 @@ export function SiteShell({
       if (target instanceof Node && drawerRef.current?.contains(target)) {
         return;
       }
+
+      const topbar = topbarRef.current;
+      if (topbar && event.clientX >= topbar.getBoundingClientRect().right) {
+        return;
+      }
+
       setDrawerOpen(false);
       setDrawerPinned(false);
+      rightHoverArmedRef.current = false;
     };
     const timer = window.setTimeout(() => {
       window.addEventListener("mousemove", handleMouseMove);
@@ -138,7 +171,10 @@ export function SiteShell({
 
   return (
     <div id="container" className={classes}>
-      <header className={isDrawer ? "site-topbar" : undefined}>
+      <header
+        ref={isDrawer ? topbarRef : undefined}
+        className={isDrawer ? "site-topbar" : undefined}
+      >
         <SiteTitle />
         {isDrawer ? (
           <button
