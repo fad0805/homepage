@@ -214,7 +214,9 @@ export default function AdminGalleryPage() {
                     <td>{formatDateTime(invite.expires_at)}</td>
                     <td>{formatDateTime(invite.used_at)}</td>
                     <td>
-                      {invite.status === "unused" ? (
+                      {(isAdmin
+                        ? invite.status !== "revoked"
+                        : invite.status === "unused") ? (
                         <button
                           type="button"
                           onClick={() => revokeInvite(invite.id)}
@@ -287,7 +289,9 @@ export default function AdminGalleryPage() {
                       {session.user_agent || "-"}
                     </td>
                     <td>
-                      {session.status === "active" ? (
+                      {(isAdmin
+                        ? session.status !== "revoked"
+                        : session.status === "active") ? (
                         <button
                           type="button"
                           onClick={() => revokeSession(session.id)}
