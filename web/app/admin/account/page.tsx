@@ -7,7 +7,9 @@ import {
   type FormEvent,
 } from "react";
 
+import { useAuth } from "@/components/auth-provider";
 import { apiFetch } from "@/lib/api";
+import { formatDateTime } from "@/lib/datetime";
 
 import "@/public/styles/admin/account.scss";
 
@@ -18,17 +20,39 @@ interface Account {
   slug: string;
 }
 
+interface AccountSummary {
+  id: number;
+  username: string;
+  nickname: string;
+  slug: string | null;
+  role: string;
+  created_at: string | null;
+  updated_at: string | null;
+  is_self: boolean;
+}
+
 type Notice = { type: "success" | "error"; text: string };
 
 const SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
+function roleLabel(role: string) {
+  return role === "admin" ? "관리자" : "일반 사용자";
+}
+
 export default function AdminAccount() {
+  const { isAdmin } = useAuth();
   const [account, setAccount] = useState<Account | null>(null);
   const [nickname, setNickname] = useState("");
   const [slug, setSlug] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState<Notice | null>(null);
+  const [accountsOpen, setAccountsOpen] = useState(false);
+  const [accountsLoading, setAccountsLoading] = useState(false);
+  const [accounts, setAccounts] = useState<AccountSummary[]>([]);
+  const [accountsError, setAccountsError] = useState<string | null>(null);
+  const [viewingAccount, setViewingAccount] =
+    useState<AccountSummary | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -53,6 +77,47 @@ export default function AdminAccount() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  const openAccounts = useCallback(async () => {
+    if (!isAdmin) return;
+
+    setAccountsOpen(true);
+    setViewingAccount(null);
+    setAccountsError(null);
+    setAccountsLoading(true);
+    try {
+      const data = await apiFetch<AccountSummary[]>("/api/users");
+      setAccounts(data.filter((item) => !item.is_self));
+    } catch (error) {
+      setAccounts([]);
+      setAccountsError(
+        error instanceof Error
+          ? error.message
+          : "계정 목록을 불러오지 못했습니다.",
+      );
+    } finally {
+      setAccountsLoading(false);
+    }
+  }, [isAdmin]);
+
+  const closeAccounts = useCallback(() => {
+    setAccountsOpen(false);
+    setViewingAccount(null);
+    setAccountsError(null);
+  }, []);
+
+  useEffect(() => {
+    if (!accountsOpen) return;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        closeAccounts();
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [accountsOpen, closeAccounts]);
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -98,6 +163,25 @@ export default function AdminAccount() {
     }
   };
 
+  const isAdminAccount = isAdmin && account?.role === "admin";
+  const summaryClassName = `admin-account-summary${
+    account?.role === "admin" ? "" : " is-single"
+  }`;
+  const summaryContent = (
+    <>
+      <div>
+        <span>아이디</span>
+        <strong>{account?.username ?? ""}</strong>
+      </div>
+      {account?.role === "admin" ? (
+        <div>
+          <span>권한</span>
+          <strong>관리자</strong>
+        </div>
+      ) : null}
+    </>
+  );
+
   return (
     <div id="admin-account">
       <header className="admin-account-header">
@@ -119,22 +203,21 @@ export default function AdminAccount() {
         <p className="admin-account-loading">불러오는 중...</p>
       ) : (
         <form className="admin-account-form" onSubmit={handleSubmit}>
-          <div
-            className={`admin-account-summary${
-              account?.role === "admin" ? "" : " is-single"
-            }`}
-          >
-            <div>
-              <span>아이디</span>
-              <strong>{account?.username ?? ""}</strong>
-            </div>
-            {account?.role === "admin" ? (
-              <div>
-                <span>권한</span>
-                <strong>관리자</strong>
-              </div>
-            ) : null}
-          </div>
+          {isAdminAccount ? (
+            <button
+              type="button"
+              className={`${summaryClassName} is-clickable`}
+              onClick={openAccounts}
+              aria-haspopup="dialog"
+            >
+              {summaryContent}
+              <span className="admin-account-summary-action">
+                다른 계정 보기 →
+              </span>
+            </button>
+          ) : (
+            <div className={summaryClassName}>{summaryContent}</div>
+          )}
 
           <label className="admin-field">
             <span>닉네임</span>
@@ -177,6 +260,129 @@ export default function AdminAccount() {
           </div>
         </form>
       )}
+
+      {accountsOpen ? (
+        <div className="admin-modal-backdrop" onClick={closeAccounts}>
+          <div
+            className="admin-modal admin-account-accounts-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="admin-account-accounts-title"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <header className="admin-modal-header">
+              <h2 id="admin-account-accounts-title">
+                {viewingAccount ? "계정 정보" : "다른 계정"}
+              </h2>
+              <button
+                type="button"
+                className="admin-modal-close"
+                onClick={closeAccounts}
+                aria-label="닫기"
+              >
+                ×
+              </button>
+            </header>
+
+            <div className="admin-modal-body">
+              {viewingAccount ? (
+                <>
+                  <dl className="admin-account-detail">
+                    <div>
+                      <dt>닉네임</dt>
+                      <dd>{viewingAccount.nickname || "-"}</dd>
+                    </div>
+                    <div>
+                      <dt>아이디</dt>
+                      <dd>{viewingAccount.username}</dd>
+                    </div>
+                    <div>
+                      <dt>URL 표시명</dt>
+                      <dd>
+                        {viewingAccount.slug
+                          ? `/@${viewingAccount.slug}`
+                          : "-"}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>권한</dt>
+                      <dd>{roleLabel(viewingAccount.role)}</dd>
+                    </div>
+                    <div>
+                      <dt>가입일</dt>
+                      <dd>{formatDateTime(viewingAccount.created_at)}</dd>
+                    </div>
+                    <div>
+                      <dt>수정일</dt>
+                      <dd>{formatDateTime(viewingAccount.updated_at)}</dd>
+                    </div>
+                  </dl>
+                  <p className="admin-account-readonly">
+                    다른 계정의 정보는 조회만 할 수 있습니다.
+                  </p>
+                </>
+              ) : accountsLoading ? (
+                <p className="admin-account-loading">불러오는 중...</p>
+              ) : accountsError ? (
+                <p className="admin-account-modal-error">
+                  {accountsError}
+                </p>
+              ) : accounts.length === 0 ? (
+                <p className="admin-account-empty">
+                  다른 계정이 없습니다.
+                </p>
+              ) : (
+                <ul className="admin-account-list">
+                  {accounts.map((item) => (
+                    <li key={item.id}>
+                      <button
+                        type="button"
+                        className="admin-account-list-item"
+                        onClick={() => setViewingAccount(item)}
+                      >
+                        <span className="admin-account-list-info">
+                          <strong>{item.nickname || item.username}</strong>
+                          <span>
+                            @{item.slug ?? "-"} · {item.username}
+                          </span>
+                        </span>
+                        <span className="admin-account-list-meta">
+                          <span
+                            className={`admin-account-role${
+                              item.role === "admin" ? " is-admin" : ""
+                            }`}
+                          >
+                            {roleLabel(item.role)}
+                          </span>
+                        </span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+
+            <footer className="admin-modal-footer">
+              {viewingAccount ? (
+                <button
+                  type="button"
+                  className="admin-button"
+                  onClick={() => setViewingAccount(null)}
+                >
+                  목록으로
+                </button>
+              ) : null}
+              <button
+                type="button"
+                className="admin-button"
+                onClick={closeAccounts}
+              >
+                닫기
+              </button>
+            </footer>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

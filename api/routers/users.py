@@ -5,7 +5,7 @@ from contextlib import closing
 from fastapi import APIRouter, Depends, HTTPException, Response, Request
 from fastapi import Form
 import jwt
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from sqlalchemy.exc import SQLAlchemyError
 
 from core.config import ENVIRONMENT, AUTH_COOKIE_MAX_AGE
@@ -90,15 +90,29 @@ def list_users(
     db: Session = Depends(get_db),
     current_user=Depends(require_admin),
 ):
-    """List users for admin selection controls."""
+    """List users with public account details for admin management."""
+    users = (
+        db.query(User)
+        .options(joinedload(User.author_settings))
+        .order_by(User.id)
+        .all()
+    )
     return [
         {
             "id": user.id,
             "username": user.username,
+            "nickname": (
+                user.author_settings.nickname
+                if user.author_settings
+                else user.username
+            ),
+            "slug": user.author_settings.slug if user.author_settings else None,
             "role": user.role,
+            "created_at": user.created_at,
+            "updated_at": user.updated_at,
             "is_self": user.id == current_user.id,
         }
-        for user in db.query(User).order_by(User.id).all()
+        for user in users
     ]
 
 

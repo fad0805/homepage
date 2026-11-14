@@ -61,6 +61,9 @@
   border: 1px solid var(--admin-border);
   border-radius: 0.8rem;
   background: rgba(255, 255, 255, 0.28);
+  color: inherit;
+  font-family: inherit;
+  text-align: left;
 
   div {
     display: flex;
@@ -81,6 +84,31 @@
   &.is-single {
     grid-template-columns: minmax(0, 1fr);
   }
+
+  &.is-clickable {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) auto;
+    align-items: center;
+    cursor: pointer;
+    transition:
+      border-color 0.15s ease,
+      background 0.15s ease;
+
+    &:hover {
+      border-color: var(--admin-primary);
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--admin-primary);
+      outline-offset: 2px;
+    }
+  }
+}
+
+.admin-account-summary .admin-account-summary-action {
+  color: var(--admin-primary);
+  font-size: 0.72rem;
+  font-weight: bold;
+  white-space: nowrap;
 }
 
 [data-theme='dark'] .admin-account-summary {
@@ -110,12 +138,167 @@
   justify-content: flex-end;
 }
 
+.admin-account-accounts-modal {
+  width: min(720px, 100%);
+}
+
+.admin-account-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.admin-account-list-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.9rem;
+  box-sizing: border-box;
+  width: 100%;
+  padding: 0.8rem 0.9rem;
+  border: 1px solid var(--admin-border);
+  border-radius: 0.65rem;
+  background: var(--input-background);
+  color: inherit;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease;
+
+  &:hover {
+    border-color: var(--admin-primary);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--admin-primary);
+    outline-offset: 2px;
+  }
+}
+
+.admin-account-list-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-width: 0;
+
+  strong {
+    overflow: hidden;
+    color: var(--title-color);
+    font-size: 0.9rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  span {
+    overflow: hidden;
+    color: var(--admin-muted);
+    font-size: 0.74rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+.admin-account-list-meta {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.admin-account-role {
+  padding: 0.18rem 0.5rem;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.06);
+  color: var(--admin-muted);
+  font-size: 0.68rem;
+  font-weight: bold;
+  white-space: nowrap;
+
+  &.is-admin {
+    background: rgba(47, 128, 60, 0.1);
+    color: var(--admin-primary);
+  }
+}
+
+.admin-account-detail {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem 0.9rem;
+  margin: 0;
+
+  div {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    min-width: 0;
+    padding: 0.7rem 0.8rem;
+    border: 1px solid var(--admin-border);
+    border-radius: 0.65rem;
+    background: var(--input-background);
+  }
+
+  dt {
+    color: var(--admin-muted);
+    font-size: 0.68rem;
+  }
+
+  dd {
+    margin: 0;
+    overflow-wrap: anywhere;
+    color: var(--title-color);
+    font-size: 0.85rem;
+  }
+}
+
+.admin-account-readonly,
+.admin-account-empty,
+.admin-account-modal-error {
+  margin: 0;
+  color: var(--admin-muted);
+  font-size: 0.8rem;
+}
+
+.admin-account-modal-error {
+  color: #a33c3c;
+}
+
+[data-theme='dark'] .admin-account-modal-error {
+  color: #e08a8a;
+}
+
 @media (width < 600px) {
   #admin-account {
     padding: 1rem 0.75rem 4rem;
   }
 
   .admin-account-summary {
+    grid-template-columns: 1fr;
+
+    &.is-clickable {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+
+  .admin-account-summary .admin-account-summary-action {
+    grid-column: 1 / -1;
+    justify-self: end;
+  }
+
+  .admin-account-list-item {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .admin-account-list-meta {
+    margin-left: auto;
+  }
+
+  .admin-account-detail {
     grid-template-columns: 1fr;
   }
 }
