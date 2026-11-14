@@ -106,17 +106,12 @@ export default function AdminAppearance() {
     }
   };
 
-  const selected =
-    LAYOUT_OPTIONS.find((option) => option.key === layoutKey) ??
-    LAYOUT_OPTIONS[0];
   const saved =
     LAYOUT_OPTIONS.find((option) => option.key === savedLayoutKey) ??
     LAYOUT_OPTIONS[0];
   const isDirty =
     layoutKey !== savedLayoutKey ||
     sidePosition !== savedSidePosition;
-  const selectedSideLabel =
-    sidePosition === "right" ? "오른쪽" : "왼쪽";
   const savedSideLabel =
     savedSidePosition === "right" ? "오른쪽" : "왼쪽";
 
@@ -146,11 +141,13 @@ export default function AdminAppearance() {
         <p className="admin-appearance-hint">불러오는 중...</p>
       ) : (
         <div className="admin-appearance-form">
-          <div
-            className="admin-appearance-grid"
-            role="radiogroup"
-            aria-label="레이아웃 선택"
-          >
+          <div className="admin-appearance-layout">
+            <div className="admin-appearance-menu">
+              <div
+                className="admin-appearance-list"
+                role="radiogroup"
+                aria-label="레이아웃 선택"
+              >
             {LAYOUT_OPTIONS.map((option) => {
               const isSelected = layoutKey === option.key;
 
@@ -170,81 +167,23 @@ export default function AdminAppearance() {
                       ✓ 선택됨
                     </span>
                   ) : null}
-                  <span
-                    className={`admin-appearance-card__preview is-${option.key}${
-                      option.key === "side" &&
-                      sidePosition === "right"
-                        ? " is-side-right"
-                        : ""
-                    }`}
-                  >
-                    <span className="admin-appearance-card__mini">
-                      <span className="admin-appearance-card__mini-nav">
-                        <i />
-                        <i />
-                        <i />
-                      </span>
-                      <span className="admin-appearance-card__mini-main">
-                        <span className="admin-appearance-card__brand">
-                          어디에도 없는 섬
-                        </span>
-                        <span className="admin-appearance-card__line" />
-                        <span className="admin-appearance-card__line is-short" />
-                      </span>
-                    </span>
+                  <span className="admin-appearance-card__heading">
+                    <strong>{option.label}</strong>
+                    <span>{option.englishLabel}</span>
                   </span>
-                  <span className="admin-appearance-card__body">
-                    <span className="admin-appearance-card__heading">
-                      <strong>{option.label}</strong>
-                      <span>{option.englishLabel}</span>
-                    </span>
-                    <span className="admin-appearance-card__description">
-                      {option.description}
-                    </span>
+                  <span className="admin-appearance-card__description">
+                    {option.description}
                   </span>
                 </button>
               );
             })}
           </div>
 
-          {layoutKey === "side" ? (
-            <fieldset className="admin-appearance-side-position">
-              <legend>사이드 메뉴 위치</legend>
-              <div className="admin-appearance-side-position__options">
-                {SIDE_POSITION_OPTIONS.map((option) => (
-                  <label
-                    key={option.key}
-                    className={
-                      sidePosition === option.key
-                        ? "is-selected"
-                        : ""
-                    }
-                  >
-                    <input
-                      type="radio"
-                      name="side-position"
-                      value={option.key}
-                      checked={sidePosition === option.key}
-                      onChange={() => setSidePosition(option.key)}
-                    />
-                    <span>{option.label}</span>
-                  </label>
-                ))}
-              </div>
-            </fieldset>
-          ) : null}
+            </div>
 
-          <section className="admin-appearance-preview-section">
-            <header>
-              <h2>미리보기</h2>
-              <span>
-                {selected.label}
-                {layoutKey === "side"
-                  ? ` · ${selectedSideLabel}`
-                  : ""}
-              </span>
-            </header>
+            <section className="admin-appearance-preview-section">
             <div
+              aria-label="레이아웃 미리보기"
               className={`admin-appearance-preview is-${layoutKey}${
                 layoutKey === "side" && sidePosition === "right"
                   ? " is-side-right"
@@ -320,28 +259,61 @@ export default function AdminAppearance() {
                 </div>
               </div>
             </div>
-          </section>
+            </section>
+          </div>
 
-          <div className="admin-appearance-actions">
-            <button
-              type="button"
-              className="admin-button"
-              onClick={() => {
-                setLayoutKey(savedLayoutKey);
-                setSidePosition(savedSidePosition);
-              }}
-              disabled={saving || !isDirty}
-            >
-              되돌리기
-            </button>
-            <button
-              type="button"
-              className="admin-button primary"
-              onClick={() => void handleSave()}
-              disabled={saving || !isDirty}
-            >
-              {saving ? "저장 중..." : "저장"}
-            </button>
+          <div className="admin-appearance-footer">
+            {layoutKey === "side" ? (
+              <div
+                className="admin-appearance-side-position"
+                role="radiogroup"
+                aria-label="사이드 메뉴 위치"
+              >
+                <div className="admin-appearance-side-position__options">
+                  {SIDE_POSITION_OPTIONS.map((option) => (
+                    <label
+                      key={option.key}
+                      className={
+                        sidePosition === option.key
+                          ? "is-selected"
+                          : ""
+                      }
+                    >
+                      <input
+                        type="radio"
+                        name="side-position"
+                        value={option.key}
+                        checked={sidePosition === option.key}
+                        onChange={() => setSidePosition(option.key)}
+                      />
+                      <span>{option.label}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+
+            <div className="admin-appearance-actions">
+              <button
+                type="button"
+                className="admin-button"
+                onClick={() => {
+                  setLayoutKey(savedLayoutKey);
+                  setSidePosition(savedSidePosition);
+                }}
+                disabled={saving || !isDirty}
+              >
+                되돌리기
+              </button>
+              <button
+                type="button"
+                className="admin-button primary"
+                onClick={() => void handleSave()}
+                disabled={saving || !isDirty}
+              >
+                {saving ? "저장 중..." : "저장"}
+              </button>
+            </div>
           </div>
         </div>
       )}

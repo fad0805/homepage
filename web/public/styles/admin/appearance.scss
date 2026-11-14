@@ -41,7 +41,27 @@
   display: flex;
   flex-direction: column;
   gap: 1.2rem;
-  width: min(920px, 100%);
+  width: min(1100px, 100%);
+}
+
+.admin-appearance-layout {
+  display: grid;
+  grid-template-columns: minmax(14rem, 18rem) minmax(0, 1fr);
+  align-items: start;
+  gap: 1.25rem;
+}
+
+.admin-appearance-menu {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  min-width: 0;
+}
+
+.admin-appearance-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
 }
 
 .admin-appearance-grid {
@@ -52,17 +72,8 @@
 
 .admin-appearance-side-position {
   display: flex;
-  flex-direction: column;
   margin: 0;
   padding: 0;
-  border: 0;
-
-  legend {
-    margin-bottom: 0.45rem;
-    color: var(--title-color);
-    font-size: 0.8rem;
-    font-weight: bold;
-  }
 }
 
 .admin-appearance-side-position__options {
@@ -98,8 +109,9 @@
   position: relative;
   display: flex;
   flex-direction: column;
-  padding: 0;
-  overflow: hidden;
+  gap: 0.35rem;
+  padding: 0.9rem 1rem;
+  overflow: visible;
   border: 1px solid var(--admin-border);
   border-radius: 0.8rem;
   background: var(--admin-card-bg);
@@ -277,6 +289,7 @@
   align-items: baseline;
   justify-content: space-between;
   gap: 0.5rem;
+  padding-right: 3.8rem;
 
   strong {
     color: var(--title-color);
@@ -299,25 +312,7 @@
 .admin-appearance-preview-section {
   display: flex;
   flex-direction: column;
-  gap: 0.6rem;
-
-  > header {
-    display: flex;
-    align-items: baseline;
-    justify-content: space-between;
-    gap: 0.5rem;
-
-    h2 {
-      margin: 0;
-      color: var(--title-color);
-      font-size: 1rem;
-    }
-
-    span {
-      color: var(--admin-muted);
-      font-size: 0.72rem;
-    }
-  }
+  min-width: 0;
 }
 
 .admin-appearance-preview {
@@ -551,6 +546,13 @@
   }
 }
 
+.admin-appearance-footer {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.8rem;
+}
+
 .admin-appearance-actions {
   display: flex;
   justify-content: flex-end;
@@ -563,6 +565,10 @@
   }
 
   .admin-appearance-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-appearance-layout {
     grid-template-columns: 1fr;
   }
 

@@ -205,11 +205,6 @@ body:not(:has(.admin-layout)) #container.site-layout--side * {
   border-radius: 0;
 }
 
-#container.site-layout--side .admin-layout,
-#container.site-layout--side .admin-layout * {
-  border-radius: 0;
-}
-
 .site-sidebar #title {
   color: var(--title-color);
   font-family: Eulyoo1945-SemiBold, Arial, Helvetica, sans-serif;
