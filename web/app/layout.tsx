@@ -1,6 +1,11 @@
 import type { Metadata, Viewport } from "next";
 
-import { DEFAULT_LAYOUT, type LayoutKey } from "@/config/appearance";
+import {
+  DEFAULT_LAYOUT,
+  DEFAULT_SIDE_POSITION,
+  type LayoutKey,
+  type SidePosition,
+} from "@/config/appearance";
 import { serverApiFetch } from "@/lib/server-api";
 import { getCurrentUser } from "@/lib/server-auth";
 
@@ -64,9 +69,13 @@ export default async function RootLayout({
 }>) {
   const currentUser = await getCurrentUser();
   let layoutKey: LayoutKey = DEFAULT_LAYOUT;
+  let sidePosition: SidePosition = DEFAULT_SIDE_POSITION;
 
   try {
-    const appearance = await serverApiFetch<{ layout_key: LayoutKey }>(
+    const appearance = await serverApiFetch<{
+      layout_key: LayoutKey;
+      side_position: SidePosition;
+    }>(
       currentUser ? "/users/me/appearance" : "/appearance",
       {
         auth: Boolean(currentUser),
@@ -74,6 +83,7 @@ export default async function RootLayout({
       },
     );
     layoutKey = appearance.layout_key;
+    sidePosition = appearance.side_position ?? DEFAULT_SIDE_POSITION;
   } catch (error) {
     console.error("Failed to load the site appearance.", error);
   }
@@ -89,7 +99,10 @@ export default async function RootLayout({
           <AuthProvider>
             <VisitTracker />
             <Shortcuts>
-              <SiteShell layoutKey={layoutKey}>
+              <SiteShell
+                layoutKey={layoutKey}
+                sidePosition={sidePosition}
+              >
                 {children}
               </SiteShell>
             </Shortcuts>

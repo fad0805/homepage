@@ -43,6 +43,12 @@ class AuthorSettings(Base):
         default="editorial",
         server_default="editorial",
     )
+    side_position = Column(
+        String(16),
+        nullable=False,
+        default="left",
+        server_default="left",
+    )
     created_at = Column(DateTime, default=func.now(), nullable=False)
     updated_at = Column(
         DateTime,

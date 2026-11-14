@@ -4,6 +4,8 @@ export type LayoutKey =
   | "collapsible"
   | "drawer";
 
+export type SidePosition = "left" | "right";
+
 export interface LayoutOption {
   key: LayoutKey;
   label: string;
@@ -11,7 +13,13 @@ export interface LayoutOption {
   description: string;
 }
 
+export interface SidePositionOption {
+  key: SidePosition;
+  label: string;
+}
+
 export const DEFAULT_LAYOUT: LayoutKey = "editorial";
+export const DEFAULT_SIDE_POSITION: SidePosition = "left";
 
 export const LAYOUT_OPTIONS: LayoutOption[] = [
   {
@@ -38,4 +46,9 @@ export const LAYOUT_OPTIONS: LayoutOption[] = [
     englishLabel: "Drawer Menu",
     description: "상단 버튼을 눌렀을 때 메뉴가 옆에서 열립니다.",
   },
+];
+
+export const SIDE_POSITION_OPTIONS: SidePositionOption[] = [
+  { key: "left", label: "왼쪽" },
+  { key: "right", label: "오른쪽" },
 ];

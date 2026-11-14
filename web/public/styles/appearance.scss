@@ -187,6 +187,18 @@ html:has(#container.site-layout--side) {
   }
 }
 
+#container.site-layout--side.is-side-right {
+  grid-template-columns: minmax(0, 1fr) 15rem;
+}
+
+#container.site-layout--side.is-side-right > .site-sidebar {
+  order: 2;
+}
+
+#container.site-layout--side.is-side-right > .site-main-column {
+  order: 1;
+}
+
 .site-sidebar #title {
   color: var(--title-color);
   font-family: Eulyoo1945-SemiBold, Arial, Helvetica, sans-serif;
@@ -335,6 +347,16 @@ html[data-appearance='collapsible'] .theme-toggle {
       width: 100%;
       min-height: 0;
     }
+  }
+
+  #container.site-layout--side.is-side-right > .site-sidebar {
+    order: 2;
+    margin-top: 1rem;
+    margin-bottom: 0;
+  }
+
+  #container.site-layout--side.is-side-right > .site-main-column {
+    order: 1;
   }
 
   #container.site-layout--side #content {

@@ -154,10 +154,12 @@ def update_author_layout(
     user: User,
     *,
     layout_key: str,
+    side_position: str,
 ) -> AuthorSettings:
     """Update the signed-in author's layout."""
     settings = ensure_author_settings(db, user)
     settings.layout_key = layout_key
+    settings.side_position = side_position
     db.commit()
     db.refresh(settings)
     return settings

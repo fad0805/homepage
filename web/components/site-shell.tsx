@@ -10,10 +10,14 @@ import {
 
 import { FooterShortcut } from "@/components/footer-shortcut";
 import { Navbar } from "@/components/navbar";
-import type { LayoutKey } from "@/config/appearance";
+import type {
+  LayoutKey,
+  SidePosition,
+} from "@/config/appearance";
 
 interface SiteShellProps {
   layoutKey: LayoutKey;
+  sidePosition: SidePosition;
   children: ReactNode;
 }
 
@@ -28,13 +32,18 @@ function SiteTitle() {
   );
 }
 
-export function SiteShell({ layoutKey, children }: SiteShellProps) {
+export function SiteShell({
+  layoutKey,
+  sidePosition,
+  children,
+}: SiteShellProps) {
   const pathname = usePathname();
   const [drawerOpen, setDrawerOpen] = useState(false);
 
   const isSide = layoutKey === "side";
   const isBottom = layoutKey === "collapsible";
   const isDrawer = layoutKey === "drawer";
+  const sideRight = isSide && sidePosition === "right";
 
   useEffect(() => {
     setDrawerOpen(false);
@@ -43,6 +52,7 @@ export function SiteShell({ layoutKey, children }: SiteShellProps) {
   const classes = [
     "site-layout",
     `site-layout--${layoutKey}`,
+    sideRight ? "is-side-right" : "",
     drawerOpen ? "is-menu-open" : "",
   ]
     .filter(Boolean)

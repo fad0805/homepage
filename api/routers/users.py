@@ -418,7 +418,10 @@ def get_my_appearance(
 ):
     """Return the signed-in author's appearance settings."""
     settings = ensure_author_settings(db, user)
-    return {"layout_key": settings.layout_key}
+    return {
+        "layout_key": settings.layout_key,
+        "side_position": settings.side_position,
+    }
 
 
 @router.put("/me/appearance", response_model=AppearanceRead)
@@ -432,5 +435,9 @@ def update_my_appearance(
         db,
         user,
         layout_key=payload.layout_key,
+        side_position=payload.side_position,
     )
-    return {"layout_key": settings.layout_key}
+    return {
+        "layout_key": settings.layout_key,
+        "side_position": settings.side_position,
+    }

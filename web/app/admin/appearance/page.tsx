@@ -9,8 +9,11 @@ import {
 
 import {
   DEFAULT_LAYOUT,
+  DEFAULT_SIDE_POSITION,
   LAYOUT_OPTIONS,
+  SIDE_POSITION_OPTIONS,
   type LayoutKey,
+  type SidePosition,
 } from "@/config/appearance";
 import { apiFetch } from "@/lib/api";
 
@@ -19,6 +22,7 @@ import "@/public/styles/admin/appearance.scss";
 
 interface Appearance {
   layout_key: LayoutKey;
+  side_position: SidePosition;
 }
 
 type Notice = { type: "success" | "error"; text: string };
@@ -28,6 +32,10 @@ export default function AdminAppearance() {
   const [layoutKey, setLayoutKey] = useState<LayoutKey>(DEFAULT_LAYOUT);
   const [savedLayoutKey, setSavedLayoutKey] =
     useState<LayoutKey>(DEFAULT_LAYOUT);
+  const [sidePosition, setSidePosition] =
+    useState<SidePosition>(DEFAULT_SIDE_POSITION);
+  const [savedSidePosition, setSavedSidePosition] =
+    useState<SidePosition>(DEFAULT_SIDE_POSITION);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState<Notice | null>(null);
@@ -40,6 +48,8 @@ export default function AdminAppearance() {
       );
       setLayoutKey(data.layout_key);
       setSavedLayoutKey(data.layout_key);
+      setSidePosition(data.side_position ?? DEFAULT_SIDE_POSITION);
+      setSavedSidePosition(data.side_position ?? DEFAULT_SIDE_POSITION);
     } catch (error) {
       setNotice({
         type: "error",
@@ -65,11 +75,18 @@ export default function AdminAppearance() {
         "/api/users/me/appearance",
         {
           method: "PUT",
-          body: JSON.stringify({ layout_key: layoutKey }),
+          body: JSON.stringify({
+            layout_key: layoutKey,
+            side_position: sidePosition,
+          }),
         },
       );
       setLayoutKey(data.layout_key);
       setSavedLayoutKey(data.layout_key);
+      setSidePosition(data.side_position ?? DEFAULT_SIDE_POSITION);
+      setSavedSidePosition(
+        data.side_position ?? DEFAULT_SIDE_POSITION,
+      );
       document.documentElement.dataset.appearance = data.layout_key;
       router.refresh();
       setNotice({
@@ -95,6 +112,13 @@ export default function AdminAppearance() {
   const saved =
     LAYOUT_OPTIONS.find((option) => option.key === savedLayoutKey) ??
     LAYOUT_OPTIONS[0];
+  const isDirty =
+    layoutKey !== savedLayoutKey ||
+    sidePosition !== savedSidePosition;
+  const selectedSideLabel =
+    sidePosition === "right" ? "오른쪽" : "왼쪽";
+  const savedSideLabel =
+    savedSidePosition === "right" ? "오른쪽" : "왼쪽";
 
   return (
     <div id="admin-appearance">
@@ -108,6 +132,7 @@ export default function AdminAppearance() {
         </div>
         <span className="admin-appearance-current">
           현재 적용: {saved.label}
+          {savedLayoutKey === "side" ? ` · ${savedSideLabel}` : ""}
         </span>
       </header>
 
@@ -146,7 +171,12 @@ export default function AdminAppearance() {
                     </span>
                   ) : null}
                   <span
-                    className={`admin-appearance-card__preview is-${option.key}`}
+                    className={`admin-appearance-card__preview is-${option.key}${
+                      option.key === "side" &&
+                      sidePosition === "right"
+                        ? " is-side-right"
+                        : ""
+                    }`}
                   >
                     <span className="admin-appearance-card__mini">
                       <span className="admin-appearance-card__mini-nav">
@@ -177,13 +207,49 @@ export default function AdminAppearance() {
             })}
           </div>
 
+          {layoutKey === "side" ? (
+            <fieldset className="admin-appearance-side-position">
+              <legend>사이드 메뉴 위치</legend>
+              <div className="admin-appearance-side-position__options">
+                {SIDE_POSITION_OPTIONS.map((option) => (
+                  <label
+                    key={option.key}
+                    className={
+                      sidePosition === option.key
+                        ? "is-selected"
+                        : ""
+                    }
+                  >
+                    <input
+                      type="radio"
+                      name="side-position"
+                      value={option.key}
+                      checked={sidePosition === option.key}
+                      onChange={() => setSidePosition(option.key)}
+                    />
+                    <span>{option.label}</span>
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+          ) : null}
+
           <section className="admin-appearance-preview-section">
             <header>
               <h2>미리보기</h2>
-              <span>{selected.label}</span>
+              <span>
+                {selected.label}
+                {layoutKey === "side"
+                  ? ` · ${selectedSideLabel}`
+                  : ""}
+              </span>
             </header>
             <div
-              className={`admin-appearance-preview is-${layoutKey}`}
+              className={`admin-appearance-preview is-${layoutKey}${
+                layoutKey === "side" && sidePosition === "right"
+                  ? " is-side-right"
+                  : ""
+              }`}
             >
               <div className="admin-appearance-preview__shell">
                 <aside className="admin-appearance-preview__sidebar">
@@ -260,8 +326,11 @@ export default function AdminAppearance() {
             <button
               type="button"
               className="admin-button"
-              onClick={() => setLayoutKey(savedLayoutKey)}
-              disabled={saving || layoutKey === savedLayoutKey}
+              onClick={() => {
+                setLayoutKey(savedLayoutKey);
+                setSidePosition(savedSidePosition);
+              }}
+              disabled={saving || !isDirty}
             >
               되돌리기
             </button>
@@ -269,7 +338,7 @@ export default function AdminAppearance() {
               type="button"
               className="admin-button primary"
               onClick={() => void handleSave()}
-              disabled={saving || layoutKey === savedLayoutKey}
+              disabled={saving || !isDirty}
             >
               {saving ? "저장 중..." : "저장"}
             </button>
