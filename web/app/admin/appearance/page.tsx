@@ -16,8 +16,12 @@ import {
   type SidePosition,
 } from "@/config/appearance";
 import { apiFetch } from "@/lib/api";
+import {
+  clearAppearancePreview,
+  getAppearancePreview,
+  setAppearancePreview,
+} from "@/lib/appearance-preview";
 
-import "@/public/styles/appearance.scss";
 import "@/public/styles/admin/appearance.scss";
 
 interface Appearance {
@@ -46,10 +50,14 @@ export default function AdminAppearance() {
       const data = await apiFetch<Appearance>(
         "/api/users/me/appearance",
       );
-      setLayoutKey(data.layout_key);
+      const savedSide =
+        data.side_position ?? DEFAULT_SIDE_POSITION;
+      const activePreview = getAppearancePreview();
+
       setSavedLayoutKey(data.layout_key);
-      setSidePosition(data.side_position ?? DEFAULT_SIDE_POSITION);
-      setSavedSidePosition(data.side_position ?? DEFAULT_SIDE_POSITION);
+      setSavedSidePosition(savedSide);
+      setLayoutKey(activePreview?.layoutKey ?? data.layout_key);
+      setSidePosition(activePreview?.sidePosition ?? savedSide);
     } catch (error) {
       setNotice({
         type: "error",
@@ -81,12 +89,17 @@ export default function AdminAppearance() {
           }),
         },
       );
+      const savedSide =
+        data.side_position ?? DEFAULT_SIDE_POSITION;
+
       setLayoutKey(data.layout_key);
       setSavedLayoutKey(data.layout_key);
-      setSidePosition(data.side_position ?? DEFAULT_SIDE_POSITION);
-      setSavedSidePosition(
-        data.side_position ?? DEFAULT_SIDE_POSITION,
-      );
+      setSidePosition(savedSide);
+      setSavedSidePosition(savedSide);
+      setAppearancePreview({
+        layoutKey: data.layout_key,
+        sidePosition: savedSide,
+      });
       document.documentElement.dataset.appearance = data.layout_key;
       router.refresh();
       setNotice({
@@ -121,8 +134,8 @@ export default function AdminAppearance() {
         <div>
           <h1>외관 관리</h1>
           <p className="admin-appearance-hint">
-            사이트 전체의 메뉴 위치와 접힘 방식을 선택합니다. 설정은
-            작가별로 저장됩니다.
+            레이아웃을 선택하면 이 화면에 바로 임시 적용됩니다.
+            저장해야 사이트에 반영됩니다.
           </p>
         </div>
         <span className="admin-appearance-current">
@@ -152,149 +165,89 @@ export default function AdminAppearance() {
               const isSelected = layoutKey === option.key;
 
               return (
-                <button
+                <div
                   key={option.key}
-                  type="button"
-                  role="radio"
-                  aria-checked={isSelected}
                   className={`admin-appearance-card${
                     isSelected ? " is-selected" : ""
                   }`}
-                  onClick={() => setLayoutKey(option.key)}
                 >
-                  {isSelected ? (
-                    <span className="admin-appearance-card__selected">
-                      ✓ 선택됨
+                  <button
+                    type="button"
+                    role="radio"
+                    aria-checked={isSelected}
+                    className="admin-appearance-card__select"
+                    onClick={() => {
+                      setLayoutKey(option.key);
+                      setAppearancePreview({
+                        layoutKey: option.key,
+                        sidePosition,
+                      });
+                    }}
+                  >
+                    {isSelected ? (
+                      <span className="admin-appearance-card__selected">
+                        ✓ 선택됨
+                      </span>
+                    ) : null}
+                    <span className="admin-appearance-card__heading">
+                      <strong>{option.label}</strong>
+                      <span>{option.englishLabel}</span>
                     </span>
+                    <span className="admin-appearance-card__description">
+                      {option.description}
+                    </span>
+                  </button>
+
+                  {isSelected && option.key === "side" ? (
+                    <div className="admin-appearance-card__side-position">
+                      <span className="admin-appearance-card__side-label">
+                        메뉴 위치
+                      </span>
+                      <div
+                        className="admin-appearance-side-position"
+                        role="radiogroup"
+                        aria-label="사이드 메뉴 위치"
+                      >
+                        <div className="admin-appearance-side-position__options">
+                          {SIDE_POSITION_OPTIONS.map((sideOption) => (
+                            <label
+                              key={sideOption.key}
+                              className={
+                                sidePosition === sideOption.key
+                                  ? "is-selected"
+                                  : ""
+                              }
+                            >
+                              <input
+                                type="radio"
+                                name="side-position"
+                                value={sideOption.key}
+                                checked={sidePosition === sideOption.key}
+                                onChange={() => {
+                                  setSidePosition(sideOption.key);
+                                  setAppearancePreview({
+                                    layoutKey,
+                                    sidePosition: sideOption.key,
+                                  });
+                                }}
+                              />
+                              <span>{sideOption.label}</span>
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
                   ) : null}
-                  <span className="admin-appearance-card__heading">
-                    <strong>{option.label}</strong>
-                    <span>{option.englishLabel}</span>
-                  </span>
-                  <span className="admin-appearance-card__description">
-                    {option.description}
-                  </span>
-                </button>
+                </div>
               );
             })}
           </div>
 
             </div>
 
-            <section className="admin-appearance-preview-section">
-            <div
-              aria-label="레이아웃 미리보기"
-              className={`admin-appearance-preview is-${layoutKey}${
-                layoutKey === "side" && sidePosition === "right"
-                  ? " is-side-right"
-                  : ""
-              }`}
-            >
-              <div className="admin-appearance-preview__shell">
-                <aside className="admin-appearance-preview__sidebar">
-                  <span className="admin-appearance-preview__brand">
-                    <span>어디에도 없는 섬</span>
-                    <small>Missing Island</small>
-                  </span>
-                  <nav className="admin-appearance-preview__side-nav">
-                    <span>작가소개</span>
-                    <span>등장인물</span>
-                    <span>목차</span>
-                    <span>삽화</span>
-                  </nav>
-                  <span className="admin-appearance-preview__collapse">
-                    «
-                  </span>
-                </aside>
-
-                <div className="admin-appearance-preview__main">
-                  <header className="admin-appearance-preview__topbar">
-                    <span className="admin-appearance-preview__hamburger">
-                      ☰
-                    </span>
-                    <span className="admin-appearance-preview__brand">
-                      <span>어디에도 없는 섬</span>
-                      <small>Missing Island</small>
-                    </span>
-                    <nav className="admin-appearance-preview__nav">
-                      <span>작가소개</span>
-                      <span>등장인물</span>
-                      <span>목차</span>
-                      <span>삽화</span>
-                    </nav>
-                  </header>
-
-                  <div className="admin-appearance-preview__content">
-                    <section className="admin-appearance-preview__hero">
-                      <p className="admin-appearance-preview__eyebrow">
-                        MISSING ISLAND
-                      </p>
-                      <h3>당신은 어떤 이야기를 가지고 있나요?</h3>
-                      <p className="admin-appearance-preview__lead">
-                        선택한 레이아웃에 따라 메뉴의 위치와 접힘 방식이
-                        달라집니다. 색상은 현재 테마를 그대로 유지합니다.
-                      </p>
-                    </section>
-
-                    <section className="admin-appearance-preview__cards">
-                      <article>
-                        <span />
-                        <strong>작가소개</strong>
-                      </article>
-                      <article>
-                        <span />
-                        <strong>목차</strong>
-                      </article>
-                      <article>
-                        <span />
-                        <strong>삽화</strong>
-                      </article>
-                    </section>
-
-                    <nav className="admin-appearance-preview__bottom-nav">
-                      <span>작가소개</span>
-                      <span>등장인물</span>
-                      <span>목차</span>
-                      <span>삽화</span>
-                    </nav>
-                  </div>
-                </div>
-              </div>
-            </div>
-            </section>
           </div>
 
           <div className="admin-appearance-footer">
-            {layoutKey === "side" ? (
-              <div
-                className="admin-appearance-side-position"
-                role="radiogroup"
-                aria-label="사이드 메뉴 위치"
-              >
-                <div className="admin-appearance-side-position__options">
-                  {SIDE_POSITION_OPTIONS.map((option) => (
-                    <label
-                      key={option.key}
-                      className={
-                        sidePosition === option.key
-                          ? "is-selected"
-                          : ""
-                      }
-                    >
-                      <input
-                        type="radio"
-                        name="side-position"
-                        value={option.key}
-                        checked={sidePosition === option.key}
-                        onChange={() => setSidePosition(option.key)}
-                      />
-                      <span>{option.label}</span>
-                    </label>
-                  ))}
-                </div>
-              </div>
-            ) : null}
-
             <div className="admin-appearance-actions">
               <button
                 type="button"
@@ -302,6 +255,7 @@ export default function AdminAppearance() {
                 onClick={() => {
                   setLayoutKey(savedLayoutKey);
                   setSidePosition(savedSidePosition);
+                  clearAppearancePreview();
                 }}
                 disabled={saving || !isDirty}
               >

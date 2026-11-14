@@ -16,6 +16,10 @@ import type {
   LayoutKey,
   SidePosition,
 } from "@/config/appearance";
+import {
+  clearAppearancePreview,
+  useAppearancePreview,
+} from "@/lib/appearance-preview";
 
 interface SiteShellProps {
   layoutKey: LayoutKey;
@@ -43,17 +47,20 @@ export function SiteShell({
   children,
 }: SiteShellProps) {
   const pathname = usePathname();
+  const preview = useAppearancePreview();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [drawerPinned, setDrawerPinned] = useState(false);
   const drawerRef = useRef<HTMLDivElement>(null);
   const topbarRef = useRef<HTMLElement>(null);
   const rightHoverArmedRef = useRef(true);
 
-  const isSide = layoutKey === "side";
-  const isBottom = layoutKey === "collapsible";
-  const isDrawer = layoutKey === "drawer";
+  const activeLayoutKey = preview?.layoutKey ?? layoutKey;
+  const activeSidePosition = preview?.sidePosition ?? sidePosition;
+  const isSide = activeLayoutKey === "side";
+  const isBottom = activeLayoutKey === "collapsible";
+  const isDrawer = activeLayoutKey === "drawer";
   const isAdminRoute = pathname.startsWith("/admin");
-  const sideRight = isSide && sidePosition === "right";
+  const sideRight = isSide && activeSidePosition === "right";
 
   const closeDrawer = () => {
     setDrawerOpen(false);
@@ -65,6 +72,16 @@ export function SiteShell({
     setDrawerOpen(false);
     setDrawerPinned(false);
     rightHoverArmedRef.current = false;
+  }, [pathname]);
+
+  useEffect(() => {
+    document.documentElement.dataset.appearance = activeLayoutKey;
+  }, [activeLayoutKey]);
+
+  useEffect(() => {
+    if (!pathname.startsWith("/admin/appearance")) {
+      clearAppearancePreview();
+    }
   }, [pathname]);
 
   useEffect(() => {
@@ -126,7 +143,7 @@ export function SiteShell({
 
   const classes = [
     "site-layout",
-    `site-layout--${layoutKey}`,
+    `site-layout--${activeLayoutKey}`,
     sideRight ? "is-side-right" : "",
     drawerOpen ? "is-menu-open" : "",
   ]

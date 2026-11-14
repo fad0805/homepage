@@ -831,13 +831,13 @@ html[data-appearance='collapsible'] .theme-toggle {
   }
 
   #container.site-layout--side.is-side-right > .site-sidebar {
-    order: 2;
-    margin-top: 1rem;
-    margin-bottom: 0;
+    order: 1;
+    margin-top: 0;
+    margin-bottom: 1rem;
   }
 
   #container.site-layout--side.is-side-right > .site-main-column {
-    order: 1;
+    order: 2;
   }
 
   #container.site-layout--side #content {
