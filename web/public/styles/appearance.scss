@@ -8,6 +8,10 @@
   position: relative;
 }
 
+html:has(#container.site-layout--side) {
+  scrollbar-gutter: stable;
+}
+
 /* Drawer layout */
 #container.site-layout--drawer {
   width: min(96vw, 980px);
@@ -123,10 +127,10 @@
   grid-template-columns: 15rem minmax(0, 1fr);
   align-items: start;
   gap: 1.5rem;
-  width: min(96vw, 1180px);
+  width: min(96%, 1180px);
   max-width: 1180px;
   min-width: 0;
-  padding: 1.5rem 1.5rem 0;
+  padding: 0 1.5rem;
   margin: 0 auto;
   box-sizing: border-box;
 
@@ -145,8 +149,12 @@
   > .site-main-column {
     display: flex;
     flex-direction: column;
+    width: 100%;
+    max-width: 100%;
     min-width: 0;
     min-height: 100vh;
+    min-height: 100dvh;
+    background: var(--subtheme);
   }
 
   > .site-main-column > main {
@@ -156,14 +164,25 @@
     align-items: center;
     width: 100%;
     min-width: 0;
+    min-height: 0;
   }
 
   #content {
     flex: 1;
-    min-height: max-content;
     width: 100%;
     max-width: none;
-    border-radius: 1.7rem;
+    height: 100%;
+    min-height: 0;
+    overflow-y: auto;
+    scrollbar-gutter: stable;
+    box-sizing: border-box;
+    background: var(--subtheme);
+  }
+
+  > .site-main-column > footer {
+    width: 100%;
+    margin-top: 0;
+    box-sizing: border-box;
     background: var(--subtheme);
   }
 }
@@ -272,6 +291,31 @@ html[data-appearance='collapsible'] .theme-toggle {
   bottom: 5rem;
 }
 
+@media (min-width: ($breakpoint-md + 1)) {
+  #container.site-layout--side {
+    height: 100vh;
+    height: 100dvh;
+    overflow: hidden;
+  }
+
+  #container.site-layout--side > .site-main-column {
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  #container.site-layout--side #content {
+    overflow-y: auto;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+    scrollbar-gutter: auto;
+  }
+
+  #container.site-layout--side #content::-webkit-scrollbar {
+    display: none;
+  }
+}
+
 @media (max-width: $breakpoint-md) {
   #container.site-layout--side {
     display: flex;
@@ -291,6 +335,11 @@ html[data-appearance='collapsible'] .theme-toggle {
       width: 100%;
       min-height: 0;
     }
+  }
+
+  #container.site-layout--side #content {
+    height: auto;
+    min-height: calc(100dvh - 3rem);
   }
 
   .site-sidebar #navbar {
