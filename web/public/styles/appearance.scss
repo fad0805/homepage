@@ -8,6 +8,17 @@
   position: relative;
 }
 
+#container.site-layout #content,
+#container.site-layout .site-bottom-content__scroll {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+#container.site-layout #content::-webkit-scrollbar,
+#container.site-layout .site-bottom-content__scroll::-webkit-scrollbar {
+  display: none;
+}
+
 html:has(#container.site-layout--side) {
   scrollbar-gutter: stable;
 }
@@ -320,6 +331,59 @@ body:not(:has(.admin-layout)) #container.site-layout--side * {
   max-width: 100%;
   overflow-x: auto;
   padding-bottom: 0.5rem;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+#container.site-layout--collapsible .characters::-webkit-scrollbar {
+  display: none;
+}
+
+#container.site-layout--collapsible .characters.has-left-fade {
+  -webkit-mask-image: linear-gradient(
+    90deg,
+    transparent,
+    #000 1.5rem,
+    #000 100%
+  );
+  mask-image: linear-gradient(
+    90deg,
+    transparent,
+    #000 1.5rem,
+    #000 100%
+  );
+}
+
+#container.site-layout--collapsible .characters.has-right-fade {
+  -webkit-mask-image: linear-gradient(
+    90deg,
+    #000 0,
+    #000 calc(100% - 1.5rem),
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    90deg,
+    #000 0,
+    #000 calc(100% - 1.5rem),
+    transparent 100%
+  );
+}
+
+#container.site-layout--collapsible .characters.has-left-fade.has-right-fade {
+  -webkit-mask-image: linear-gradient(
+    90deg,
+    transparent,
+    #000 1.5rem,
+    #000 calc(100% - 1.5rem),
+    transparent
+  );
+  mask-image: linear-gradient(
+    90deg,
+    transparent,
+    #000 1.5rem,
+    #000 calc(100% - 1.5rem),
+    transparent
+  );
 }
 
 #container.site-layout--collapsible .characters > .character {

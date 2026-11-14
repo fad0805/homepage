@@ -1,5 +1,7 @@
 import { serverApiFetch } from "@/lib/server-api";
 
+import { CharacterRow } from "./character-row";
+
 import "@/public/styles/characters.scss";
 
 export const dynamic = "force-dynamic";
@@ -75,7 +77,7 @@ export default async function Characters() {
         grouped.map((group) => (
           <div className="characters-list__item" key={group.location.id}>
             <h2>{group.location.name}</h2>
-            <div className="characters">
+            <CharacterRow>
               {group.characters.map((character) => (
                 <a
                   key={character.id}
@@ -93,7 +95,7 @@ export default async function Characters() {
                   </div>
                 </a>
               ))}
-            </div>
+            </CharacterRow>
           </div>
         ))
       )}
