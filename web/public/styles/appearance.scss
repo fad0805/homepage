@@ -481,6 +481,22 @@ body:not(:has(.admin-layout)) #container.site-layout--side * {
   border-radius: 0;
 }
 
+/* Keep the links banner shape consistent with the other layouts. */
+body:not(:has(.admin-layout)) #container.site-layout--side .links-banner {
+  border-end-start-radius: 1rem;
+  border-start-end-radius: 1rem;
+}
+
+body:not(:has(.admin-layout))
+  #container.site-layout--side
+  .links-banner__image,
+body:not(:has(.admin-layout)) #container.site-layout--side .links-banner img,
+body:not(:has(.admin-layout))
+  #container.site-layout--side
+  .links-banner__placeholder {
+  border-start-end-radius: 1rem;
+}
+
 #container.site-layout--side .admin-layout,
 #container.site-layout--side .admin-layout * {
   border-radius: 0;
