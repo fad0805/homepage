@@ -26,25 +26,75 @@ html:has(#container.site-layout--side) {
 
 /* Drawer layout */
 #container.site-layout--drawer {
-  width: min(96vw, 980px);
-  max-width: 980px;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: none;
+  min-width: 0;
+  padding: 0;
+  margin: 0;
+  box-sizing: border-box;
 }
 
 .site-topbar {
   display: flex !important;
   flex-direction: row !important;
+  flex-shrink: 0;
   align-items: center;
   justify-content: flex-start;
   width: 100%;
+  max-width: none;
+  margin: 0;
+  padding: 1.2rem 0.4rem;
+  box-sizing: border-box;
   gap: 1rem;
 }
 
 .site-topbar #title {
+  display: flex;
   flex: 1;
+  align-items: center;
+  min-width: 0;
 }
 
 .site-topbar #title a {
   align-items: flex-start;
+}
+
+#container.site-layout--drawer > main {
+  flex: 1;
+  min-height: 0;
+  background: var(--subtheme);
+}
+
+#container.site-layout--drawer > main > #content {
+  flex: 1;
+  width: 100%;
+  max-width: none;
+  min-height: 0;
+  border-radius: 0;
+  background: var(--subtheme);
+}
+
+#container.site-layout--drawer > footer {
+  flex-shrink: 0;
+  width: 100%;
+  margin-top: 0;
+  background: var(--background);
+}
+
+@media (min-width: 769px) {
+  #container.site-layout--drawer {
+    height: 100vh;
+    height: 100dvh;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  #container.site-layout--drawer > main > #content {
+    height: 100%;
+    overflow-y: auto;
+  }
 }
 
 .site-menu-toggle {
@@ -56,9 +106,9 @@ html:has(#container.site-layout--side) {
   width: 2.4rem;
   height: 2.4rem;
   padding: 0 0.55rem;
-  border: 1px solid rgba(0, 0, 0, 0.14);
+  border: none;
   border-radius: 0.6rem;
-  background: var(--input-background);
+  background: transparent;
   cursor: pointer;
 
   span {
@@ -68,10 +118,6 @@ html:has(#container.site-layout--side) {
     border-radius: 999px;
     background: var(--title-color);
   }
-}
-
-[data-theme='dark'] .site-menu-toggle {
-  border-color: rgba(255, 255, 255, 0.18);
 }
 
 .site-drawer-backdrop {
