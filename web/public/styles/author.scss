@@ -10,7 +10,7 @@
 .author-state {
   margin: 0;
   padding: 2rem 0;
-  color: var(--foreground);
+  color: var(--input-text);
   font-size: 0.9rem;
   opacity: 0.68;
 }
@@ -25,7 +25,7 @@
 
 .author-eyebrow {
   margin: 0 0 0 1.5rem;
-  color: var(--home-muted, var(--foreground));
+  color: var(--home-muted, var(--input-text));
   font-size: 0.64rem;
   letter-spacing: 0.24em;
   opacity: 0.7;
@@ -42,7 +42,7 @@
 
 .author-tagline {
   margin: 0.2rem 0 0 1.5rem;
-  color: var(--foreground);
+  color: var(--input-text);
   font-size: 0.92rem;
   opacity: 0.68;
 }
@@ -81,7 +81,7 @@
 
   p {
     margin: 0 0 0.7rem;
-    color: var(--foreground);
+    color: var(--input-text);
     font-size: 0.95rem;
     line-height: 1.65;
 
@@ -111,7 +111,7 @@
   ol {
     margin: 0 0 0.7rem;
     padding-left: 1.5rem;
-    color: var(--foreground);
+    color: var(--input-text);
     font-size: 0.95rem;
     line-height: 1.65;
   }
@@ -126,7 +126,7 @@
     border-left: 3px solid var(--title-color);
     border-radius: 0 0.5rem 0.5rem 0;
     background: rgba(255, 255, 255, 0.45);
-    color: var(--foreground);
+    color: var(--input-text);
     font-size: 0.92rem;
     line-height: 1.6;
   }

@@ -43,7 +43,7 @@
     padding: 0.3rem 0.55rem;
     border: 1px solid rgba(0, 0, 0, 0.16);
     border-radius: 999px;
-    color: var(--foreground);
+    color: var(--input-text);
     text-decoration: none;
   }
 
@@ -83,7 +83,7 @@
   border: 1px solid rgba(0, 0, 0, 0.16);
   border-radius: 999px;
   background: transparent;
-  color: var(--foreground);
+  color: var(--input-text);
   cursor: pointer;
 
   &:hover {
@@ -114,7 +114,7 @@
   border: 1px solid rgba(0, 0, 0, 0.12);
   border-radius: 0.7rem;
   background: var(--subtheme);
-  color: var(--foreground);
+  color: var(--input-text);
   box-shadow: 0 0.8rem 2rem rgba(0, 0, 0, 0.18);
 }
 
@@ -133,7 +133,7 @@
     border: 1px solid rgba(0, 0, 0, 0.16);
     border-radius: 0.5rem;
     background: var(--input-background);
-    color: var(--foreground);
+    color: var(--input-text);
     font-family: inherit;
     font-size: 0.9rem;
 
@@ -179,7 +179,7 @@
     border: 1px solid rgba(0, 0, 0, 0.16);
     border-radius: 0.45rem;
     background: var(--input-background);
-    color: var(--foreground);
+    color: var(--input-text);
     font-family: inherit;
     font-size: 0.72rem;
 
@@ -218,7 +218,7 @@
   border: 1px solid rgba(0, 0, 0, 0.16);
   border-radius: 0.45rem;
   background: var(--input-background);
-  color: var(--foreground);
+  color: var(--input-text);
   font-family: inherit;
   font-size: 0.72rem;
 
@@ -255,7 +255,7 @@
 
 .illustrations-state {
   padding: 2rem 0;
-  color: var(--foreground);
+  color: var(--input-text);
   font-size: 0.9rem;
   opacity: 0.68;
 
@@ -312,7 +312,7 @@
 
 .illustrations-pagination__ellipsis {
   padding: 0 0.2rem;
-  color: var(--foreground);
+  color: var(--input-text);
   font-size: 0.78rem;
   opacity: 0.5;
 }
@@ -329,12 +329,12 @@
   border-radius: 0.9rem;
   background: var(--illustration-card-bg);
   box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-  color: var(--foreground);
+  color: var(--input-text);
   text-decoration: none;
   transition: transform 0.18s ease, box-shadow 0.18s ease;
 
   &:visited {
-    color: var(--foreground);
+    color: var(--input-text);
   }
 
   &:hover {
@@ -351,11 +351,11 @@
   display: flex;
   flex-direction: column;
   min-width: 0;
-  color: var(--foreground);
+  color: var(--input-text);
   text-decoration: none;
 
   &:visited {
-    color: var(--foreground);
+    color: var(--input-text);
   }
 
   &:focus-visible {
@@ -435,7 +435,7 @@
 .illustration-card__title {
   margin: 0;
   overflow: hidden;
-  color: var(--foreground);
+  color: var(--input-text);
   font-size: 0.86rem;
   font-weight: 600;
   line-height: 1.4;
@@ -641,7 +641,7 @@
 .illustration-detail__description {
   max-width: 44rem;
   margin: 0.55rem 0 0;
-  color: var(--foreground);
+  color: var(--input-text);
   font-size: 0.86rem;
   line-height: 1.7;
   overflow-wrap: anywhere;
@@ -670,7 +670,7 @@
 
   dd {
     margin: 0;
-    color: var(--foreground);
+    color: var(--input-text);
   }
 }
 
@@ -759,7 +759,7 @@
   padding: 1.1rem 1.2rem 1rem;
   border-radius: 1rem;
   background: var(--subtheme);
-  color: var(--foreground);
+  color: var(--input-text);
   box-shadow: 0 1.5rem 3rem rgba(0, 0, 0, 0.3);
 
   header {
@@ -796,7 +796,7 @@
     border: 1px solid rgba(0, 0, 0, 0.16);
     border-radius: 0.5rem;
     background: var(--input-background);
-    color: var(--foreground);
+    color: var(--input-text);
     font-family: inherit;
     font-size: 1rem;
     letter-spacing: 0.05em;
@@ -816,7 +816,7 @@
 .illustration-unlock-close {
   border: 0;
   background: transparent;
-  color: var(--foreground);
+  color: var(--input-text);
   font-size: 1.4rem;
   line-height: 1;
   opacity: 0.6;
@@ -840,7 +840,7 @@
     border: 1px solid rgba(0, 0, 0, 0.16);
     border-radius: 0.5rem;
     background: transparent;
-    color: var(--foreground);
+    color: var(--input-text);
     font-family: inherit;
     font-size: 0.8rem;
     cursor: pointer;

@@ -29,6 +29,7 @@ body {
   --input-background: #{$white};
   --input-text: var(--foreground);
   --empty-banner-bg: #{color.adjust($maintheme, $lightness: -10%)};
+  --links-banner-color: #fff;
 
   a, a:visited {
     color: var(--title-color);
@@ -41,8 +42,9 @@ body {
   --subtheme: #{$dark-bg-sub};
   --title-color: #{color.adjust($maintheme, $lightness: -35%)};
   --input-background: #{$dark-bg-sub};
-  --input-text: #{$dark-text};
+  --input-text: rgba(145, 160, 128, 0.9);
   --empty-banner-bg: #{color.adjust($maintheme, $lightness: -40%, $saturation: -10%)};
+  --links-banner-color: #c2d6bf;
 
   a, a:visited {
     color: var(--title-color);
@@ -63,7 +65,7 @@ body {
   justify-items: center;
   min-height: 100vh;
 
-  color: var(--foreground);
+  color: var(--input-text);
   background: var(--background);
   font-family: GowunDodum, Arial, Helvetica, sans-serif;
   word-break: keep-all;
@@ -228,7 +230,7 @@ div#container > main {
   border: 1px solid rgba(0, 0, 0, 0.14);
   border-radius: 0.9rem;
   background: rgba(255, 255, 255, 0.42);
-  color: var(--foreground);
+  color: var(--input-text);
   text-decoration: none;
   transition:
     border-color 0.18s ease,
@@ -379,7 +381,7 @@ div#container > main {
   border: 1px solid rgba(0, 0, 0, 0.16);
   border-radius: 999px;
   background: var(--input-background);
-  color: var(--foreground);
+  color: var(--input-text);
   font-size: 0.9rem;
   line-height: 1;
   cursor: pointer;

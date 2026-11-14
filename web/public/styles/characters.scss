@@ -54,7 +54,7 @@
       }
 
       p {
-        color: $white;
+        color: var(--links-banner-color);
         text-shadow: 0 0 5px black;
 
         position: absolute;

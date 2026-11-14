@@ -9,7 +9,7 @@
 
 .books-state {
   padding: 2rem 0;
-  color: var(--foreground);
+  color: var(--input-text);
   font-size: 0.9rem;
   opacity: 0.68;
 }
@@ -67,7 +67,7 @@
 
 .books-list-empty {
   margin: 0.4rem 0;
-  color: var(--foreground);
+  color: var(--input-text);
   font-size: 0.78rem;
   opacity: 0.6;
 }
@@ -77,7 +77,7 @@
   align-items: center;
   gap: 0.35rem;
   margin: 0 0 0.6rem;
-  color: var(--foreground);
+  color: var(--input-text);
   font-size: 0.72rem;
   opacity: 0.7;
 
@@ -126,7 +126,7 @@
   border: 1px solid rgba(0, 0, 0, 0.15);
   border-radius: 0.6rem;
   background: var(--subtheme);
-  color: var(--foreground);
+  color: var(--input-text);
   box-shadow: 0 0.5rem 1.5rem rgba(0, 0, 0, 0.16);
 
   p {
@@ -316,7 +316,7 @@
 
 .books-book-button__count {
   flex-shrink: 0;
-  color: var(--foreground);
+  color: var(--input-text);
   font-size: 0.7rem;
   opacity: 0.55;
 }
@@ -351,7 +351,7 @@
 
   p {
     margin: 0.3rem 0 0;
-    color: var(--foreground);
+    color: var(--input-text);
     font-size: 0.8rem;
     line-height: 1.6;
     opacity: 0.65;
@@ -362,7 +362,7 @@
 
 .books-panel__empty {
   margin: 0;
-  color: var(--foreground);
+  color: var(--input-text);
   font-size: 0.85rem;
   opacity: 0.58;
 }
@@ -414,7 +414,7 @@
 
 .books-chapter-link__time {
   flex-shrink: 0;
-  color: var(--foreground);
+  color: var(--input-text);
   font-size: 0.68rem;
   opacity: 0.55;
   white-space: nowrap;
@@ -502,7 +502,7 @@
   border: 1px solid rgba(0, 0, 0, 0.18);
   border-radius: 0.45rem;
   background: transparent;
-  color: var(--foreground);
+  color: var(--input-text);
   font-family: inherit;
   font-size: 0.75rem;
   cursor: pointer;
@@ -525,14 +525,14 @@
 
 .pagination__ellipsis {
   padding: 0 0.25rem;
-  color: var(--foreground);
+  color: var(--input-text);
   font-size: 0.75rem;
   opacity: 0.55;
 }
 
 .chapter-detail__book {
   margin: 0 0 0.35rem;
-  color: var(--foreground);
+  color: var(--input-text);
   font-size: 0.64rem;
   letter-spacing: 0.18em;
   text-transform: uppercase;
@@ -558,7 +558,7 @@
 
 .chapter-detail__subtitle {
   margin: 0.25rem 0 0;
-  color: var(--foreground);
+  color: var(--input-text);
   font-size: 0.85rem;
   opacity: 0.65;
   overflow-wrap: anywhere;
@@ -567,7 +567,7 @@
 
 .chapter-detail__body {
   margin-top: 1.2rem;
-  color: var(--foreground);
+  color: var(--input-text);
   min-width: 0;
   overflow-wrap: anywhere;
   word-break: break-word;
@@ -718,7 +718,7 @@
 
 .chapter-detail__empty {
   margin: 1rem 0 0;
-  color: var(--foreground);
+  color: var(--input-text);
   font-size: 0.85rem;
   opacity: 0.58;
 }
@@ -870,7 +870,7 @@
     border: 1px solid var(--background);
     border-radius: 8px;
     background-color: transparent;
-    color: var(--foreground);
+    color: var(--input-text);
     text-align: center;
     letter-spacing: 0.08em;
   }
@@ -881,7 +881,7 @@
     border: 1px solid var(--background);
     border-radius: 8px;
     background-color: transparent;
-    color: var(--foreground);
+    color: var(--input-text);
     cursor: pointer;
   }
 

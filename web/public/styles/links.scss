@@ -5,14 +5,12 @@
   --links-banner-bg: var(--empty-banner-bg);
   /* The image area keeps the old "no image" surface, slightly brighter. */
   --links-banner-image-bg: #{color.mix(#000, color.adjust($maintheme, $lightness: -10%), 8%)};
-  --links-banner-color: #fff;
 }
 
 [data-theme='dark'] {
   --links-banner-bg: var(--empty-banner-bg);
   /* The image area keeps the old "no image" surface, slightly darker. */
   --links-banner-image-bg: #{color.mix(#000, color.adjust($maintheme, $lightness: -40%, $saturation: -10%), 28%)};
-  --links-banner-color: #{color.adjust($maintheme, $lightness: 10%)};
 }
 
 #links-page {
@@ -38,7 +36,7 @@
   justify-content: center;
   align-items: center;
   width: 100%;
-  color: var(--foreground);
+  color: var(--input-text);
   font-size: 1.2rem;
   font-weight: bold;
   margin: 0.5rem 0;
@@ -103,7 +101,7 @@
     padding: 0.4rem 0.55rem;
     border-radius: 0.5rem;
     background: var(--subtheme);
-    color: var(--foreground);
+    color: var(--input-text);
     font-size: 0.7rem;
     line-height: 1.35;
     text-align: left;
