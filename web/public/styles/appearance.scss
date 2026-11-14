@@ -662,6 +662,32 @@ body:not(:has(.admin-layout)) #container.site-layout--side * {
   width: 12rem;
 }
 
+@media (max-width: $breakpoint-md) {
+  #container.site-layout--collapsible .characters {
+    flex-direction: column;
+    flex-wrap: nowrap;
+    gap: 1rem;
+    width: 100%;
+    overflow-x: visible;
+    padding-bottom: 0;
+  }
+
+  #container.site-layout--collapsible .characters > .character,
+  #container.site-layout--collapsible .characters > .character .image,
+  #container.site-layout--collapsible .characters > .character .image img,
+  #container.site-layout--collapsible
+    .characters
+    > .character
+    .image.is-empty {
+    width: 100%;
+  }
+
+  #container.site-layout--collapsible .characters > .character .image img {
+    display: block;
+    max-width: 100%;
+  }
+}
+
 #container.site-layout--collapsible .illustrations-grid {
   grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 0.75rem;
