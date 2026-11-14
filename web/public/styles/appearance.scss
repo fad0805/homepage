@@ -202,6 +202,10 @@ html:has(#container.site-layout--side) {
   will-change: transform;
 }
 
+[data-theme='dark'] .site-drawer {
+  background: color.scale($dark-bg-sub, $lightness: -20%);
+}
+
 .site-drawer-backdrop.is-open .site-drawer {
   transform: translateX(0);
 }
