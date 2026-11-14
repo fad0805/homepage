@@ -12,6 +12,7 @@ import {
 import { AdminNavbar } from "@/components/admin-navbar";
 import { FooterShortcut } from "@/components/footer-shortcut";
 import { Navbar } from "@/components/navbar";
+import { ThemeToggle } from "@/components/theme-toggle";
 import type {
   LayoutKey,
   SidePosition,
@@ -286,6 +287,10 @@ export function SiteShell({
             ) : (
               <Navbar />
             )}
+            <div className="site-drawer__theme">
+              <span>테마</span>
+              <ThemeToggle variant="drawer" />
+            </div>
           </div>
         </div>
       ) : null}
