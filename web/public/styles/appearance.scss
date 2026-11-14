@@ -24,6 +24,10 @@ html:has(#container.site-layout--side) {
   scrollbar-gutter: stable;
 }
 
+#container.site-layout--editorial > header > #title {
+  align-self: flex-end;
+}
+
 /* Drawer layout */
 #container.site-layout--drawer {
   display: flex;
@@ -57,7 +61,7 @@ html:has(#container.site-layout--side) {
   min-width: 0;
 }
 
-.site-topbar #title a {
+#container.site-layout--drawer > .site-topbar #title a {
   align-items: flex-start;
 }
 
@@ -359,7 +363,7 @@ html:has(#container.site-layout--side) {
 
   > .site-sidebar {
     position: sticky;
-    top: 1.5rem;
+    top: 4rem;
     display: flex;
     flex-direction: column;
     align-items: stretch;
@@ -467,6 +471,19 @@ body:not(:has(.admin-layout)) #container.site-layout--side * {
   width: 100%;
   margin: 0;
   gap: 0.55rem;
+}
+
+@media (min-width: 769px) {
+  #container.site-layout--side:not(.is-side-right) .site-sidebar #navbar a {
+    text-align: right;
+  }
+
+  #container.site-layout--side:not(.is-side-right)
+    .site-sidebar
+    #title
+    .title__caption {
+    text-align: right;
+  }
 }
 
 .site-sidebar #navbar a {
@@ -796,15 +813,18 @@ html[data-appearance='collapsible'] .theme-toggle {
   #container.site-layout--side {
     display: flex;
     flex-direction: column;
-    width: 90vw;
+    width: 100%;
     max-width: none;
-    padding: 2rem 1.2rem 0;
+    padding: 2rem 0 0;
     gap: 0;
 
     > .site-sidebar {
       position: static;
       width: 100%;
+      padding-right: 1.5rem;
+      padding-left: 1.5rem;
       margin-bottom: 1rem;
+      box-sizing: border-box;
     }
 
     > .site-main-column {
