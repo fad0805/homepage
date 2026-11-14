@@ -60,6 +60,15 @@ nav#admin-navbar a {
   }
 }
 
+#container.site-layout--side nav#admin-navbar a.active {
+  color: var(--home-highlight, var(--title-color));
+  background: linear-gradient(
+    180deg,
+    transparent 62%,
+    var(--background) 62%
+  );
+}
+
 
 div#content > .admin-layout > .admin-account-bar {
   display: flex;
