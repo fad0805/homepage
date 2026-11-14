@@ -86,15 +86,20 @@ export function SiteShell({
         </header>
 
         <main>
-          <div id="content">{children}</div>
+          <div id="content" className="site-bottom-content">
+            <div className="site-bottom-content__scroll">
+              {children}
+            </div>
+            <div className="site-bottom-dock">
+              <div className="site-bottom-bar">
+                <Navbar />
+              </div>
+              <footer className="site-bottom-footer">
+                <FooterShortcut />
+              </footer>
+            </div>
+          </div>
         </main>
-        <footer>
-          <FooterShortcut />
-        </footer>
-
-        <div className="site-bottom-bar">
-          <Navbar />
-        </div>
       </div>
     );
   }
