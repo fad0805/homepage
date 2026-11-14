@@ -193,7 +193,8 @@ export default function AdminAppearance() {
               <div className="admin-appearance-preview__shell">
                 <aside className="admin-appearance-preview__sidebar">
                   <span className="admin-appearance-preview__brand">
-                    어디에도 없는 섬
+                    <span>어디에도 없는 섬</span>
+                    <small>Missing Island</small>
                   </span>
                   <nav className="admin-appearance-preview__side-nav">
                     <span>작가소개</span>
@@ -212,7 +213,8 @@ export default function AdminAppearance() {
                       ☰
                     </span>
                     <span className="admin-appearance-preview__brand">
-                      어디에도 없는 섬
+                      <span>어디에도 없는 섬</span>
+                      <small>Missing Island</small>
                     </span>
                     <nav className="admin-appearance-preview__nav">
                       <span>작가소개</span>
@@ -248,14 +250,14 @@ export default function AdminAppearance() {
                         <strong>삽화</strong>
                       </article>
                     </section>
-                  </div>
 
-                  <nav className="admin-appearance-preview__bottom-nav">
-                    <span>작가소개</span>
-                    <span>등장인물</span>
-                    <span>목차</span>
-                    <span>삽화</span>
-                  </nav>
+                    <nav className="admin-appearance-preview__bottom-nav">
+                      <span>작가소개</span>
+                      <span>등장인물</span>
+                      <span>목차</span>
+                      <span>삽화</span>
+                    </nav>
+                  </div>
                 </div>
               </div>
             </div>

@@ -24,10 +24,6 @@ html:has(#container.site-layout--side) {
   scrollbar-gutter: stable;
 }
 
-#container.site-layout--editorial > header > #title {
-  align-self: flex-end;
-}
-
 /* Drawer layout */
 #container.site-layout--drawer {
   display: flex;
