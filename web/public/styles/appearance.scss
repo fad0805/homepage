@@ -199,8 +199,9 @@ html:has(#container.site-layout--side) {
   order: 1;
 }
 
-#container.site-layout--side .author-card,
-#container.site-layout--side .author-card__image {
+/* Public side layout: use a flat, square-cornered surface throughout. */
+body:not(:has(.admin-layout)) #container.site-layout--side,
+body:not(:has(.admin-layout)) #container.site-layout--side * {
   border-radius: 0;
 }
 
