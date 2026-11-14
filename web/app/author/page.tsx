@@ -81,13 +81,27 @@ export default async function Author({ searchParams }: AuthorPageProps) {
             "작가";
           const href =
             profile.id != null ? `/author?profile=${profile.id}` : null;
+          const cardClassName = `author-card${
+            profile.banner_url ? " has-image" : ""
+          }`;
           const card = (
-            <span className="author-card__name">{nickname}</span>
+            <>
+              {profile.banner_url ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  className="author-card__image"
+                  src={profile.banner_url}
+                  alt=""
+                  loading="lazy"
+                />
+              ) : null}
+              <span className="author-card__name">{nickname}</span>
+            </>
           );
 
           return href ? (
             <Link
-              className="author-card"
+              className={cardClassName}
               href={href}
               key={profile.id}
               aria-label={`${nickname} 작가 소개 보기`}
@@ -96,7 +110,7 @@ export default async function Author({ searchParams }: AuthorPageProps) {
             </Link>
           ) : (
             <article
-              className="author-card"
+              className={cardClassName}
               key={`${nickname}-${index}`}
             >
               {card}

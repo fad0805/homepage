@@ -16,6 +16,7 @@ class Profile(Base):
     )
     title = Column(String(255))
     subtitle = Column(String(255), nullable=True)
+    banner_url = Column(String(1000), nullable=True)
     profile = Column(Text)
     created_at = Column(DateTime, default=func.now())
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())

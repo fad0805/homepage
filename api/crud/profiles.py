@@ -1,6 +1,7 @@
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session, joinedload
 
+from core.uploads import delete_replaced_upload, delete_uploaded_file
 from models.profiles import Profile
 from models.users import User
 from schemas.profiles import ProfileCreate, ProfileUpdate
@@ -22,6 +23,7 @@ def _serialize_profile(profile: Profile) -> dict:
         ),
         "title": profile.title,
         "subtitle": profile.subtitle,
+        "banner_url": profile.banner_url,
         "profile": profile.profile,
     }
 
@@ -105,13 +107,28 @@ def update_profile(
             detail="Profile not found",
         )
 
-    for key, value in updated_profile.model_dump(
-        exclude_unset=True
-    ).items():
+    old_banner_url = profile.banner_url
+    data = updated_profile.model_dump(exclude_unset=True)
+
+    for key, value in data.items():
         setattr(profile, key, value)
 
     db.commit()
     db.refresh(profile)
+
+    if (
+        old_banner_url
+        and "banner_url" in data
+        and old_banner_url != profile.banner_url
+    ):
+        still_used = (
+            db.query(Profile)
+            .filter(Profile.banner_url == old_banner_url)
+            .first()
+        )
+        if not still_used:
+            delete_replaced_upload(old_banner_url, profile.banner_url)
+
     return _serialize_profile(profile)
 
 
@@ -133,6 +150,15 @@ def delete_profile(
             detail="Does not exist profile",
         )
 
+    banner_url = profile.banner_url
     db.delete(profile)
     db.commit()
+
+    if banner_url:
+        still_used = (
+            db.query(Profile).filter(Profile.banner_url == banner_url).first()
+        )
+        if not still_used:
+            delete_uploaded_file(banner_url)
+
     return True
