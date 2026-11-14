@@ -65,6 +65,16 @@ div#content > .admin-layout > nav#admin-navbar {
   width: 100%;
 }
 
+@media (max-width: $breakpoint-md) {
+  #container.site-layout--collapsible
+    .admin-layout
+    > nav#admin-navbar {
+    width: calc(100% - 2rem);
+    margin-right: 1rem;
+    margin-left: 1rem;
+  }
+}
+
 nav#admin-navbar a {
   color: var(--title-color);
   text-decoration: none;
