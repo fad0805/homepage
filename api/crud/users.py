@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from core.config import REFRESH_TOKEN_EXPIRE_DAYS
 from models.users import AuthorSettings, User, UserSession, UserSigninHistory
-from core.security import hash_password
+from core.security import hash_password, verify_password
 from schemas.users import UserCreate, UserUpdate
 
 
@@ -48,6 +48,22 @@ def update_user(db: Session, username: str, user_update: UserUpdate):
     db.commit()
     db.refresh(user)
     return True if user else False
+
+
+def change_user_password(
+    db: Session,
+    user: User,
+    current_password: str,
+    new_password: str,
+) -> bool:
+    """Change one user's password after verifying the current one."""
+    if not verify_password(current_password, user.hashed_password):
+        raise ValueError("invalid_current_password")
+
+    user.hashed_password = hash_password(new_password)
+    db.commit()
+    db.refresh(user)
+    return True
 
 
 SLUG_MAX_LENGTH = 48

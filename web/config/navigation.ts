@@ -13,6 +13,7 @@ interface NaviSection {
 interface AdminNaviSection {
   title: string
   rows: NavItem[][]
+  rowLabels?: string[]
 }
 
 interface Navigation {
@@ -34,6 +35,7 @@ const navigation: Navigation = {
   },
   admin: {
     title: "결계 관리자 대시보드",
+    rowLabels: ["콘텐츠 관리", "운영"],
     rows: [
       [
         { href: "/admin/author", label: "프로필 관리" },
@@ -45,8 +47,10 @@ const navigation: Navigation = {
       [
         { href: "/admin", label: "대시보드", adminOnly: true },
         { href: "/admin/gallery", label: "열람 관리" },
-        { href: "/admin/export", label: "내보내기" },
         { href: "/admin/connections", label: "연결 관리" },
+        { href: "/admin/appearance", label: "외관 관리" },
+        { href: "/admin/account", label: "계정 관리" },
+        { href: "/admin/export", label: "내보내기" },
       ],
     ],
   },

@@ -3,11 +3,18 @@
 import {
   useCallback,
   useEffect,
+  useRef,
   useState,
+  type ChangeEvent,
   type FormEvent,
 } from "react";
 
 import { useAuth } from "@/components/auth-provider";
+import {
+  ImageCropModal,
+  type CropStageConfig,
+  type CroppedImageResult,
+} from "@/components/image-crop-modal";
 import { RichTextEditor } from "@/components/rich-text-editor";
 import { profileToHtml, type AuthorProfile } from "@/config/author";
 import { maybeRevalidatePublicContent } from "@/lib/revalidate";
@@ -15,6 +22,28 @@ import { maybeRevalidatePublicContent } from "@/lib/revalidate";
 import "@/public/styles/admin/author.scss";
 
 type Notice = { type: "success" | "error"; text: string };
+
+interface CropRequest {
+  src: string;
+  fileName: string;
+}
+
+const MAX_BANNER_SIZE = 50 * 1024 * 1024;
+const ALLOWED_BANNER_TYPES = [
+  "image/png",
+  "image/jpeg",
+  "image/webp",
+  "image/gif",
+];
+
+const PROFILE_BANNER_CROP_STAGE: CropStageConfig = {
+  key: "banner",
+  aspect: 1,
+  outputWidth: 1024,
+  title: "이미지 자르기 · 프로필 배너",
+  hint: "작가소개 카드에 표시할 정사각형(1:1) 이미지를 자릅니다. 1024×1024px로 저장됩니다.",
+  fileSuffix: "banner",
+};
 
 async function apiFetch<T>(url: string, init: RequestInit = {}): Promise<T> {
   const headers = new Headers(init.headers);
@@ -75,6 +104,11 @@ export default function AdminProfile() {
   const [title, setTitle] = useState("");
   const [subtitle, setSubtitle] = useState("");
   const [content, setContent] = useState("");
+  const [bannerPreview, setBannerPreview] = useState<string | null>(null);
+  const [bannerFile, setBannerFile] = useState<File | null>(null);
+  const [bannerFileName, setBannerFileName] = useState("");
+  const [cropRequest, setCropRequest] = useState<CropRequest | null>(null);
+  const objectUrls = useRef<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState<Notice | null>(null);
@@ -84,6 +118,14 @@ export default function AdminProfile() {
   const [viewingOther, setViewingOther] = useState<AuthorProfile | null>(
     null,
   );
+
+  useEffect(() => {
+    const urls = objectUrls.current;
+    return () => {
+      urls.forEach((url) => URL.revokeObjectURL(url));
+      urls.clear();
+    };
+  }, []);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -101,6 +143,9 @@ export default function AdminProfile() {
       setTitle(nextTitle);
       setSubtitle(nextSubtitle);
       setContent(nextHtml);
+      setBannerPreview(first?.banner_url ?? null);
+      setBannerFile(null);
+      setBannerFileName("");
     } catch (error) {
       setNotice({
         type: "error",
@@ -117,6 +162,74 @@ export default function AdminProfile() {
   useEffect(() => {
     load();
   }, [load]);
+
+  const uploadBanner = useCallback(async (file: File) => {
+    const body = new FormData();
+    body.append("file", file);
+    const uploaded = await apiFetch<{ url: string }>(
+      "/api/profiles/upload",
+      {
+        method: "POST",
+        body,
+      },
+    );
+    return uploaded.url;
+  }, []);
+
+  const closeCropModal = useCallback(() => {
+    if (cropRequest) {
+      URL.revokeObjectURL(cropRequest.src);
+      objectUrls.current.delete(cropRequest.src);
+    }
+    setCropRequest(null);
+  }, [cropRequest]);
+
+  const handleBannerChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+
+    if (!ALLOWED_BANNER_TYPES.includes(file.type)) {
+      setNotice({
+        type: "error",
+        text: "PNG / JPEG / WEBP / GIF 이미지만 업로드할 수 있습니다.",
+      });
+      return;
+    }
+    if (file.size > MAX_BANNER_SIZE) {
+      setNotice({
+        type: "error",
+        text: "이미지는 50MB 이하만 업로드할 수 있습니다.",
+      });
+      return;
+    }
+
+    const objectUrl = URL.createObjectURL(file);
+    objectUrls.current.add(objectUrl);
+    setCropRequest({ src: objectUrl, fileName: file.name });
+  };
+
+  const handleCropComplete = useCallback(
+    (results: CroppedImageResult[]) => {
+      const banner = results.find((result) => result.stage === "banner");
+      if (!banner) {
+        setNotice({
+          type: "error",
+          text: "이미지 크롭 결과를 찾지 못했습니다.",
+        });
+        closeCropModal();
+        return;
+      }
+
+      const preview = URL.createObjectURL(banner.file);
+      objectUrls.current.add(preview);
+      setBannerFile(banner.file);
+      setBannerPreview(preview);
+      setBannerFileName(banner.file.name);
+      closeCropModal();
+    },
+    [closeCropModal],
+  );
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -141,6 +254,11 @@ export default function AdminProfile() {
 
     setSaving(true);
     try {
+      let nextBannerUrl = profile?.banner_url ?? null;
+      if (bannerFile) {
+        nextBannerUrl = await uploadBanner(bannerFile);
+      }
+
       if (profile?.id) {
         const updated = await apiFetch<AuthorProfile>(
           `/api/profiles/${profile.id}`,
@@ -149,24 +267,30 @@ export default function AdminProfile() {
             body: JSON.stringify({
               title: nextTitle,
               subtitle: nextSubtitle,
+              banner_url: nextBannerUrl,
               profile: nextContent,
             }),
           },
         );
         setProfile(updated);
+        setBannerPreview(updated.banner_url ?? null);
       } else {
         const created = await apiFetch<AuthorProfile>("/api/profiles", {
           method: "POST",
           body: JSON.stringify({
             title: nextTitle,
             subtitle: nextSubtitle,
+            banner_url: nextBannerUrl,
             profile: nextContent,
           }),
         });
         setProfile(created);
+        setBannerPreview(created.banner_url ?? null);
       }
       setTitle(nextTitle);
       setSubtitle(nextSubtitle);
+      setBannerFile(null);
+      setBannerFileName("");
       setNotice({ type: "success", text: "프로필을 저장했습니다." });
     } catch (error) {
       setNotice({
@@ -261,7 +385,8 @@ export default function AdminProfile() {
         <div>
           <h1>프로필 관리</h1>
           <p className="admin-author-hint">
-            작가소개 페이지에 표시할 제목, 서브타이틀, 소개를 편집합니다.
+            작가소개 카드에 표시할 배너 이미지, 제목, 서브타이틀,
+            소개를 편집합니다.
           </p>
         </div>
         {isAdmin ? (
@@ -285,6 +410,36 @@ export default function AdminProfile() {
         <p className="admin-author-loading">불러오는 중...</p>
       ) : (
         <form className="admin-author-form" onSubmit={handleSubmit}>
+          <div className="admin-field">
+            <span>프로필 배너</span>
+            <div className="admin-author-banner-field">
+              <div className="admin-author-banner-preview">
+                {bannerPreview ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={bannerPreview} alt="프로필 배너 미리보기" />
+                ) : (
+                  <span>이미지 없음</span>
+                )}
+              </div>
+              <div className="admin-author-banner-controls">
+                <input
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp,image/gif"
+                  onChange={handleBannerChange}
+                />
+                {bannerFileName ? (
+                  <span className="admin-banner-filename">
+                    {bannerFileName}
+                  </span>
+                ) : null}
+                <span className="admin-banner-help">
+                  이미지를 선택하면 정사각형(1:1)으로 자릅니다.
+                  1024×1024px로 저장됩니다.
+                </span>
+              </div>
+            </div>
+          </div>
+
           <label className="admin-field">
             <span>제목</span>
             <input
@@ -437,6 +592,16 @@ export default function AdminProfile() {
             </footer>
           </div>
         </div>
+      ) : null}
+
+      {cropRequest ? (
+        <ImageCropModal
+          imageSrc={cropRequest.src}
+          fileName={cropRequest.fileName}
+          stages={[PROFILE_BANNER_CROP_STAGE]}
+          onClose={closeCropModal}
+          onComplete={handleCropComplete}
+        />
       ) : null}
     </div>
   );

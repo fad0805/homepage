@@ -7,8 +7,10 @@ export interface AuthorProfile {
   id?: number;
   user_id?: number;
   owner?: string | null;
+  nickname?: string | null;
   title: string;
   subtitle?: string | null;
+  banner_url?: string | null;
   profile: string;
 }
 
@@ -17,5 +19,3 @@ export interface AuthorProfile {
  * both the Tiptap editor and the public page can render them consistently.
  */
 export const profileToHtml = toRichTextHtml;
-
-
