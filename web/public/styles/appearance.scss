@@ -137,11 +137,12 @@ html:has(#container.site-layout--side) {
 }
 
 .site-drawer {
+  --navbar-active-color: #{$white};
   width: min(20rem, 85vw);
   height: 100%;
   padding: 1.2rem;
   overflow-y: auto;
-  background: var(--subtheme);
+  background: var(--title-color);
   box-shadow: -0.8rem 0 2rem rgba(0, 0, 0, 0.18);
 }
 
@@ -150,7 +151,7 @@ html:has(#container.site-layout--side) {
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
-  color: var(--title-color);
+  color: $white;
   font-weight: bold;
 
   button {
@@ -174,16 +175,17 @@ html:has(#container.site-layout--side) {
   width: 100%;
   padding: 0.35rem 0.45rem;
   border-radius: 0.4rem;
+  color: $white;
   font-size: 1rem;
 
+  &:hover {
+    background: rgba(255, 255, 255, 0.08);
+  }
+
   &.active {
-    background: rgba(0, 0, 0, 0.07);
+    background: rgba(255, 255, 255, 0.14);
     font-size: 1.05rem;
   }
-}
-
-[data-theme='dark'] .site-drawer #navbar a.active {
-  background: rgba(255, 255, 255, 0.08);
 }
 
 /* Sidebar layout */

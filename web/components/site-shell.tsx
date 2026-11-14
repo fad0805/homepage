@@ -112,6 +112,7 @@ export function SiteShell({
             type="button"
             className="site-menu-toggle"
             onClick={() => setDrawerOpen(true)}
+            onMouseEnter={() => setDrawerOpen(true)}
             aria-label="메뉴 열기"
             aria-expanded={drawerOpen}
           >
