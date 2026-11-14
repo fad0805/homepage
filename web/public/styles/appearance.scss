@@ -285,7 +285,7 @@ body:not(:has(.admin-layout)) #container.site-layout--side * {
   box-sizing: border-box;
   margin-bottom: 3rem;
   padding-right: 1rem;
-  padding-left: calc(var(--bottom-left-gutter) - 3rem);
+  padding-left: var(--bottom-left-gutter);
 }
 
 #container.site-layout--collapsible > header #title,
