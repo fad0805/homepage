@@ -19,6 +19,9 @@ interface GalleryResource {
   type: ResourceType;
   id: number;
   title: string;
+  owner_id: number | null;
+  owner_name: string | null;
+  grant_id: number | null;
 }
 
 interface GalleryInvite {
@@ -100,12 +103,18 @@ export default function AdminGalleryPage() {
     void refresh();
   }, [refresh]);
 
-  async function revokeInvite(id: number) {
-    if (!window.confirm("이 비밀번호를 폐기할까요?")) return;
+  async function revokeInvite(invite: GalleryInvite) {
+    const message =
+      invite.status === "used"
+        ? "이미 사용된 발급 기록을 폐기할까요? 이미 열린 열람 권한은 유지됩니다."
+        : "이 비밀번호를 폐기할까요?";
+    if (!window.confirm(message)) return;
     setBusy(true);
     setError(null);
     try {
-      await apiFetch(`/api/gallery/invites/${id}`, { method: "DELETE" });
+      await apiFetch(`/api/gallery/invites/${invite.id}`, {
+        method: "DELETE",
+      });
       await refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "폐기하지 못했습니다.");
@@ -114,12 +123,17 @@ export default function AdminGalleryPage() {
     }
   }
 
-  async function revokeSession(id: number) {
+  async function revokeSessionGrant(
+    session: GallerySession,
+    resource: GalleryResource,
+  ) {
+    if (resource.grant_id === null) return;
+    const label = resourceLabel(resource);
     if (
       !window.confirm(
         isAdmin
-          ? "이 브라우저의 열람 권한을 폐기할까요?"
-          : "내 콘텐츠에 대한 이 브라우저의 열람 권한을 폐기할까요?",
+          ? `${label}의 열람 권한을 폐기할까요?`
+          : `내 콘텐츠 ${label}의 열람 권한을 폐기할까요?`,
       )
     ) {
       return;
@@ -127,7 +141,10 @@ export default function AdminGalleryPage() {
     setBusy(true);
     setError(null);
     try {
-      await apiFetch(`/api/gallery/sessions/${id}`, { method: "DELETE" });
+      await apiFetch(
+        `/api/gallery/sessions/${session.id}/grants/${resource.grant_id}`,
+        { method: "DELETE" },
+      );
       await refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "폐기하지 못했습니다.");
@@ -145,6 +162,9 @@ export default function AdminGalleryPage() {
     (currentInvitePage - 1) * INVITES_PER_PAGE,
     currentInvitePage * INVITES_PER_PAGE,
   );
+  const sessionRows = sessions.flatMap((session) =>
+    session.resources.map((resource) => ({ session, resource })),
+  );
 
   return (
     <div className="gallery-admin">
@@ -152,10 +172,12 @@ export default function AdminGalleryPage() {
         <h2>열람 관리</h2>
         <p>
           {isAdmin
-            ? "발급 기록과 열람 중인 브라우저를 확인하고 폐기할 수 있습니다."
+            ? "모든 사용자의 발급 기록과 열람 중인 브라우저를 확인하고 폐기할 수 있습니다."
             : "내가 발급한 기록과 내 콘텐츠를 열람 중인 브라우저를 확인할 수 있습니다."}
           {" "}새 비밀번호는 각 삽화·게시물·책 관리 화면에서 발급합니다.
-          폐기된 기록은 30일 뒤 자동으로 삭제됩니다.
+          사용된 발급 기록을 폐기해도 이미 열린 열람 권한은 유지되며,
+          열람 중인 브라우저에서 데이터별로 폐기할 수 있습니다. 폐기된
+          기록은 30일 뒤 자동으로 삭제됩니다.
         </p>
       </header>
 
@@ -174,6 +196,7 @@ export default function AdminGalleryPage() {
                 <tr>
                   <th>상태</th>
                   <th>대상</th>
+                  <th>작성자</th>
                   <th>메모</th>
                   <th>발급</th>
                   <th>만료</th>
@@ -194,15 +217,16 @@ export default function AdminGalleryPage() {
                     <td className="gallery-wrap-text">
                       {resourceLabel(invite.resource)}
                     </td>
+                    <td>{invite.resource?.owner_name || "-"}</td>
                     <td>{invite.note || "-"}</td>
                     <td>{formatDateTime(invite.created_at)}</td>
                     <td>{formatDateTime(invite.expires_at)}</td>
                     <td>{formatDateTime(invite.used_at)}</td>
                     <td>
-                      {invite.status === "unused" ? (
+                      {invite.status !== "revoked" ? (
                         <button
                           type="button"
-                          onClick={() => revokeInvite(invite.id)}
+                          onClick={() => revokeInvite(invite)}
                           disabled={busy}
                         >
                           폐기
@@ -226,7 +250,7 @@ export default function AdminGalleryPage() {
         <h3>열람 중인 브라우저</h3>
         {loading ? (
           <p>불러오는 중...</p>
-        ) : sessions.length === 0 ? (
+        ) : sessionRows.length === 0 ? (
           <p>열람 중인 브라우저가 없습니다.</p>
         ) : (
           <div className="gallery-table-wrap">
@@ -235,6 +259,7 @@ export default function AdminGalleryPage() {
                 <tr>
                   <th>상태</th>
                   <th>열람 범위</th>
+                  <th>작성자</th>
                   <th>열람 시작</th>
                   <th>만료</th>
                   <th>마지막 접속</th>
@@ -244,8 +269,12 @@ export default function AdminGalleryPage() {
                 </tr>
               </thead>
               <tbody>
-                {sessions.map((session) => (
-                  <tr key={session.id}>
+                {sessionRows.map(({ session, resource }) => (
+                  <tr
+                    key={`${session.id}-${
+                      resource.grant_id ?? `${resource.type}-${resource.id}`
+                    }`}
+                  >
                     <td>
                       <span
                         className={`gallery-status gallery-status--${session.status}`}
@@ -254,11 +283,10 @@ export default function AdminGalleryPage() {
                       </span>
                     </td>
                     <td className="gallery-wrap-text">
-                      {session.resources.length === 0
-                        ? "-"
-                        : session.resources
-                            .map((resource) => resourceLabel(resource))
-                            .join(", ")}
+                      {resourceLabel(resource)}
+                    </td>
+                    <td className="gallery-wrap-text">
+                      {resource.owner_name || "-"}
                     </td>
                     <td>{formatDateTime(session.created_at)}</td>
                     <td>{formatDateTime(session.expires_at)}</td>
@@ -268,10 +296,15 @@ export default function AdminGalleryPage() {
                       {session.user_agent || "-"}
                     </td>
                     <td>
-                      {session.status === "active" ? (
+                      {resource.grant_id !== null &&
+                      (isAdmin
+                        ? session.status !== "revoked"
+                        : session.status === "active") ? (
                         <button
                           type="button"
-                          onClick={() => revokeSession(session.id)}
+                          onClick={() =>
+                            void revokeSessionGrant(session, resource)
+                          }
                           disabled={busy}
                         >
                           폐기

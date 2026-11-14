@@ -1214,3 +1214,12 @@
   }
 
 }
+
+#container.site-layout--collapsible .admin-illustrations-grid {
+  grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
+  gap: 0.65rem;
+}
+
+#container.site-layout--collapsible .admin-illustration-card.is-compact > img {
+  height: 5.5rem;
+}
