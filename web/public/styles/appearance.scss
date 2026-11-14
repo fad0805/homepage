@@ -497,6 +497,11 @@ body:not(:has(.admin-layout))
   border-start-end-radius: 1rem;
 }
 
+body:not(:has(.admin-layout)) #container.site-layout--side .memo-pinned-section {
+  border-top-left-radius: 1rem;
+  border-top-right-radius: 1rem;
+}
+
 #container.site-layout--side .admin-layout,
 #container.site-layout--side .admin-layout * {
   border-radius: 0;
