@@ -22,7 +22,7 @@
   --admin-appearance-card-body-bg: #c1dcc6;
   --admin-card-bg: #{color.adjust($dark-bg-sub, $lightness: 4%)};
   --admin-border: #{color.adjust($dark-bg-sub, $lightness: 12%)};
-  --admin-muted: #{color.adjust($dark-text, $lightness: -28%)};
+  --admin-muted: rgba(166, 165, 145, 0.9);
   --admin-primary: #5e7b5a;
   --admin-primary-ink: #{color.adjust($dark-bg, $lightness: 5%)};
 }
