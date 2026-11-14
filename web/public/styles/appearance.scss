@@ -252,13 +252,18 @@ body:not(:has(.admin-layout)) #container.site-layout--side * {
   font-size: 1rem;
 
   &.active {
-    background: rgba(0, 0, 0, 0.07);
+    background: transparent;
     font-size: 1.05rem;
-  }
-}
 
-[data-theme='dark'] .site-sidebar #navbar a.active {
-  background: rgba(255, 255, 255, 0.08);
+    span {
+      color: var(--home-highlight, var(--title-color));
+      background: linear-gradient(
+        180deg,
+        transparent 62%,
+        var(--empty-banner-bg) 62%
+      );
+    }
+  }
 }
 
 /* Bottom sticky menu */
