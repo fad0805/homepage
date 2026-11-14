@@ -89,6 +89,9 @@ export default function AdminAppearance() {
     }
   };
 
+  const selected =
+    LAYOUT_OPTIONS.find((option) => option.key === layoutKey) ??
+    LAYOUT_OPTIONS[0];
   const saved =
     LAYOUT_OPTIONS.find((option) => option.key === savedLayoutKey) ??
     LAYOUT_OPTIONS[0];
@@ -172,10 +175,10 @@ export default function AdminAppearance() {
           <section className="admin-appearance-preview-section">
             <header>
               <h2>미리보기</h2>
-              <span>{saved.label}</span>
+              <span>{selected.label}</span>
             </header>
             <div
-              className={`admin-appearance-preview is-${savedLayoutKey}`}
+              className={`admin-appearance-preview is-${layoutKey}`}
             >
               <div className="admin-appearance-preview__shell">
                 <aside className="admin-appearance-preview__sidebar">
