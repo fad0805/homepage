@@ -9,6 +9,7 @@ import {
   type ReactNode,
 } from "react";
 
+import { AdminNavbar } from "@/components/admin-navbar";
 import { FooterShortcut } from "@/components/footer-shortcut";
 import { Navbar } from "@/components/navbar";
 import type {
@@ -46,6 +47,7 @@ export function SiteShell({
   const isSide = layoutKey === "side";
   const isBottom = layoutKey === "collapsible";
   const isDrawer = layoutKey === "drawer";
+  const isAdminRoute = pathname.startsWith("/admin");
   const sideRight = isSide && sidePosition === "right";
 
   const closeDrawer = () => {
@@ -185,7 +187,21 @@ export function SiteShell({
                 ×
               </button>
             </div>
-            <Navbar />
+            {isAdminRoute ? (
+              <>
+                <div className="site-drawer__section-label">관리자</div>
+                <AdminNavbar
+                  id="drawer-admin-navbar"
+                  showGroupLabels
+                />
+                <details className="site-drawer__site-menu">
+                  <summary>사이트 메뉴</summary>
+                  <Navbar />
+                </details>
+              </>
+            ) : (
+              <Navbar />
+            )}
           </div>
         </div>
       ) : null}
