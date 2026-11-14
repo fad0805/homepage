@@ -203,7 +203,7 @@ html:has(#container.site-layout--side) {
 }
 
 [data-theme='dark'] .site-drawer {
-  background: color.scale($dark-bg-sub, $lightness: -20%);
+  background: var(--subtheme);
 }
 
 .site-drawer-backdrop.is-open .site-drawer {
