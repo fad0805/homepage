@@ -17,8 +17,6 @@ interface SiteShellProps {
   children: ReactNode;
 }
 
-const COLLAPSE_STORAGE_KEY = "site-menu-collapsed";
-
 function SiteTitle() {
   return (
     <div id="title">
@@ -33,42 +31,18 @@ function SiteTitle() {
 export function SiteShell({ layoutKey, children }: SiteShellProps) {
   const pathname = usePathname();
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const [collapsed, setCollapsed] = useState(false);
 
-  const isSide =
-    layoutKey === "side" || layoutKey === "collapsible";
-  const isCollapsible = layoutKey === "collapsible";
+  const isSide = layoutKey === "side";
+  const isBottom = layoutKey === "collapsible";
   const isDrawer = layoutKey === "drawer";
 
   useEffect(() => {
     setDrawerOpen(false);
   }, [pathname]);
 
-  useEffect(() => {
-    if (!isCollapsible) {
-      setCollapsed(false);
-      return;
-    }
-    setCollapsed(
-      window.localStorage.getItem(COLLAPSE_STORAGE_KEY) === "true",
-    );
-  }, [isCollapsible]);
-
-  const toggleCollapsed = () => {
-    setCollapsed((current) => {
-      const next = !current;
-      window.localStorage.setItem(
-        COLLAPSE_STORAGE_KEY,
-        String(next),
-      );
-      return next;
-    });
-  };
-
   const classes = [
     "site-layout",
     `site-layout--${layoutKey}`,
-    collapsed ? "is-menu-collapsed" : "",
     drawerOpen ? "is-menu-open" : "",
   ]
     .filter(Boolean)
@@ -80,17 +54,6 @@ export function SiteShell({ layoutKey, children }: SiteShellProps) {
         <aside className="site-sidebar">
           <SiteTitle />
           <Navbar />
-          {isCollapsible ? (
-            <button
-              type="button"
-              className="site-menu-collapse"
-              onClick={toggleCollapsed}
-              aria-label={collapsed ? "메뉴 펼치기" : "메뉴 접기"}
-              aria-expanded={!collapsed}
-            >
-              {collapsed ? "»" : "«"}
-            </button>
-          ) : null}
         </aside>
 
         <div className="site-main-column">
@@ -100,6 +63,27 @@ export function SiteShell({ layoutKey, children }: SiteShellProps) {
           <footer>
             <FooterShortcut />
           </footer>
+        </div>
+      </div>
+    );
+  }
+
+  if (isBottom) {
+    return (
+      <div id="container" className={classes}>
+        <header className="site-bottom-header">
+          <SiteTitle />
+        </header>
+
+        <main>
+          <div id="content">{children}</div>
+        </main>
+        <footer>
+          <FooterShortcut />
+        </footer>
+
+        <div className="site-bottom-bar">
+          <Navbar />
         </div>
       </div>
     );

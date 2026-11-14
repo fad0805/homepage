@@ -28,9 +28,9 @@ export const LAYOUT_OPTIONS: LayoutOption[] = [
   },
   {
     key: "collapsible",
-    label: "접이식 사이드",
-    englishLabel: "Collapsible Sidebar",
-    description: "사이드 메뉴를 접거나 펼칠 수 있고 상태를 기억합니다.",
+    label: "하단 메뉴",
+    englishLabel: "Bottom Sticky Menu",
+    description: "화면 하단에 고정된 메뉴 바를 표시합니다.",
   },
   {
     key: "drawer",

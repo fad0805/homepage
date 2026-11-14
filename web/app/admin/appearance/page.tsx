@@ -140,6 +140,11 @@ export default function AdminAppearance() {
                   }`}
                   onClick={() => setLayoutKey(option.key)}
                 >
+                  {isSelected ? (
+                    <span className="admin-appearance-card__selected">
+                      ✓ 선택됨
+                    </span>
+                  ) : null}
                   <span
                     className={`admin-appearance-card__preview is-${option.key}`}
                   >
@@ -239,6 +244,13 @@ export default function AdminAppearance() {
                       </article>
                     </section>
                   </div>
+
+                  <nav className="admin-appearance-preview__bottom-nav">
+                    <span>작가소개</span>
+                    <span>등장인물</span>
+                    <span>목차</span>
+                    <span>삽화</span>
+                  </nav>
                 </div>
               </div>
             </div>
