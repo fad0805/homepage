@@ -23,6 +23,9 @@ interface SiteShellProps {
   children: ReactNode;
 }
 
+const RIGHT_HOVER_OFFSET = 40;
+const RIGHT_HOVER_MIN_ZONE = 24;
+
 function SiteTitle() {
   return (
     <div id="title">
@@ -71,8 +74,11 @@ export function SiteShell({
       const topbar = topbarRef.current;
       if (!topbar) return;
 
-      const edge = topbar.getBoundingClientRect().right;
-      if (event.clientX < edge) {
+      const triggerStart = Math.min(
+        topbar.getBoundingClientRect().right + RIGHT_HOVER_OFFSET,
+        window.innerWidth - RIGHT_HOVER_MIN_ZONE,
+      );
+      if (event.clientX < triggerStart) {
         rightHoverArmedRef.current = true;
         return;
       }
@@ -96,8 +102,12 @@ export function SiteShell({
       }
 
       const topbar = topbarRef.current;
-      if (topbar && event.clientX >= topbar.getBoundingClientRect().right) {
-        return;
+      if (topbar) {
+        const triggerStart = Math.min(
+          topbar.getBoundingClientRect().right + RIGHT_HOVER_OFFSET,
+          window.innerWidth - RIGHT_HOVER_MIN_ZONE,
+        );
+        if (event.clientX >= triggerStart) return;
       }
 
       setDrawerOpen(false);
