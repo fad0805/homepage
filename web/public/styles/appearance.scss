@@ -565,6 +565,10 @@ body:not(:has(.admin-layout)) #container.site-layout--side * {
     margin-bottom: 0.5rem;
     padding-right: 0.5rem;
   }
+
+  #container.site-layout--collapsible > header #title {
+    padding-left: 0.75rem;
+  }
 }
 
 #container.site-layout--collapsible #author {
