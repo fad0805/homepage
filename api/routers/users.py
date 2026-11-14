@@ -36,10 +36,12 @@ from crud.users import (
     get_user_session,
     get_user_session_by_token,
     record_signin_history,
+    update_author_layout,
     update_author_settings,
 )
 from db.session import get_db
 from models.users import User
+from schemas.appearance import AppearanceRead, AppearanceUpdate
 from schemas.users import (
     AccountRead,
     AccountUpdate,
@@ -407,3 +409,28 @@ def update_my_password(
         )
 
     return {"success": True}
+
+
+@router.get("/me/appearance", response_model=AppearanceRead)
+def get_my_appearance(
+    db: Session = Depends(get_db),
+    user=Depends(require_auth),
+):
+    """Return the signed-in author's appearance settings."""
+    settings = ensure_author_settings(db, user)
+    return {"layout_key": settings.layout_key}
+
+
+@router.put("/me/appearance", response_model=AppearanceRead)
+def update_my_appearance(
+    payload: AppearanceUpdate,
+    db: Session = Depends(get_db),
+    user=Depends(require_auth),
+):
+    """Update the signed-in author's site layout."""
+    settings = update_author_layout(
+        db,
+        user,
+        layout_key=payload.layout_key,
+    )
+    return {"layout_key": settings.layout_key}

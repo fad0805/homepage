@@ -47,6 +47,7 @@ const navigation: Navigation = {
         { href: "/admin/gallery", label: "열람 관리" },
         { href: "/admin/connections", label: "연결 관리" },
         { href: "/admin/account", label: "계정 관리" },
+        { href: "/admin/appearance", label: "외관 관리" },
         { href: "/admin/export", label: "내보내기" },
       ],
     ],

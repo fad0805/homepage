@@ -37,6 +37,12 @@ class AuthorSettings(Base):
     )
     slug = Column(String(64), unique=True, index=True, nullable=False)
     nickname = Column(String(80), nullable=False)
+    layout_key = Column(
+        String(32),
+        nullable=False,
+        default="editorial",
+        server_default="editorial",
+    )
     created_at = Column(DateTime, default=func.now(), nullable=False)
     updated_at = Column(
         DateTime,

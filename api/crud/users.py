@@ -149,6 +149,20 @@ def update_author_settings(
     return settings
 
 
+def update_author_layout(
+    db: Session,
+    user: User,
+    *,
+    layout_key: str,
+) -> AuthorSettings:
+    """Update the signed-in author's layout."""
+    settings = ensure_author_settings(db, user)
+    settings.layout_key = layout_key
+    db.commit()
+    db.refresh(settings)
+    return settings
+
+
 def create_user_session(
     db: Session,
     user_id: int,
