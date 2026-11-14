@@ -65,6 +65,15 @@ html:has(#container.site-layout--side) {
   display: none;
 }
 
+#container.site-layout--drawer > header {
+  align-items: flex-start;
+}
+
+#container.site-layout--drawer > header .site-menu-toggle {
+  justify-content: flex-start;
+  margin-top: 0.35rem;
+}
+
 @media (max-width: $breakpoint-md) {
   #container.site-layout--drawer > header {
     margin-top: 3rem;
