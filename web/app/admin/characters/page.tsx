@@ -544,6 +544,12 @@ export default function AdminCharacters() {
     Set<number>
   >(() => new Set());
   const [locationsReordered, setLocationsReordered] = useState(false);
+  const [siteLayout, setSiteLayout] = useState<string | null>(null);
+  const isBottomLayout = siteLayout === "collapsible";
+
+  useEffect(() => {
+    setSiteLayout(document.documentElement.dataset.appearance ?? null);
+  }, []);
 
   const noticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const objectUrls = useRef<Set<string>>(new Set());
@@ -1224,7 +1230,9 @@ export default function AdminCharacters() {
     const bodyName = String(form.get("body_name") ?? "").trim();
     const bodyCompany = String(form.get("body_company") ?? "").trim();
     const bodySkinTone = String(form.get("body_skin_tone") ?? "").trim();
-    const rawLayout = String(form.get("layout") ?? "auto");
+    const rawLayout = isBottomLayout
+      ? editingCharacter?.layout ?? "auto"
+      : String(form.get("layout") ?? "auto");
     const layout: CharacterLayout =
       rawLayout === "left" || rawLayout === "right" || rawLayout === "center"
         ? rawLayout
@@ -1696,13 +1704,20 @@ export default function AdminCharacters() {
               <span>배치</span>
               <select
                 name="layout"
+                className="admin-character-layout-select"
                 defaultValue={editingCharacter?.layout ?? "auto"}
+                disabled={isBottomLayout}
               >
                 <option value="auto">자동 (기본)</option>
                 <option value="left">왼쪽</option>
                 <option value="center">가운데</option>
                 <option value="right">오른쪽</option>
               </select>
+              {isBottomLayout ? (
+                <p className="admin-character-layout-hint">
+                  하단 메뉴 레이아웃에서는 배치를 변경할 수 없습니다.
+                </p>
+              ) : null}
             </label>
 
             <div className="admin-field admin-relationships-field">

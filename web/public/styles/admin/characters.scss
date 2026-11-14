@@ -352,6 +352,33 @@
   }
 }
 
+.admin-character-layout-hint {
+  margin: 0.2rem 0 0;
+  color: var(--admin-muted);
+  font-size: 0.68rem;
+  line-height: 1.5;
+}
+
+.admin-character-layout-select:disabled {
+  background: color-mix(
+    in srgb,
+    var(--admin-muted) 12%,
+    transparent
+  );
+  color: var(--admin-muted);
+  opacity: 1;
+  cursor: not-allowed;
+}
+
+#container.site-layout--collapsible .admin-characters-grid {
+  grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
+  gap: 0.65rem;
+}
+
+#container.site-layout--collapsible .admin-character-thumb {
+  height: 5.5rem;
+}
+
 @media (width < 600px) {
   #admin-characters {
     padding: 1rem 0.75rem;

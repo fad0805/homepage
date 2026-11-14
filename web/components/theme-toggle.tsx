@@ -44,7 +44,13 @@ function MoonIcon() {
   );
 }
 
-export function ThemeToggle() {
+interface ThemeToggleProps {
+  variant?: "floating" | "drawer";
+}
+
+export function ThemeToggle({
+  variant = "floating",
+}: ThemeToggleProps) {
   const { theme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
 
@@ -61,7 +67,9 @@ export function ThemeToggle() {
 
   return (
     <button
-      className="theme-toggle"
+      className={`theme-toggle${
+        variant === "drawer" ? " theme-toggle--drawer" : ""
+      }`}
       type="button"
       title={label}
       aria-label={label}

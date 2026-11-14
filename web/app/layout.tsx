@@ -1,13 +1,21 @@
 import type { Metadata, Viewport } from "next";
-import Link from "next/link";
+
+import {
+  DEFAULT_LAYOUT,
+  DEFAULT_SIDE_POSITION,
+  type LayoutKey,
+  type SidePosition,
+} from "@/config/appearance";
+import { serverApiFetch } from "@/lib/server-api";
+import { getCurrentUser } from "@/lib/server-auth";
 
 import "@/public/styles/globals.scss";
+import "@/public/styles/appearance.scss";
 
 import { AuthProvider } from "@/components/auth-provider";
-import { FooterShortcut } from "@/components/footer-shortcut";
 import { InstallPrompt } from "@/components/install-prompt";
-import { Navbar } from "@/components/navbar";
 import { ServiceWorkerRegister } from "@/components/service-worker-register";
+import { SiteShell } from "@/components/site-shell";
 import { ThemeProvider } from "@/components/theme-provider";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Shortcuts } from "@/components/shortcuts";
@@ -54,37 +62,49 @@ export const viewport: Viewport = {
   themeColor: "#bedbbb",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const currentUser = await getCurrentUser();
+  let layoutKey: LayoutKey = DEFAULT_LAYOUT;
+  let sidePosition: SidePosition = DEFAULT_SIDE_POSITION;
+
+  try {
+    const appearance = await serverApiFetch<{
+      layout_key: LayoutKey;
+      side_position: SidePosition;
+    }>(
+      currentUser ? "/users/me/appearance" : "/appearance",
+      {
+        auth: Boolean(currentUser),
+        tags: ["appearance"],
+      },
+    );
+    layoutKey = appearance.layout_key;
+    sidePosition = appearance.side_position ?? DEFAULT_SIDE_POSITION;
+  } catch (error) {
+    console.error("Failed to load the site appearance.", error);
+  }
+
   return (
-    <html lang="ko" suppressHydrationWarning>
+    <html
+      lang="ko"
+      data-appearance={layoutKey}
+      suppressHydrationWarning
+    >
       <body>
         <ThemeProvider>
           <AuthProvider>
             <VisitTracker />
             <Shortcuts>
-              <div id="container">
-                <header>
-                  <div id="title">
-                    <Link href="/">
-                      <span className="title__text">어디에도 없는 섬</span>
-                      <span className="title__caption">Missing Island</span>
-                    </Link>
-                  </div>
-                  <Navbar />
-                </header>
-                <main>
-                  <div id="content">
-                    {children}
-                  </div>
-                </main>
-                <footer>
-                  <FooterShortcut />
-                </footer>
-              </div>
+              <SiteShell
+                layoutKey={layoutKey}
+                sidePosition={sidePosition}
+              >
+                {children}
+              </SiteShell>
             </Shortcuts>
             <ThemeToggle />
             <InstallPrompt />
