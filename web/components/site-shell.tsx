@@ -50,6 +50,7 @@ export function SiteShell({
   const preview = useAppearancePreview();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [drawerPinned, setDrawerPinned] = useState(false);
+  const [sideMenuOpen, setSideMenuOpen] = useState(false);
   const drawerRef = useRef<HTMLDivElement>(null);
   const topbarRef = useRef<HTMLElement>(null);
   const rightHoverArmedRef = useRef(true);
@@ -71,8 +72,13 @@ export function SiteShell({
   useEffect(() => {
     setDrawerOpen(false);
     setDrawerPinned(false);
+    setSideMenuOpen(false);
     rightHoverArmedRef.current = false;
   }, [pathname]);
+
+  useEffect(() => {
+    if (!isSide) setSideMenuOpen(false);
+  }, [isSide]);
 
   useEffect(() => {
     document.documentElement.dataset.appearance = activeLayoutKey;
@@ -146,6 +152,7 @@ export function SiteShell({
     `site-layout--${activeLayoutKey}`,
     sideRight ? "is-side-right" : "",
     drawerOpen ? "is-menu-open" : "",
+    isSide && sideMenuOpen ? "is-side-menu-open" : "",
   ]
     .filter(Boolean)
     .join(" ");
@@ -154,7 +161,21 @@ export function SiteShell({
     return (
       <div id="container" className={classes}>
         <aside className="site-sidebar">
-          <SiteTitle />
+          <div className="site-sidebar__header">
+            <SiteTitle />
+            <button
+              type="button"
+              className="site-menu-toggle site-sidebar-menu-toggle"
+              onClick={() => setSideMenuOpen((open) => !open)}
+              aria-label={sideMenuOpen ? "메뉴 닫기" : "메뉴 열기"}
+              aria-expanded={sideMenuOpen}
+              aria-controls="navbar"
+            >
+              <span />
+              <span />
+              <span />
+            </button>
+          </div>
           <Navbar />
         </aside>
 
