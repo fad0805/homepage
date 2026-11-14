@@ -1,14 +1,18 @@
-import {
-  profileToHtml,
-  type AuthorProfile,
-} from "@/config/author";
+import Link from "next/link";
+
+import { AuthorProfileView } from "@/components/author-profile-view";
+import type { AuthorProfile } from "@/config/author";
 import { serverApiFetch } from "@/lib/server-api";
 
 import "@/public/styles/author.scss";
 
 export const dynamic = "force-dynamic";
 
-export default async function Author() {
+interface AuthorPageProps {
+  searchParams: Promise<{ profile?: string | string[] }>;
+}
+
+export default async function Author({ searchParams }: AuthorPageProps) {
   let profiles: AuthorProfile[] = [];
   let failed = false;
 
@@ -37,32 +41,69 @@ export default async function Author() {
     );
   }
 
+  const params = await searchParams;
+  const rawProfileId = Array.isArray(params.profile)
+    ? params.profile[0]
+    : params.profile;
+  const selectedProfileId = rawProfileId
+    ? Number.parseInt(rawProfileId, 10)
+    : null;
+  const selectedProfile =
+    selectedProfileId !== null && Number.isInteger(selectedProfileId)
+      ? profiles.find((profile) => profile.id === selectedProfileId) ?? null
+      : null;
+
+  if (rawProfileId) {
+    return (
+      <div id="author">
+        <div className="author-detail">
+          <Link className="author-back" href="/author">
+            <span aria-hidden="true">←</span> 작가 목록
+          </Link>
+          {selectedProfile ? (
+            <AuthorProfileView profile={selectedProfile} />
+          ) : (
+            <p className="author-state">작가 소개를 찾을 수 없습니다.</p>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div id="author">
-      {profiles.map((profile, index) => {
-        const profileHtml = profileToHtml(profile.profile);
-        const subtitle = profile.subtitle?.trim() ?? "";
+      <div className="author-directory">
+        {profiles.map((profile, index) => {
+          const nickname =
+            profile.nickname?.trim() ||
+            profile.owner?.trim() ||
+            profile.title?.trim() ||
+            "작가";
+          const href =
+            profile.id != null ? `/author?profile=${profile.id}` : null;
+          const card = (
+            <span className="author-card__name">{nickname}</span>
+          );
 
-        return (
-          <article
-            className="author-profile"
-            key={profile.id ?? `${profile.title}-${index}`}
-          >
-            <section className="author-hero">
-              <p className="author-eyebrow">ABOUT THE AUTHOR</p>
-              <h1 className="author-title">{profile.title}</h1>
-              {subtitle ? <p className="author-tagline">{subtitle}</p> : null}
-            </section>
-
-            <section className="author-body">
-              <div
-                className="author-copy"
-                dangerouslySetInnerHTML={{ __html: profileHtml }}
-              />
-            </section>
-          </article>
-        );
-      })}
+          return href ? (
+            <Link
+              className="author-card"
+              href={href}
+              key={profile.id}
+              aria-label={`${nickname} 작가 소개 보기`}
+            >
+              {card}
+            </Link>
+          ) : (
+            <article
+              className="author-card"
+              key={`${nickname}-${index}`}
+            >
+              {card}
+            </article>
+          );
+        })}
+      </div>
     </div>
   );
 }

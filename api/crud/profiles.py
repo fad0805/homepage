@@ -1,15 +1,25 @@
 from fastapi import HTTPException, status
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from models.profiles import Profile
+from models.users import User
 from schemas.profiles import ProfileCreate, ProfileUpdate
 
 
 def _serialize_profile(profile: Profile) -> dict:
+    user = profile.user
+    author_settings = user.author_settings if user else None
     return {
         "id": profile.id,
         "user_id": profile.user_id,
-        "owner": profile.user.username if profile.user else None,
+        "owner": user.username if user else None,
+        "nickname": (
+            author_settings.nickname
+            if author_settings
+            else user.username
+            if user
+            else None
+        ),
         "title": profile.title,
         "subtitle": profile.subtitle,
         "profile": profile.profile,
@@ -26,7 +36,9 @@ def get_all_profiles(
     """
     Get all profiles, one author's profiles, or every other author's profiles.
     """
-    query = db.query(Profile)
+    query = db.query(Profile).options(
+        joinedload(Profile.user).joinedload(User.author_settings)
+    )
     if user_id is not None:
         query = query.filter(Profile.user_id == user_id)
     if exclude_user_id is not None:
@@ -40,7 +52,12 @@ def get_profile(db: Session, profile_id: int):
     Get profile from database.
     """
     profile = (
-        db.query(Profile).filter(Profile.id == profile_id).first()
+        db.query(Profile)
+        .options(
+            joinedload(Profile.user).joinedload(User.author_settings)
+        )
+        .filter(Profile.id == profile_id)
+        .first()
     )
     if not profile:
         raise HTTPException(
@@ -73,6 +90,9 @@ def update_profile(
     """
     profile = (
         db.query(Profile)
+        .options(
+            joinedload(Profile.user).joinedload(User.author_settings)
+        )
         .filter(
             Profile.id == profile_id,
             Profile.user_id == user_id,

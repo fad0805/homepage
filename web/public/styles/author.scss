@@ -15,6 +15,79 @@
   opacity: 0.68;
 }
 
+.author-directory {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+  padding: 0 1.5rem;
+}
+
+.author-card {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  justify-content: flex-end;
+  aspect-ratio: 3 / 1;
+  padding: 1.1rem 1.2rem;
+  overflow: hidden;
+  box-sizing: border-box;
+  border-radius: 0.7rem;
+  background: var(--empty-banner-bg);
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.15);
+  color: var(--title-color);
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease,
+    filter 0.2s ease;
+
+  &:hover,
+  &:focus-visible {
+    box-shadow: 0 0.6rem 1.2rem rgba(0, 0, 0, 0.16);
+    filter: brightness(1.04);
+    transform: translateY(-2px);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--title-color);
+    outline-offset: 3px;
+  }
+}
+
+.author-card__name {
+  position: relative;
+  z-index: 1;
+  color: var(--title-color);
+  font-family: Eulyoo1945-SemiBold, Arial, Helvetica, sans-serif;
+  font-size: clamp(1.15rem, 2.3vw, 1.4rem);
+  line-height: 1.3;
+  letter-spacing: -0.01em;
+  text-align: right;
+  word-break: keep-all;
+}
+
+.author-detail {
+  display: flex;
+  flex-direction: column;
+}
+
+.author-back {
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
+  gap: 0.35rem;
+  margin: 0 0 1.2rem 1.5rem;
+  color: var(--home-muted, var(--foreground));
+  font-size: 0.74rem;
+  letter-spacing: 0.04em;
+  opacity: 0.75;
+
+  &:hover,
+  &:focus-visible {
+    color: var(--title-color);
+    opacity: 1;
+  }
+}
+
 .author-profile + .author-profile {
   margin-top: 3.5rem;
   padding-top: 2rem;
@@ -199,6 +272,15 @@
 }
 
 [data-theme='dark'] {
+  .author-card {
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.35);
+
+    &:hover,
+    &:focus-visible {
+      box-shadow: 0 0.6rem 1.2rem rgba(0, 0, 0, 0.45);
+    }
+  }
+
   .author-copy blockquote {
     background: rgba(255, 255, 255, 0.06);
   }
@@ -215,6 +297,15 @@
 @media (max-width: $breakpoint-md) {
   #author {
     padding: 2rem 1.2rem 5rem;
+  }
+
+  .author-directory {
+    grid-template-columns: 1fr;
+    padding: 0 0.75rem;
+  }
+
+  .author-back {
+    margin-left: 0.75rem;
   }
 
   .author-eyebrow,
