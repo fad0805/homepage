@@ -37,7 +37,7 @@ export const Navbar = () => {
                         router.refresh();
                     }
                 }}
-            >{item.label}</Link>
+            ><span>{item.label}</span></Link>
         )) }
     </nav>;
 };

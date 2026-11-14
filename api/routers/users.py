@@ -1,10 +1,11 @@
 import os
+import re
 
 from contextlib import closing
 from fastapi import APIRouter, Depends, HTTPException, Response, Request
 from fastapi import Form
 import jwt
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from sqlalchemy.exc import SQLAlchemyError
 
 from core.config import ENVIRONMENT, AUTH_COOKIE_MAX_AGE
@@ -22,22 +23,35 @@ from routers.utils import (
     get_optional_user,
     get_session_id_from_payload,
     require_admin,
+    require_auth,
 )
 from crud.users import (
+    change_user_password,
     create_user,
     create_user_session,
     delete_expired_user_sessions,
     delete_user_session,
+    ensure_author_settings,
     get_user,
     get_user_session,
     get_user_session_by_token,
     record_signin_history,
+    update_author_layout,
+    update_author_settings,
 )
 from db.session import get_db
 from models.users import User
-from schemas.users import UserCreate
+from schemas.appearance import AppearanceRead, AppearanceUpdate
+from schemas.users import (
+    AccountRead,
+    AccountUpdate,
+    PasswordUpdate,
+    UserCreate,
+)
 
 router = APIRouter()
+
+SLUG_PATTERN = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 
 # Password guessing is slowed down per client IP. A successful sign-in clears
 # the bucket so a person who mistyped a few times is not punished later.
@@ -84,15 +98,29 @@ def list_users(
     db: Session = Depends(get_db),
     current_user=Depends(require_admin),
 ):
-    """List users for admin selection controls."""
+    """List users with public account details for admin management."""
+    users = (
+        db.query(User)
+        .options(joinedload(User.author_settings))
+        .order_by(User.id)
+        .all()
+    )
     return [
         {
             "id": user.id,
             "username": user.username,
+            "nickname": (
+                user.author_settings.nickname
+                if user.author_settings
+                else user.username
+            ),
+            "slug": user.author_settings.slug if user.author_settings else None,
             "role": user.role,
+            "created_at": user.created_at,
+            "updated_at": user.updated_at,
             "is_self": user.id == current_user.id,
         }
-        for user in db.query(User).order_by(User.id).all()
+        for user in users
     ]
 
 
@@ -274,4 +302,142 @@ def get_current_user_status(
         "success": True,
         "user": user.username,
         "role": user.role,
+    }
+
+
+@router.get("/me/account", response_model=AccountRead)
+def get_my_account(
+    db: Session = Depends(get_db),
+    user=Depends(require_auth),
+):
+    """Return the signed-in author's public account settings."""
+    settings = ensure_author_settings(db, user)
+    return {
+        "username": user.username,
+        "role": user.role,
+        "nickname": settings.nickname,
+        "slug": settings.slug,
+    }
+
+
+@router.put("/me/account", response_model=AccountRead)
+def update_my_account(
+    payload: AccountUpdate,
+    db: Session = Depends(get_db),
+    user=Depends(require_auth),
+):
+    """Update the signed-in author's nickname and public URL slug."""
+    nickname = payload.nickname.strip()
+    slug = payload.slug.strip().lower()
+
+    if not nickname:
+        raise HTTPException(status_code=400, detail="닉네임을 입력해주세요.")
+    if len(nickname) > 80:
+        raise HTTPException(
+            status_code=400,
+            detail="닉네임은 80자 이하로 입력해주세요.",
+        )
+    if not slug:
+        raise HTTPException(
+            status_code=400,
+            detail="URL 표시명을 입력해주세요.",
+        )
+    if len(slug) > 48:
+        raise HTTPException(
+            status_code=400,
+            detail="URL 표시명은 48자 이하로 입력해주세요.",
+        )
+    if not SLUG_PATTERN.fullmatch(slug):
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "URL 표시명은 영문 소문자, 숫자, 하이픈만 사용할 수 "
+                "있습니다."
+            ),
+        )
+
+    try:
+        settings = update_author_settings(
+            db,
+            user,
+            nickname=nickname,
+            slug=slug,
+        )
+    except ValueError:
+        raise HTTPException(
+            status_code=409,
+            detail="이미 사용 중인 URL 표시명입니다.",
+        )
+
+    return {
+        "username": user.username,
+        "role": user.role,
+        "nickname": settings.nickname,
+        "slug": settings.slug,
+    }
+
+
+@router.put("/me/password")
+def update_my_password(
+    payload: PasswordUpdate,
+    db: Session = Depends(get_db),
+    user=Depends(require_auth),
+):
+    """Change the signed-in user's password."""
+    if len(payload.new_password) < 8:
+        raise HTTPException(
+            status_code=400,
+            detail="새 비밀번호는 8자 이상 입력해주세요.",
+        )
+    if len(payload.new_password) > 128:
+        raise HTTPException(
+            status_code=400,
+            detail="새 비밀번호는 128자 이하로 입력해주세요.",
+        )
+
+    try:
+        change_user_password(
+            db,
+            user,
+            payload.current_password,
+            payload.new_password,
+        )
+    except ValueError:
+        raise HTTPException(
+            status_code=400,
+            detail="현재 비밀번호가 올바르지 않습니다.",
+        )
+
+    return {"success": True}
+
+
+@router.get("/me/appearance", response_model=AppearanceRead)
+def get_my_appearance(
+    db: Session = Depends(get_db),
+    user=Depends(require_auth),
+):
+    """Return the signed-in author's appearance settings."""
+    settings = ensure_author_settings(db, user)
+    return {
+        "layout_key": settings.layout_key,
+        "side_position": settings.side_position,
+    }
+
+
+@router.put("/me/appearance", response_model=AppearanceRead)
+def update_my_appearance(
+    payload: AppearanceUpdate,
+    db: Session = Depends(get_db),
+    user=Depends(require_auth),
+):
+    """Update the signed-in author's site layout."""
+    settings = update_author_layout(
+        db,
+        user,
+        layout_key=payload.layout_key,
+        side_position=payload.side_position,
+    )
+    return {
+        "layout_key": settings.layout_key,
+        "side_position": settings.side_position,
     }

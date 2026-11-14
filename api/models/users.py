@@ -1,4 +1,5 @@
 from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, func
+from sqlalchemy.orm import relationship
 
 from db.base import Base
 
@@ -17,6 +18,46 @@ class User(Base):
     )
     created_at = Column(DateTime, default=func.now())
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
+
+    author_settings = relationship(
+        "AuthorSettings",
+        back_populates="user",
+        uselist=False,
+        cascade="all, delete-orphan",
+    )
+
+
+class AuthorSettings(Base):
+    __tablename__ = "author_settings"
+
+    user_id = Column(
+        Integer,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    slug = Column(String(64), unique=True, index=True, nullable=False)
+    nickname = Column(String(80), nullable=False)
+    layout_key = Column(
+        String(32),
+        nullable=False,
+        default="editorial",
+        server_default="editorial",
+    )
+    side_position = Column(
+        String(16),
+        nullable=False,
+        default="left",
+        server_default="left",
+    )
+    created_at = Column(DateTime, default=func.now(), nullable=False)
+    updated_at = Column(
+        DateTime,
+        default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+    user = relationship("User", back_populates="author_settings")
 
 
 class UserSession(Base):

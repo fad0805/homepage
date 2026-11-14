@@ -28,7 +28,7 @@ body {
   --title-color: #{color.adjust($maintheme, $lightness: -55%)};
   --input-background: #{$white};
   --input-text: var(--foreground);
-  --empty-banner-bg: #{color.adjust($maintheme, $lightness: -10%)};
+  --empty-banner-bg: #adcfaa;
   --links-banner-color: #fff;
 
   a, a:visited {
@@ -43,7 +43,7 @@ body {
   --title-color: #{color.adjust($maintheme, $lightness: -35%)};
   --input-background: #{$dark-bg-sub};
   --input-text: rgba(145, 160, 128, 0.9);
-  --empty-banner-bg: #{color.adjust($maintheme, $lightness: -40%, $saturation: -10%)};
+  --empty-banner-bg: #455b43;
   --links-banner-color: #c2d6bf;
 
   a, a:visited {
@@ -64,6 +64,7 @@ body {
   align-items: center;
   justify-items: center;
   min-height: 100vh;
+  margin: 0;
 
   color: var(--input-text);
   background: var(--background);
@@ -142,8 +143,11 @@ div#container>header {
   flex-direction: column;
   justify-content: center;
   align-items: center;
-  width: 100%;
-  margin: 1.5rem 0 1rem 0;
+  width: min(860px, 100%);
+  max-width: 860px;
+  margin: 5rem auto 1rem;
+  padding: 0 1.5rem;
+  box-sizing: border-box;
 }
 
 div#container>header>div#title {

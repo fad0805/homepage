@@ -1,4 +1,9 @@
+@use 'sass:color';
+@use '../variables' as *;
+
 .gallery-admin {
+  --admin-muted: #{color.adjust($light-text, $lightness: 38%)};
+
   width: 100%;
   max-width: 1000px;
   margin: 0 auto;
@@ -8,6 +13,7 @@
   flex-direction: column;
   gap: 1.5rem;
   min-width: 0;
+  color: var(--admin-muted);
 
   header {
     h2 {
@@ -21,6 +27,10 @@
       line-height: 1.5;
     }
   }
+}
+
+[data-theme='dark'] .gallery-admin {
+  --admin-muted: rgba(166, 165, 145, 0.9);
 }
 
 .gallery-admin__error {
@@ -68,7 +78,7 @@
     border: 1px solid var(--background);
     border-radius: 8px;
     background-color: transparent;
-    color: var(--foreground);
+    color: var(--admin-muted);
   }
 
   input {
@@ -123,7 +133,7 @@
     border: 1px solid var(--background);
     border-radius: 6px;
     background-color: transparent;
-    color: var(--foreground);
+    color: var(--admin-muted);
     cursor: pointer;
   }
 
@@ -166,7 +176,7 @@
     border: 1px solid var(--background);
     border-radius: 6px;
     background-color: transparent;
-    color: var(--foreground);
+    color: var(--admin-muted);
     cursor: pointer;
   }
 
@@ -227,7 +237,7 @@
     border: 1px solid var(--background);
     border-radius: 0.45rem;
     background: transparent;
-    color: var(--foreground);
+    color: var(--admin-muted);
     font-family: inherit;
     font-size: 0.75rem;
     cursor: pointer;
@@ -250,7 +260,7 @@
 
   .pagination__ellipsis {
     padding: 0 0.25rem;
-    color: var(--foreground);
+    color: var(--admin-muted);
     font-size: 0.75rem;
     opacity: 0.55;
   }

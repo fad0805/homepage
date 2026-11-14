@@ -6,6 +6,7 @@ const API_BASE = (
 ).replace(/\/+$/, "");
 
 const PUBLIC_TAGS = [
+  "appearance",
   "books",
   "chapters",
   "links",

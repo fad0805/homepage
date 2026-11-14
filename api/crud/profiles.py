@@ -1,17 +1,29 @@
 from fastapi import HTTPException, status
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
+from core.uploads import delete_replaced_upload, delete_uploaded_file
 from models.profiles import Profile
+from models.users import User
 from schemas.profiles import ProfileCreate, ProfileUpdate
 
 
 def _serialize_profile(profile: Profile) -> dict:
+    user = profile.user
+    author_settings = user.author_settings if user else None
     return {
         "id": profile.id,
         "user_id": profile.user_id,
-        "owner": profile.user.username if profile.user else None,
+        "owner": user.username if user else None,
+        "nickname": (
+            author_settings.nickname
+            if author_settings
+            else user.username
+            if user
+            else None
+        ),
         "title": profile.title,
         "subtitle": profile.subtitle,
+        "banner_url": profile.banner_url,
         "profile": profile.profile,
     }
 
@@ -26,7 +38,9 @@ def get_all_profiles(
     """
     Get all profiles, one author's profiles, or every other author's profiles.
     """
-    query = db.query(Profile)
+    query = db.query(Profile).options(
+        joinedload(Profile.user).joinedload(User.author_settings)
+    )
     if user_id is not None:
         query = query.filter(Profile.user_id == user_id)
     if exclude_user_id is not None:
@@ -40,7 +54,12 @@ def get_profile(db: Session, profile_id: int):
     Get profile from database.
     """
     profile = (
-        db.query(Profile).filter(Profile.id == profile_id).first()
+        db.query(Profile)
+        .options(
+            joinedload(Profile.user).joinedload(User.author_settings)
+        )
+        .filter(Profile.id == profile_id)
+        .first()
     )
     if not profile:
         raise HTTPException(
@@ -73,6 +92,9 @@ def update_profile(
     """
     profile = (
         db.query(Profile)
+        .options(
+            joinedload(Profile.user).joinedload(User.author_settings)
+        )
         .filter(
             Profile.id == profile_id,
             Profile.user_id == user_id,
@@ -85,13 +107,28 @@ def update_profile(
             detail="Profile not found",
         )
 
-    for key, value in updated_profile.model_dump(
-        exclude_unset=True
-    ).items():
+    old_banner_url = profile.banner_url
+    data = updated_profile.model_dump(exclude_unset=True)
+
+    for key, value in data.items():
         setattr(profile, key, value)
 
     db.commit()
     db.refresh(profile)
+
+    if (
+        old_banner_url
+        and "banner_url" in data
+        and old_banner_url != profile.banner_url
+    ):
+        still_used = (
+            db.query(Profile)
+            .filter(Profile.banner_url == old_banner_url)
+            .first()
+        )
+        if not still_used:
+            delete_replaced_upload(old_banner_url, profile.banner_url)
+
     return _serialize_profile(profile)
 
 
@@ -113,6 +150,15 @@ def delete_profile(
             detail="Does not exist profile",
         )
 
+    banner_url = profile.banner_url
     db.delete(profile)
     db.commit()
+
+    if banner_url:
+        still_used = (
+            db.query(Profile).filter(Profile.banner_url == banner_url).first()
+        )
+        if not still_used:
+            delete_uploaded_file(banner_url)
+
     return True
