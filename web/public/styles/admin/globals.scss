@@ -5,9 +5,3 @@
   flex-direction: column;
   align-items: center;
 }
-
-/* Admin surfaces stay square regardless of the public layout preset. */
-#container .admin-layout,
-#container .admin-layout * {
-  border-radius: 0;
-}
