@@ -1,4 +1,5 @@
 import os
+import re
 
 from contextlib import closing
 from fastapi import APIRouter, Depends, HTTPException, Response, Request
@@ -22,22 +23,27 @@ from routers.utils import (
     get_optional_user,
     get_session_id_from_payload,
     require_admin,
+    require_auth,
 )
 from crud.users import (
     create_user,
     create_user_session,
     delete_expired_user_sessions,
     delete_user_session,
+    ensure_author_settings,
     get_user,
     get_user_session,
     get_user_session_by_token,
     record_signin_history,
+    update_author_settings,
 )
 from db.session import get_db
 from models.users import User
-from schemas.users import UserCreate
+from schemas.users import AccountRead, AccountUpdate, UserCreate
 
 router = APIRouter()
+
+SLUG_PATTERN = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 
 # Password guessing is slowed down per client IP. A successful sign-in clears
 # the bucket so a person who mistyped a few times is not punished later.
@@ -274,4 +280,76 @@ def get_current_user_status(
         "success": True,
         "user": user.username,
         "role": user.role,
+    }
+
+
+@router.get("/me/account", response_model=AccountRead)
+def get_my_account(
+    db: Session = Depends(get_db),
+    user=Depends(require_auth),
+):
+    """Return the signed-in author's public account settings."""
+    settings = ensure_author_settings(db, user)
+    return {
+        "username": user.username,
+        "role": user.role,
+        "nickname": settings.nickname,
+        "slug": settings.slug,
+    }
+
+
+@router.put("/me/account", response_model=AccountRead)
+def update_my_account(
+    payload: AccountUpdate,
+    db: Session = Depends(get_db),
+    user=Depends(require_auth),
+):
+    """Update the signed-in author's nickname and public URL slug."""
+    nickname = payload.nickname.strip()
+    slug = payload.slug.strip().lower()
+
+    if not nickname:
+        raise HTTPException(status_code=400, detail="닉네임을 입력해주세요.")
+    if len(nickname) > 80:
+        raise HTTPException(
+            status_code=400,
+            detail="닉네임은 80자 이하로 입력해주세요.",
+        )
+    if not slug:
+        raise HTTPException(
+            status_code=400,
+            detail="URL 표시명을 입력해주세요.",
+        )
+    if len(slug) > 48:
+        raise HTTPException(
+            status_code=400,
+            detail="URL 표시명은 48자 이하로 입력해주세요.",
+        )
+    if not SLUG_PATTERN.fullmatch(slug):
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "URL 표시명은 영문 소문자, 숫자, 하이픈만 사용할 수 "
+                "있습니다."
+            ),
+        )
+
+    try:
+        settings = update_author_settings(
+            db,
+            user,
+            nickname=nickname,
+            slug=slug,
+        )
+    except ValueError:
+        raise HTTPException(
+            status_code=409,
+            detail="이미 사용 중인 URL 표시명입니다.",
+        )
+
+    return {
+        "username": user.username,
+        "role": user.role,
+        "nickname": settings.nickname,
+        "slug": settings.slug,
     }

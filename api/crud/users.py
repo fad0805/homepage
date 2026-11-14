@@ -1,10 +1,11 @@
+import re
 from datetime import datetime, timedelta
 
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from core.config import REFRESH_TOKEN_EXPIRE_DAYS
-from models.users import User, UserSession, UserSigninHistory
+from models.users import AuthorSettings, User, UserSession, UserSigninHistory
 from core.security import hash_password
 from schemas.users import UserCreate, UserUpdate
 
@@ -47,6 +48,89 @@ def update_user(db: Session, username: str, user_update: UserUpdate):
     db.commit()
     db.refresh(user)
     return True if user else False
+
+
+SLUG_MAX_LENGTH = 48
+
+
+def _slug_base(username: str) -> str:
+    slug = re.sub(r"[^a-z0-9]+", "-", username.lower()).strip("-")
+    return (slug or "author")[:SLUG_MAX_LENGTH]
+
+
+def _unique_slug(db: Session, username: str, user_id: int) -> str:
+    base = _slug_base(username)
+    candidate = base
+    suffix = 2
+    while (
+        db.query(AuthorSettings)
+        .filter(
+            AuthorSettings.slug == candidate,
+            AuthorSettings.user_id != user_id,
+        )
+        .first()
+    ):
+        suffix_text = f"-{suffix}"
+        candidate = f"{base[:SLUG_MAX_LENGTH - len(suffix_text)]}{suffix_text}"
+        suffix += 1
+    return candidate
+
+
+def get_author_settings(db: Session, user_id: int) -> AuthorSettings | None:
+    """Return the public author settings for one user."""
+    return (
+        db.query(AuthorSettings)
+        .filter(AuthorSettings.user_id == user_id)
+        .first()
+    )
+
+
+def ensure_author_settings(db: Session, user: User) -> AuthorSettings:
+    """Create default settings for accounts created before author settings.
+
+    New accounts are normally created together with settings by the CLI, but
+    this keeps an account usable if its settings row is missing.
+    """
+    settings = get_author_settings(db, user.id)
+    if settings is not None:
+        return settings
+
+    settings = AuthorSettings(
+        user_id=user.id,
+        slug=_unique_slug(db, user.username, user.id),
+        nickname=user.username,
+    )
+    db.add(settings)
+    db.commit()
+    db.refresh(settings)
+    return settings
+
+
+def update_author_settings(
+    db: Session,
+    user: User,
+    *,
+    nickname: str,
+    slug: str,
+) -> AuthorSettings:
+    """Update the signed-in author's public account settings."""
+    settings = ensure_author_settings(db, user)
+    conflict = (
+        db.query(AuthorSettings)
+        .filter(
+            AuthorSettings.slug == slug,
+            AuthorSettings.user_id != user.id,
+        )
+        .first()
+    )
+    if conflict is not None:
+        raise ValueError("slug_conflict")
+
+    settings.nickname = nickname
+    settings.slug = slug
+    db.commit()
+    db.refresh(settings)
+    return settings
 
 
 def create_user_session(

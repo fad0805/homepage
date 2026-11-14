@@ -20,6 +20,22 @@ class UserUpdate(BaseModel):
     updated_at: datetime | None = None
 
 
+class AccountRead(BaseModel):
+    """Public account settings for the signed-in author."""
+
+    username: str
+    role: str
+    nickname: str
+    slug: str
+
+
+class AccountUpdate(BaseModel):
+    """Editable account settings."""
+
+    nickname: str
+    slug: str
+
+
 class UserRead(UserBase):
     """Model for user response"""
     id: int
