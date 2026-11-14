@@ -39,15 +39,39 @@ export function SiteShell({
 }: SiteShellProps) {
   const pathname = usePathname();
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [drawerPinned, setDrawerPinned] = useState(false);
 
   const isSide = layoutKey === "side";
   const isBottom = layoutKey === "collapsible";
   const isDrawer = layoutKey === "drawer";
   const sideRight = isSide && sidePosition === "right";
 
+  const closeDrawer = () => {
+    setDrawerOpen(false);
+    setDrawerPinned(false);
+  };
+
   useEffect(() => {
     setDrawerOpen(false);
+    setDrawerPinned(false);
   }, [pathname]);
+
+  useEffect(() => {
+    if (!drawerOpen || drawerPinned) return;
+
+    const handleMouseMove = () => {
+      setDrawerOpen(false);
+      setDrawerPinned(false);
+    };
+    const timer = window.setTimeout(() => {
+      window.addEventListener("mousemove", handleMouseMove, { once: true });
+    }, 120);
+
+    return () => {
+      window.clearTimeout(timer);
+      window.removeEventListener("mousemove", handleMouseMove);
+    };
+  }, [drawerOpen, drawerPinned]);
 
   const classes = [
     "site-layout",
@@ -111,8 +135,14 @@ export function SiteShell({
           <button
             type="button"
             className="site-menu-toggle"
-            onClick={() => setDrawerOpen(true)}
-            onMouseEnter={() => setDrawerOpen(true)}
+            onClick={() => {
+              setDrawerOpen(true);
+              setDrawerPinned(true);
+            }}
+            onMouseEnter={() => {
+              setDrawerOpen(true);
+              setDrawerPinned(false);
+            }}
             aria-label="메뉴 열기"
             aria-expanded={drawerOpen}
           >
@@ -126,10 +156,7 @@ export function SiteShell({
       </header>
 
       {isDrawer && drawerOpen ? (
-        <div
-          className="site-drawer-backdrop"
-          onClick={() => setDrawerOpen(false)}
-        >
+        <div className="site-drawer-backdrop" onClick={closeDrawer}>
           <div
             className="site-drawer"
             role="dialog"
@@ -141,7 +168,7 @@ export function SiteShell({
               <span>메뉴</span>
               <button
                 type="button"
-                onClick={() => setDrawerOpen(false)}
+                onClick={closeDrawer}
                 aria-label="메뉴 닫기"
               >
                 ×

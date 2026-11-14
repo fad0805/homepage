@@ -105,6 +105,8 @@ html:has(#container.site-layout--side) {
 }
 
 .site-menu-toggle {
+  position: relative;
+  z-index: 70;
   display: inline-flex;
   flex-direction: column;
   flex-shrink: 0;
