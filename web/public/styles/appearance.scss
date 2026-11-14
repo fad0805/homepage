@@ -69,6 +69,26 @@ html:has(#container.site-layout--side) {
   #container.site-layout--drawer > header {
     margin-top: 3rem;
   }
+
+  #container.site-layout--drawer > header #title {
+    font-size: 1.408rem;
+  }
+
+  #container.site-layout--drawer > header #title .title__caption {
+    font-size: 0.44rem;
+  }
+
+  #container.site-layout--drawer .site-menu-toggle {
+    width: 2.737152rem;
+    height: 2.737152rem;
+    padding: 0 0.627264rem;
+    gap: 0.28512rem;
+    border-radius: 0.684288rem;
+  }
+
+  #container.site-layout--drawer .site-menu-toggle span {
+    height: 2.28096px;
+  }
 }
 
 #container.site-layout--drawer > main {
