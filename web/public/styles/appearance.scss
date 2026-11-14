@@ -303,6 +303,72 @@ body:not(:has(.admin-layout)) #container.site-layout--side * {
   justify-content: start;
 }
 
+#container.site-layout--collapsible .characters-list__item {
+  align-items: flex-start;
+}
+
+#container.site-layout--collapsible .characters-list__item h2 {
+  margin-right: auto;
+  margin-left: 0;
+}
+
+#container.site-layout--collapsible .characters {
+  justify-content: flex-start;
+}
+
+#container.site-layout--collapsible .characters > .character,
+#container.site-layout--collapsible
+  #characters-list
+  > *:first-child
+  .characters
+  > *:first-child.is-auto {
+  justify-self: start;
+}
+
+#container.site-layout--collapsible .illustrations-grid {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+#container.site-layout--collapsible
+  #illustrations-page.illustration-detail-page {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  padding-bottom: 1.25rem;
+}
+
+#container.site-layout--collapsible
+  .illustration-detail-page
+  .illustration-detail {
+  flex: 1;
+  min-height: 0;
+}
+
+#container.site-layout--collapsible
+  .illustration-detail-page
+  .illustration-detail__viewer {
+  flex: 1;
+  min-height: 0;
+}
+
+#container.site-layout--collapsible
+  .illustration-detail-page
+  .illustration-detail__main {
+  flex: 1;
+  min-height: 0;
+  max-height: none;
+  aspect-ratio: auto !important;
+}
+
+#container.site-layout--collapsible
+  .illustration-detail-page
+  .illustration-detail__main
+  > img {
+  max-height: 100%;
+}
+
 #container.site-layout--collapsible > main {
   display: flex;
   flex: 1;
@@ -406,6 +472,12 @@ html[data-appearance='collapsible'] .theme-toggle {
   }
 }
 
+@media (max-width: 899px) {
+  #container.site-layout--collapsible .illustrations-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
 @media (max-width: $breakpoint-md) {
   #container.site-layout--side {
     display: flex;
@@ -451,6 +523,10 @@ html[data-appearance='collapsible'] .theme-toggle {
   }
 
   #container.site-layout--collapsible .author-directory {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  #container.site-layout--collapsible .illustrations-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
