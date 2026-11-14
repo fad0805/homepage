@@ -4,6 +4,7 @@
 #admin-account {
   display: flex;
   flex-direction: column;
+  align-items: center;
   gap: 1rem;
   width: 100%;
   box-sizing: border-box;
@@ -11,6 +12,13 @@
 }
 
 .admin-account-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: 1rem;
+  width: 100%;
+
   h1 {
     margin: 0;
     font-size: 1.4rem;
@@ -25,7 +33,8 @@
 }
 
 .admin-account-loading {
-  margin: 0;
+  width: min(860px, 100%);
+  margin: 0 auto;
   color: var(--admin-muted);
   font-size: 0.8rem;
 }
@@ -34,7 +43,14 @@
   display: flex;
   flex-direction: column;
   gap: 0.9rem;
-  width: min(560px, 100%);
+  width: min(860px, 100%);
+  margin-inline: auto;
+}
+
+#admin-account > .admin-notice {
+  align-self: center;
+  box-sizing: border-box;
+  width: min(860px, 100%);
 }
 
 .admin-account-summary {
