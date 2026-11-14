@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   useEffect,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -40,6 +41,7 @@ export function SiteShell({
   const pathname = usePathname();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [drawerPinned, setDrawerPinned] = useState(false);
+  const drawerRef = useRef<HTMLDivElement>(null);
 
   const isSide = layoutKey === "side";
   const isBottom = layoutKey === "collapsible";
@@ -59,12 +61,16 @@ export function SiteShell({
   useEffect(() => {
     if (!drawerOpen || drawerPinned) return;
 
-    const handleMouseMove = () => {
+    const handleMouseMove = (event: MouseEvent) => {
+      const target = event.target;
+      if (target instanceof Node && drawerRef.current?.contains(target)) {
+        return;
+      }
       setDrawerOpen(false);
       setDrawerPinned(false);
     };
     const timer = window.setTimeout(() => {
-      window.addEventListener("mousemove", handleMouseMove, { once: true });
+      window.addEventListener("mousemove", handleMouseMove);
     }, 120);
 
     return () => {
@@ -131,6 +137,7 @@ export function SiteShell({
   return (
     <div id="container" className={classes}>
       <header className={isDrawer ? "site-topbar" : undefined}>
+        <SiteTitle />
         {isDrawer ? (
           <button
             type="button"
@@ -151,13 +158,17 @@ export function SiteShell({
             <span />
           </button>
         ) : null}
-        <SiteTitle />
         {!isDrawer ? <Navbar /> : null}
       </header>
 
-      {isDrawer && drawerOpen ? (
-        <div className="site-drawer-backdrop" onClick={closeDrawer}>
+      {isDrawer ? (
+        <div
+          className={`site-drawer-backdrop${drawerOpen ? " is-open" : ""}`}
+          onClick={closeDrawer}
+          aria-hidden={!drawerOpen}
+        >
           <div
+            ref={drawerRef}
             className="site-drawer"
             role="dialog"
             aria-modal="true"
