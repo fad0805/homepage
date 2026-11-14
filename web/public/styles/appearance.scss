@@ -274,10 +274,33 @@ body:not(:has(.admin-layout)) #container.site-layout--side * {
 
   width: 100%;
   max-width: none;
-  padding: 2rem 0 0;
+  padding: 6.75rem 0 0;
   height: 100vh;
   height: 100dvh;
   overflow: hidden;
+}
+
+#container.site-layout--collapsible > header {
+  align-items: flex-start;
+  box-sizing: border-box;
+  margin-bottom: 3rem;
+  padding-right: 1rem;
+  padding-left: calc(var(--bottom-left-gutter) - 3rem);
+}
+
+#container.site-layout--collapsible > header #title,
+#container.site-layout--collapsible > header #title a {
+  align-items: flex-start;
+}
+
+#container.site-layout--collapsible #author {
+  margin-right: auto;
+  margin-left: 2rem;
+}
+
+#container.site-layout--collapsible .author-directory {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  justify-content: start;
 }
 
 #container.site-layout--collapsible > main {
@@ -429,6 +452,10 @@ html[data-appearance='collapsible'] .theme-toggle {
     align-items: center;
     width: auto;
     margin-top: 0.4rem;
+  }
+
+  #container.site-layout--collapsible .author-directory {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .site-bottom-bar {
