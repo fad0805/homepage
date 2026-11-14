@@ -243,6 +243,47 @@ def revoke_session(db: Session, session_id: int, now: datetime) -> bool:
     return bool(updated)
 
 
+def revoke_session_grant(
+    db: Session,
+    session_id: int,
+    grant_id: int,
+    owner_user_id: int | None,
+) -> bool:
+    """Remove one resource from a browser session."""
+    grant = (
+        db.query(GallerySessionGrant)
+        .options(
+            selectinload(GallerySessionGrant.illustration),
+            selectinload(GallerySessionGrant.chapter),
+            selectinload(GallerySessionGrant.book),
+        )
+        .filter(
+            GallerySessionGrant.id == grant_id,
+            GallerySessionGrant.session_id == session_id,
+        )
+        .first()
+    )
+    if grant is None:
+        return False
+    if owner_user_id is not None and _grant_owner_id(grant) != owner_user_id:
+        return False
+
+    db.delete(grant)
+    db.flush()
+
+    remaining = (
+        db.query(GallerySessionGrant.id)
+        .filter(GallerySessionGrant.session_id == session_id)
+        .first()
+    )
+    if remaining is None:
+        db.query(GallerySession).filter(
+            GallerySession.id == session_id
+        ).delete(synchronize_session=False)
+
+    return True
+
+
 def revoke_session_grants(
     db: Session,
     session_id: int,

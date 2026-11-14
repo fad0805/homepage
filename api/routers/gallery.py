@@ -108,6 +108,7 @@ def _resource(
     book_id,
     relation,
     owner_names: dict[int, str],
+    grant_id: int | None = None,
 ):
     owner_id = relation.user_id if relation is not None else None
     owner_name = owner_names.get(owner_id) if owner_id is not None else None
@@ -121,6 +122,7 @@ def _resource(
             "title": relation.title if relation is not None else "",
             "owner_id": owner_id,
             "owner_name": owner_name,
+            "grant_id": grant_id,
         }
     if chapter_id is not None:
         return {
@@ -129,6 +131,7 @@ def _resource(
             "title": relation.title if relation is not None else "",
             "owner_id": owner_id,
             "owner_name": owner_name,
+            "grant_id": grant_id,
         }
     if book_id is not None:
         return {
@@ -137,6 +140,7 @@ def _resource(
             "title": relation.title if relation is not None else "",
             "owner_id": owner_id,
             "owner_name": owner_name,
+            "grant_id": grant_id,
         }
     return None
 
@@ -187,6 +191,7 @@ def _grant_resource(grant, owner_names: dict[int, str]):
             None,
             grant.illustration,
             owner_names,
+            grant.id,
         )
     if grant.chapter_id is not None:
         return _resource(
@@ -195,6 +200,7 @@ def _grant_resource(grant, owner_names: dict[int, str]):
             None,
             grant.chapter,
             owner_names,
+            grant.id,
         )
     if grant.book_id is not None:
         return _resource(
@@ -203,6 +209,7 @@ def _grant_resource(grant, owner_names: dict[int, str]):
             grant.book_id,
             grant.book,
             owner_names,
+            grant.id,
         )
     return None
 
@@ -559,6 +566,30 @@ def read_gallery_sessions(
         }
         for session in sessions
     ]
+
+
+@router.delete("/sessions/{session_id}/grants/{grant_id}")
+def revoke_gallery_session_grant(
+    session_id: int,
+    grant_id: int,
+    db: Session = Depends(get_db),
+    user=Depends(require_auth),
+):
+    """Revoke one resource from a browser's gallery access."""
+    owner_user_id = None if is_admin(user) else user.id
+    if not gallery_crud.revoke_session_grant(
+        db,
+        session_id,
+        grant_id,
+        owner_user_id,
+    ):
+        db.rollback()
+        raise HTTPException(
+            status_code=404,
+            detail="열람 권한을 찾을 수 없습니다.",
+        )
+    db.commit()
+    return {"success": True}
 
 
 @router.delete("/sessions/{session_id}")

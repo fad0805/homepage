@@ -12,6 +12,7 @@ class GalleryResourceRead(BaseModel):
     title: str
     owner_id: int | None = None
     owner_name: str | None = None
+    grant_id: int | None = None
 
 
 class GalleryUnlockRequest(BaseModel):
