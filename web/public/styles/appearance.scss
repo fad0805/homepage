@@ -24,6 +24,16 @@ html:has(#container.site-layout--side) {
   scrollbar-gutter: stable;
 }
 
+@media (max-width: $breakpoint-md) {
+  #container.site-layout--editorial > header {
+    margin: 2rem auto 1rem;
+  }
+
+  #container.site-layout--editorial > header #navbar {
+    gap: 1rem;
+  }
+}
+
 /* Drawer layout */
 #container.site-layout--drawer {
   display: flex;
