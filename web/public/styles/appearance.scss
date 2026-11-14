@@ -552,6 +552,21 @@ body:not(:has(.admin-layout)) #container.site-layout--side * {
   align-items: flex-start;
 }
 
+@media (max-width: $breakpoint-md) {
+  #container.site-layout--collapsible {
+    --bottom-left-gutter: 0.25rem;
+
+    width: calc(100% - 0.25rem);
+    padding-top: 1rem;
+  }
+
+  #container.site-layout--collapsible > header {
+    margin-top: 0.5rem;
+    margin-bottom: 0.5rem;
+    padding-right: 0.5rem;
+  }
+}
+
 #container.site-layout--collapsible #author {
   margin-right: auto;
   margin-left: 2rem;
@@ -788,6 +803,15 @@ html[data-appearance='collapsible'] .theme-toggle {
     &:hover {
       background: rgba(255, 255, 255, 0.12);
     }
+  }
+}
+
+@media (max-width: $breakpoint-md) {
+  html[data-appearance='collapsible'] .theme-toggle {
+    top: calc(1rem + env(safe-area-inset-top, 0px));
+    right: calc(1rem + env(safe-area-inset-right, 0px));
+    bottom: auto;
+    left: auto;
   }
 }
 
