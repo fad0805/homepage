@@ -31,6 +31,7 @@ class IllustrationListItem(BaseModel):
 
     id: int
     title: str
+    author_nickname: str | None = None
     tags: list[str] = Field(default_factory=list)
     taken_at: date | None = None
     visible: bool

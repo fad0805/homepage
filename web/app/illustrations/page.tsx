@@ -324,6 +324,7 @@ export default async function IllustrationsPage({
             items={visible.map((item) => ({
               id: item.id,
               title: item.title,
+              author_nickname: item.author_nickname,
               taken_at: item.taken_at,
               representative_url: item.representative_url,
               image_count: item.image_count,

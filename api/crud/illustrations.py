@@ -3,7 +3,7 @@ from datetime import date, datetime, timedelta
 
 from fastapi import HTTPException, status
 from sqlalchemy import func, or_
-from sqlalchemy.orm import Session, selectinload
+from sqlalchemy.orm import Session, joinedload, selectinload
 
 from core.mastodon import maybe_notify_illustration
 from core.uploads import delete_replaced_upload, delete_uploaded_file
@@ -12,6 +12,7 @@ from models.illustrations import (
     IllustrationImage,
     IllustrationView,
 )
+from models.users import User
 from schemas.illustrations import (
     IllustrationBulkUpdate,
     IllustrationImageReorderRequest,
@@ -56,10 +57,20 @@ def _serialize_summary(illustration: Illustration) -> dict:
     representative_url = illustration.representative_url or (
         representative.url if representative else None
     )
+    user = illustration.user
+    author_settings = user.author_settings if user else None
+    author_nickname = (
+        author_settings.nickname
+        if author_settings
+        else user.username
+        if user
+        else illustration.owner
+    )
     return {
         "id": illustration.id,
         "user_id": illustration.user_id,
         "title": illustration.title,
+        "author_nickname": author_nickname,
         "description": illustration.description,
         "tags": illustration.tags or [],
         "taken_at": illustration.taken_at,
@@ -102,7 +113,10 @@ def _serialize_detail(
 
 
 def _group_query(db: Session):
-    return db.query(Illustration).options(selectinload(Illustration.images))
+    return db.query(Illustration).options(
+        selectinload(Illustration.images),
+        joinedload(Illustration.user).joinedload(User.author_settings),
+    )
 
 
 def get_visible_illustrations(

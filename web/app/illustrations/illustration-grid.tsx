@@ -15,6 +15,7 @@ import { formatDate } from "@/lib/datetime";
 export interface IllustrationCardItem {
   id: number;
   title: string;
+  author_nickname: string | null;
   taken_at: string | null;
   representative_url: string | null;
   image_count: number;
@@ -25,9 +26,12 @@ export interface IllustrationCardItem {
 export function IllustrationGrid({
   items,
   unlockedIds,
+  showAuthor = true,
 }: {
   items: IllustrationCardItem[];
   unlockedIds: number[] | null;
+  /** Per-author pages should hide the author name. */
+  showAuthor?: boolean;
 }) {
   const router = useRouter();
   const [mounted, setMounted] = useState(false);
@@ -175,6 +179,11 @@ export function IllustrationGrid({
                   ) : null}
                 </div>
                 <div className="illustration-card__body">
+                  {showAuthor && item.author_nickname ? (
+                    <p className="illustration-card__author">
+                      {item.author_nickname}
+                    </p>
+                  ) : null}
                   <p className="illustration-card__title">{item.title}</p>
                   <p className="illustration-card__meta">
                     촬영 {formatDate(item.taken_at)}

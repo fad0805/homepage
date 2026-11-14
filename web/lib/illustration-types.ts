@@ -7,6 +7,7 @@ export interface IllustrationImageItem {
 export interface IllustrationItem {
   id: number;
   title: string;
+  author_nickname: string | null;
   tags: string[];
   taken_at: string | null;
   visible: boolean;
