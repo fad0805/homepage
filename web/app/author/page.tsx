@@ -29,8 +29,7 @@ export default async function Author() {
     );
   }
 
-  const profile = profiles[0] ?? null;
-  if (!profile) {
+  if (profiles.length === 0) {
     return (
       <div id="author">
         <p className="author-state">작가 소개가 아직 등록되지 않았습니다.</p>
@@ -38,23 +37,32 @@ export default async function Author() {
     );
   }
 
-  const profileHtml = profileToHtml(profile.profile);
-  const subtitle = profile.subtitle?.trim() ?? "";
-
   return (
     <div id="author">
-      <section className="author-hero">
-        <p className="author-eyebrow">ABOUT THE AUTHOR</p>
-        <h1 className="author-title">{profile.title}</h1>
-        {subtitle ? <p className="author-tagline">{subtitle}</p> : null}
-      </section>
+      {profiles.map((profile, index) => {
+        const profileHtml = profileToHtml(profile.profile);
+        const subtitle = profile.subtitle?.trim() ?? "";
 
-      <section className="author-body">
-        <div
-          className="author-copy"
-          dangerouslySetInnerHTML={{ __html: profileHtml }}
-        />
-      </section>
+        return (
+          <article
+            className="author-profile"
+            key={profile.id ?? `${profile.title}-${index}`}
+          >
+            <section className="author-hero">
+              <p className="author-eyebrow">ABOUT THE AUTHOR</p>
+              <h1 className="author-title">{profile.title}</h1>
+              {subtitle ? <p className="author-tagline">{subtitle}</p> : null}
+            </section>
+
+            <section className="author-body">
+              <div
+                className="author-copy"
+                dangerouslySetInnerHTML={{ __html: profileHtml }}
+              />
+            </section>
+          </article>
+        );
+      })}
     </div>
   );
 }

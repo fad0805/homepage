@@ -24,12 +24,7 @@ from schemas.links import (
     CategoryReorderRequest,
     UploadResponse,
 )
-from .utils import (
-    get_default_author_id,
-    get_optional_user,
-    is_admin,
-    require_auth,
-)
+from .utils import get_optional_user, is_admin, require_auth
 
 router = APIRouter()
 
@@ -115,10 +110,7 @@ def get_links(
                 detail="Not authenticated",
             )
         return get_all_links(db, user_id=current_user.id)
-    author_id = get_default_author_id(db)
-    if author_id is None:
-        return []
-    return get_all_links(db, user_id=author_id)
+    return get_all_links(db)
 
 
 @router.post("/")
@@ -180,13 +172,7 @@ def get_link_detail(
                 detail="Not authenticated",
             )
         return get_link(db, link_id, user_id=current_user.id)
-    link = get_link(db, link_id)
-    if link.get("user_id") != get_default_author_id(db):
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Does not exist link",
-        )
-    return link
+    return get_link(db, link_id)
 
 
 @router.put("/{link_id}")
