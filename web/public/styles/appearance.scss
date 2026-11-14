@@ -313,16 +313,26 @@ body:not(:has(.admin-layout)) #container.site-layout--side * {
 }
 
 #container.site-layout--collapsible .characters {
+  display: flex;
+  flex-wrap: nowrap;
   justify-content: flex-start;
+  gap: 0.75rem;
+  max-width: 100%;
+  overflow-x: auto;
+  padding-bottom: 0.5rem;
 }
 
-#container.site-layout--collapsible .characters > .character,
+#container.site-layout--collapsible .characters > .character {
+  flex: 0 0 auto;
+}
+
+#container.site-layout--collapsible .characters > .character .image,
+#container.site-layout--collapsible .characters > .character .image img,
 #container.site-layout--collapsible
-  #characters-list
-  > *:first-child
   .characters
-  > *:first-child.is-auto {
-  justify-self: start;
+  > .character
+  .image.is-empty {
+  width: 12rem;
 }
 
 #container.site-layout--collapsible .illustrations-grid {
