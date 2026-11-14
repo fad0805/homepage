@@ -26,6 +26,7 @@ from routers.utils import (
     require_auth,
 )
 from crud.users import (
+    change_user_password,
     create_user,
     create_user_session,
     delete_expired_user_sessions,
@@ -39,7 +40,12 @@ from crud.users import (
 )
 from db.session import get_db
 from models.users import User
-from schemas.users import AccountRead, AccountUpdate, UserCreate
+from schemas.users import (
+    AccountRead,
+    AccountUpdate,
+    PasswordUpdate,
+    UserCreate,
+)
 
 router = APIRouter()
 
@@ -367,3 +373,37 @@ def update_my_account(
         "nickname": settings.nickname,
         "slug": settings.slug,
     }
+
+
+@router.put("/me/password")
+def update_my_password(
+    payload: PasswordUpdate,
+    db: Session = Depends(get_db),
+    user=Depends(require_auth),
+):
+    """Change the signed-in user's password."""
+    if len(payload.new_password) < 8:
+        raise HTTPException(
+            status_code=400,
+            detail="새 비밀번호는 8자 이상 입력해주세요.",
+        )
+    if len(payload.new_password) > 128:
+        raise HTTPException(
+            status_code=400,
+            detail="새 비밀번호는 128자 이하로 입력해주세요.",
+        )
+
+    try:
+        change_user_password(
+            db,
+            user,
+            payload.current_password,
+            payload.new_password,
+        )
+    except ValueError:
+        raise HTTPException(
+            status_code=400,
+            detail="현재 비밀번호가 올바르지 않습니다.",
+        )
+
+    return {"success": True}

@@ -44,8 +44,12 @@ export default function AdminAccount() {
   const [account, setAccount] = useState<Account | null>(null);
   const [nickname, setNickname] = useState("");
   const [slug, setSlug] = useState("");
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [changingPassword, setChangingPassword] = useState(false);
   const [notice, setNotice] = useState<Notice | null>(null);
   const [accountsOpen, setAccountsOpen] = useState(false);
   const [accountsLoading, setAccountsLoading] = useState(false);
@@ -163,6 +167,63 @@ export default function AdminAccount() {
     }
   };
 
+  const handlePasswordSubmit = async (
+    event: FormEvent<HTMLFormElement>,
+  ) => {
+    event.preventDefault();
+
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      setNotice({
+        type: "error",
+        text: "비밀번호 항목을 모두 입력해주세요.",
+      });
+      return;
+    }
+    if (newPassword.length < 8) {
+      setNotice({
+        type: "error",
+        text: "새 비밀번호는 8자 이상 입력해주세요.",
+      });
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setNotice({
+        type: "error",
+        text: "새 비밀번호 확인이 일치하지 않습니다.",
+      });
+      return;
+    }
+
+    setChangingPassword(true);
+    setNotice(null);
+    try {
+      await apiFetch<{ success: boolean }>("/api/users/me/password", {
+        method: "PUT",
+        body: JSON.stringify({
+          current_password: currentPassword,
+          new_password: newPassword,
+        }),
+      });
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+      setNotice({
+        type: "success",
+        text: "비밀번호를 변경했습니다.",
+      });
+    } catch (error) {
+      setNotice({
+        type: "error",
+        text:
+          error instanceof Error
+            ? error.message
+            : "비밀번호를 변경하지 못했습니다.",
+      });
+    } finally {
+      setChangingPassword(false);
+    }
+  };
+
   const isAdminAccount = isAdmin && account?.role === "admin";
   const summaryClassName = `admin-account-summary${
     account?.role === "admin" ? "" : " is-single"
@@ -260,6 +321,68 @@ export default function AdminAccount() {
           </div>
         </form>
       )}
+
+      {!loading ? (
+        <form
+          className="admin-account-password"
+          onSubmit={handlePasswordSubmit}
+        >
+          <header>
+            <h2>비밀번호 변경</h2>
+            <p>
+              현재 비밀번호를 확인한 뒤 새 비밀번호로 변경합니다.
+            </p>
+          </header>
+
+          <label className="admin-field">
+            <span>현재 비밀번호</span>
+            <input
+              type="password"
+              autoComplete="current-password"
+              value={currentPassword}
+              onChange={(event) => setCurrentPassword(event.target.value)}
+            />
+          </label>
+
+          <label className="admin-field">
+            <span>새 비밀번호</span>
+            <input
+              type="password"
+              autoComplete="new-password"
+              minLength={8}
+              maxLength={128}
+              value={newPassword}
+              onChange={(event) => setNewPassword(event.target.value)}
+            />
+          </label>
+
+          <label className="admin-field">
+            <span>새 비밀번호 확인</span>
+            <input
+              type="password"
+              autoComplete="new-password"
+              minLength={8}
+              maxLength={128}
+              value={confirmPassword}
+              onChange={(event) => setConfirmPassword(event.target.value)}
+            />
+          </label>
+
+          <p className="admin-account-help">
+            새 비밀번호는 8자 이상이어야 합니다.
+          </p>
+
+          <div className="admin-account-actions">
+            <button
+              type="submit"
+              className="admin-button primary"
+              disabled={changingPassword}
+            >
+              {changingPassword ? "변경 중..." : "비밀번호 변경"}
+            </button>
+          </div>
+        </form>
+      ) : null}
 
       {accountsOpen ? (
         <div className="admin-modal-backdrop" onClick={closeAccounts}>

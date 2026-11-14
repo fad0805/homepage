@@ -36,6 +36,13 @@ class AccountUpdate(BaseModel):
     slug: str
 
 
+class PasswordUpdate(BaseModel):
+    """Payload for changing the signed-in user's password."""
+
+    current_password: str
+    new_password: str
+
+
 class UserRead(UserBase):
     """Model for user response"""
     id: int

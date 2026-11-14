@@ -53,6 +53,30 @@
   width: min(860px, 100%);
 }
 
+.admin-account-password {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+  width: min(860px, 100%);
+  margin-inline: auto;
+  padding-top: 1.4rem;
+  border-top: 1px solid var(--admin-border);
+
+  header {
+    h2 {
+      margin: 0;
+      color: var(--title-color);
+      font-size: 1rem;
+    }
+
+    p {
+      margin: 0.3rem 0 0;
+      color: var(--admin-muted);
+      font-size: 0.75rem;
+    }
+  }
+}
+
 .admin-account-summary {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
