@@ -1673,7 +1673,7 @@ export default function AdminIllustrations() {
                     <textarea
                       value={editingItem.description ?? ""}
                       maxLength={2000}
-                      rows={4}
+                      rows={6}
                       placeholder="삽화에 대한 설명"
                       onChange={(event) =>
                         updateEditing({
