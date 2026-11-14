@@ -126,7 +126,7 @@ html:has(#container.site-layout--side) {
   display: grid;
   grid-template-columns: 15rem minmax(0, 1fr);
   align-items: start;
-  gap: 1.5rem;
+  gap: 0;
   width: min(96%, 1180px);
   max-width: 1180px;
   min-width: 0;
@@ -197,6 +197,11 @@ html:has(#container.site-layout--side) {
 
 #container.site-layout--side.is-side-right > .site-main-column {
   order: 1;
+}
+
+#container.site-layout--side .author-card,
+#container.site-layout--side .author-card__image {
+  border-radius: 0;
 }
 
 .site-sidebar #title {
