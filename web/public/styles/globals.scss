@@ -141,8 +141,9 @@ div#container>header {
   flex-direction: column;
   justify-content: center;
   align-items: center;
-  width: 100%;
-  margin: 5rem 0 1rem;
+  width: min(860px, 100%);
+  max-width: 860px;
+  margin: 5rem auto 1rem;
   padding: 0 1.5rem;
   box-sizing: border-box;
 }

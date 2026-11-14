@@ -352,6 +352,10 @@ body:not(:has(.admin-layout)) #container.site-layout--side * {
 #container.site-layout--collapsible > header {
   align-items: flex-start;
   box-sizing: border-box;
+  width: 100%;
+  max-width: none;
+  margin-right: 0;
+  margin-left: 0;
   margin-bottom: 3rem;
   padding-right: 1rem;
   padding-left: var(--bottom-left-gutter);
