@@ -2,7 +2,7 @@ import secrets
 from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from core.config import (
     ENVIRONMENT,
@@ -23,6 +23,7 @@ from crud import gallery as gallery_crud
 from db.session import get_db
 from models.books import Book, Chapter
 from models.illustrations import Illustration
+from models.users import User
 from routers.utils import get_client_ip, is_admin, require_auth
 from schemas.gallery import (
     GalleryInviteCreate,
@@ -77,35 +78,87 @@ def _session_status(session, now: datetime) -> str:
     return "active"
 
 
-def _resource(illustration_id, chapter_id, book_id, relation):
+def _owner_name_map(
+    db: Session,
+    owner_ids: set[int | None],
+) -> dict[int, str]:
+    ids = {owner_id for owner_id in owner_ids if owner_id is not None}
+    if not ids:
+        return {}
+
+    users = (
+        db.query(User)
+        .options(joinedload(User.author_settings))
+        .filter(User.id.in_(ids))
+        .all()
+    )
+    return {
+        user.id: (
+            user.author_settings.nickname
+            if user.author_settings
+            else user.username
+        )
+        for user in users
+    }
+
+
+def _resource(
+    illustration_id,
+    chapter_id,
+    book_id,
+    relation,
+    owner_names: dict[int, str],
+):
+    owner_id = relation.user_id if relation is not None else None
+    owner_name = owner_names.get(owner_id) if owner_id is not None else None
+    if owner_name is None and relation is not None:
+        owner_name = getattr(relation, "owner", None)
+
     if illustration_id is not None:
         return {
             "type": "illustration",
             "id": illustration_id,
             "title": relation.title if relation is not None else "",
+            "owner_id": owner_id,
+            "owner_name": owner_name,
         }
     if chapter_id is not None:
         return {
             "type": "chapter",
             "id": chapter_id,
             "title": relation.title if relation is not None else "",
+            "owner_id": owner_id,
+            "owner_name": owner_name,
         }
     if book_id is not None:
         return {
             "type": "book",
             "id": book_id,
             "title": relation.title if relation is not None else "",
+            "owner_id": owner_id,
+            "owner_name": owner_name,
         }
     return None
 
 
-def _invite_resource(invite):
+def _invite_owner_id(invite) -> int | None:
+    if invite.illustration_id is not None and invite.illustration is not None:
+        return invite.illustration.user_id
+    if invite.chapter_id is not None and invite.chapter is not None:
+        return invite.chapter.user_id
+    if invite.book_id is not None and invite.book is not None:
+        return invite.book.user_id
+    return None
+
+
+def _invite_resource(invite, owner_names: dict[int, str]):
     if invite.illustration_id is not None:
         return _resource(
             invite.illustration_id,
             None,
             None,
             invite.illustration,
+            owner_names,
         )
     if invite.chapter_id is not None:
         return _resource(
@@ -113,6 +166,7 @@ def _invite_resource(invite):
             invite.chapter_id,
             None,
             invite.chapter,
+            owner_names,
         )
     if invite.book_id is not None:
         return _resource(
@@ -120,17 +174,19 @@ def _invite_resource(invite):
             None,
             invite.book_id,
             invite.book,
+            owner_names,
         )
     return None
 
 
-def _grant_resource(grant):
+def _grant_resource(grant, owner_names: dict[int, str]):
     if grant.illustration_id is not None:
         return _resource(
             grant.illustration_id,
             None,
             None,
             grant.illustration,
+            owner_names,
         )
     if grant.chapter_id is not None:
         return _resource(
@@ -138,6 +194,7 @@ def _grant_resource(grant):
             grant.chapter_id,
             None,
             grant.chapter,
+            owner_names,
         )
     if grant.book_id is not None:
         return _resource(
@@ -145,6 +202,7 @@ def _grant_resource(grant):
             None,
             grant.book_id,
             grant.book,
+            owner_names,
         )
     return None
 
@@ -159,7 +217,11 @@ def _grant_owner_id(grant) -> int | None:
     return None
 
 
-def _session_resources(session, owner_user_id: int | None):
+def _session_resources(
+    session,
+    owner_user_id: int | None,
+    owner_names: dict[int, str],
+):
     resources = []
     for grant in session.grants:
         if (
@@ -167,7 +229,7 @@ def _session_resources(session, owner_user_id: int | None):
             and _grant_owner_id(grant) != owner_user_id
         ):
             continue
-        resource = _grant_resource(grant)
+        resource = _grant_resource(grant, owner_names)
         if resource is not None:
             resources.append(resource)
     return resources
@@ -193,12 +255,22 @@ def unlock_gallery(
         db,
         hash_gallery_code(normalized),
     )
+    owner_names = (
+        _owner_name_map(db, {_invite_owner_id(invite)})
+        if invite is not None
+        else {}
+    )
+    resource = (
+        _invite_resource(invite, owner_names)
+        if invite is not None
+        else None
+    )
     if (
         invite is None
         or invite.used_at is not None
         or invite.revoked_at is not None
         or invite.expires_at <= now
-        or _invite_resource(invite) is None
+        or resource is None
     ):
         _reject_unlock(ip)
 
@@ -256,7 +328,6 @@ def unlock_gallery(
             book_id=invite.book_id,
         )
 
-    resource = _invite_resource(invite)
     db.commit()
     _unlock_limiter.reset(ip)
 
@@ -408,10 +479,16 @@ def read_gallery_invites(
     )
     if deleted:
         db.commit()
+
+    invites = gallery_crud.list_invites(db, owner_user_id)
+    owner_names = _owner_name_map(
+        db,
+        {_invite_owner_id(invite) for invite in invites},
+    )
     return [
         {
             "id": invite.id,
-            "resource": _invite_resource(invite),
+            "resource": _invite_resource(invite, owner_names),
             "note": invite.note,
             "created_at": invite.created_at,
             "expires_at": invite.expires_at,
@@ -419,7 +496,7 @@ def read_gallery_invites(
             "revoked_at": invite.revoked_at,
             "status": _invite_status(invite, now),
         }
-        for invite in gallery_crud.list_invites(db, owner_user_id)
+        for invite in invites
     ]
 
 
@@ -455,6 +532,15 @@ def read_gallery_sessions(
 ):
     owner_user_id = None if is_admin(user) else user.id
     now = datetime.utcnow()
+    sessions = gallery_crud.list_sessions(db, owner_user_id)
+    owner_names = _owner_name_map(
+        db,
+        {
+            _grant_owner_id(grant)
+            for session in sessions
+            for grant in session.grants
+        },
+    )
     return [
         {
             "id": session.id,
@@ -465,9 +551,13 @@ def read_gallery_sessions(
             "ip_address": session.ip_address,
             "user_agent": session.user_agent,
             "status": _session_status(session, now),
-            "resources": _session_resources(session, owner_user_id),
+            "resources": _session_resources(
+                session,
+                owner_user_id,
+                owner_names,
+            ),
         }
-        for session in gallery_crud.list_sessions(db, owner_user_id)
+        for session in sessions
     ]
 
 

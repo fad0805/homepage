@@ -19,6 +19,8 @@ interface GalleryResource {
   type: ResourceType;
   id: number;
   title: string;
+  owner_id: number | null;
+  owner_name: string | null;
 }
 
 interface GalleryInvite {
@@ -66,6 +68,17 @@ const TYPE_LABEL: Record<ResourceType, string> = {
 function resourceLabel(resource: GalleryResource | null) {
   if (!resource) return "-";
   return `[${TYPE_LABEL[resource.type]}] ${resource.title || `#${resource.id}`}`;
+}
+
+function sessionOwnerLabel(session: GallerySession) {
+  const names = Array.from(
+    new Set(
+      session.resources
+        .map((resource) => resource.owner_name)
+        .filter((name): name is string => Boolean(name)),
+    ),
+  );
+  return names.length > 0 ? names.join(", ") : "-";
 }
 
 export default function AdminGalleryPage() {
@@ -152,7 +165,7 @@ export default function AdminGalleryPage() {
         <h2>열람 관리</h2>
         <p>
           {isAdmin
-            ? "발급 기록과 열람 중인 브라우저를 확인하고 폐기할 수 있습니다."
+            ? "모든 사용자의 발급 기록과 열람 중인 브라우저를 확인하고 폐기할 수 있습니다."
             : "내가 발급한 기록과 내 콘텐츠를 열람 중인 브라우저를 확인할 수 있습니다."}
           {" "}새 비밀번호는 각 삽화·게시물·책 관리 화면에서 발급합니다.
           폐기된 기록은 30일 뒤 자동으로 삭제됩니다.
@@ -174,6 +187,7 @@ export default function AdminGalleryPage() {
                 <tr>
                   <th>상태</th>
                   <th>대상</th>
+                  <th>작성자</th>
                   <th>메모</th>
                   <th>발급</th>
                   <th>만료</th>
@@ -194,6 +208,7 @@ export default function AdminGalleryPage() {
                     <td className="gallery-wrap-text">
                       {resourceLabel(invite.resource)}
                     </td>
+                    <td>{invite.resource?.owner_name || "-"}</td>
                     <td>{invite.note || "-"}</td>
                     <td>{formatDateTime(invite.created_at)}</td>
                     <td>{formatDateTime(invite.expires_at)}</td>
@@ -235,6 +250,7 @@ export default function AdminGalleryPage() {
                 <tr>
                   <th>상태</th>
                   <th>열람 범위</th>
+                  <th>작성자</th>
                   <th>열람 시작</th>
                   <th>만료</th>
                   <th>마지막 접속</th>
@@ -259,6 +275,9 @@ export default function AdminGalleryPage() {
                         : session.resources
                             .map((resource) => resourceLabel(resource))
                             .join(", ")}
+                    </td>
+                    <td className="gallery-wrap-text">
+                      {sessionOwnerLabel(session)}
                     </td>
                     <td>{formatDateTime(session.created_at)}</td>
                     <td>{formatDateTime(session.expires_at)}</td>
