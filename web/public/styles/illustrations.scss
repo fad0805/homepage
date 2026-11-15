@@ -7,7 +7,7 @@
 
 /* The blue preset uses a tinted card surface in both color modes. */
 :root[data-color-theme='blue']:not([data-theme='dark']) {
-  --illustration-card-bg: #cbd2e1;
+  --illustration-card-bg: #e0e4ee;
 }
 
 :root[data-color-theme='blue'][data-theme='dark'] {
