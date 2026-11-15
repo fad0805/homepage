@@ -3,6 +3,7 @@ import hashlib
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
 from sqlalchemy.orm import Session
 
+from core.image_urls import public_url
 from core.uploads import save_banner
 from crud.books import (
     create_chapter,
@@ -38,8 +39,8 @@ async def upload_chapter_image(
     _=Depends(require_auth),
 ):
     """Upload an image used inside a chapter body."""
-    url = await save_banner(file, folder="chapters")
-    return {"url": url}
+    key = await save_banner(file, folder="chapters")
+    return {"url": public_url(key)}
 
 
 @router.get("/")

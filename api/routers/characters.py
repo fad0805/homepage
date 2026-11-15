@@ -6,6 +6,7 @@ from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
+from core.image_urls import public_url
 from core.uploads import MAX_UPLOAD_SIZE, save_banner
 from core.url_safety import UnsafeUrlError, pin_external_url
 from db.session import get_db
@@ -265,8 +266,8 @@ async def upload_character_thumbnail(
     """
     Upload a thumbnail image and return its public URL.
     """
-    url = await save_banner(file, folder="characters")
-    return {"url": url}
+    key = await save_banner(file, folder="characters")
+    return {"url": public_url(key)}
 
 
 @router.get("/{character_id}")

@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from sqlalchemy.orm import Session
 
+from core.image_urls import public_url
 from core.uploads import save_banner
 from db.session import get_db
 from crud.profiles import (
@@ -28,8 +29,8 @@ async def upload_profile_image(
     _=Depends(require_auth),
 ):
     """Upload an image used inside an author introduction."""
-    url = await save_banner(file, folder="author")
-    return {"url": url}
+    key = await save_banner(file, folder="author")
+    return {"url": public_url(key)}
 
 
 @router.get("/others")

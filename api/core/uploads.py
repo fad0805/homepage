@@ -25,11 +25,7 @@ from core.config import (
     S3_REGION,
     S3_SECRET_ACCESS_KEY,
 )
-from core.image_urls import (
-    build_public_url,
-    is_external_reference,
-    s3_key_from_url,
-)
+from core.image_urls import is_external_reference, s3_key_from_url
 
 logger = logging.getLogger(__name__)
 
@@ -109,8 +105,16 @@ def _local_path_from_url(url: str) -> Path | None:
     if not path.startswith(prefix):
         return None
 
+    return _local_path_from_key(path[len(prefix) :])
+
+
+def _local_path_from_key(key: str | None) -> Path | None:
+    """Return the local path for an object key without leaving the root."""
+    if not key or is_external_reference(key):
+        return None
+
     root = UPLOAD_DIR.resolve()
-    candidate = (root / unquote(path[len(prefix) :])).resolve()
+    candidate = (root / unquote(key.lstrip("/"))).resolve()
     try:
         candidate.relative_to(root)
     except ValueError:
@@ -119,12 +123,27 @@ def _local_path_from_url(url: str) -> Path | None:
     return candidate
 
 
+def _local_path_from_reference(url: str | None) -> Path | None:
+    """Resolve both legacy URLs and relative object keys to a local path."""
+    if not url:
+        return None
+
+    local_path = _local_path_from_url(url)
+    if local_path is not None:
+        return local_path
+
+    # Relative keys belong to local storage only while S3 is not configured.
+    if _s3_is_configured():
+        return None
+    return _local_path_from_key(url)
+
+
 def _storage_identity(url: str | None) -> tuple[str, str] | None:
     """Identify a stored object so two references can be compared."""
     if not url:
         return None
 
-    local_path = _local_path_from_url(url)
+    local_path = _local_path_from_reference(url)
     if local_path is not None:
         return ("local", str(local_path))
 
@@ -132,7 +151,7 @@ def _storage_identity(url: str | None) -> tuple[str, str] | None:
     if key is not None:
         return ("s3", key)
 
-    if not is_external_reference(url):
+    if not is_external_reference(url) and _s3_is_configured():
         return ("s3", url.lstrip("/"))
     return None
 
@@ -191,24 +210,29 @@ def delete_uploaded_file(url: str | None) -> None:
     if not url:
         return
 
-    local_path = _local_path_from_url(url)
-    if local_path is not None:
-        try:
-            local_path.unlink(missing_ok=True)
-        except OSError:
-            logger.warning("Failed to delete local upload: %s", url, exc_info=True)
+    identity = _storage_identity(url)
+    if identity is None:
         return
 
-    key = s3_key_from_url(url)
-    if key is None and not is_external_reference(url):
-        key = url.lstrip("/")
-    if key is None or not _s3_is_configured():
+    kind, reference = identity
+    if kind == "local":
+        try:
+            Path(reference).unlink(missing_ok=True)
+        except OSError:
+            logger.warning(
+                "Failed to delete local upload: %s", url, exc_info=True
+            )
+        return
+
+    if not _s3_is_configured():
         return
 
     try:
-        _get_s3_client().delete_object(Bucket=S3_BUCKET, Key=key)
+        _get_s3_client().delete_object(Bucket=S3_BUCKET, Key=reference)
     except (BotoCoreError, ClientError):
-        logger.warning("Failed to delete S3 object: %s", key, exc_info=True)
+        logger.warning(
+            "Failed to delete S3 object: %s", reference, exc_info=True
+        )
 
 
 def delete_replaced_upload(
@@ -252,17 +276,18 @@ def _save_to_s3(
             detail="이미지를 업로드하지 못했습니다.",
         )
 
-    return build_public_url(key)
+    return key
 
 
 def _save_to_local(content: bytes, extension: str, folder: str) -> str:
-    """Development fallback when S3 is not configured."""
-    directory = ensure_upload_dir()
-    subdir = directory / folder.strip("/") if folder.strip("/") else directory
-    subdir.mkdir(parents=True, exist_ok=True)
+    """Development fallback when S3 is not configured.
 
-    filename = f"{uuid.uuid4().hex}{extension}"
-    destination = subdir / filename
+    The same object key that S3 would use is written under ``uploads/`` so
+    development and production store the same relative reference.
+    """
+    key = _build_key(folder, extension)
+    destination = ensure_upload_dir() / key
+    destination.parent.mkdir(parents=True, exist_ok=True)
     try:
         destination.write_bytes(content)
     except OSError:
@@ -272,10 +297,7 @@ def _save_to_local(content: bytes, extension: str, folder: str) -> str:
             detail="이미지를 저장하지 못했습니다.",
         )
 
-    folder_path = folder.strip("/")
-    if folder_path:
-        return f"{URL_PREFIX}/{folder_path}/{filename}"
-    return f"{URL_PREFIX}/{filename}"
+    return key
 
 
 async def _read_upload(file: UploadFile) -> bytes:
@@ -355,11 +377,11 @@ def _sanitize_image(content: bytes) -> tuple[bytes, str, str]:
 
 
 async def save_banner(file: UploadFile, folder: str = "banners") -> str:
-    """Upload a banner or thumbnail image and return its public URL.
+    """Upload an image and return its storage key.
 
-    Database models store only the object path through their ``ImageUrl``
-    type; upload responses still use a full URL so the browser can preview the
-    image immediately.
+    Database models persist this relative key through their ``ImageUrl`` type.
+    Callers that return the image to a browser should pass it through
+    :func:`core.image_urls.public_url` first.
     """
     if file.content_type not in ALLOWED_CONTENT_TYPES:
         raise HTTPException(

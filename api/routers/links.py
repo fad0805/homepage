@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from sqlalchemy.orm import Session
 
+from core.image_urls import public_url
 from core.uploads import save_banner
 from db.session import get_db
 from crud.links import (
@@ -159,8 +160,8 @@ async def upload_link_banner(
     """
     Upload a banner image and return its public URL.
     """
-    url = await save_banner(file, folder="banners")
-    return {"url": url}
+    key = await save_banner(file, folder="banners")
+    return {"url": public_url(key)}
 
 
 @router.get("/{link_id}")

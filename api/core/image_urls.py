@@ -2,7 +2,8 @@
 
 Only the object path (for example ``images/characters/abc.jpg``) belongs in the
 database. ``S3_PUBLIC_BASE_URL`` is applied when a value is read, so changing
-the public host does not require rewriting every row.
+the public host does not require rewriting every row. Without object storage,
+the same key is served from the local ``/uploads`` mount.
 """
 
 import os
@@ -12,8 +13,13 @@ _S3_PUBLIC_BASE_URL = os.getenv("S3_PUBLIC_BASE_URL")
 _S3_ENDPOINT_URL = os.getenv("S3_ENDPOINT_URL")
 _S3_BUCKET = os.getenv("S3_BUCKET")
 _S3_REGION = os.getenv("S3_REGION") or "ap-northeast-2"
+_S3_KEY_PREFIX = (os.getenv("S3_KEY_PREFIX") or "images").strip("/")
 
 _EXTERNAL_PREFIXES = ("http://", "https://", "//", "data:", "blob:")
+
+
+def _has_object_storage() -> bool:
+    return bool(_S3_PUBLIC_BASE_URL or _S3_BUCKET)
 
 
 def _public_bases() -> list[str]:
@@ -29,6 +35,18 @@ def _public_bases() -> list[str]:
     return bases
 
 
+def _local_public_url(key: str) -> str:
+    return f"/uploads/{key.lstrip('/')}"
+
+
+def _local_storage_key(value: str) -> str | None:
+    prefix = "/uploads/"
+    if not value.startswith(prefix):
+        return None
+    key = unquote(value[len(prefix) :]).lstrip("/")
+    return key or None
+
+
 def build_public_url(reference: str) -> str:
     """Return the public URL for an object key."""
     if _S3_PUBLIC_BASE_URL:
@@ -38,8 +56,8 @@ def build_public_url(reference: str) -> str:
     elif _S3_BUCKET:
         base = f"https://{_S3_BUCKET}.s3.{_S3_REGION}.amazonaws.com"
     else:
-        # Without storage configuration there is nothing to join. Keep the
-        # reference intact so local development data is not corrupted.
+        # ``_save_to_s3`` only calls this after checking configuration. Keep
+        # the reference intact if the helper is used directly without it.
         return reference
 
     return f"{base}/{reference.lstrip('/')}"
@@ -66,8 +84,9 @@ def is_external_reference(value: str) -> bool:
 def storage_reference(value: str | None) -> str | None:
     """Convert a client or legacy URL into the value stored in the database.
 
-    External URLs and local ``/uploads/...`` paths are kept as-is. URLs under
-    the configured object-storage base are reduced to their object key.
+    External URLs are kept as-is. Object-storage URLs are reduced to their
+    key. During local development, ``/uploads/...`` URLs are normalized to
+    the same relative key so the database representation stays consistent.
     """
     if value is None:
         return None
@@ -80,6 +99,13 @@ def storage_reference(value: str | None) -> str | None:
     if key is not None:
         return key
 
+    # Local development uses the same relative object path as S3. Old
+    # ``/uploads/...`` rows are normalized when they are written again.
+    if not _has_object_storage():
+        local_key = _local_storage_key(text)
+        if local_key is not None:
+            return local_key
+
     if is_external_reference(text):
         return text
 
@@ -87,7 +113,11 @@ def storage_reference(value: str | None) -> str | None:
 
 
 def public_url(value: str | None) -> str | None:
-    """Return the public URL for a stored image reference."""
+    """Return the public URL for a stored image reference.
+
+    Object keys use ``S3_PUBLIC_BASE_URL`` when configured. Without object
+    storage (development), the same key is served under ``/uploads/``.
+    """
     if value is None:
         return None
 
@@ -97,9 +127,14 @@ def public_url(value: str | None) -> str | None:
 
     key = s3_key_from_url(text)
     if key is not None:
+        if not _has_object_storage():
+            return _local_public_url(key)
         return build_public_url(key)
 
     if is_external_reference(text):
         return text
 
-    return build_public_url(text.lstrip("/"))
+    key = text.lstrip("/")
+    if not _has_object_storage():
+        return _local_public_url(key)
+    return build_public_url(key)
