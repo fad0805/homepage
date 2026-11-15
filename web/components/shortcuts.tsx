@@ -40,7 +40,7 @@ children: React.ReactNode;
                 if (pathname === '/signin') return;
 
                 if (pathname.startsWith('/admin')) {
-                    router.push('/');
+                    if (pathname !== '/admin') router.push('/admin');
                     return;
                 }
 
