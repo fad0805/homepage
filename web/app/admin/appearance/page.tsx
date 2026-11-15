@@ -4,20 +4,25 @@ import { useRouter } from "next/navigation";
 import {
   useCallback,
   useEffect,
+  useRef,
   useState,
 } from "react";
 
+import { useTheme, type Theme } from "@/components/theme-provider";
 import {
   COLOR_THEME_OPTIONS,
   DEFAULT_COLOR_THEME,
   DEFAULT_LAYOUT,
   DEFAULT_SIDE_POSITION,
+  DEFAULT_THEME_MODE,
   LAYOUT_OPTIONS,
   SIDE_POSITION_OPTIONS,
+  THEME_MODE_OPTIONS,
   getColorThemeOption,
   type ColorThemeKey,
   type LayoutKey,
   type SidePosition,
+  type ThemeMode,
 } from "@/config/appearance";
 import { apiFetch } from "@/lib/api";
 import {
@@ -35,10 +40,14 @@ import "@/public/styles/admin/appearance.scss";
 interface Appearance {
   layout_key: LayoutKey;
   side_position: SidePosition;
+  default_theme: ThemeMode;
   color_theme: ColorThemeKey;
   color_background: string | null;
   color_content: string | null;
   color_accent: string | null;
+  color_background_dark: string | null;
+  color_content_dark: string | null;
+  color_accent_dark: string | null;
 }
 
 type Notice = { type: "success" | "error"; text: string };
@@ -68,17 +77,44 @@ function overridesFromAppearance(
     background: data.color_background,
     content: data.color_content,
     accent: data.color_accent,
+    darkBackground: data.color_background_dark,
+    darkContent: data.color_content_dark,
+    darkAccent: data.color_accent_dark,
   };
 }
 
+const OVERRIDE_KEYS = [
+  "background",
+  "content",
+  "accent",
+  "darkBackground",
+  "darkContent",
+  "darkAccent",
+] as const;
+
 function sameOverrides(a: ColorOverrides, b: ColorOverrides) {
-  return (["background", "content", "accent"] as const).every(
+  return OVERRIDE_KEYS.every(
     (key) => normalizeHex(a[key]) === normalizeHex(b[key]),
   );
 }
 
+type ColorMode = "light" | "dark";
+type ColorFieldKey = (typeof COLOR_FIELDS)[number]["key"];
+
+const DARK_FIELD_KEYS = {
+  background: "darkBackground",
+  content: "darkContent",
+  accent: "darkAccent",
+} as const;
+
+function overrideKeyFor(field: ColorFieldKey, mode: ColorMode) {
+  return mode === "light" ? field : DARK_FIELD_KEYS[field];
+}
+
 export default function AdminAppearance() {
   const router = useRouter();
+  const { theme } = useTheme();
+  const initialThemeRef = useRef<Theme | null>(null);
   const [layoutKey, setLayoutKey] = useState<LayoutKey>(DEFAULT_LAYOUT);
   const [savedLayoutKey, setSavedLayoutKey] =
     useState<LayoutKey>(DEFAULT_LAYOUT);
@@ -86,6 +122,10 @@ export default function AdminAppearance() {
     useState<SidePosition>(DEFAULT_SIDE_POSITION);
   const [savedSidePosition, setSavedSidePosition] =
     useState<SidePosition>(DEFAULT_SIDE_POSITION);
+  const [defaultTheme, setDefaultTheme] =
+    useState<ThemeMode>(DEFAULT_THEME_MODE);
+  const [savedDefaultTheme, setSavedDefaultTheme] =
+    useState<ThemeMode>(DEFAULT_THEME_MODE);
   const [colorTheme, setColorTheme] =
     useState<ColorThemeKey>(DEFAULT_COLOR_THEME);
   const [savedColorTheme, setSavedColorTheme] =
@@ -94,9 +134,29 @@ export default function AdminAppearance() {
     useState<ColorOverrides>({});
   const [savedColorOverrides, setSavedColorOverrides] =
     useState<ColorOverrides>({});
+  const [colorMode, setColorMode] = useState<ColorMode>("light");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState<Notice | null>(null);
+
+  useEffect(() => {
+    if (initialThemeRef.current === null) {
+      initialThemeRef.current = theme;
+    }
+    setColorMode(theme);
+  }, [theme]);
+
+  useEffect(() => {
+    return () => {
+      const originalTheme = initialThemeRef.current;
+      if (originalTheme) {
+        document.documentElement.setAttribute(
+          "data-theme",
+          originalTheme,
+        );
+      }
+    };
+  }, []);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -106,12 +166,16 @@ export default function AdminAppearance() {
       );
       const savedSide =
         data.side_position ?? DEFAULT_SIDE_POSITION;
+      const savedDefaultTheme =
+        data.default_theme ?? DEFAULT_THEME_MODE;
       const savedTheme = data.color_theme ?? DEFAULT_COLOR_THEME;
       const savedOverrides = overridesFromAppearance(data);
       const activePreview = getAppearancePreview();
 
       setSavedLayoutKey(data.layout_key);
       setSavedSidePosition(savedSide);
+      setDefaultTheme(savedDefaultTheme);
+      setSavedDefaultTheme(savedDefaultTheme);
       setSavedColorTheme(savedTheme);
       setSavedColorOverrides(savedOverrides);
       setLayoutKey(activePreview?.layoutKey ?? data.layout_key);
@@ -165,17 +229,26 @@ export default function AdminAppearance() {
           body: JSON.stringify({
             layout_key: layoutKey,
             side_position: sidePosition,
+            default_theme: defaultTheme,
             color_theme: colorTheme,
             color_background:
               normalizeHex(colorOverrides.background),
             color_content:
               normalizeHex(colorOverrides.content),
             color_accent: normalizeHex(colorOverrides.accent),
+            color_background_dark:
+              normalizeHex(colorOverrides.darkBackground),
+            color_content_dark:
+              normalizeHex(colorOverrides.darkContent),
+            color_accent_dark:
+              normalizeHex(colorOverrides.darkAccent),
           }),
         },
       );
       const savedSide =
         data.side_position ?? DEFAULT_SIDE_POSITION;
+      const savedDefaultTheme =
+        data.default_theme ?? DEFAULT_THEME_MODE;
       const savedTheme = data.color_theme ?? DEFAULT_COLOR_THEME;
       const savedOverrides = overridesFromAppearance(data);
 
@@ -183,6 +256,8 @@ export default function AdminAppearance() {
       setSavedLayoutKey(data.layout_key);
       setSidePosition(savedSide);
       setSavedSidePosition(savedSide);
+      setDefaultTheme(savedDefaultTheme);
+      setSavedDefaultTheme(savedDefaultTheme);
       setColorTheme(savedTheme);
       setSavedColorTheme(savedTheme);
       setColorOverrides(savedOverrides);
@@ -194,6 +269,12 @@ export default function AdminAppearance() {
         colorOverrides: savedOverrides,
       });
       document.documentElement.dataset.appearance = data.layout_key;
+      const originalTheme = initialThemeRef.current ?? theme;
+      setColorMode(originalTheme);
+      document.documentElement.setAttribute(
+        "data-theme",
+        originalTheme,
+      );
       router.refresh();
       setNotice({
         type: "success",
@@ -220,33 +301,47 @@ export default function AdminAppearance() {
   const isDirty =
     layoutKey !== savedLayoutKey ||
     sidePosition !== savedSidePosition ||
+    defaultTheme !== savedDefaultTheme ||
     colorTheme !== savedColorTheme ||
     !sameOverrides(colorOverrides, savedColorOverrides);
   const savedSideLabel =
     savedSidePosition === "right" ? "오른쪽" : "왼쪽";
 
+  const modePalette =
+    colorMode === "light" ? selectedColor.light : selectedColor.dark;
   const effectiveColors = {
     background:
-      normalizeHex(colorOverrides.background) ??
-      selectedColor.light.background,
+      normalizeHex(
+        colorOverrides[overrideKeyFor("background", colorMode)],
+      ) ?? modePalette.background,
     content:
-      normalizeHex(colorOverrides.content) ??
-      selectedColor.light.content,
+      normalizeHex(
+        colorOverrides[overrideKeyFor("content", colorMode)],
+      ) ?? modePalette.content,
     accent:
-      normalizeHex(colorOverrides.accent) ??
-      selectedColor.light.accent,
+      normalizeHex(
+        colorOverrides[overrideKeyFor("accent", colorMode)],
+      ) ?? modePalette.accent,
   };
-  const hasColorOverride = COLOR_FIELDS.some((field) =>
-    Boolean(normalizeHex(colorOverrides[field.key])),
+  const hasColorOverride = OVERRIDE_KEYS.some((key) =>
+    Boolean(normalizeHex(colorOverrides[key])),
   );
 
   const setColorField = (
-    field: (typeof COLOR_FIELDS)[number]["key"],
+    field: ColorFieldKey,
     value: string | null,
   ) => {
-    const next = { ...colorOverrides, [field]: value };
+    const key = overrideKeyFor(field, colorMode);
+    const next = { ...colorOverrides, [key]: value };
     setColorOverrides(next);
     preview({ colorOverrides: next });
+  };
+
+  const toggleColorMode = () => {
+    const next: ColorMode =
+      colorMode === "light" ? "dark" : "light";
+    setColorMode(next);
+    document.documentElement.setAttribute("data-theme", next);
   };
 
   return (
@@ -260,7 +355,8 @@ export default function AdminAppearance() {
           </p>
         </div>
         <span className="admin-appearance-current">
-          현재 적용: {saved.label} · {savedColor.label}
+          현재 적용: {saved.label} · {savedColor.label} · 기본{" "}
+          {savedDefaultTheme === "dark" ? "다크" : "라이트"}
           {savedLayoutKey === "side" ? ` · ${savedSideLabel}` : ""}
         </span>
       </header>
@@ -364,14 +460,55 @@ export default function AdminAppearance() {
             </div>
           </div>
 
+          <section className="admin-appearance-default-theme">
+            <div className="admin-appearance-section-head">
+              <div>
+                <h2>기본 테마</h2>
+                <p className="admin-appearance-hint">
+                  저장된 테마가 없는 방문자에게 처음 보여줄
+                  라이트/다크 테마를 정합니다. 방문자가 직접
+                  전환한 테마는 그대로 유지됩니다.
+                </p>
+              </div>
+            </div>
+            <div
+              className="admin-appearance-theme-options"
+              role="radiogroup"
+              aria-label="기본 테마 선택"
+            >
+              {THEME_MODE_OPTIONS.map((option) => {
+                const isSelected = defaultTheme === option.key;
+                return (
+                  <button
+                    key={option.key}
+                    type="button"
+                    role="radio"
+                    aria-checked={isSelected}
+                    className={`admin-appearance-theme-card${
+                      isSelected ? " is-selected" : ""
+                    }`}
+                    onClick={() => setDefaultTheme(option.key)}
+                  >
+                    {isSelected ? (
+                      <span className="admin-appearance-theme-card__selected">
+                        ✓ 선택됨
+                      </span>
+                    ) : null}
+                    <strong>{option.label}</strong>
+                    <span>{option.description}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </section>
+
           <section className="admin-appearance-colors">
             <div className="admin-appearance-section-head">
               <div>
                 <h2>색 테마</h2>
                 <p className="admin-appearance-hint">
-                  템플릿을 고른 뒤 배경·콘텐츠·포인트 색만
-                  조정할 수 있습니다. 다크 모드는 선택한 색에 맞춰
-                  자동으로 조정됩니다.
+                  템플릿을 고른 뒤 라이트/다크 색상을 각각 조정할
+                  수 있습니다.
                 </p>
               </div>
             </div>
@@ -413,14 +550,27 @@ export default function AdminAppearance() {
                     >
                       <i
                         style={{
-                          background: option.light.background,
+                          background:
+                            colorMode === "light"
+                              ? option.light.background
+                              : option.dark.background,
                         }}
                       />
                       <i
-                        style={{ background: option.light.content }}
+                        style={{
+                          background:
+                            colorMode === "light"
+                              ? option.light.content
+                              : option.dark.content,
+                        }}
                       />
                       <i
-                        style={{ background: option.light.accent }}
+                        style={{
+                          background:
+                            colorMode === "light"
+                              ? option.light.accent
+                              : option.dark.accent,
+                        }}
                       />
                     </span>
                     <span className="admin-appearance-color-card__heading">
@@ -437,8 +587,12 @@ export default function AdminAppearance() {
 
             <div className="admin-appearance-tweaks">
               {COLOR_FIELDS.map((field) => {
+                const overrideKey = overrideKeyFor(
+                  field.key,
+                  colorMode,
+                );
                 const hasOverride = Boolean(
-                  normalizeHex(colorOverrides[field.key]),
+                  normalizeHex(colorOverrides[overrideKey]),
                 );
 
                 return (
@@ -481,17 +635,42 @@ export default function AdminAppearance() {
 
               <div className="admin-appearance-tweaks__footer">
                 <span>선택한 템플릿은 유지됩니다.</span>
-                <button
-                  type="button"
-                  className="admin-button admin-appearance-reset-all"
-                  onClick={() => {
-                    setColorOverrides({});
-                    preview({ colorOverrides: {} });
-                  }}
-                  disabled={!hasColorOverride}
-                >
-                  기본 템플릿으로 되돌리기
-                </button>
+                <div className="admin-appearance-tweaks__actions">
+                  <button
+                    type="button"
+                    className="admin-appearance-color-mode-toggle"
+                    onClick={toggleColorMode}
+                    aria-pressed={colorMode === "dark"}
+                    aria-label={`${
+                      colorMode === "light" ? "라이트" : "다크"
+                    } 색상 편집 중, ${
+                      colorMode === "light" ? "다크" : "라이트"
+                    } 색상으로 전환`}
+                  >
+                    <span
+                      className="admin-appearance-color-mode-toggle__track"
+                      aria-hidden="true"
+                    >
+                      <span />
+                    </span>
+                    <span>
+                      {colorMode === "light"
+                        ? "라이트 색상"
+                        : "다크 색상"}
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    className="admin-button admin-appearance-reset-all"
+                    onClick={() => {
+                      setColorOverrides({});
+                      preview({ colorOverrides: {} });
+                    }}
+                    disabled={!hasColorOverride}
+                  >
+                    기본 템플릿으로 되돌리기
+                  </button>
+                </div>
               </div>
             </div>
           </section>

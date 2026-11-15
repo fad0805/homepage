@@ -4,9 +4,11 @@ import {
   DEFAULT_COLOR_THEME,
   DEFAULT_LAYOUT,
   DEFAULT_SIDE_POSITION,
+  DEFAULT_THEME_MODE,
   type ColorThemeKey,
   type LayoutKey,
   type SidePosition,
+  type ThemeMode,
 } from "@/config/appearance";
 import {
   buildColorThemeStyle,
@@ -77,6 +79,7 @@ export default async function RootLayout({
   const currentUser = await getCurrentUser();
   let layoutKey: LayoutKey = DEFAULT_LAYOUT;
   let sidePosition: SidePosition = DEFAULT_SIDE_POSITION;
+  let defaultTheme: ThemeMode = DEFAULT_THEME_MODE;
   let colorTheme: ColorThemeKey = DEFAULT_COLOR_THEME;
   let colorOverrides: ColorOverrides = {};
 
@@ -84,10 +87,14 @@ export default async function RootLayout({
     const appearance = await serverApiFetch<{
       layout_key: LayoutKey;
       side_position: SidePosition;
+      default_theme?: ThemeMode;
       color_theme?: ColorThemeKey;
       color_background?: string | null;
       color_content?: string | null;
       color_accent?: string | null;
+      color_background_dark?: string | null;
+      color_content_dark?: string | null;
+      color_accent_dark?: string | null;
     }>(
       currentUser ? "/users/me/appearance" : "/appearance",
       {
@@ -97,11 +104,15 @@ export default async function RootLayout({
     );
     layoutKey = appearance.layout_key;
     sidePosition = appearance.side_position ?? DEFAULT_SIDE_POSITION;
+    defaultTheme = appearance.default_theme ?? DEFAULT_THEME_MODE;
     colorTheme = appearance.color_theme ?? DEFAULT_COLOR_THEME;
     colorOverrides = {
       background: appearance.color_background,
       content: appearance.color_content,
       accent: appearance.color_accent,
+      darkBackground: appearance.color_background_dark,
+      darkContent: appearance.color_content_dark,
+      darkAccent: appearance.color_accent_dark,
     };
   } catch (error) {
     console.error("Failed to load the site appearance.", error);
@@ -119,7 +130,10 @@ export default async function RootLayout({
       suppressHydrationWarning
     >
       <body>
-        <ThemeProvider themeColors={themeColors}>
+        <ThemeProvider
+          themeColors={themeColors}
+          defaultTheme={defaultTheme}
+        >
           <AuthProvider>
             <VisitTracker />
             <Shortcuts>

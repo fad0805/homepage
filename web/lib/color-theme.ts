@@ -11,6 +11,9 @@ export interface ColorOverrides {
   background?: string | null;
   content?: string | null;
   accent?: string | null;
+  darkBackground?: string | null;
+  darkContent?: string | null;
+  darkAccent?: string | null;
 }
 
 export interface ResolvedColorTheme {
@@ -32,7 +35,10 @@ export function hasColorOverrides(overrides: ColorOverrides) {
   return Boolean(
     normalizeHex(overrides.background) ??
       normalizeHex(overrides.content) ??
-      normalizeHex(overrides.accent),
+      normalizeHex(overrides.accent) ??
+      normalizeHex(overrides.darkBackground) ??
+      normalizeHex(overrides.darkContent) ??
+      normalizeHex(overrides.darkAccent),
   );
 }
 
@@ -100,8 +106,11 @@ function ensureContrast(foreground: string, background: string, min = 4.5) {
     relativeLuminance(background) > 0.35 ? "#000000" : "#ffffff";
   let next = foreground;
 
+  // Start close to the chosen color and only blend toward the target as
+  // much as needed. Using `step / 10` here would jump straight to a nearly
+  // black/white color and destroy the selected accent's saturation.
   for (let step = 1; step <= 10; step += 1) {
-    next = mixColor(foreground, target, step / 10);
+    next = mixColor(foreground, target, 1 - step / 10);
     if (contrastRatio(next, background) >= min) return next;
   }
 
@@ -116,6 +125,9 @@ export function resolveColorTheme(
   const backgroundOverride = normalizeHex(overrides.background);
   const contentOverride = normalizeHex(overrides.content);
   const accentOverride = normalizeHex(overrides.accent);
+  const darkBackgroundOverride = normalizeHex(overrides.darkBackground);
+  const darkContentOverride = normalizeHex(overrides.darkContent);
+  const darkAccentOverride = normalizeHex(overrides.darkAccent);
 
   const lightBackground =
     backgroundOverride ?? option.light.background;
@@ -134,27 +146,37 @@ export function resolveColorTheme(
     ? mixColor(lightBackground, "#000000", 0.86)
     : option.light.emptyBanner;
 
-  const darkBackground = backgroundOverride
-    ? mixColor(backgroundOverride, option.dark.background, 0.14)
-    : option.dark.background;
-  const darkContent = contentOverride
-    ? mixColor(contentOverride, option.dark.content, 0.14)
-    : option.dark.content;
-  const darkAccent = accentOverride
-    ? ensureContrast(
-        mixColor(accentOverride, "#ffffff", 0.55),
-        darkContent,
-      )
-    : option.dark.accent;
-  const darkText = backgroundOverride
-    ? pickTextColor(darkBackground)
-    : option.dark.text;
-  const darkInput = contentOverride
-    ? darkContent
-    : option.dark.inputBackground;
-  const darkEmpty = backgroundOverride
+  const darkBackground = darkBackgroundOverride
+    ? darkBackgroundOverride
+    : backgroundOverride
+      ? mixColor(backgroundOverride, option.dark.background, 0.14)
+      : option.dark.background;
+  const darkContent = darkContentOverride
+    ? darkContentOverride
+    : contentOverride
+      ? mixColor(contentOverride, option.dark.content, 0.14)
+      : option.dark.content;
+  const darkAccent = darkAccentOverride
+    ? ensureContrast(darkAccentOverride, darkContent)
+    : accentOverride
+      ? ensureContrast(
+          mixColor(accentOverride, "#ffffff", 0.55),
+          darkContent,
+        )
+      : option.dark.accent;
+  const darkText =
+    darkBackgroundOverride || backgroundOverride
+      ? pickTextColor(darkBackground)
+      : option.dark.text;
+  const darkInput =
+    darkContentOverride || contentOverride
+      ? darkContent
+      : option.dark.inputBackground;
+  const darkEmpty = darkBackgroundOverride
     ? mixColor(darkBackground, option.dark.emptyBanner, 0.55)
-    : option.dark.emptyBanner;
+    : backgroundOverride
+      ? mixColor(darkBackground, option.dark.emptyBanner, 0.55)
+      : option.dark.emptyBanner;
 
   return {
     light: {

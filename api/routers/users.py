@@ -421,10 +421,14 @@ def get_my_appearance(
     return {
         "layout_key": settings.layout_key,
         "side_position": settings.side_position,
+        "default_theme": settings.default_theme,
         "color_theme": settings.color_theme,
         "color_background": settings.color_background,
         "color_content": settings.color_content,
         "color_accent": settings.color_accent,
+        "color_background_dark": settings.color_background_dark,
+        "color_content_dark": settings.color_content_dark,
+        "color_accent_dark": settings.color_accent_dark,
     }
 
 
@@ -440,16 +444,24 @@ def update_my_appearance(
         user,
         layout_key=payload.layout_key,
         side_position=payload.side_position,
+        default_theme=payload.default_theme,
         color_theme=payload.color_theme,
         color_background=payload.color_background,
         color_content=payload.color_content,
         color_accent=payload.color_accent,
+        color_background_dark=payload.color_background_dark,
+        color_content_dark=payload.color_content_dark,
+        color_accent_dark=payload.color_accent_dark,
     )
     return {
         "layout_key": settings.layout_key,
         "side_position": settings.side_position,
+        "default_theme": settings.default_theme,
         "color_theme": settings.color_theme,
         "color_background": settings.color_background,
         "color_content": settings.color_content,
         "color_accent": settings.color_accent,
+        "color_background_dark": settings.color_background_dark,
+        "color_content_dark": settings.color_content_dark,
+        "color_accent_dark": settings.color_accent_dark,
     }

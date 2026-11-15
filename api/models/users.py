@@ -49,6 +49,13 @@ class AuthorSettings(Base):
         default="left",
         server_default="left",
     )
+    # Theme shown to visitors who have not chosen light/dark themselves.
+    default_theme = Column(
+        String(16),
+        nullable=False,
+        default="light",
+        server_default="light",
+    )
     color_theme = Column(
         String(32),
         nullable=False,
@@ -58,6 +65,9 @@ class AuthorSettings(Base):
     color_background = Column(String(7), nullable=True)
     color_content = Column(String(7), nullable=True)
     color_accent = Column(String(7), nullable=True)
+    color_background_dark = Column(String(7), nullable=True)
+    color_content_dark = Column(String(7), nullable=True)
+    color_accent_dark = Column(String(7), nullable=True)
     created_at = Column(DateTime, default=func.now(), nullable=False)
     updated_at = Column(
         DateTime,
