@@ -1,3 +1,5 @@
+from urllib.parse import urljoin
+
 import httpx
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from fastapi.concurrency import run_in_threadpool
@@ -5,7 +7,7 @@ from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
 from core.uploads import MAX_UPLOAD_SIZE, save_banner
-from core.url_safety import validate_external_url
+from core.url_safety import UnsafeUrlError, pin_external_url
 from db.session import get_db
 from crud.characters import (
     create_character,
@@ -160,51 +162,86 @@ async def proxy_character_image(
     Fetch an external image through the API so it can be cropped in the
     browser without cross-origin canvas restrictions.
     """
-    await run_in_threadpool(
-        validate_external_url,
-        url,
-        resource_label="이미지 URL",
-    )
+    current_url = url
+    chunks: list[bytes] = []
+    content_type = ""
 
     try:
         async with httpx.AsyncClient(
-            follow_redirects=True,
+            follow_redirects=False,
             timeout=httpx.Timeout(10.0),
             headers={"User-Agent": "homepage-image-proxy/1.0"},
         ) as client:
-            async with client.stream("GET", url) as response:
-                if response.status_code != status.HTTP_200_OK:
+            for _ in range(6):
+                try:
+                    target = await run_in_threadpool(
+                        pin_external_url,
+                        current_url,
+                        resource_label="이미지 URL",
+                    )
+                except UnsafeUrlError as error:
                     raise HTTPException(
                         status_code=status.HTTP_400_BAD_REQUEST,
-                        detail="이미지를 불러오지 못했습니다.",
-                    )
+                        detail=str(error),
+                    ) from error
 
-                content_type = (
-                    response.headers.get("content-type", "")
-                    .split(";")[0]
-                    .strip()
-                    .lower()
-                )
-                if not content_type.startswith("image/"):
-                    raise HTTPException(
-                        status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
-                        detail="이미지 URL이 아닙니다.",
-                    )
+                async with client.stream(
+                    "GET",
+                    target.url,
+                    headers=target.headers,
+                    extensions=target.extensions,
+                ) as response:
+                    location = response.headers.get("location")
+                    if (
+                        status.HTTP_300_MULTIPLE_CHOICES
+                        <= response.status_code
+                        < status.HTTP_400_BAD_REQUEST
+                        and location
+                    ):
+                        current_url = urljoin(current_url, location)
+                        continue
 
-                chunks: list[bytes] = []
-                size = 0
-                async for chunk in response.aiter_bytes():
-                    size += len(chunk)
-                    if size > MAX_UPLOAD_SIZE:
+                    if response.status_code != status.HTTP_200_OK:
                         raise HTTPException(
-                            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-                            detail=(
-                                "이미지 크기는 "
-                                f"{MAX_UPLOAD_SIZE // (1024 * 1024)}MB 이하여야 "
-                                "합니다."
-                            ),
+                            status_code=status.HTTP_400_BAD_REQUEST,
+                            detail="이미지를 불러오지 못했습니다.",
                         )
-                    chunks.append(chunk)
+
+                    content_type = (
+                        response.headers.get("content-type", "")
+                        .split(";")[0]
+                        .strip()
+                        .lower()
+                    )
+                    if not content_type.startswith("image/"):
+                        raise HTTPException(
+                            status_code=(
+                                status.HTTP_415_UNSUPPORTED_MEDIA_TYPE
+                            ),
+                            detail="이미지 URL이 아닙니다.",
+                        )
+
+                    size = 0
+                    async for chunk in response.aiter_bytes():
+                        size += len(chunk)
+                        if size > MAX_UPLOAD_SIZE:
+                            raise HTTPException(
+                                status_code=(
+                                    status.HTTP_413_REQUEST_ENTITY_TOO_LARGE
+                                ),
+                                detail=(
+                                    "이미지 크기는 "
+                                    f"{MAX_UPLOAD_SIZE // (1024 * 1024)}MB "
+                                    "이하여야 합니다."
+                                ),
+                            )
+                        chunks.append(chunk)
+                    break
+            else:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="이미지 이동이 너무 많습니다.",
+                )
     except HTTPException:
         raise
     except httpx.HTTPError:

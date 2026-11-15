@@ -8,6 +8,7 @@ from urllib.parse import urlparse
 import httpx
 from sqlalchemy.orm import Session
 
+from core.url_safety import UnsafeUrlError, pin_external_url
 from models.books import Chapter
 from models.illustrations import Illustration
 from models.settings import MastodonSettings, NotificationDelivery
@@ -35,7 +36,12 @@ def normalize_instance_url(value: str | None) -> str | None:
         raise MastodonError("인스턴스 주소를 확인해주세요. 예: mastodon.social")
     if any(char.isspace() for char in parsed.netloc):
         raise MastodonError("인스턴스 주소를 확인해주세요. 예: mastodon.social")
-    return f"{parsed.scheme}://{parsed.netloc}".rstrip("/")
+    normalized = f"{parsed.scheme}://{parsed.netloc}".rstrip("/")
+    try:
+        pin_external_url(normalized, resource_label="인스턴스 URL")
+    except UnsafeUrlError as error:
+        raise MastodonError(str(error)) from error
+    return normalized
 
 
 def normalize_site_url(value: str | None) -> str | None:
@@ -49,6 +55,14 @@ def normalize_site_url(value: str | None) -> str | None:
             "사이트 주소를 확인해주세요. 예: https://example.com"
         )
     return f"{parsed.scheme}://{parsed.netloc}".rstrip("/")
+
+
+def _pin_instance_url(url: str):
+    """Resolve an instance URL once so the request uses the checked IP."""
+    try:
+        return pin_external_url(url, resource_label="인스턴스 URL")
+    except UnsafeUrlError as error:
+        raise MastodonError(str(error)) from error
 
 
 def _ready_settings(db: Session):
@@ -308,12 +322,17 @@ def _request(
     if not instance or not token:
         raise MastodonError("연결 정보를 먼저 저장해주세요.")
 
+    target = _pin_instance_url(f"{instance}{path}")
     try:
         with httpx.Client(timeout=REQUEST_TIMEOUT) as client:
             return client.request(
                 method,
-                f"{instance}{path}",
-                headers={"Authorization": f"Bearer {token}"},
+                target.url,
+                headers={
+                    "Authorization": f"Bearer {token}",
+                    **target.headers,
+                },
+                extensions=target.extensions,
                 **kwargs,
             )
     except httpx.HTTPError as error:
@@ -336,10 +355,16 @@ def _misskey_request(
 
     body = dict(payload or {})
     body["i"] = token
+    target = _pin_instance_url(f"{instance}{path}")
 
     try:
         with httpx.Client(timeout=REQUEST_TIMEOUT) as client:
-            return client.post(f"{instance}{path}", json=body)
+            return client.post(
+                target.url,
+                headers=target.headers,
+                extensions=target.extensions,
+                json=body,
+            )
     except httpx.HTTPError as error:
         logger.warning("Misskey request failed: %s", error)
         raise MastodonError(
@@ -381,9 +406,16 @@ def _detect_instance_software(
     if not instance:
         return None
 
+    mastodon_target = _pin_instance_url(f"{instance}/api/v1/instance")
+    misskey_target = _pin_instance_url(f"{instance}/api/meta")
+
     try:
         with httpx.Client(timeout=REQUEST_TIMEOUT) as client:
-            mastodon = client.get(f"{instance}/api/v1/instance")
+            mastodon = client.get(
+                mastodon_target.url,
+                headers=mastodon_target.headers,
+                extensions=mastodon_target.extensions,
+            )
             if mastodon.status_code == 200:
                 data = mastodon.json()
                 if isinstance(data, dict):
@@ -393,7 +425,12 @@ def _detect_instance_software(
                     if "uri" in data or "version" in data:
                         return "mastodon"
 
-            misskey = client.post(f"{instance}/api/meta", json={})
+            misskey = client.post(
+                misskey_target.url,
+                headers=misskey_target.headers,
+                extensions=misskey_target.extensions,
+                json={},
+            )
             if misskey.status_code == 200:
                 data = misskey.json()
                 if isinstance(data, dict) and (
