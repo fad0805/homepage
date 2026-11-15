@@ -55,6 +55,8 @@ interface VisitDay {
   date: string;
   visitors: number;
   visits: number;
+  sources: VisitSource[];
+  searches: VisitSearch[];
 }
 
 interface VisitSource {
@@ -81,8 +83,6 @@ interface VisitStats {
   daily: VisitDay[];
   sources: VisitSource[];
   searches: VisitSearch[];
-  today_sources: VisitSource[];
-  today_searches: VisitSearch[];
 }
 
 interface DashboardData {
@@ -130,7 +130,9 @@ export default function AdminHome() {
   const [error, setError] = useState<string | null>(null);
   const [now, setNow] = useState<number | null>(null);
   const [showAllPosts, setShowAllPosts] = useState(false);
-  const [todayTrafficOnly, setTodayTrafficOnly] = useState(false);
+  const [selectedTrafficDate, setSelectedTrafficDate] = useState<
+    string | null
+  >(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -264,6 +266,25 @@ export default function AdminHome() {
     ? popularChapters
     : popularChapters.slice(0, 5);
 
+  const selectedTrafficDay = useMemo(() => {
+    if (!data || selectedTrafficDate === null) return null;
+    return (
+      data.visits.daily.find(
+        (day) => day.date === selectedTrafficDate,
+      ) ?? null
+    );
+  }, [data, selectedTrafficDate]);
+
+  const trafficLabel = selectedTrafficDay
+    ? selectedTrafficDay.date === data?.visits.today.date
+      ? "오늘"
+      : formatDayLabel(selectedTrafficDay.date)
+    : "최근 7일";
+  const trafficSources =
+    selectedTrafficDay?.sources ?? data?.visits.sources ?? [];
+  const trafficSearches =
+    selectedTrafficDay?.searches ?? data?.visits.searches ?? [];
+
   const visitMax = useMemo(() => {
     if (!data) return 1;
     return Math.max(
@@ -393,49 +414,34 @@ export default function AdminHome() {
                               (day.visitors / visitMax) * 100,
                             ),
                           );
-                    const isToday =
-                      day.date === data.visits.today.date;
+                    const selected =
+                      day.date === selectedTrafficDate;
                     return (
                       <div
-                        className={`admin-dashboard-chart__bar${
-                          isToday ? " is-today" : ""
-                        }${
-                          isToday && todayTrafficOnly
-                            ? " is-selected"
-                            : ""
+                        className={`admin-dashboard-chart__bar is-clickable${
+                          selected ? " is-selected" : ""
                         }`}
                         key={day.date}
-                        role={isToday ? "button" : undefined}
-                        tabIndex={isToday ? 0 : undefined}
-                        aria-pressed={
-                          isToday ? todayTrafficOnly : undefined
+                        role="button"
+                        tabIndex={0}
+                        aria-pressed={selected}
+                        title={`${formatDayLabel(day.date)} 유입 경로와 검색어 보기`}
+                        onClick={() =>
+                          setSelectedTrafficDate((current) =>
+                            current === day.date ? null : day.date,
+                          )
                         }
-                        title={
-                          isToday
-                            ? "오늘 유입 경로와 검색어 보기"
-                            : undefined
-                        }
-                        onClick={
-                          isToday
-                            ? () =>
-                                setTodayTrafficOnly((current) => !current)
-                            : undefined
-                        }
-                        onKeyDown={
-                          isToday
-                            ? (event) => {
-                                if (
-                                  event.key === "Enter" ||
-                                  event.key === " "
-                                ) {
-                                  event.preventDefault();
-                                  setTodayTrafficOnly(
-                                    (current) => !current,
-                                  );
-                                }
-                              }
-                            : undefined
-                        }
+                        onKeyDown={(event) => {
+                          if (
+                            event.key === "Enter" ||
+                            event.key === " "
+                          ) {
+                            event.preventDefault();
+                            setSelectedTrafficDate((current) =>
+                              current === day.date ? null : day.date,
+                            );
+                          }
+                        }}
                       >
                         <span className="admin-dashboard-chart__count">
                           {day.visitors}
@@ -460,18 +466,12 @@ export default function AdminHome() {
                   <div className="admin-dashboard-subhead">
                     <h3>유입 경로</h3>
                     <span>
-                      {todayTrafficOnly ? "오늘" : "최근 7일"}
+                      {trafficLabel}
                     </span>
                   </div>
-                  {(todayTrafficOnly
-                    ? data.visits.today_sources
-                    : data.visits.sources
-                  ).length ? (
+                  {trafficSources.length ? (
                     <ul>
-                      {(todayTrafficOnly
-                        ? data.visits.today_sources
-                        : data.visits.sources
-                      ).map((source) => (
+                      {trafficSources.map((source) => (
                         <li key={source.source}>
                           <span
                             className="admin-dashboard-sources__name"
@@ -496,18 +496,12 @@ export default function AdminHome() {
                   <div className="admin-dashboard-subhead">
                     <h3>유입 검색어</h3>
                     <span>
-                      {todayTrafficOnly ? "오늘" : "최근 7일"}
+                      {trafficLabel}
                     </span>
                   </div>
-                  {(todayTrafficOnly
-                    ? data.visits.today_searches
-                    : data.visits.searches
-                  ).length ? (
+                  {trafficSearches.length ? (
                     <ul>
-                      {(todayTrafficOnly
-                        ? data.visits.today_searches
-                        : data.visits.searches
-                      ).map((search) => (
+                      {trafficSearches.map((search) => (
                         <li key={search.query}>
                           <span
                             className="admin-dashboard-sources__name"
