@@ -497,6 +497,34 @@
   border-top: 1px solid var(--admin-border);
 }
 
+.admin-appearance-color-mode {
+  display: flex;
+  gap: 0.4rem;
+  margin-bottom: 0.2rem;
+
+  button {
+    padding: 0.4rem 0.7rem;
+    border: 1px solid var(--admin-border);
+    border-radius: 0.55rem;
+    background: var(--admin-card-bg);
+    color: var(--foreground);
+    font: inherit;
+    font-size: 0.74rem;
+    cursor: pointer;
+
+    &.is-selected {
+      border-color: var(--admin-primary);
+      box-shadow: 0 0 0 1px var(--admin-primary) inset;
+      color: var(--title-color);
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--admin-primary);
+      outline-offset: 2px;
+    }
+  }
+}
+
 .admin-appearance-section-head {
   display: flex;
   align-items: flex-end;

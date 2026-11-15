@@ -34,6 +34,9 @@ class AppearanceRead(BaseModel):
     color_background: str | None = None
     color_content: str | None = None
     color_accent: str | None = None
+    color_background_dark: str | None = None
+    color_content_dark: str | None = None
+    color_accent_dark: str | None = None
 
 
 class AppearanceUpdate(BaseModel):
@@ -46,11 +49,17 @@ class AppearanceUpdate(BaseModel):
     color_background: str | None = None
     color_content: str | None = None
     color_accent: str | None = None
+    color_background_dark: str | None = None
+    color_content_dark: str | None = None
+    color_accent_dark: str | None = None
 
     @field_validator(
         "color_background",
         "color_content",
         "color_accent",
+        "color_background_dark",
+        "color_content_dark",
+        "color_accent_dark",
         mode="before",
     )
     @classmethod

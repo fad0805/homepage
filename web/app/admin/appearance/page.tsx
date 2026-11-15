@@ -43,6 +43,9 @@ interface Appearance {
   color_background: string | null;
   color_content: string | null;
   color_accent: string | null;
+  color_background_dark: string | null;
+  color_content_dark: string | null;
+  color_accent_dark: string | null;
 }
 
 type Notice = { type: "success" | "error"; text: string };
@@ -72,13 +75,38 @@ function overridesFromAppearance(
     background: data.color_background,
     content: data.color_content,
     accent: data.color_accent,
+    darkBackground: data.color_background_dark,
+    darkContent: data.color_content_dark,
+    darkAccent: data.color_accent_dark,
   };
 }
 
+const OVERRIDE_KEYS = [
+  "background",
+  "content",
+  "accent",
+  "darkBackground",
+  "darkContent",
+  "darkAccent",
+] as const;
+
 function sameOverrides(a: ColorOverrides, b: ColorOverrides) {
-  return (["background", "content", "accent"] as const).every(
+  return OVERRIDE_KEYS.every(
     (key) => normalizeHex(a[key]) === normalizeHex(b[key]),
   );
+}
+
+type ColorMode = "light" | "dark";
+type ColorFieldKey = (typeof COLOR_FIELDS)[number]["key"];
+
+const DARK_FIELD_KEYS = {
+  background: "darkBackground",
+  content: "darkContent",
+  accent: "darkAccent",
+} as const;
+
+function overrideKeyFor(field: ColorFieldKey, mode: ColorMode) {
+  return mode === "light" ? field : DARK_FIELD_KEYS[field];
 }
 
 export default function AdminAppearance() {
@@ -102,6 +130,7 @@ export default function AdminAppearance() {
     useState<ColorOverrides>({});
   const [savedColorOverrides, setSavedColorOverrides] =
     useState<ColorOverrides>({});
+  const [colorMode, setColorMode] = useState<ColorMode>("light");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState<Notice | null>(null);
@@ -184,6 +213,12 @@ export default function AdminAppearance() {
             color_content:
               normalizeHex(colorOverrides.content),
             color_accent: normalizeHex(colorOverrides.accent),
+            color_background_dark:
+              normalizeHex(colorOverrides.darkBackground),
+            color_content_dark:
+              normalizeHex(colorOverrides.darkContent),
+            color_accent_dark:
+              normalizeHex(colorOverrides.darkAccent),
           }),
         },
       );
@@ -243,26 +278,32 @@ export default function AdminAppearance() {
   const savedSideLabel =
     savedSidePosition === "right" ? "오른쪽" : "왼쪽";
 
+  const modePalette =
+    colorMode === "light" ? selectedColor.light : selectedColor.dark;
   const effectiveColors = {
     background:
-      normalizeHex(colorOverrides.background) ??
-      selectedColor.light.background,
+      normalizeHex(
+        colorOverrides[overrideKeyFor("background", colorMode)],
+      ) ?? modePalette.background,
     content:
-      normalizeHex(colorOverrides.content) ??
-      selectedColor.light.content,
+      normalizeHex(
+        colorOverrides[overrideKeyFor("content", colorMode)],
+      ) ?? modePalette.content,
     accent:
-      normalizeHex(colorOverrides.accent) ??
-      selectedColor.light.accent,
+      normalizeHex(
+        colorOverrides[overrideKeyFor("accent", colorMode)],
+      ) ?? modePalette.accent,
   };
-  const hasColorOverride = COLOR_FIELDS.some((field) =>
-    Boolean(normalizeHex(colorOverrides[field.key])),
+  const hasColorOverride = OVERRIDE_KEYS.some((key) =>
+    Boolean(normalizeHex(colorOverrides[key])),
   );
 
   const setColorField = (
-    field: (typeof COLOR_FIELDS)[number]["key"],
+    field: ColorFieldKey,
     value: string | null,
   ) => {
-    const next = { ...colorOverrides, [field]: value };
+    const key = overrideKeyFor(field, colorMode);
+    const next = { ...colorOverrides, [key]: value };
     setColorOverrides(next);
     preview({ colorOverrides: next });
   };
@@ -430,11 +471,35 @@ export default function AdminAppearance() {
               <div>
                 <h2>색 테마</h2>
                 <p className="admin-appearance-hint">
-                  템플릿을 고른 뒤 배경·콘텐츠·포인트 색만
-                  조정할 수 있습니다. 다크 모드는 선택한 색에 맞춰
-                  자동으로 조정됩니다.
+                  템플릿을 고른 뒤 라이트/다크 색상을 각각 조정할
+                  수 있습니다.
                 </p>
               </div>
+            </div>
+
+            <div
+              className="admin-appearance-color-mode"
+              role="tablist"
+              aria-label="색상 모드"
+            >
+              <button
+                type="button"
+                role="tab"
+                aria-selected={colorMode === "light"}
+                className={colorMode === "light" ? "is-selected" : ""}
+                onClick={() => setColorMode("light")}
+              >
+                라이트 색상
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={colorMode === "dark"}
+                className={colorMode === "dark" ? "is-selected" : ""}
+                onClick={() => setColorMode("dark")}
+              >
+                다크 색상
+              </button>
             </div>
 
             <div
@@ -474,14 +539,27 @@ export default function AdminAppearance() {
                     >
                       <i
                         style={{
-                          background: option.light.background,
+                          background:
+                            colorMode === "light"
+                              ? option.light.background
+                              : option.dark.background,
                         }}
                       />
                       <i
-                        style={{ background: option.light.content }}
+                        style={{
+                          background:
+                            colorMode === "light"
+                              ? option.light.content
+                              : option.dark.content,
+                        }}
                       />
                       <i
-                        style={{ background: option.light.accent }}
+                        style={{
+                          background:
+                            colorMode === "light"
+                              ? option.light.accent
+                              : option.dark.accent,
+                        }}
                       />
                     </span>
                     <span className="admin-appearance-color-card__heading">
@@ -498,8 +576,12 @@ export default function AdminAppearance() {
 
             <div className="admin-appearance-tweaks">
               {COLOR_FIELDS.map((field) => {
+                const overrideKey = overrideKeyFor(
+                  field.key,
+                  colorMode,
+                );
                 const hasOverride = Boolean(
-                  normalizeHex(colorOverrides[field.key]),
+                  normalizeHex(colorOverrides[overrideKey]),
                 );
 
                 return (

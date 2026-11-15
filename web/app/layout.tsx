@@ -92,6 +92,9 @@ export default async function RootLayout({
       color_background?: string | null;
       color_content?: string | null;
       color_accent?: string | null;
+      color_background_dark?: string | null;
+      color_content_dark?: string | null;
+      color_accent_dark?: string | null;
     }>(
       currentUser ? "/users/me/appearance" : "/appearance",
       {
@@ -107,6 +110,9 @@ export default async function RootLayout({
       background: appearance.color_background,
       content: appearance.color_content,
       accent: appearance.color_accent,
+      darkBackground: appearance.color_background_dark,
+      darkContent: appearance.color_content_dark,
+      darkAccent: appearance.color_accent_dark,
     };
   } catch (error) {
     console.error("Failed to load the site appearance.", error);

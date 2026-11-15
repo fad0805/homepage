@@ -46,4 +46,13 @@ def get_public_appearance(db: Session) -> dict:
         "color_background": settings.color_background if settings else None,
         "color_content": settings.color_content if settings else None,
         "color_accent": settings.color_accent if settings else None,
+        "color_background_dark": (
+            settings.color_background_dark if settings else None
+        ),
+        "color_content_dark": (
+            settings.color_content_dark if settings else None
+        ),
+        "color_accent_dark": (
+            settings.color_accent_dark if settings else None
+        ),
     }

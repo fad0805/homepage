@@ -156,6 +156,9 @@ def update_author_appearance(
     color_background: str | None = None,
     color_content: str | None = None,
     color_accent: str | None = None,
+    color_background_dark: str | None = None,
+    color_content_dark: str | None = None,
+    color_accent_dark: str | None = None,
 ) -> AuthorSettings:
     """Update the signed-in author's layout and color theme."""
     settings = ensure_author_settings(db, user)
@@ -166,6 +169,9 @@ def update_author_appearance(
     settings.color_background = color_background
     settings.color_content = color_content
     settings.color_accent = color_accent
+    settings.color_background_dark = color_background_dark
+    settings.color_content_dark = color_content_dark
+    settings.color_accent_dark = color_accent_dark
     db.commit()
     db.refresh(settings)
     return settings
