@@ -147,6 +147,32 @@
   }
 }
 
+.admin-editor__font-size {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  color: var(--admin-muted);
+  font-size: 0.72rem;
+
+  select {
+    max-width: 6.5rem;
+    padding: 0.3rem 0.4rem;
+    border: 1px solid var(--admin-border);
+    border-radius: 0.4rem;
+    background: var(--admin-card-bg);
+    color: var(--foreground);
+    font: inherit;
+    font-size: 0.74rem;
+    cursor: pointer;
+  }
+}
+
+.admin-editor__content .tiptap mark {
+  padding: 0 0.1em;
+  border-radius: 0.15rem;
+  color: inherit;
+}
+
 .admin-editor__color {
   display: inline-flex;
   align-items: center;

@@ -10,9 +10,10 @@ import {
 } from "react";
 import { EditorContent, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
+import Highlight from "@tiptap/extension-highlight";
 import Placeholder from "@tiptap/extension-placeholder";
 import TextAlign from "@tiptap/extension-text-align";
-import { Color, TextStyle } from "@tiptap/extension-text-style";
+import { Color, FontSize, TextStyle } from "@tiptap/extension-text-style";
 
 import { AuthorImage } from "@/components/author-image";
 import { PagePreview } from "@/components/page-preview";
@@ -41,6 +42,10 @@ interface RichTextEditorProps {
   onNotice?: (notice: EditorNotice) => void;
   /** Reduce the editor's vertical height for compact forms. */
   compact?: boolean;
+  /** Show a font-size picker in the toolbar. */
+  enableFontSize?: boolean;
+  /** Show the highlight toggle in the toolbar. */
+  enableHighlight?: boolean;
 }
 
 function ToolbarButton({
@@ -76,6 +81,8 @@ export function RichTextEditor({
   uploadUrl,
   onNotice,
   compact = false,
+  enableFontSize = false,
+  enableHighlight = false,
 }: RichTextEditorProps) {
   const onChangeRef = useRef(onChange);
   const onNoticeRef = useRef(onNotice);
@@ -108,6 +115,8 @@ export function RichTextEditor({
       }),
       TextStyle,
       Color,
+      FontSize,
+      Highlight.configure({ multicolor: true }),
       TextAlign.configure({
         types: ["heading", "paragraph"],
       }),
@@ -405,6 +414,53 @@ export function RichTextEditor({
         >
           H3
         </ToolbarButton>
+        {enableFontSize ? (
+          <label className="admin-editor__font-size">
+            <span>크기</span>
+            <select
+              value={
+                (editor?.getAttributes("textStyle").fontSize as string) ??
+                ""
+              }
+              disabled={!editor}
+              onChange={(event) => {
+                const size = event.target.value;
+                if (size) {
+                  editor?.chain().focus().setFontSize(size).run();
+                } else {
+                  editor?.chain().focus().unsetFontSize().run();
+                }
+              }}
+            >
+              <option value="">기본</option>
+              <option value="0.875rem">작게</option>
+              <option value="1rem">보통</option>
+              <option value="1.125rem">조금 크게</option>
+              <option value="1.25rem">크게</option>
+              <option value="1.5rem">아주 크게</option>
+              <option value="1.75rem">제목</option>
+              <option value="2rem">큰 제목</option>
+              <option value="2.5rem">히어로</option>
+              <option value="3rem">특대</option>
+            </select>
+          </label>
+        ) : null}
+        {enableHighlight ? (
+          <ToolbarButton
+            onClick={() =>
+              editor
+                ?.chain()
+                .focus()
+                .toggleHighlight({ color: "#f5e27a" })
+                .run()
+            }
+            active={editor?.isActive("highlight")}
+            disabled={!editor}
+            title="형광펜"
+          >
+            형광
+          </ToolbarButton>
+        ) : null}
         <ToolbarButton
           onClick={() => editor?.chain().focus().setTextAlign("left").run()}
           active={editor?.isActive({ textAlign: "left" })}
