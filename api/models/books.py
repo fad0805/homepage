@@ -97,6 +97,12 @@ class Chapter(Base):
     tags = Column(JSON, nullable=False, default=list)
     order = Column(Integer, nullable=False, default=0)
     visible = Column(Boolean, nullable=False, default=True)
+    pinned = Column(
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default="false",
+    )
     protected = Column(
         Boolean,
         nullable=False,

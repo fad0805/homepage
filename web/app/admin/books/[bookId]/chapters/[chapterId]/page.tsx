@@ -34,6 +34,7 @@ interface ChapterItem {
   tags: string[];
   order: number;
   visible: boolean;
+  pinned: boolean;
   protected: boolean;
   view_count: number;
   published_at: string | null;
@@ -50,6 +51,7 @@ interface ChapterDraft {
   body: string | null;
   tags: string[];
   visible: boolean;
+  pinned: boolean;
   published_at: string | null;
   target_book_id: number | null;
   created_at: string;
@@ -88,6 +90,7 @@ function getDraftSignature(values: {
   body: string;
   tagsInput: string;
   visible: boolean;
+  pinned: boolean;
   publishedAt: string;
   targetBookId: number;
 }) {
@@ -97,6 +100,7 @@ function getDraftSignature(values: {
     values.body,
     values.tagsInput,
     values.visible,
+    values.pinned,
     values.publishedAt,
     values.targetBookId,
   ]);
@@ -126,6 +130,7 @@ export default function AdminChapterEdit() {
   const [body, setBody] = useState("");
   const [tagsInput, setTagsInput] = useState("");
   const [visible, setVisible] = useState(true);
+  const [pinned, setPinned] = useState(false);
   const [chapterProtected, setChapterProtected] = useState(false);
   const [issuedCode, setIssuedCode] = useState<string | null>(null);
   const [issuing, setIssuing] = useState(false);
@@ -235,6 +240,7 @@ export default function AdminChapterEdit() {
       let baseBody = "";
       let baseTagsInput = "";
       let baseVisible = true;
+      let basePinned = false;
       let baseProtected = false;
       let basePublishedAt = "";
       let baseTargetBookId = bookId;
@@ -256,6 +262,7 @@ export default function AdminChapterEdit() {
         baseBody = current.body ?? "";
         baseTagsInput = (current.tags ?? []).join(", ");
         baseVisible = current.visible !== false;
+        basePinned = current.pinned === true;
         baseProtected = current.protected === true;
         basePublishedAt = toDatetimeLocal(current.published_at);
         baseTargetBookId = current.book_id;
@@ -267,6 +274,7 @@ export default function AdminChapterEdit() {
         setBody(baseBody);
         setTagsInput(baseTagsInput);
         setVisible(baseVisible);
+        setPinned(basePinned);
         setChapterProtected(baseProtected);
         setPublishedAt(basePublishedAt);
       } else {
@@ -277,6 +285,7 @@ export default function AdminChapterEdit() {
         setBody(baseBody);
         setTagsInput(baseTagsInput);
         setVisible(baseVisible);
+        setPinned(basePinned);
         setChapterProtected(false);
         setPublishedAt(basePublishedAt);
       }
@@ -287,6 +296,7 @@ export default function AdminChapterEdit() {
         body: baseBody,
         tagsInput: baseTagsInput,
         visible: baseVisible,
+        pinned: basePinned,
         publishedAt: basePublishedAt,
         targetBookId: baseTargetBookId,
       });
@@ -357,6 +367,7 @@ export default function AdminChapterEdit() {
       body: nextBody,
       tagsInput: nextTagsInput,
       visible: nextVisible,
+      pinned: availableDraft.pinned === true,
       publishedAt: nextPublishedAt,
       targetBookId: nextTargetBookId,
     });
@@ -366,6 +377,7 @@ export default function AdminChapterEdit() {
     setBody(nextBody);
     setTagsInput(nextTagsInput);
     setVisible(nextVisible);
+    setPinned(availableDraft.pinned === true);
     setPublishedAt(nextPublishedAt);
     setTargetBookId(nextTargetBookId);
     setDraftSavedAt(availableDraft.updated_at);
@@ -402,6 +414,7 @@ export default function AdminChapterEdit() {
         body,
         tagsInput,
         visible,
+        pinned,
         publishedAt,
         targetBookId,
       });
@@ -448,6 +461,7 @@ export default function AdminChapterEdit() {
         body,
         tagsInput,
         visible,
+        pinned,
         publishedAt,
         targetBookId,
       });
@@ -466,6 +480,7 @@ export default function AdminChapterEdit() {
                 body: body || null,
                 tags: parseTags(tagsInput),
                 visible,
+                pinned,
                 published_at: toUtcDateTime(publishedAt),
                 target_book_id: Number.isFinite(targetBookId)
                   ? targetBookId
@@ -512,6 +527,7 @@ export default function AdminChapterEdit() {
       tagsInput,
       targetBookId,
       title,
+      pinned,
       visible,
     ],
   );
@@ -539,6 +555,7 @@ export default function AdminChapterEdit() {
       body,
       tagsInput,
       visible,
+      pinned,
       publishedAt,
       targetBookId,
     });
@@ -569,8 +586,17 @@ export default function AdminChapterEdit() {
     tagsInput,
     targetBookId,
     title,
+    pinned,
     visible,
   ]);
+
+  const otherPinnedCount = allChapters.filter(
+    (item) =>
+      item.book_id === targetBookId &&
+      item.pinned &&
+      item.id !== chapter?.id,
+  ).length;
+  const pinLimitReached = otherPinnedCount >= 5;
 
   const issueChapterCode = async () => {
     if (!chapter || issuing) return;
@@ -639,6 +665,7 @@ export default function AdminChapterEdit() {
             tags: parseTags(tagsInput),
             order,
             visible,
+            pinned,
             protected: chapterProtected,
             published_at: publishedAtValue,
           }),
@@ -682,6 +709,7 @@ export default function AdminChapterEdit() {
         setBody(updated.body ?? "");
         setTagsInput(nextTagsInput);
         setVisible(updated.visible !== false);
+        setPinned(updated.pinned === true);
         setChapterProtected(updated.protected === true);
         setPublishedAt(nextPublishedAt);
         setTargetBookId(updated.book_id);
@@ -691,6 +719,7 @@ export default function AdminChapterEdit() {
           body: updated.body ?? "",
           tagsInput: nextTagsInput,
           visible: updated.visible !== false,
+          pinned: updated.pinned === true,
           publishedAt: nextPublishedAt,
           targetBookId: updated.book_id,
         });
@@ -950,6 +979,21 @@ export default function AdminChapterEdit() {
                   </div>
                 ) : null}
               </div>
+              <label className="admin-books-checkbox">
+                <input
+                  type="checkbox"
+                  checked={pinned}
+                  onChange={(event) => setPinned(event.target.checked)}
+                  disabled={pinLimitReached && !pinned}
+                />
+                <span>목차 상단 고정</span>
+              </label>
+              <p className="admin-books-hint">
+                고정 게시글은 책당 최대 5개까지 가능합니다.
+                {pinLimitReached && !pinned
+                  ? " 이 책에는 이미 5개가 고정되어 있습니다."
+                  : ""}
+              </p>
               <div className="admin-books-form-actions">
                 {!isNew && chapter ? (
                   <button

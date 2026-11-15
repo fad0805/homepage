@@ -46,6 +46,7 @@ interface ChapterItem {
   tags: string[];
   order: number;
   visible: boolean;
+  pinned: boolean;
   protected: boolean;
   view_count: number;
   created_at: string | null;
@@ -73,6 +74,7 @@ function createdTime(value: string | null) {
 
 function sortChapters(chapters: ChapterItem[]) {
   return [...chapters].sort((a, b) => {
+    if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
     const aTime = createdTime(a.created_at);
     const bTime = createdTime(b.created_at);
     if (aTime === null && bTime === null) return b.id - a.id;
@@ -98,6 +100,9 @@ export default function AdminBookDetail() {
     null,
   );
   const [bulkWorking, setBulkWorking] = useState(false);
+  const [pinningChapterId, setPinningChapterId] = useState<number | null>(
+    null,
+  );
   const [page, setPage] = useState(1);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -196,6 +201,7 @@ export default function AdminBookDetail() {
     if (page > totalPages) setPage(totalPages);
   }, [page, totalPages]);
 
+  const pinnedCount = chapters.filter((chapter) => chapter.pinned).length;
   const pageChapters = useMemo(
     () =>
       chapters.slice(
@@ -208,6 +214,40 @@ export default function AdminBookDetail() {
   const allPageSelected =
     pageChapters.length > 0 &&
     pageChapters.every((chapter) => selectedChapterIds.has(chapter.id));
+
+  const toggleChapterPinned = async (chapter: ChapterItem) => {
+    if (pinningChapterId !== null) return;
+    setPinningChapterId(chapter.id);
+    try {
+      const updated = await apiFetch<ChapterItem>(
+        `/api/chapters/${chapter.id}`,
+        {
+          method: "PUT",
+          body: JSON.stringify({ pinned: !chapter.pinned }),
+        },
+      );
+      setChapters((items) =>
+        sortChapters(
+          items.map((item) =>
+            item.id === updated.id ? updated : item,
+          ),
+        ),
+      );
+      notify(
+        "success",
+        updated.pinned ? "게시글을 고정했습니다." : "고정을 해제했습니다.",
+      );
+    } catch (error) {
+      notify(
+        "error",
+        error instanceof Error
+          ? error.message
+          : "고정 상태를 변경하지 못했습니다.",
+      );
+    } finally {
+      setPinningChapterId(null);
+    }
+  };
 
   const toggleChapterSelection = (chapterId: number) => {
     setSelectedChapterIds((prev) => {
@@ -658,13 +698,46 @@ export default function AdminBookDetail() {
                         disabled={bulkWorking}
                         aria-label={`${chapter.title} 선택`}
                       />
+                      <button
+                        type="button"
+                        className={`admin-books-pin-button${
+                          chapter.pinned ? " is-active" : ""
+                        }`}
+                        onClick={() => void toggleChapterPinned(chapter)}
+                        disabled={
+                          pinningChapterId !== null ||
+                          (!chapter.pinned && pinnedCount >= 5)
+                        }
+                        title={
+                          chapter.pinned
+                            ? "고정 해제"
+                            : pinnedCount >= 5
+                              ? "고정 게시글은 책당 최대 5개까지 가능합니다."
+                              : "목차 상단에 고정"
+                        }
+                      >
+                        {pinningChapterId === chapter.id
+                          ? "..."
+                          : chapter.pinned
+                            ? "고정됨"
+                            : "고정"}
+                      </button>
                       <Link
                         className="admin-books-chapter-link"
                         href={`/admin/books/${book.id}/chapters/${chapter.id}`}
                       >
                         <span className="admin-books-chapter-main">
-                          <span className="admin-books-chapter-title">
+                          <span
+                            className={`admin-books-chapter-title${
+                              chapter.pinned ? " is-pinned" : ""
+                            }`}
+                          >
                             {chapter.title}
+                            {chapter.pinned ? (
+                              <span className="admin-books-pin-badge">
+                                고정
+                              </span>
+                            ) : null}
                           </span>
                         </span>
                         <span className="admin-books-chapter-views">

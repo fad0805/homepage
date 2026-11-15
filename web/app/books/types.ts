@@ -26,6 +26,7 @@ export interface Chapter {
   tags: string[];
   order: number;
   visible: boolean;
+  pinned: boolean;
   protected: boolean;
   locked?: boolean;
   view_count: number;

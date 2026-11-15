@@ -393,6 +393,19 @@
   gap: 0.15rem;
 }
 
+.books-chapter-link.is-pinned {
+  background: color-mix(in srgb, var(--title-color) 7%, transparent);
+}
+
+.books-chapter-link.is-pinned:hover,
+.books-chapter-link.is-pinned:focus-visible {
+  background: color-mix(in srgb, var(--title-color) 11%, transparent);
+}
+
+.books-chapter-link.is-pinned .books-chapter-link__title {
+  font-weight: 700;
+}
+
 .books-chapter-link {
   display: flex;
   align-items: baseline;
