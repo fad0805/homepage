@@ -112,11 +112,27 @@
 
 .admin-editor__toolbar {
   display: flex;
-  flex-wrap: wrap;
-  gap: 0.25rem;
+  flex-direction: column;
+  gap: 0.3rem;
   padding: 0.45rem;
   border-bottom: 1px solid var(--admin-border);
   background: rgba(0, 0, 0, 0.025);
+}
+
+.admin-editor__toolbar-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.admin-editor__html-view {
+  margin-left: auto;
+}
+
+.admin-editor__toolbar-row--secondary {
+  padding-top: 0.3rem;
+  border-top: 1px solid color-mix(in srgb, var(--admin-border) 65%, transparent);
 }
 
 .admin-editor__button {
@@ -147,6 +163,87 @@
   }
 }
 
+.admin-editor__menu {
+  position: relative;
+  display: inline-flex;
+}
+
+.admin-editor__menu-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.18rem;
+}
+
+.admin-editor__menu-caret {
+  font-size: 0.58rem;
+  opacity: 0.65;
+}
+
+.admin-editor__menu-panel {
+  position: absolute;
+  top: calc(100% + 0.25rem);
+  left: 0;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  min-width: 8.25rem;
+  padding: 0.25rem;
+  border: 1px solid var(--admin-border);
+  border-radius: 0.55rem;
+  background: var(--input-background);
+  box-shadow: 0 0.5rem 1.2rem rgba(0, 0, 0, 0.18);
+}
+
+.admin-editor__menu-item {
+  width: 100%;
+  padding: 0.42rem 0.55rem;
+  border: 0;
+  border-radius: 0.35rem;
+  background: transparent;
+  color: var(--foreground);
+  font-family: inherit;
+  font-size: 0.78rem;
+  text-align: left;
+  white-space: nowrap;
+  cursor: pointer;
+
+  &:hover,
+  &:focus-visible {
+    background: rgba(0, 0, 0, 0.07);
+  }
+
+  &.is-active {
+    color: var(--title-color);
+    font-weight: bold;
+  }
+}
+
+.admin-editor__font-size {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  color: var(--admin-muted);
+  font-size: 0.72rem;
+
+  select {
+    max-width: 6.5rem;
+    padding: 0.3rem 0.4rem;
+    border: 1px solid var(--admin-border);
+    border-radius: 0.4rem;
+    background: var(--admin-card-bg);
+    color: var(--foreground);
+    font: inherit;
+    font-size: 0.74rem;
+    cursor: pointer;
+  }
+}
+
+.admin-editor__content .tiptap mark {
+  padding: 0 0.1em;
+  border-radius: 0.15rem;
+  color: inherit;
+}
+
 .admin-editor__color {
   display: inline-flex;
   align-items: center;
@@ -164,6 +261,74 @@
     background: transparent;
     cursor: pointer;
   }
+}
+
+.admin-editor__color-reset {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.8rem;
+  padding: 0;
+  border: 0;
+  border-radius: 0.35rem;
+  background: transparent;
+  color: var(--admin-muted);
+  font-family: inherit;
+  font-size: 0.9rem;
+  line-height: 1;
+  cursor: pointer;
+
+  &:hover:not(:disabled),
+  &:focus-visible {
+    background: rgba(0, 0, 0, 0.07);
+    color: var(--title-color);
+  }
+
+  &:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+  }
+}
+
+.admin-editor__highlight {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0 0.25rem;
+  color: var(--admin-muted);
+  font-size: 0.72rem;
+
+  input[type='color'] {
+    width: 1.6rem;
+    height: 1.8rem;
+    padding: 0;
+    border: 1px solid var(--admin-border);
+    border-radius: 0.35rem;
+    background: transparent;
+    cursor: pointer;
+  }
+}
+
+.admin-editor__html-source {
+  display: block;
+  width: 100%;
+  min-height: 18rem;
+  margin: 0;
+  padding: 0.9rem 1rem;
+  border: 0;
+  outline: none;
+  box-sizing: border-box;
+  resize: vertical;
+  background: var(--input-background);
+  color: var(--input-text);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.8rem;
+  line-height: 1.55;
+  overflow-x: hidden;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 .admin-editor__image-controls {

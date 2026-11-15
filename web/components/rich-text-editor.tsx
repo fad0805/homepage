@@ -10,9 +10,10 @@ import {
 } from "react";
 import { EditorContent, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
+import Highlight from "@tiptap/extension-highlight";
 import Placeholder from "@tiptap/extension-placeholder";
 import TextAlign from "@tiptap/extension-text-align";
-import { Color, TextStyle } from "@tiptap/extension-text-style";
+import { Color, FontSize, TextStyle } from "@tiptap/extension-text-style";
 
 import { AuthorImage } from "@/components/author-image";
 import { PagePreview } from "@/components/page-preview";
@@ -41,6 +42,10 @@ interface RichTextEditorProps {
   onNotice?: (notice: EditorNotice) => void;
   /** Reduce the editor's vertical height for compact forms. */
   compact?: boolean;
+  /** Show a font-size picker in the toolbar. */
+  enableFontSize?: boolean;
+  /** Show the highlight toggle in the toolbar. */
+  enableHighlight?: boolean;
 }
 
 function ToolbarButton({
@@ -49,23 +54,99 @@ function ToolbarButton({
   active = false,
   disabled = false,
   title,
+  className = "",
 }: {
   children: ReactNode;
   onClick: () => void;
   active?: boolean;
   disabled?: boolean;
   title?: string;
+  className?: string;
 }) {
   return (
     <button
       type="button"
-      className={`admin-editor__button${active ? " is-active" : ""}`}
+      className={`admin-editor__button${active ? " is-active" : ""}${
+        className ? ` ${className}` : ""
+      }`}
       onClick={onClick}
       disabled={disabled}
       title={title}
     >
       {children}
     </button>
+  );
+}
+
+interface ToolbarMenuItem {
+  label: string;
+  active?: boolean;
+  onSelect: () => void;
+}
+
+function ToolbarMenu({
+  label,
+  items,
+  active = false,
+  disabled = false,
+}: {
+  label: string;
+  items: ToolbarMenuItem[];
+  active?: boolean;
+  disabled?: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const close = (event: PointerEvent) => {
+      if (!rootRef.current?.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener("pointerdown", close);
+    return () => document.removeEventListener("pointerdown", close);
+  }, [open]);
+
+  return (
+    <div className="admin-editor__menu" ref={rootRef}>
+      <button
+        type="button"
+        className={`admin-editor__button admin-editor__menu-trigger${
+          active ? " is-active" : ""
+        }`}
+        disabled={disabled}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        onClick={() => setOpen((value) => !value)}
+      >
+        {label}
+        <span className="admin-editor__menu-caret" aria-hidden="true">
+          ▾
+        </span>
+      </button>
+      {open ? (
+        <div className="admin-editor__menu-panel" role="menu">
+          {items.map((item) => (
+            <button
+              key={item.label}
+              type="button"
+              role="menuitem"
+              className={`admin-editor__menu-item${
+                item.active ? " is-active" : ""
+              }`}
+              onClick={() => {
+                item.onSelect();
+                setOpen(false);
+              }}
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </div>
   );
 }
 
@@ -76,12 +157,16 @@ export function RichTextEditor({
   uploadUrl,
   onNotice,
   compact = false,
+  enableFontSize = false,
+  enableHighlight = false,
 }: RichTextEditorProps) {
   const onChangeRef = useRef(onChange);
   const onNoticeRef = useRef(onNotice);
   const imageInputRef = useRef<HTMLInputElement | null>(null);
   const [uploadingImage, setUploadingImage] = useState(false);
   const [loadingPagePreview, setLoadingPagePreview] = useState(false);
+  const [htmlMode, setHtmlMode] = useState(false);
+  const [htmlSource, setHtmlSource] = useState("");
 
   useEffect(() => {
     onChangeRef.current = onChange;
@@ -108,6 +193,8 @@ export function RichTextEditor({
       }),
       TextStyle,
       Color,
+      FontSize,
+      Highlight.configure({ multicolor: true }),
       TextAlign.configure({
         types: ["heading", "paragraph"],
       }),
@@ -128,10 +215,26 @@ export function RichTextEditor({
 
   useEffect(() => {
     if (!editor) return;
+    if (htmlMode) return;
     if (value !== editor.getHTML()) {
       editor.commands.setContent(value || "<p></p>");
     }
-  }, [editor, value]);
+  }, [editor, htmlMode, value]);
+
+  const toggleHtmlMode = useCallback(() => {
+    if (!editor) return;
+    if (htmlMode) {
+      editor.commands.setContent(htmlSource || "<p></p>", {
+        emitUpdate: true,
+      });
+      const nextHtml = editor.getHTML();
+      onChangeRef.current(nextHtml);
+      setHtmlMode(false);
+      return;
+    }
+    setHtmlSource(editor.getHTML());
+    setHtmlMode(true);
+  }, [editor, htmlMode, htmlSource]);
 
   const setLink = useCallback(() => {
     if (!editor) return;
@@ -338,6 +441,12 @@ export function RichTextEditor({
     typeof activeColor === "string" && /^#[0-9a-f]{6}$/i.test(activeColor)
       ? activeColor
       : "#2f803c";
+  const activeHighlightColor = editor?.getAttributes("highlight").color;
+  const highlightColor =
+    typeof activeHighlightColor === "string" &&
+    /^#[0-9a-f]{6}$/i.test(activeHighlightColor)
+      ? activeHighlightColor
+      : "#f5e27a";
   const imageAttrs = editor?.getAttributes("image") ?? {};
   const imageAlign: "left" | "center" | "right" =
     imageAttrs.align === "left" || imageAttrs.align === "right"
@@ -359,161 +468,280 @@ export function RichTextEditor({
   return (
     <div className={`admin-editor${compact ? " admin-editor--compact" : ""}`}>
       <div className="admin-editor__toolbar">
-        <ToolbarButton
-          onClick={() => editor?.chain().focus().toggleBold().run()}
-          active={editor?.isActive("bold")}
-          disabled={!editor}
-        >
-          <strong>B</strong>
-        </ToolbarButton>
-        <ToolbarButton
-          onClick={() => editor?.chain().focus().toggleItalic().run()}
-          active={editor?.isActive("italic")}
-          disabled={!editor}
-        >
-          <em>I</em>
-        </ToolbarButton>
-        <ToolbarButton
-          onClick={() => editor?.chain().focus().toggleUnderline().run()}
-          active={editor?.isActive("underline")}
-          disabled={!editor}
-        >
-          <u>U</u>
-        </ToolbarButton>
-        <ToolbarButton
-          onClick={() => editor?.chain().focus().toggleStrike().run()}
-          active={editor?.isActive("strike")}
-          disabled={!editor}
-        >
-          <s>S</s>
-        </ToolbarButton>
-        <ToolbarButton
-          onClick={() =>
-            editor?.chain().focus().toggleHeading({ level: 2 }).run()
-          }
-          active={editor?.isActive("heading", { level: 2 })}
-          disabled={!editor}
-        >
-          H2
-        </ToolbarButton>
-        <ToolbarButton
-          onClick={() =>
-            editor?.chain().focus().toggleHeading({ level: 3 }).run()
-          }
-          active={editor?.isActive("heading", { level: 3 })}
-          disabled={!editor}
-        >
-          H3
-        </ToolbarButton>
-        <ToolbarButton
-          onClick={() => editor?.chain().focus().setTextAlign("left").run()}
-          active={editor?.isActive({ textAlign: "left" })}
-          disabled={!editor}
-        >
-          좌
-        </ToolbarButton>
-        <ToolbarButton
-          onClick={() =>
-            editor?.chain().focus().setTextAlign("center").run()
-          }
-          active={editor?.isActive({ textAlign: "center" })}
-          disabled={!editor}
-        >
-          중
-        </ToolbarButton>
-        <ToolbarButton
-          onClick={() =>
-            editor?.chain().focus().setTextAlign("right").run()
-          }
-          active={editor?.isActive({ textAlign: "right" })}
-          disabled={!editor}
-        >
-          우
-        </ToolbarButton>
-        <ToolbarButton
-          onClick={() => editor?.chain().focus().toggleBulletList().run()}
-          active={editor?.isActive("bulletList")}
-          disabled={!editor}
-        >
-          • 목록
-        </ToolbarButton>
-        <ToolbarButton
-          onClick={() => editor?.chain().focus().toggleOrderedList().run()}
-          active={editor?.isActive("orderedList")}
-          disabled={!editor}
-        >
-          1. 목록
-        </ToolbarButton>
-        <ToolbarButton
-          onClick={() => editor?.chain().focus().toggleBlockquote().run()}
-          active={editor?.isActive("blockquote")}
-          disabled={!editor}
-        >
-          인용
-        </ToolbarButton>
-        <ToolbarButton
-          onClick={() => editor?.chain().focus().toggleCode().run()}
-          active={editor?.isActive("code")}
-          disabled={!editor}
-        >
-          코드
-        </ToolbarButton>
-        <ToolbarButton
-          onClick={setLink}
-          active={editor?.isActive("link")}
-          disabled={!editor}
-        >
-          링크
-        </ToolbarButton>
-        <ToolbarButton
-          onClick={insertPagePreview}
-          disabled={!editor || loadingPagePreview}
-          title="페이지 미리보기 임베드"
-        >
-          {loadingPagePreview ? "불러오는 중..." : "페이지"}
-        </ToolbarButton>
-        <label className="admin-editor__color">
-          <span>색</span>
-          <input
-            type="color"
-            value={textColor}
+        <div className="admin-editor__toolbar-row">
+          {enableFontSize ? (
+            <label className="admin-editor__font-size">
+              <span>크기</span>
+              <select
+                value={
+                  (editor?.getAttributes("textStyle").fontSize as string) ??
+                  ""
+                }
+                disabled={!editor}
+                onChange={(event) => {
+                  const size = event.target.value;
+                  if (size) {
+                    editor?.chain().focus().setFontSize(size).run();
+                  } else {
+                    editor?.chain().focus().unsetFontSize().run();
+                  }
+                }}
+              >
+                <option value="">기본</option>
+                <option value="10pt">10pt</option>
+                <option value="11pt">11pt</option>
+                <option value="12pt">12pt</option>
+                <option value="14pt">14pt</option>
+                <option value="16pt">16pt</option>
+                <option value="18pt">18pt</option>
+                <option value="21pt">21pt</option>
+                <option value="24pt">24pt</option>
+                <option value="30pt">30pt</option>
+                <option value="36pt">36pt</option>
+              </select>
+            </label>
+          ) : null}
+          <ToolbarButton
+            onClick={() => editor?.chain().focus().toggleBold().run()}
+            active={editor?.isActive("bold")}
             disabled={!editor}
-            onChange={(event) =>
-              editor?.chain().focus().setColor(event.target.value).run()
-            }
+          >
+            <strong>B</strong>
+          </ToolbarButton>
+          <ToolbarButton
+            onClick={() => editor?.chain().focus().toggleItalic().run()}
+            active={editor?.isActive("italic")}
+            disabled={!editor}
+          >
+            <em>I</em>
+          </ToolbarButton>
+          <ToolbarButton
+            onClick={() => editor?.chain().focus().toggleUnderline().run()}
+            active={editor?.isActive("underline")}
+            disabled={!editor}
+          >
+            <u>U</u>
+          </ToolbarButton>
+          <ToolbarButton
+            onClick={() => editor?.chain().focus().toggleStrike().run()}
+            active={editor?.isActive("strike")}
+            disabled={!editor}
+          >
+            <s>S</s>
+          </ToolbarButton>
+          <ToolbarMenu
+            label="형식"
+            active={editor?.isActive("heading")}
+            disabled={!editor}
+            items={[
+              {
+                label: "본문",
+                active:
+                  editor?.isActive("paragraph") &&
+                  !editor?.isActive("heading"),
+                onSelect: () => editor?.chain().focus().setParagraph().run(),
+              },
+              {
+                label: "H2",
+                active: editor?.isActive("heading", { level: 2 }),
+                onSelect: () =>
+                  editor?.chain().focus().setHeading({ level: 2 }).run(),
+              },
+              {
+                label: "H3",
+                active: editor?.isActive("heading", { level: 3 }),
+                onSelect: () =>
+                  editor?.chain().focus().setHeading({ level: 3 }).run(),
+              },
+            ]}
           />
-        </label>
-        <ToolbarButton
-          onClick={() => editor?.chain().focus().unsetColor().run()}
-          disabled={!editor}
-        >
-          색 초기화
-        </ToolbarButton>
-        <ToolbarButton
-          onClick={() => imageInputRef.current?.click()}
-          disabled={!editor || uploadingImage}
-        >
-          {uploadingImage ? "업로드 중..." : "이미지"}
-        </ToolbarButton>
-        <input
-          ref={imageInputRef}
-          type="file"
-          accept="image/png,image/jpeg,image/webp,image/gif"
-          hidden
-          onChange={handleImageFile}
-        />
-        <ToolbarButton
-          onClick={() => editor?.chain().focus().undo().run()}
-          disabled={!editor || !editor.can().undo()}
-        >
-          ↶
-        </ToolbarButton>
-        <ToolbarButton
-          onClick={() => editor?.chain().focus().redo().run()}
-          disabled={!editor || !editor.can().redo()}
-        >
-          ↷
-        </ToolbarButton>
+          <ToolbarMenu
+            label="정렬"
+            active={
+              editor?.isActive({ textAlign: "center" }) ||
+              editor?.isActive({ textAlign: "right" })
+            }
+            disabled={!editor}
+            items={[
+              {
+                label: "왼쪽 정렬",
+                active: editor?.isActive({ textAlign: "left" }),
+                onSelect: () =>
+                  editor?.chain().focus().setTextAlign("left").run(),
+              },
+              {
+                label: "가운데 정렬",
+                active: editor?.isActive({ textAlign: "center" }),
+                onSelect: () =>
+                  editor?.chain().focus().setTextAlign("center").run(),
+              },
+              {
+                label: "오른쪽 정렬",
+                active: editor?.isActive({ textAlign: "right" }),
+                onSelect: () =>
+                  editor?.chain().focus().setTextAlign("right").run(),
+              },
+            ]}
+          />
+          <ToolbarMenu
+            label="목록"
+            active={
+              editor?.isActive("bulletList") ||
+              editor?.isActive("orderedList")
+            }
+            disabled={!editor}
+            items={[
+              {
+                label: "글머리 목록",
+                active: editor?.isActive("bulletList"),
+                onSelect: () =>
+                  editor?.chain().focus().toggleBulletList().run(),
+              },
+              {
+                label: "번호 목록",
+                active: editor?.isActive("orderedList"),
+                onSelect: () =>
+                  editor?.chain().focus().toggleOrderedList().run(),
+              },
+            ]}
+          />
+          <ToolbarButton
+            onClick={() => editor?.chain().focus().undo().run()}
+            disabled={!editor || !editor.can().undo()}
+          >
+            ↶
+          </ToolbarButton>
+          <ToolbarButton
+            onClick={() => editor?.chain().focus().redo().run()}
+            disabled={!editor || !editor.can().redo()}
+          >
+            ↷
+          </ToolbarButton>
+          <ToolbarButton
+            onClick={toggleHtmlMode}
+            active={htmlMode}
+            disabled={!editor}
+            title={
+              htmlMode
+                ? "에디터로 돌아가기"
+                : "HTML 소스 직접 편집"
+            }
+            className="admin-editor__html-view"
+          >
+            HTML
+          </ToolbarButton>
+        </div>
+        <div className="admin-editor__toolbar-row admin-editor__toolbar-row--secondary">
+          <div className="admin-editor__color">
+            <span>색</span>
+            <input
+              type="color"
+              value={textColor}
+              disabled={!editor}
+              aria-label="글자 색"
+              onChange={(event) =>
+                editor?.chain().focus().setColor(event.target.value).run()
+              }
+            />
+            <button
+              type="button"
+              className="admin-editor__color-reset"
+              onClick={() => editor?.chain().focus().unsetColor().run()}
+              disabled={!editor}
+              title="기본 색으로 초기화"
+              aria-label="색 초기화"
+            >
+              ×
+            </button>
+          </div>
+          {enableHighlight ? (
+            <div className="admin-editor__highlight">
+              <button
+                type="button"
+                className={`admin-editor__button${
+                  editor?.isActive("highlight") ? " is-active" : ""
+                }`}
+                onClick={() =>
+                  editor
+                    ?.chain()
+                    .focus()
+                    .toggleHighlight({ color: highlightColor })
+                    .run()
+                }
+                disabled={!editor}
+                title="형광펜"
+              >
+                형광
+              </button>
+              <input
+                type="color"
+                value={highlightColor}
+                disabled={!editor}
+                aria-label="형광 배경색"
+                onChange={(event) =>
+                  editor
+                    ?.chain()
+                    .focus()
+                    .setHighlight({ color: event.target.value })
+                    .run()
+                }
+              />
+              <button
+                type="button"
+                className="admin-editor__color-reset"
+                onClick={() =>
+                  editor?.chain().focus().unsetHighlight().run()
+                }
+                disabled={!editor}
+                title="형광 초기화"
+                aria-label="형광 초기화"
+              >
+                ×
+              </button>
+            </div>
+          ) : null}
+          <ToolbarButton
+            onClick={() => editor?.chain().focus().toggleBlockquote().run()}
+            active={editor?.isActive("blockquote")}
+            disabled={!editor}
+          >
+            인용
+          </ToolbarButton>
+          <ToolbarButton
+            onClick={() => editor?.chain().focus().toggleCode().run()}
+            active={editor?.isActive("code")}
+            disabled={!editor}
+          >
+            코드
+          </ToolbarButton>
+          <ToolbarButton
+            onClick={setLink}
+            active={editor?.isActive("link")}
+            disabled={!editor}
+          >
+            링크
+          </ToolbarButton>
+          <ToolbarButton
+            onClick={insertPagePreview}
+            disabled={!editor || loadingPagePreview}
+            title="페이지 미리보기 임베드"
+          >
+            {loadingPagePreview ? "불러오는 중..." : "페이지"}
+          </ToolbarButton>
+          <ToolbarButton
+            onClick={() => imageInputRef.current?.click()}
+            disabled={!editor || uploadingImage}
+          >
+            {uploadingImage ? "업로드 중..." : "이미지"}
+          </ToolbarButton>
+          <input
+            ref={imageInputRef}
+            type="file"
+            accept="image/png,image/jpeg,image/webp,image/gif"
+            hidden
+            onChange={handleImageFile}
+          />
+        </div>
       </div>
       {editor?.isActive("image") ? (
         <div className="admin-editor__image-controls">
@@ -645,19 +873,42 @@ export function RichTextEditor({
       ) : null}
       <div
         className="admin-editor__content"
-        onClick={() => editor?.chain().focus().run()}
-        onBlur={(event) => {
-          const related = event.relatedTarget;
-          if (
-            related instanceof Node &&
-            event.currentTarget.closest(".admin-editor")?.contains(related)
-          ) {
-            return;
-          }
-          linkifyEditorContent();
-        }}
+        onClick={
+          htmlMode ? undefined : () => editor?.chain().focus().run()
+        }
+        onBlur={
+          htmlMode
+            ? undefined
+            : (event) => {
+                const related = event.relatedTarget;
+                if (
+                  related instanceof Node &&
+                  event.currentTarget
+                    .closest(".admin-editor")
+                    ?.contains(related)
+                ) {
+                  return;
+                }
+                linkifyEditorContent();
+              }
+        }
       >
-        <EditorContent editor={editor} />
+        {htmlMode ? (
+          <textarea
+            className="admin-editor__html-source"
+            value={htmlSource}
+            wrap="soft"
+            spellCheck={false}
+            aria-label="HTML 소스"
+            onChange={(event) => {
+              const next = event.target.value;
+              setHtmlSource(next);
+              onChangeRef.current(next);
+            }}
+          />
+        ) : (
+          <EditorContent editor={editor} />
+        )}
       </div>
     </div>
   );
