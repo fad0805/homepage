@@ -798,6 +798,9 @@ html:has(#container.site-layout--side) {
 }
 
 #container.site-layout--collapsible > main > #content {
+  /* Keep the content box inside the viewport so the fixed bottom dock
+     remains visible even when an admin page is taller than the screen. */
+  min-height: 0;
   border-top-right-radius: 0;
   border-bottom-right-radius: 0;
   border-bottom-left-radius: 0;
@@ -832,6 +835,7 @@ html:has(#container.site-layout--side) {
   flex-shrink: 0;
   width: 100%;
   padding: 0.55rem 0.8rem;
+  box-sizing: border-box;
   background: transparent;
 }
 
@@ -839,6 +843,7 @@ html:has(#container.site-layout--side) {
   width: 100%;
   margin: 0;
   padding: 0.55rem 1rem;
+  box-sizing: border-box;
   border-radius: 0;
   background: transparent;
 }
