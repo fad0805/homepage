@@ -478,31 +478,6 @@ export default function AdminAppearance() {
             </div>
 
             <div
-              className="admin-appearance-color-mode"
-              role="tablist"
-              aria-label="색상 모드"
-            >
-              <button
-                type="button"
-                role="tab"
-                aria-selected={colorMode === "light"}
-                className={colorMode === "light" ? "is-selected" : ""}
-                onClick={() => setColorMode("light")}
-              >
-                라이트 색상
-              </button>
-              <button
-                type="button"
-                role="tab"
-                aria-selected={colorMode === "dark"}
-                className={colorMode === "dark" ? "is-selected" : ""}
-                onClick={() => setColorMode("dark")}
-              >
-                다크 색상
-              </button>
-            </div>
-
-            <div
               className="admin-appearance-color-list"
               role="radiogroup"
               aria-label="색 테마 선택"
@@ -624,17 +599,46 @@ export default function AdminAppearance() {
 
               <div className="admin-appearance-tweaks__footer">
                 <span>선택한 템플릿은 유지됩니다.</span>
-                <button
-                  type="button"
-                  className="admin-button admin-appearance-reset-all"
-                  onClick={() => {
-                    setColorOverrides({});
-                    preview({ colorOverrides: {} });
-                  }}
-                  disabled={!hasColorOverride}
-                >
-                  기본 템플릿으로 되돌리기
-                </button>
+                <div className="admin-appearance-tweaks__actions">
+                  <button
+                    type="button"
+                    className="admin-appearance-color-mode-toggle"
+                    onClick={() =>
+                      setColorMode(
+                        colorMode === "light" ? "dark" : "light",
+                      )
+                    }
+                    aria-pressed={colorMode === "dark"}
+                    aria-label={`${
+                      colorMode === "light" ? "라이트" : "다크"
+                    } 색상 편집 중, ${
+                      colorMode === "light" ? "다크" : "라이트"
+                    } 색상으로 전환`}
+                  >
+                    <span
+                      className="admin-appearance-color-mode-toggle__track"
+                      aria-hidden="true"
+                    >
+                      <span />
+                    </span>
+                    <span>
+                      {colorMode === "light"
+                        ? "라이트 색상"
+                        : "다크 색상"}
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    className="admin-button admin-appearance-reset-all"
+                    onClick={() => {
+                      setColorOverrides({});
+                      preview({ colorOverrides: {} });
+                    }}
+                    disabled={!hasColorOverride}
+                  >
+                    기본 템플릿으로 되돌리기
+                  </button>
+                </div>
               </div>
             </div>
           </section>
