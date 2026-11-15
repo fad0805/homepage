@@ -5,7 +5,11 @@
   --illustration-card-bg: var(--input-background);
 }
 
-/* The blue preset uses a slightly lifted card surface in dark mode. */
+/* The blue preset uses a tinted card surface in both color modes. */
+:root[data-color-theme='blue']:not([data-theme='dark']) {
+  --illustration-card-bg: #cbd2e1;
+}
+
 :root[data-color-theme='blue'][data-theme='dark'] {
   --illustration-card-bg: #2b3d4c;
 }
