@@ -40,10 +40,12 @@ export const ThemeProvider = ({
 children,
 themeColors,
 defaultTheme = "light",
+nonce,
 }:{
 children: React.ReactNode;
 themeColors?: Record<Theme, string>;
 defaultTheme?: Theme;
+nonce?: string;
 }) => {
     const colors = themeColors ?? DEFAULT_THEME_COLORS;
     const lightColor = colors.light;
@@ -80,6 +82,7 @@ defaultTheme?: Theme;
     useServerInsertedHTML(() => {
         return (
             <script
+                nonce={nonce}
                 dangerouslySetInnerHTML={{
                     __html: `
                         (function() {

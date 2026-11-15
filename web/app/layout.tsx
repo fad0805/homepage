@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { headers } from "next/headers";
 
 import {
   DEFAULT_COLOR_THEME,
@@ -77,6 +78,8 @@ export default async function RootLayout({
   children: React.ReactNode;
 }>) {
   const currentUser = await getCurrentUser();
+  const requestHeaders = await headers();
+  const nonce = requestHeaders.get("x-nonce") ?? undefined;
   let layoutKey: LayoutKey = DEFAULT_LAYOUT;
   let sidePosition: SidePosition = DEFAULT_SIDE_POSITION;
   let defaultTheme: ThemeMode = DEFAULT_THEME_MODE;
@@ -133,6 +136,7 @@ export default async function RootLayout({
         <ThemeProvider
           themeColors={themeColors}
           defaultTheme={defaultTheme}
+          nonce={nonce}
         >
           <AuthProvider>
             <VisitTracker />
