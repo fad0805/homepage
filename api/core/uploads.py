@@ -15,13 +15,13 @@ from fastapi import HTTPException, UploadFile, status
 from PIL import Image, ImageOps
 
 from core.config import (
-    ENVIRONMENT,
     S3_ACCESS_KEY_ID,
     S3_ACL,
     S3_ADDRESSING_STYLE,
     S3_BUCKET,
     S3_ENDPOINT_URL,
     S3_KEY_PREFIX,
+    S3_PUBLIC_BASE_URL,
     S3_REGION,
     S3_SECRET_ACCESS_KEY,
 )
@@ -29,8 +29,8 @@ from core.image_urls import is_external_reference, s3_key_from_url
 
 logger = logging.getLogger(__name__)
 
-# Legacy local storage. New uploads go to S3 when it is configured; the local
-# directory is kept so previously uploaded files keep being served.
+# Local storage is used when S3 is not configured, including production
+# deployments without object storage. Files are served from ``/uploads``.
 UPLOAD_DIR = Path(os.getenv("UPLOAD_DIR", "uploads"))
 MAX_UPLOAD_SIZE = int(os.getenv("MAX_UPLOAD_SIZE", 50 * 1024 * 1024))
 URL_PREFIX = "/uploads"
@@ -280,7 +280,7 @@ def _save_to_s3(
 
 
 def _save_to_local(content: bytes, extension: str, folder: str) -> str:
-    """Development fallback when S3 is not configured.
+    """Local fallback when S3 is not configured.
 
     The same object key that S3 would use is written under ``uploads/`` so
     development and production store the same relative reference.
@@ -399,10 +399,12 @@ async def save_banner(file: UploadFile, folder: str = "banners") -> str:
     if _s3_is_configured():
         return _save_to_s3(content, content_type, extension, folder)
 
-    if ENVIRONMENT == "production":
+    # Partial S3 configuration is a deployment error. If no S3 settings are
+    # present at all, local storage is used in every environment.
+    if S3_BUCKET or S3_PUBLIC_BASE_URL:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="S3 설정이 누락되었습니다.",
+            detail="S3 설정이 불완전합니다.",
         )
 
     return _save_to_local(content, extension, folder)

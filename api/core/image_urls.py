@@ -3,7 +3,7 @@
 Only the object path (for example ``images/characters/abc.jpg``) belongs in the
 database. ``S3_PUBLIC_BASE_URL`` is applied when a value is read, so changing
 the public host does not require rewriting every row. Without object storage,
-the same key is served from the local ``/uploads`` mount.
+the same key is served from the local ``/uploads`` mount in any environment.
 """
 
 import os
@@ -85,8 +85,8 @@ def storage_reference(value: str | None) -> str | None:
     """Convert a client or legacy URL into the value stored in the database.
 
     External URLs are kept as-is. Object-storage URLs are reduced to their
-    key. During local development, ``/uploads/...`` URLs are normalized to
-    the same relative key so the database representation stays consistent.
+    key. Without object storage, ``/uploads/...`` URLs are normalized to the
+    same relative key so the database representation stays consistent.
     """
     if value is None:
         return None
@@ -99,7 +99,7 @@ def storage_reference(value: str | None) -> str | None:
     if key is not None:
         return key
 
-    # Local development uses the same relative object path as S3. Old
+    # Local storage uses the same relative object path as S3. Old
     # ``/uploads/...`` rows are normalized when they are written again.
     if not _has_object_storage():
         local_key = _local_storage_key(text)
@@ -116,7 +116,7 @@ def public_url(value: str | None) -> str | None:
     """Return the public URL for a stored image reference.
 
     Object keys use ``S3_PUBLIC_BASE_URL`` when configured. Without object
-    storage (development), the same key is served under ``/uploads/``.
+    storage, the same key is served under ``/uploads/`` in every environment.
     """
     if value is None:
         return None
