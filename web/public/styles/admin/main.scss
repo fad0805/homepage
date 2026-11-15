@@ -244,6 +244,12 @@ a.admin-dashboard-stat:visited {
 .admin-dashboard-visitor-body > .admin-dashboard-chart,
 .admin-dashboard-visitor-body > .admin-dashboard-traffic {
   height: 100%;
+  min-height: 0;
+  box-sizing: border-box;
+}
+
+.admin-dashboard-visitor-body > .admin-dashboard-chart {
+  overflow: hidden;
 }
 
 .admin-dashboard-traffic {
