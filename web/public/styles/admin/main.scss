@@ -237,6 +237,13 @@ a.admin-dashboard-stat:visited {
   display: grid;
   grid-template-columns: minmax(0, 1.5fr) minmax(0, 0.9fr);
   gap: 0.8rem;
+  /* Two 5-row traffic panels (sources + searches) plus their headers. */
+  height: 21.5rem;
+}
+
+.admin-dashboard-visitor-body > .admin-dashboard-chart,
+.admin-dashboard-visitor-body > .admin-dashboard-traffic {
+  height: 100%;
 }
 
 .admin-dashboard-traffic {
@@ -842,6 +849,12 @@ a.admin-dashboard-book:visited {
 @media (max-width: 900px) {
   .admin-dashboard-visitor-body {
     grid-template-columns: minmax(0, 1fr);
+    height: auto;
+  }
+
+  .admin-dashboard-visitor-body > .admin-dashboard-chart,
+  .admin-dashboard-visitor-body > .admin-dashboard-traffic {
+    height: auto;
   }
 }
 
