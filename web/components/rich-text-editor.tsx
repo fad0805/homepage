@@ -433,15 +433,16 @@ export function RichTextEditor({
               }}
             >
               <option value="">기본</option>
-              <option value="0.875rem">작게</option>
-              <option value="1rem">보통</option>
-              <option value="1.125rem">조금 크게</option>
-              <option value="1.25rem">크게</option>
-              <option value="1.5rem">아주 크게</option>
-              <option value="1.75rem">제목</option>
-              <option value="2rem">큰 제목</option>
-              <option value="2.5rem">히어로</option>
-              <option value="3rem">특대</option>
+              <option value="10pt">10pt</option>
+              <option value="11pt">11pt</option>
+              <option value="12pt">12pt</option>
+              <option value="14pt">14pt</option>
+              <option value="16pt">16pt</option>
+              <option value="18pt">18pt</option>
+              <option value="21pt">21pt</option>
+              <option value="24pt">24pt</option>
+              <option value="30pt">30pt</option>
+              <option value="36pt">36pt</option>
             </select>
           </label>
         ) : null}
