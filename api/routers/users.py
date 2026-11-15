@@ -61,6 +61,30 @@ _signin_limiter = FailureRateLimiter(
 )
 
 
+def _set_auth_cookies(
+    response: Response,
+    access_token: str,
+    refresh_token: str,
+) -> None:
+    """Write the access and refresh cookies for a newly issued session."""
+    response.set_cookie(
+        key="refresh_token",
+        value=refresh_token,
+        httponly=True,
+        secure=True if ENVIRONMENT == "production" else False,
+        samesite="Strict",
+        max_age=AUTH_COOKIE_MAX_AGE,
+    )
+    response.set_cookie(
+        key="access_token",
+        value=access_token,
+        httponly=True,
+        secure=True if ENVIRONMENT == "production" else False,
+        samesite="Strict",
+        max_age=AUTH_COOKIE_MAX_AGE,
+    )
+
+
 def create_admin_for_dev():
     # Only seed the default account in explicit development mode. Any other
     # value (including a missing/misspelled ENVIRONMENT) must fail closed.
@@ -174,23 +198,7 @@ async def signin(
     record_signin_history(db, user.id, ip_address, device_info, success=True)
     _signin_limiter.reset(ip_address)
 
-    response.set_cookie(
-        key="refresh_token",
-        value=refresh_token,
-        httponly=True,
-        secure=True if ENVIRONMENT == 'production' else False,
-        samesite="Strict",
-        max_age=AUTH_COOKIE_MAX_AGE,
-    )
-
-    response.set_cookie(
-        key="access_token",
-        value=access_token,
-        httponly=True,
-        secure=True if ENVIRONMENT == 'production' else False,
-        samesite="Strict",
-        max_age=AUTH_COOKIE_MAX_AGE,
-    )
+    _set_auth_cookies(response, access_token, refresh_token)
 
     return {"success": True, "message": "Login successful"}
 
@@ -380,10 +388,12 @@ def update_my_account(
 @router.put("/me/password")
 def update_my_password(
     payload: PasswordUpdate,
+    request: Request,
+    response: Response,
     db: Session = Depends(get_db),
     user=Depends(require_auth),
 ):
-    """Change the signed-in user's password."""
+    """Change the password, revoke old sessions, and re-authenticate here."""
     if len(payload.new_password) < 8:
         raise HTTPException(
             status_code=400,
@@ -408,7 +418,35 @@ def update_my_password(
             detail="현재 비밀번호가 올바르지 않습니다.",
         )
 
-    return {"success": True}
+    device_info = (request.headers.get("user-agent") or "")[:255] or None
+    ip_address = get_client_ip(request)
+    try:
+        session = create_user_session(
+            db,
+            user.id,
+            device_info,
+            ip_address,
+        )
+        access_token = create_access_token(
+            data={"sub": user.username, "sid": session.id}
+        )
+        refresh_token = create_refresh_token(
+            data={"sub": user.username, "sid": session.id}
+        )
+        session.refresh_token = refresh_token
+        db.commit()
+    except SQLAlchemyError:
+        db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail="새 로그인 세션을 만들지 못했습니다.",
+        )
+
+    _set_auth_cookies(response, access_token, refresh_token)
+    return {
+        "success": True,
+        "message": "Password changed and old sessions revoked",
+    }
 
 
 @router.get("/me/appearance", response_model=AppearanceRead)
