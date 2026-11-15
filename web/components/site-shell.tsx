@@ -197,6 +197,11 @@ export function SiteShell({
             </button>
           </div>
           <Navbar />
+          {!sideRight ? (
+            <div className="site-sidebar__theme">
+              <ThemeToggle variant="sidebar" />
+            </div>
+          ) : null}
         </aside>
 
         <div className="site-main-column">

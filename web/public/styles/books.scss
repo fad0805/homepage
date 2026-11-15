@@ -295,6 +295,21 @@
   }
 }
 
+:root[data-color-theme='blue']:not([data-theme='dark'])
+  .books-book-button.is-active {
+  background: rgba(227, 241, 255, 0.5);
+}
+
+:root[data-color-theme='sepia']:not([data-theme='dark'])
+  .books-book-button.is-active {
+  background: rgba(211, 180, 136, 0.5);
+}
+
+:root[data-color-theme='rose']:not([data-theme='dark'])
+  .books-book-button.is-active {
+  background: rgba(232, 188, 198, 0.55);
+}
+
 .books-book-button__main {
   flex: 1;
   min-width: 0;
