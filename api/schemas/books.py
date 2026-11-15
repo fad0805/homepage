@@ -67,6 +67,7 @@ class ChapterBase(BaseModel):
     tags: list[str] = Field(default_factory=list)
     order: int = 0
     visible: bool = True
+    pinned: bool = False
     protected: bool = False
     published_at: datetime | None = None
 
@@ -85,6 +86,7 @@ class ChapterUpdate(BaseModel):
     tags: list[str] | None = None
     order: int | None = None
     visible: bool | None = None
+    pinned: bool | None = None
     protected: bool | None = None
     published_at: datetime | None = None
 

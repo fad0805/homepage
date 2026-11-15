@@ -498,6 +498,54 @@ p.admin-books-draft-preview-empty {
   }
 }
 
+.admin-books-pin-button {
+  flex-shrink: 0;
+  padding: 0.28rem 0.45rem;
+  border: 1px solid var(--admin-border);
+  border-radius: 0.4rem;
+  background: transparent;
+  color: var(--admin-muted);
+  font-family: inherit;
+  font-size: 0.68rem;
+  line-height: 1.2;
+  white-space: nowrap;
+  cursor: pointer;
+
+  &:hover:not(:disabled),
+  &:focus-visible {
+    border-color: var(--admin-primary);
+    color: var(--title-color);
+  }
+
+  &.is-active {
+    border-color: var(--admin-primary);
+    background: color-mix(in srgb, var(--admin-primary) 12%, transparent);
+    color: var(--title-color);
+    font-weight: bold;
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+}
+
+.admin-books-chapter-title.is-pinned {
+  font-weight: bold;
+}
+
+.admin-books-pin-badge {
+  display: inline-block;
+  margin-left: 0.35rem;
+  padding: 0.05rem 0.35rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--admin-primary) 14%, transparent);
+  color: var(--title-color);
+  font-size: 0.62rem;
+  font-weight: normal;
+  vertical-align: middle;
+}
+
 .admin-books-chapter-check {
   flex-shrink: 0;
   width: 1rem;

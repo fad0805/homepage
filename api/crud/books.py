@@ -23,6 +23,7 @@ from schemas.books import (
 CHAPTER_VIEW_DEDUP_MINUTES = int(
     os.getenv("CHAPTER_VIEW_DEDUP_MINUTES", "60")
 )
+MAX_PINNED_CHAPTERS = 5
 
 
 def _clean_tags(tags: list[str] | None) -> list[str]:
@@ -228,6 +229,7 @@ def _serialize_chapter(chapter: Chapter, locked: bool = False) -> dict:
         "tags": chapter.tags or [],
         "order": chapter.order,
         "visible": chapter.visible,
+        "pinned": bool(chapter.pinned),
         "protected": bool(chapter.protected),
         "locked": locked,
         "view_count": chapter.view_count or 0,
@@ -549,6 +551,28 @@ def _chapter_is_public(chapter: Chapter) -> bool:
     return published_at <= datetime.utcnow()
 
 
+def _check_pinned_chapter_limit(
+    db: Session,
+    book_id: int,
+    *,
+    exclude_chapter_id: int | None = None,
+) -> None:
+    query = db.query(Chapter).filter(
+        Chapter.book_id == book_id,
+        Chapter.pinned.is_(True),
+    )
+    if exclude_chapter_id is not None:
+        query = query.filter(Chapter.id != exclude_chapter_id)
+    if query.count() >= MAX_PINNED_CHAPTERS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                f"고정 게시글은 책당 최대 {MAX_PINNED_CHAPTERS}개까지 "
+                "가능합니다."
+            ),
+        )
+
+
 def create_chapter(
     db: Session,
     payload: ChapterCreate,
@@ -558,6 +582,8 @@ def create_chapter(
     data = payload.model_dump(exclude={"notify_mastodon"})
     data["tags"] = _clean_tags(data.get("tags"))
     data["user_id"] = user_id
+    if data.get("pinned"):
+        _check_pinned_chapter_limit(db, payload.book_id)
     chapter = Chapter(**data)
     db.add(chapter)
     db.commit()
@@ -604,6 +630,17 @@ def update_chapter(
         )
     if "tags" in data:
         data["tags"] = _clean_tags(data["tags"])
+
+    next_pinned = data.get("pinned", chapter.pinned)
+    next_book_id = data.get("book_id", chapter.book_id)
+    if next_pinned and (
+        not chapter.pinned or next_book_id != chapter.book_id
+    ):
+        _check_pinned_chapter_limit(
+            db,
+            next_book_id,
+            exclude_chapter_id=chapter.id,
+        )
 
     was_public = _chapter_is_public(chapter)
     previous_book_id = chapter.book_id

@@ -11,6 +11,7 @@ class ChapterDraftSave(BaseModel):
     body: str | None = None
     tags: list[str] = Field(default_factory=list)
     visible: bool = True
+    pinned: bool = False
     published_at: datetime | None = None
     target_book_id: int | None = None
 

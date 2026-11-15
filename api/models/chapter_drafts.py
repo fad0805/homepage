@@ -24,6 +24,12 @@ class ChapterDraft(Base):
     body = Column(Text, nullable=True)
     tags = Column(JSON, nullable=False, default=list)
     visible = Column(Boolean, nullable=False, default=True)
+    pinned = Column(
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default="false",
+    )
     published_at = Column(DateTime, nullable=True)
     target_book_id = Column(Integer, nullable=True)
     created_at = Column(DateTime, default=func.now(), nullable=False)

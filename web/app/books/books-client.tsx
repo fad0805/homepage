@@ -325,7 +325,10 @@ export default function BooksClient({
             (!chapter.published_at ||
               new Date(chapter.published_at).getTime() <= now),
         )
-        .sort(compareChaptersByCreatedDesc),
+        .sort((a, b) => {
+          if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
+          return compareChaptersByCreatedDesc(a, b);
+        }),
     [chapters, isLoggedIn, now],
   );
 
@@ -425,11 +428,17 @@ export default function BooksClient({
         null
       : null;
 
+  const pinnedChapters = activeChapters.filter(
+    (chapter) => chapter.pinned,
+  );
+  const regularChapters = activeChapters.filter(
+    (chapter) => !chapter.pinned,
+  );
   const totalChapterPages = Math.max(
     1,
-    Math.ceil(activeChapters.length / CHAPTERS_PER_PAGE),
+    Math.ceil(regularChapters.length / CHAPTERS_PER_PAGE),
   );
-  const pagedChapters = activeChapters.slice(
+  const pagedChapters = regularChapters.slice(
     (chapterPage - 1) * CHAPTERS_PER_PAGE,
     chapterPage * CHAPTERS_PER_PAGE,
   );
@@ -496,6 +505,35 @@ export default function BooksClient({
     }
     setActiveChapterId(chapterId);
   };
+
+  const renderChapterButton = (chapter: Chapter) => (
+    <button
+      type="button"
+      className={`books-chapter-link${
+        chapter.pinned ? " is-pinned" : ""
+      }`}
+      onClick={() => selectChapter(chapter.id)}
+      key={chapter.id}
+    >
+      <span className="books-chapter-link__main">
+        <span className="books-chapter-link__title">
+          {chapter.title}
+          {chapter.visible === false ? (
+            <span className="books-private-badge">비공개</span>
+          ) : null}
+          {chapter.visible !== false && chapter.protected ? (
+            <span className="books-protected-badge">보호</span>
+          ) : null}
+        </span>
+      </span>
+      <span className="books-chapter-link__time">
+        {formatDateTime(chapter.created_at)}
+      </span>
+      <span className="books-chapter-link__arrow" aria-hidden="true">
+        →
+      </span>
+    </button>
+  );
 
   const toggleCategory = (categoryId: number) => {
     setExpandedCategories((prev) => {
@@ -675,42 +713,21 @@ export default function BooksClient({
         </p>
       ) : (
         <>
+          {pinnedChapters.length > 0 ? (
+            <div className="books-chapters books-chapters--pinned">
+              {pinnedChapters.map(renderChapterButton)}
+            </div>
+          ) : null}
           <div className="books-chapters">
-            {pagedChapters.map((chapter) => (
-              <button
-                type="button"
-                className="books-chapter-link"
-                onClick={() => selectChapter(chapter.id)}
-                key={chapter.id}
-              >
-                <span className="books-chapter-link__main">
-                  <span className="books-chapter-link__title">
-                    {chapter.title}
-                    {chapter.visible === false ? (
-                      <span className="books-private-badge">비공개</span>
-                    ) : null}
-                    {chapter.visible !== false && chapter.protected ? (
-                      <span className="books-protected-badge">보호</span>
-                    ) : null}
-                  </span>
-                </span>
-                <span className="books-chapter-link__time">
-                  {formatDateTime(chapter.created_at)}
-                </span>
-                <span
-                  className="books-chapter-link__arrow"
-                  aria-hidden="true"
-                >
-                  →
-                </span>
-              </button>
-            ))}
+            {pagedChapters.map(renderChapterButton)}
           </div>
-          <Pagination
-            page={chapterPage}
-            totalPages={totalChapterPages}
-            onChange={setChapterPage}
-          />
+          {regularChapters.length > 0 ? (
+            <Pagination
+              page={chapterPage}
+              totalPages={totalChapterPages}
+              onChange={setChapterPage}
+            />
+          ) : null}
         </>
       )}
         </>
