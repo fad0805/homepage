@@ -29,6 +29,10 @@
   justify-content: flex-start;
 }
 
+#container.site-layout--collapsible #memo-page main {
+  margin-left: 2rem;
+}
+
 .memo-pinned-section {
   min-width: 0;
   padding: 0.55rem 0.8rem 0.2rem;
