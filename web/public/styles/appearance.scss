@@ -147,6 +147,10 @@ html:has(#container.site-layout--side) {
   border-radius: 0.35rem;
 }
 
+#container.site-layout--side .chapter-detail__body img {
+  border-radius: 0.35rem;
+}
+
 @media (min-width: 769px) {
   #container.site-layout--drawer {
     height: 100vh;
