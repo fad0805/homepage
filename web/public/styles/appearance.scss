@@ -888,14 +888,14 @@ html[data-appearance='collapsible'] .theme-toggle {
   right: auto;
   bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
   left: calc(1rem + env(safe-area-inset-left, 0px));
-  border-color: color.change($maintheme, $alpha: 0.5);
-  background: color.change($subtheme, $alpha: 0.38);
+  border-color: color-mix(in srgb, var(--theme-main) 50%, transparent);
+  background: color-mix(in srgb, var(--theme-sub) 38%, transparent);
   color: var(--title-color);
   box-shadow: 0 0.45rem 1.1rem rgba(0, 0, 0, 0.1);
 
   &:hover {
     filter: none;
-    background: color.change($subtheme, $alpha: 0.58);
+    background: color-mix(in srgb, var(--theme-sub) 58%, transparent);
   }
 
   [data-theme='dark'] & {

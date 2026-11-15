@@ -4,10 +4,11 @@ from models.users import AuthorSettings, User
 
 DEFAULT_LAYOUT = "editorial"
 DEFAULT_SIDE_POSITION = "left"
+DEFAULT_COLOR_THEME = "mint"
 
 
 def get_public_appearance(db: Session) -> dict:
-    """Return the layout for the integrated public site.
+    """Return the layout and color theme for the integrated public site.
 
     Until per-author routing is available, the public shell follows the
     primary administrator's appearance.
@@ -32,4 +33,12 @@ def get_public_appearance(db: Session) -> dict:
             if settings
             else DEFAULT_SIDE_POSITION
         ),
+        "color_theme": (
+            settings.color_theme
+            if settings
+            else DEFAULT_COLOR_THEME
+        ),
+        "color_background": settings.color_background if settings else None,
+        "color_content": settings.color_content if settings else None,
+        "color_accent": settings.color_accent if settings else None,
     }

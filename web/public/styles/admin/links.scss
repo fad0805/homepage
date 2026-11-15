@@ -2,19 +2,35 @@
 @use '../variables' as *;
 
 :root {
-  --admin-card-bg: #{color.adjust($maintheme, $lightness: 14%)};
-  --admin-border: #{color.adjust($maintheme, $lightness: -18%)};
-  --admin-muted: #{color.adjust($light-text, $lightness: 38%)};
-  --admin-primary: #{color.adjust($maintheme, $lightness: -35%)};
+  --admin-card-bg: color-mix(
+    in srgb,
+    var(--theme-main) 30%,
+    var(--input-background)
+  );
+  --admin-border: color-mix(in srgb, var(--theme-main) 78%, black);
+  --admin-muted: color-mix(
+    in srgb,
+    var(--foreground) 62%,
+    var(--background)
+  );
+  --admin-primary: var(--title-color);
   --admin-primary-ink: #{$white};
 }
 
 [data-theme='dark'] {
-  --admin-card-bg: #{color.adjust($dark-bg-sub, $lightness: 4%)};
-  --admin-border: #{color.adjust($dark-bg-sub, $lightness: 12%)};
-  --admin-muted: rgba(166, 165, 145, 0.9);
-  --admin-primary: #5e7b5a;
-  --admin-primary-ink: #{color.adjust($dark-bg, $lightness: 5%)};
+  --admin-card-bg: color-mix(in srgb, var(--theme-sub) 85%, white);
+  --admin-border: color-mix(in srgb, var(--theme-sub) 78%, white);
+  --admin-muted: color-mix(
+    in srgb,
+    var(--foreground) 70%,
+    var(--background)
+  );
+  --admin-primary: color-mix(
+    in srgb,
+    var(--theme-main) 60%,
+    var(--theme-sub)
+  );
+  --admin-primary-ink: var(--background);
 }
 
 #admin-links {

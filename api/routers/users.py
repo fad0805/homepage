@@ -36,7 +36,7 @@ from crud.users import (
     get_user_session,
     get_user_session_by_token,
     record_signin_history,
-    update_author_layout,
+    update_author_appearance,
     update_author_settings,
 )
 from db.session import get_db
@@ -421,6 +421,10 @@ def get_my_appearance(
     return {
         "layout_key": settings.layout_key,
         "side_position": settings.side_position,
+        "color_theme": settings.color_theme,
+        "color_background": settings.color_background,
+        "color_content": settings.color_content,
+        "color_accent": settings.color_accent,
     }
 
 
@@ -430,14 +434,22 @@ def update_my_appearance(
     db: Session = Depends(get_db),
     user=Depends(require_auth),
 ):
-    """Update the signed-in author's site layout."""
-    settings = update_author_layout(
+    """Update the signed-in author's site layout and color theme."""
+    settings = update_author_appearance(
         db,
         user,
         layout_key=payload.layout_key,
         side_position=payload.side_position,
+        color_theme=payload.color_theme,
+        color_background=payload.color_background,
+        color_content=payload.color_content,
+        color_accent=payload.color_accent,
     )
     return {
         "layout_key": settings.layout_key,
         "side_position": settings.side_position,
+        "color_theme": settings.color_theme,
+        "color_background": settings.color_background,
+        "color_content": settings.color_content,
+        "color_accent": settings.color_accent,
     }

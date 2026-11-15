@@ -18,7 +18,7 @@ interface ThemeContextValue {
 
 const ThemeContext = createContext<ThemeContextValue | null>(null);
 
-const THEME_COLORS: Record<Theme, string> = {
+const DEFAULT_THEME_COLORS: Record<Theme, string> = {
     light: "#bedbbb",
     dark: "#090c0a",
 };
@@ -35,9 +35,14 @@ function readStoredTheme(): Theme {
 
 export const ThemeProvider = ({
 children,
+themeColors,
 }:{
 children: React.ReactNode;
+themeColors?: Record<Theme, string>;
 }) => {
+    const colors = themeColors ?? DEFAULT_THEME_COLORS;
+    const lightColor = colors.light;
+    const darkColor = colors.dark;
     const [theme, setThemeState] = useState<Theme>(readStoredTheme);
 
     const setTheme = useCallback((nextTheme: Theme) => {
@@ -56,9 +61,12 @@ children: React.ReactNode;
         document
             .querySelectorAll('meta[name="theme-color"]')
             .forEach((meta) =>
-                meta.setAttribute("content", THEME_COLORS[theme]),
+                meta.setAttribute(
+                    "content",
+                    theme === "dark" ? darkColor : lightColor,
+                ),
             );
-    }, [theme]);
+    }, [theme, lightColor, darkColor]);
 
     const value = useMemo(() => ({ theme, setTheme }), [theme, setTheme]);
 
@@ -81,7 +89,7 @@ children: React.ReactNode;
                                 document
                                     .querySelectorAll('meta[name="theme-color"]')
                                     .forEach(function(meta) {
-                                        meta.setAttribute('content', isDark ? '#090c0a' : '#bedbbb');
+                                        meta.setAttribute('content', isDark ? '${darkColor}' : '${lightColor}');
                                     });
                             } catch (e) {
                                 console.error('Failed to set initial theme:', e);

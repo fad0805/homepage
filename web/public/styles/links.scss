@@ -3,14 +3,16 @@
 
 :root {
   --links-banner-bg: var(--empty-banner-bg);
-  /* The image area keeps the old "no image" surface, slightly brighter. */
-  --links-banner-image-bg: #{color.mix(#000, color.adjust($maintheme, $lightness: -10%), 8%)};
+  /* The image area keeps the old "no image" surface, slightly darker. */
+  --links-banner-image-bg: color-mix(in srgb, var(--theme-main) 82%, black);
+  --links-banner-color: #fff;
 }
 
 [data-theme='dark'] {
   --links-banner-bg: var(--empty-banner-bg);
-  /* The image area keeps the old "no image" surface, slightly darker. */
-  --links-banner-image-bg: #{color.mix(#000, color.adjust($maintheme, $lightness: -40%, $saturation: -10%), 28%)};
+  /* The image area keeps the old "no image" surface, much darker. */
+  --links-banner-image-bg: color-mix(in srgb, var(--theme-main) 45%, black);
+  --links-banner-color: color-mix(in srgb, var(--theme-main) 55%, white);
 }
 
 #links-page {

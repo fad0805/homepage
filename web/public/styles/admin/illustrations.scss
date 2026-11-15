@@ -44,7 +44,7 @@
   font-size: 0.78rem;
 
   &.is-success {
-    background: color.change($maintheme, $alpha: 0.35);
+    background: color-mix(in srgb, var(--theme-main) 35%, transparent);
     color: var(--foreground);
   }
 
@@ -239,7 +239,7 @@
   padding: 0.75rem;
   border: 1px dashed var(--admin-border);
   border-radius: 0.75rem;
-  background: color.change($maintheme, $alpha: 0.08);
+  background: color-mix(in srgb, var(--theme-main) 8%, transparent);
 
   > input[type='file'] {
     position: absolute;
@@ -275,7 +275,7 @@
   }
 
   &:hover {
-    background: color.change($maintheme, $alpha: 0.16);
+    background: color-mix(in srgb, var(--theme-main) 16%, transparent);
   }
 }
 
@@ -625,7 +625,7 @@
   padding: 0.6rem 0.7rem;
   border: 1px solid var(--admin-border);
   border-radius: 0.65rem;
-  background: color.change($maintheme, $alpha: 0.12);
+  background: color-mix(in srgb, var(--theme-main) 12%, transparent);
 
   strong {
     color: var(--title-color);

@@ -1,11 +1,18 @@
 import type { Metadata, Viewport } from "next";
 
 import {
+  DEFAULT_COLOR_THEME,
   DEFAULT_LAYOUT,
   DEFAULT_SIDE_POSITION,
+  type ColorThemeKey,
   type LayoutKey,
   type SidePosition,
 } from "@/config/appearance";
+import {
+  buildColorThemeStyle,
+  getThemeMetaColors,
+  type ColorOverrides,
+} from "@/lib/color-theme";
 import { serverApiFetch } from "@/lib/server-api";
 import { getCurrentUser } from "@/lib/server-auth";
 
@@ -70,11 +77,17 @@ export default async function RootLayout({
   const currentUser = await getCurrentUser();
   let layoutKey: LayoutKey = DEFAULT_LAYOUT;
   let sidePosition: SidePosition = DEFAULT_SIDE_POSITION;
+  let colorTheme: ColorThemeKey = DEFAULT_COLOR_THEME;
+  let colorOverrides: ColorOverrides = {};
 
   try {
     const appearance = await serverApiFetch<{
       layout_key: LayoutKey;
       side_position: SidePosition;
+      color_theme?: ColorThemeKey;
+      color_background?: string | null;
+      color_content?: string | null;
+      color_accent?: string | null;
     }>(
       currentUser ? "/users/me/appearance" : "/appearance",
       {
@@ -84,24 +97,37 @@ export default async function RootLayout({
     );
     layoutKey = appearance.layout_key;
     sidePosition = appearance.side_position ?? DEFAULT_SIDE_POSITION;
+    colorTheme = appearance.color_theme ?? DEFAULT_COLOR_THEME;
+    colorOverrides = {
+      background: appearance.color_background,
+      content: appearance.color_content,
+      accent: appearance.color_accent,
+    };
   } catch (error) {
     console.error("Failed to load the site appearance.", error);
   }
+
+  const colorStyle = buildColorThemeStyle(colorTheme, colorOverrides);
+  const themeColors = getThemeMetaColors(colorTheme, colorOverrides);
 
   return (
     <html
       lang="ko"
       data-appearance={layoutKey}
+      data-color-theme={colorTheme}
+      style={colorStyle}
       suppressHydrationWarning
     >
       <body>
-        <ThemeProvider>
+        <ThemeProvider themeColors={themeColors}>
           <AuthProvider>
             <VisitTracker />
             <Shortcuts>
               <SiteShell
                 layoutKey={layoutKey}
                 sidePosition={sidePosition}
+                colorTheme={colorTheme}
+                colorOverrides={colorOverrides}
               >
                 {children}
               </SiteShell>

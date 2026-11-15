@@ -2,7 +2,11 @@
 @use '../variables' as *;
 
 .gallery-admin {
-  --admin-muted: #{color.adjust($light-text, $lightness: 38%)};
+  --admin-muted: color-mix(
+    in srgb,
+    var(--foreground) 62%,
+    var(--background)
+  );
 
   width: 100%;
   max-width: 1000px;
@@ -30,7 +34,11 @@
 }
 
 [data-theme='dark'] .gallery-admin {
-  --admin-muted: rgba(166, 165, 145, 0.9);
+  --admin-muted: color-mix(
+    in srgb,
+    var(--foreground) 70%,
+    var(--background)
+  );
 }
 
 .gallery-admin__error {

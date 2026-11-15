@@ -22,13 +22,20 @@ body {
 }
 
 :root {
-  --background: #{$light-bg};
-  --foreground: #{$light-text};
-  --subtheme: #{$light-bg-sub};
-  --title-color: #{color.adjust($maintheme, $lightness: -55%)};
-  --input-background: #{$white};
+  color-scheme: light;
+
+  --theme-main: var(--theme-light-main, #{$maintheme});
+  --theme-sub: var(--theme-light-sub, #{$subtheme});
+  --background: var(--theme-light-background, #{$light-bg});
+  --foreground: var(--theme-light-foreground, #{$light-text});
+  --subtheme: var(--theme-light-content, #{$light-bg-sub});
+  --title-color: var(
+    --theme-light-accent,
+    #{color.adjust($maintheme, $lightness: -55%)}
+  );
+  --input-background: var(--theme-light-input, #{$white});
   --input-text: var(--foreground);
-  --empty-banner-bg: #adcfaa;
+  --empty-banner-bg: var(--theme-light-empty, #adcfaa);
   --links-banner-color: #fff;
 
   a, a:visited {
@@ -37,14 +44,28 @@ body {
 }
 
 [data-theme='dark'] {
-  --background: #{$dark-bg};
-  --foreground: #{$dark-text};
-  --subtheme: #{$dark-bg-sub};
-  --title-color: #{color.adjust($maintheme, $lightness: -35%)};
-  --input-background: #{$dark-bg-sub};
-  --input-text: rgba(145, 160, 128, 0.9);
-  --empty-banner-bg: #455b43;
-  --links-banner-color: #c2d6bf;
+  color-scheme: dark;
+
+  --theme-main: var(
+    --theme-dark-main,
+    #{color.adjust($maintheme, $lightness: -35%)}
+  );
+  --theme-sub: var(--theme-dark-sub, #{$dark-bg-sub});
+  --background: var(--theme-dark-background, #{$dark-bg});
+  --foreground: var(--theme-dark-foreground, #{$dark-text});
+  --subtheme: var(--theme-dark-content, #{$dark-bg-sub});
+  --title-color: var(
+    --theme-dark-accent,
+    #{color.adjust($maintheme, $lightness: -35%)}
+  );
+  --input-background: var(--theme-dark-input, #{$dark-bg-sub});
+  --input-text: var(--foreground);
+  --empty-banner-bg: var(--theme-dark-empty, #455b43);
+  --links-banner-color: color-mix(
+    in srgb,
+    var(--theme-main) 55%,
+    white
+  );
 
   a, a:visited {
     color: var(--title-color);
@@ -205,7 +226,7 @@ div#container>main>div#content {
   font-size: 1.5rem;
   font-weight: bold;
   margin: 0.5rem 0;
-  color: color.adjust($maintheme, $lightness: -60%);
+  color: var(--title-color);
 }
 
 div#container > main {
@@ -425,7 +446,7 @@ footer {
   padding: 1rem;
   text-align: center;
   background: var(--background);
-  color: color.adjust($maintheme, $lightness: -50%);
+  color: color-mix(in srgb, var(--title-color) 65%, var(--background));
   font-size: 0.6rem;
 }
 
