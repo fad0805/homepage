@@ -153,15 +153,67 @@ def get_visit_stats(db: Session) -> dict:
         row[0]: {"visitors": int(row[1] or 0), "visits": int(row[2] or 0)}
         for row in daily_rows
     }
+    traffic_rows = (
+        db.query(
+            SiteVisit.visited_on,
+            SiteVisit.source,
+            SiteVisit.referrer,
+            SiteVisit.ip_hash,
+        )
+        .filter(SiteVisit.visited_on >= week_start)
+        .all()
+    )
+    daily_source_map: dict[date, dict[str, dict]] = {}
+    daily_search_map: dict[date, dict[str, dict]] = {}
+    for visited_on, source, referrer, ip_hash in traffic_rows:
+        source_entry = daily_source_map.setdefault(
+            visited_on, {}
+        ).setdefault(source, {"visits": 0, "visitors": set()})
+        source_entry["visits"] += 1
+        source_entry["visitors"].add(ip_hash)
+
+        term = extract_search_query(referrer)
+        if not term:
+            continue
+        search_entry = daily_search_map.setdefault(
+            visited_on, {}
+        ).setdefault(term, {"visits": 0, "visitors": set()})
+        search_entry["visits"] += 1
+        search_entry["visitors"].add(ip_hash)
+
     daily = []
     for offset in range(7):
         day = week_start + timedelta(days=offset)
         values = daily_map.get(day, {"visitors": 0, "visits": 0})
+        day_sources = [
+            {
+                "source": source,
+                "visits": entry["visits"],
+                "visitors": len(entry["visitors"]),
+            }
+            for source, entry in sorted(
+                daily_source_map.get(day, {}).items(),
+                key=lambda item: (-item[1]["visits"], item[0]),
+            )[:5]
+        ]
+        day_searches = [
+            {
+                "query": term,
+                "visits": entry["visits"],
+                "visitors": len(entry["visitors"]),
+            }
+            for term, entry in sorted(
+                daily_search_map.get(day, {}).items(),
+                key=lambda item: (-item[1]["visits"], item[0]),
+            )[:5]
+        ]
         daily.append(
             {
                 "date": day.isoformat(),
                 "visitors": values["visitors"],
                 "visits": values["visits"],
+                "sources": day_sources,
+                "searches": day_searches,
             }
         )
 
