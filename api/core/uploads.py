@@ -108,6 +108,15 @@ def _local_path_from_url(url: str) -> Path | None:
     return _local_path_from_key(path[len(prefix) :])
 
 
+def _local_key_from_storage_key(key: str) -> str:
+    """Map an S3 object key to its path below the local uploads root."""
+    value = key.lstrip("/")
+    prefix = S3_KEY_PREFIX.strip("/")
+    if prefix and value.startswith(f"{prefix}/"):
+        return value[len(prefix) + 1 :]
+    return value
+
+
 def _local_path_from_key(key: str | None) -> Path | None:
     """Return the local path for an object key without leaving the root."""
     if not key or is_external_reference(key):
@@ -135,7 +144,7 @@ def _local_path_from_reference(url: str | None) -> Path | None:
     # Relative keys belong to local storage only while S3 is not configured.
     if _s3_is_configured():
         return None
-    return _local_path_from_key(url)
+    return _local_path_from_key(_local_key_from_storage_key(url))
 
 
 def _storage_identity(url: str | None) -> tuple[str, str] | None:
@@ -282,11 +291,12 @@ def _save_to_s3(
 def _save_to_local(content: bytes, extension: str, folder: str) -> str:
     """Local fallback when S3 is not configured.
 
-    The same object key that S3 would use is written under ``uploads/`` so
-    development and production store the same relative reference.
+    The bucket's key prefix (for example ``images``) is omitted locally, so
+    the file lives directly under ``uploads/<folder>/``. The returned key
+    still includes the prefix for a consistent database representation.
     """
     key = _build_key(folder, extension)
-    destination = ensure_upload_dir() / key
+    destination = ensure_upload_dir() / _local_key_from_storage_key(key)
     destination.parent.mkdir(parents=True, exist_ok=True)
     try:
         destination.write_bytes(content)

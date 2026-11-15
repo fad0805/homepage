@@ -35,8 +35,23 @@ def _public_bases() -> list[str]:
     return bases
 
 
+def _strip_key_prefix(key: str) -> str:
+    prefix = _S3_KEY_PREFIX
+    if prefix and key.startswith(f"{prefix}/"):
+        return key[len(prefix) + 1 :]
+    return key
+
+
+def _with_key_prefix(key: str) -> str:
+    prefix = _S3_KEY_PREFIX
+    if prefix and key and not key.startswith(f"{prefix}/"):
+        return f"{prefix}/{key}"
+    return key
+
+
 def _local_public_url(key: str) -> str:
-    return f"/uploads/{key.lstrip('/')}"
+    # The bucket's key prefix is not part of the local uploads directory.
+    return f"/uploads/{_strip_key_prefix(key).lstrip('/')}"
 
 
 def _local_storage_key(value: str) -> str | None:
@@ -104,7 +119,7 @@ def storage_reference(value: str | None) -> str | None:
     if not _has_object_storage():
         local_key = _local_storage_key(text)
         if local_key is not None:
-            return local_key
+            return _with_key_prefix(local_key)
 
     if is_external_reference(text):
         return text
