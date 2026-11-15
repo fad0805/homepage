@@ -45,7 +45,7 @@ function MoonIcon() {
 }
 
 interface ThemeToggleProps {
-  variant?: "floating" | "drawer";
+  variant?: "floating" | "drawer" | "sidebar";
 }
 
 export function ThemeToggle({
@@ -68,7 +68,7 @@ export function ThemeToggle({
   return (
     <button
       className={`theme-toggle${
-        variant === "drawer" ? " theme-toggle--drawer" : ""
+        variant !== "floating" ? ` theme-toggle--${variant}` : ""
       }`}
       type="button"
       title={label}
