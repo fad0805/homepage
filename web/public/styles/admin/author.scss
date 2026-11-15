@@ -126,6 +126,10 @@
   gap: 0.25rem;
 }
 
+.admin-editor__html-view {
+  margin-left: auto;
+}
+
 .admin-editor__toolbar-row--secondary {
   padding-top: 0.3rem;
   border-top: 1px solid color-mix(in srgb, var(--admin-border) 65%, transparent);
@@ -304,6 +308,27 @@
     background: transparent;
     cursor: pointer;
   }
+}
+
+.admin-editor__html-source {
+  display: block;
+  width: 100%;
+  min-height: 18rem;
+  margin: 0;
+  padding: 0.9rem 1rem;
+  border: 0;
+  outline: none;
+  box-sizing: border-box;
+  resize: vertical;
+  background: var(--input-background);
+  color: var(--input-text);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.8rem;
+  line-height: 1.55;
+  overflow-x: hidden;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 .admin-editor__image-controls {

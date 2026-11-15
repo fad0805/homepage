@@ -54,17 +54,21 @@ function ToolbarButton({
   active = false,
   disabled = false,
   title,
+  className = "",
 }: {
   children: ReactNode;
   onClick: () => void;
   active?: boolean;
   disabled?: boolean;
   title?: string;
+  className?: string;
 }) {
   return (
     <button
       type="button"
-      className={`admin-editor__button${active ? " is-active" : ""}`}
+      className={`admin-editor__button${active ? " is-active" : ""}${
+        className ? ` ${className}` : ""
+      }`}
       onClick={onClick}
       disabled={disabled}
       title={title}
@@ -161,6 +165,8 @@ export function RichTextEditor({
   const imageInputRef = useRef<HTMLInputElement | null>(null);
   const [uploadingImage, setUploadingImage] = useState(false);
   const [loadingPagePreview, setLoadingPagePreview] = useState(false);
+  const [htmlMode, setHtmlMode] = useState(false);
+  const [htmlSource, setHtmlSource] = useState("");
 
   useEffect(() => {
     onChangeRef.current = onChange;
@@ -209,10 +215,24 @@ export function RichTextEditor({
 
   useEffect(() => {
     if (!editor) return;
+    if (htmlMode) return;
     if (value !== editor.getHTML()) {
       editor.commands.setContent(value || "<p></p>");
     }
-  }, [editor, value]);
+  }, [editor, htmlMode, value]);
+
+  const toggleHtmlMode = useCallback(() => {
+    if (!editor) return;
+    if (htmlMode) {
+      editor.commands.setContent(htmlSource || "<p></p>");
+      const nextHtml = editor.getHTML();
+      onChangeRef.current(nextHtml);
+      setHtmlMode(false);
+      return;
+    }
+    setHtmlSource(editor.getHTML());
+    setHtmlMode(true);
+  }, [editor, htmlMode, htmlSource]);
 
   const setLink = useCallback(() => {
     if (!editor) return;
@@ -595,6 +615,19 @@ export function RichTextEditor({
           >
             ↷
           </ToolbarButton>
+          <ToolbarButton
+            onClick={toggleHtmlMode}
+            active={htmlMode}
+            disabled={!editor}
+            title={
+              htmlMode
+                ? "에디터로 돌아가기"
+                : "HTML 소스 직접 편집"
+            }
+            className="admin-editor__html-view"
+          >
+            HTML
+          </ToolbarButton>
         </div>
         <div className="admin-editor__toolbar-row admin-editor__toolbar-row--secondary">
           <div className="admin-editor__color">
@@ -838,19 +871,42 @@ export function RichTextEditor({
       ) : null}
       <div
         className="admin-editor__content"
-        onClick={() => editor?.chain().focus().run()}
-        onBlur={(event) => {
-          const related = event.relatedTarget;
-          if (
-            related instanceof Node &&
-            event.currentTarget.closest(".admin-editor")?.contains(related)
-          ) {
-            return;
-          }
-          linkifyEditorContent();
-        }}
+        onClick={
+          htmlMode ? undefined : () => editor?.chain().focus().run()
+        }
+        onBlur={
+          htmlMode
+            ? undefined
+            : (event) => {
+                const related = event.relatedTarget;
+                if (
+                  related instanceof Node &&
+                  event.currentTarget
+                    .closest(".admin-editor")
+                    ?.contains(related)
+                ) {
+                  return;
+                }
+                linkifyEditorContent();
+              }
+        }
       >
-        <EditorContent editor={editor} />
+        {htmlMode ? (
+          <textarea
+            className="admin-editor__html-source"
+            value={htmlSource}
+            wrap="soft"
+            spellCheck={false}
+            aria-label="HTML 소스"
+            onChange={(event) => {
+              const next = event.target.value;
+              setHtmlSource(next);
+              onChangeRef.current(next);
+            }}
+          />
+        ) : (
+          <EditorContent editor={editor} />
+        )}
       </div>
     </div>
   );
