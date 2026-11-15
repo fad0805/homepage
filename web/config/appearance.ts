@@ -107,7 +107,7 @@ export const COLOR_THEME_OPTIONS: ColorThemeOption[] = [
     englishLabel: "Sepia",
     description: "오래된 종이처럼 따뜻하고 부드러운 베이지 테마입니다.",
     light: {
-      background: "#dac7a5",
+      background: "#e7dcc7",
       content: "#fcf8ef",
       accent: "#64401d",
       text: "#231b12",
