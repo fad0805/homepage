@@ -99,3 +99,15 @@ def decode_refresh_token(token: str):
     if payload.get("type") != "refresh":
         raise jwt.InvalidTokenError("Invalid token type")
     return payload
+
+
+def hash_refresh_token(token: str) -> str:
+    """Store only a SHA-256 digest of a refresh token in the database."""
+    return hashlib.sha256(token.encode()).hexdigest()
+
+
+def is_refresh_token_hash(value: str | None) -> bool:
+    """Whether a stored value is already a SHA-256 refresh-token digest."""
+    if not value or len(value) != 64:
+        return False
+    return all(character in "0123456789abcdef" for character in value)

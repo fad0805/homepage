@@ -2,7 +2,7 @@ import os
 import re
 
 from contextlib import closing
-from fastapi import APIRouter, Depends, HTTPException, Response, Request
+from fastapi import APIRouter, Depends, HTTPException, Response, Request, status
 from fastapi import Form
 import jwt
 from sqlalchemy.orm import Session, joinedload
@@ -15,6 +15,7 @@ from core.security import (
     create_refresh_token,
     decode_access_token,
     decode_refresh_token,
+    hash_refresh_token,
     verify_password,
 )
 from routers.utils import (
@@ -59,6 +60,19 @@ _signin_limiter = FailureRateLimiter(
     max_failures=5,
     message="로그인 시도가 너무 많습니다. 잠시 후 다시 시도해주세요.",
 )
+
+# A valid bcrypt hash used to keep failed-login timing similar when the
+# username does not exist.
+_DUMMY_PASSWORD_HASH = (
+    "$2b$12$FY1baEZyPh71TQP81w1CyuRy/PJSs8EekZy9jA8cakqNDU/QdbTxO"
+)
+
+
+def _invalid_credentials() -> HTTPException:
+    return HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Invalid username or password",
+    )
 
 
 def _set_auth_cookies(
@@ -165,8 +179,9 @@ async def signin(
     try:
         user = get_user(db, username)
     except ValueError:
+        verify_password(password, _DUMMY_PASSWORD_HASH)
         _signin_limiter.record_failure(ip_address)
-        raise HTTPException(status_code=401, detail="Invalid username or password")
+        raise _invalid_credentials()
 
     hashed_password = user.hashed_password
     verified = verify_password(password, hashed_password)
@@ -176,7 +191,7 @@ async def signin(
     if not verified:
         record_signin_history(db, user.id, ip_address, device_info, success=False)
         _signin_limiter.record_failure(ip_address)
-        raise HTTPException(status_code=400, detail="Invalid username or password")
+        raise _invalid_credentials()
 
     # A sign-in starts a new per-device session instead of replacing the
     # user's single stored token, so other devices stay logged in.
@@ -189,7 +204,7 @@ async def signin(
         refresh_token = create_refresh_token(
             data={"sub": username, "sid": session.id}
         )
-        session.refresh_token = refresh_token
+        session.refresh_token_hash = hash_refresh_token(refresh_token)
         db.commit()
     except SQLAlchemyError:
         db.rollback()
@@ -433,7 +448,7 @@ def update_my_password(
         refresh_token = create_refresh_token(
             data={"sub": user.username, "sid": session.id}
         )
-        session.refresh_token = refresh_token
+        session.refresh_token_hash = hash_refresh_token(refresh_token)
         db.commit()
     except SQLAlchemyError:
         db.rollback()

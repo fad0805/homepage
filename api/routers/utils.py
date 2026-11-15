@@ -21,6 +21,8 @@ from core.security import (
     decode_access_token,
     decode_refresh_token,
     hash_gallery_token,
+    hash_refresh_token,
+    is_refresh_token_hash,
 )
 from crud import gallery as gallery_crud
 from crud.users import (
@@ -157,6 +159,12 @@ def get_refresh_token_from_cookie(request: Request) -> Optional[str]:
 def _token_matches(stored: Optional[str], token: Optional[str]) -> bool:
     if not stored or not token:
         return False
+    if is_refresh_token_hash(stored):
+        return hmac.compare_digest(
+            stored.encode(),
+            hash_refresh_token(token).encode(),
+        )
+    # Compatibility with a plaintext row from an older process.
     return hmac.compare_digest(stored.encode(), token.encode())
 
 
@@ -164,7 +172,7 @@ def _rotated_token_is_in_grace(
     session: UserSession, token: Optional[str]
 ) -> bool:
     """Accept the previous refresh token briefly after a rotation."""
-    if not _token_matches(session.previous_refresh_token, token):
+    if not _token_matches(session.previous_refresh_token_hash, token):
         return False
     if session.refresh_token_rotated_at is None:
         return False
@@ -206,6 +214,49 @@ def _refresh_auth_cookies(
 ) -> None:
     _set_auth_cookie(response, "access_token", new_access_token)
     _set_auth_cookie(response, "refresh_token", new_refresh_token)
+
+
+def _rotate_session_token(
+    db: Session,
+    session: UserSession,
+    username: str,
+) -> str | None:
+    """Store a new token digest only if the current row did not change."""
+    current_stored = session.refresh_token_hash
+    if not current_stored:
+        return None
+
+    previous_hash = (
+        current_stored
+        if is_refresh_token_hash(current_stored)
+        else hash_refresh_token(current_stored)
+    )
+    new_refresh_token = create_refresh_token(
+        data={"sub": username, "sid": session.id}
+    )
+    now = datetime.utcnow()
+    rotated = (
+        db.query(UserSession)
+        .filter(
+            UserSession.id == session.id,
+            UserSession.refresh_token_hash == current_stored,
+        )
+        .update(
+            {
+                UserSession.previous_refresh_token_hash: previous_hash,
+                UserSession.refresh_token_hash: hash_refresh_token(
+                    new_refresh_token
+                ),
+                UserSession.refresh_token_rotated_at: now,
+                UserSession.last_used_at: now,
+                UserSession.expires_at: now
+                + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS),
+            },
+            synchronize_session=False,
+        )
+    )
+    db.commit()
+    return new_refresh_token if rotated else None
 
 
 def refresh_access_token(
@@ -257,53 +308,34 @@ def refresh_access_token(
         data={"sub": username, "sid": session.id}
     )
 
-    # A delayed tab can still present the token from just before a rotation.
-    if not _token_matches(session.refresh_token, refresh_token):
-        if _rotated_token_is_in_grace(session, refresh_token):
-            return username, new_access_token, session.refresh_token
+    current_matches = _token_matches(
+        session.refresh_token_hash,
+        refresh_token,
+    )
+    previous_matches = _rotated_token_is_in_grace(
+        session,
+        refresh_token,
+    )
+
+    if not current_matches and not previous_matches:
         # Do not revoke the active session for a stale token. An old tab must
         # not be able to sign out the current browser/device.
         raise credentials_exception
 
-    new_refresh_token = create_refresh_token(
-        data={"sub": username, "sid": session.id}
-    )
-    now = datetime.utcnow()
-
-    # Only rotate when the presented token is still the current one for this
-    # session. The condition is evaluated by the database, so concurrent
-    # refreshes cannot both win the race.
-    rotated = (
-        db.query(UserSession)
-        .filter(
-            UserSession.id == session.id,
-            UserSession.refresh_token == refresh_token,
-        )
-        .update(
-            {
-                UserSession.previous_refresh_token: refresh_token,
-                UserSession.refresh_token: new_refresh_token,
-                UserSession.refresh_token_rotated_at: now,
-                UserSession.last_used_at: now,
-                UserSession.expires_at: now
-                + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS),
-            },
-            synchronize_session=False,
-        )
-    )
-    db.commit()
-
-    if rotated:
+    # A delayed tab may still present the previous token. Either way, issue a
+    # new token because only its digest is stored and the old plaintext token
+    # cannot be returned again.
+    new_refresh_token = _rotate_session_token(db, session, username)
+    if new_refresh_token:
         return username, new_access_token, new_refresh_token
 
-    # Another request just rotated this session's token. Reuse the stored
-    # token so every response writes the same cookie value.
+    # A concurrent refresh won the database update. Check the fresh row once
+    # more so a still-valid grace token can retry the rotation.
     db.refresh(session)
-    if (
-        session.refresh_token
-        and _rotated_token_is_in_grace(session, refresh_token)
-    ):
-        return username, new_access_token, session.refresh_token
+    if _rotated_token_is_in_grace(session, refresh_token):
+        new_refresh_token = _rotate_session_token(db, session, username)
+        if new_refresh_token:
+            return username, new_access_token, new_refresh_token
 
     raise credentials_exception
 
@@ -438,7 +470,7 @@ def get_optional_user(
         if _session_expired(session):
             return None
         if not (
-            _token_matches(session.refresh_token, refresh_token)
+            _token_matches(session.refresh_token_hash, refresh_token)
             or _rotated_token_is_in_grace(session, refresh_token)
         ):
             return None

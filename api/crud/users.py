@@ -6,7 +6,12 @@ from sqlalchemy.orm import Session
 
 from core.config import REFRESH_TOKEN_EXPIRE_DAYS
 from models.users import AuthorSettings, User, UserSession, UserSigninHistory
-from core.security import hash_password, verify_password
+from core.security import (
+    hash_password,
+    hash_refresh_token,
+    is_refresh_token_hash,
+    verify_password,
+)
 from schemas.users import UserCreate, UserUpdate
 
 
@@ -198,7 +203,7 @@ def create_user_session(
     now = datetime.utcnow()
     session = UserSession(
         user_id=user_id,
-        refresh_token="",
+        refresh_token_hash="",
         device_info=(device_info or "")[:255] or None,
         ip_address=(ip_address or "unknown")[:45],
         created_at=now,
@@ -227,16 +232,49 @@ def get_user_session_by_token(
     """Find a session by its current or recently rotated refresh token."""
     if not refresh_token:
         return None
-    return (
+
+    digest = hash_refresh_token(refresh_token)
+    session = (
         db.query(UserSession)
         .filter(
             or_(
-                UserSession.refresh_token == refresh_token,
-                UserSession.previous_refresh_token == refresh_token,
+                UserSession.refresh_token_hash == digest,
+                UserSession.previous_refresh_token_hash == digest,
             )
         )
         .first()
     )
+    if session is not None:
+        return session
+
+    # Compatibility for rows written by an older process during a rolling
+    # deployment. Startup upgrades these rows to digests.
+    return (
+        db.query(UserSession)
+        .filter(
+            or_(
+                UserSession.refresh_token_hash == refresh_token,
+                UserSession.previous_refresh_token_hash == refresh_token,
+            )
+        )
+        .first()
+    )
+
+
+def hash_legacy_refresh_tokens(db: Session) -> None:
+    """Replace plaintext refresh tokens left by an older installation."""
+    changed = False
+    for session in db.query(UserSession).all():
+        for field in (
+            "refresh_token_hash",
+            "previous_refresh_token_hash",
+        ):
+            value = getattr(session, field)
+            if value and not is_refresh_token_hash(value):
+                setattr(session, field, hash_refresh_token(value))
+                changed = True
+    if changed:
+        db.commit()
 
 
 def delete_user_session(db: Session, session: UserSession | None) -> None:
