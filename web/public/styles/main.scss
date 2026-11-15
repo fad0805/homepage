@@ -2,21 +2,21 @@
 @use 'variables' as *;
 
 :root {
-  --home-text: #{color.change($light-text, $alpha: 0.72)};
-  --home-muted: #{color.change($light-text, $alpha: 0.48)};
-  --home-highlight: #{color.adjust($maintheme, $lightness: -42%)};
-  --home-highlight-bg: #{color.change($maintheme, $alpha: 0.45)};
-  --home-glow-1: #{color.change($maintheme, $alpha: 0.32)};
-  --home-glow-2: #{color.change($subtheme, $alpha: 0.6)};
+  --home-text: color-mix(in srgb, var(--foreground) 72%, transparent);
+  --home-muted: color-mix(in srgb, var(--foreground) 48%, transparent);
+  --home-highlight: var(--title-color);
+  --home-highlight-bg: color-mix(in srgb, var(--theme-main) 45%, transparent);
+  --home-glow-1: color-mix(in srgb, var(--theme-main) 32%, transparent);
+  --home-glow-2: color-mix(in srgb, var(--theme-sub) 60%, transparent);
 }
 
 [data-theme='dark'] {
-  --home-text: #{color.change($dark-text, $alpha: 0.72)};
-  --home-muted: #{color.change($dark-text, $alpha: 0.45)};
-  --home-highlight: #{color.adjust($maintheme, $lightness: -8%)};
-  --home-highlight-bg: #{color.change($maintheme, $alpha: 0.18)};
-  --home-glow-1: #{color.change($maintheme, $alpha: 0.1)};
-  --home-glow-2: #{color.change($dark-bg-sub, $alpha: 0.5)};
+  --home-text: color-mix(in srgb, var(--foreground) 72%, transparent);
+  --home-muted: color-mix(in srgb, var(--foreground) 45%, transparent);
+  --home-highlight: color-mix(in srgb, var(--title-color) 85%, white);
+  --home-highlight-bg: color-mix(in srgb, var(--theme-main) 18%, transparent);
+  --home-glow-1: color-mix(in srgb, var(--theme-main) 10%, transparent);
+  --home-glow-2: color-mix(in srgb, var(--theme-sub) 50%, transparent);
 }
 
 #main {

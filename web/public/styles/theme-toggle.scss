@@ -13,7 +13,7 @@
   width: 2.75rem;
   height: 2.75rem;
   padding: 0;
-  border: 1px solid color.change($maintheme, $alpha: 0.55);
+  border: 1px solid color-mix(in srgb, var(--theme-main) 55%, transparent);
   border-radius: 50%;
   background: var(--subtheme);
   color: var(--title-color);

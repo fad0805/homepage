@@ -3,12 +3,11 @@
 
 :root {
   --memo-input-bg: var(--input-background);
-  --memo-pinned-bg: #{color.change($maintheme, $alpha: 0.55)};
+  --memo-pinned-bg: color-mix(in srgb, var(--theme-main) 55%, transparent);
 }
 
 [data-theme='dark'] {
-  --memo-input-bg: #{color.adjust($dark-bg-sub, $lightness: 4%)};
-  --memo-pinned-bg: #{color.change($maintheme, $alpha: 0.16)};
+  --memo-pinned-bg: color-mix(in srgb, var(--theme-main) 16%, transparent);
 }
 
 #memo-page {
@@ -28,7 +27,7 @@
 .memo-pinned-section {
   min-width: 0;
   padding: 0.55rem 0.8rem 0.2rem;
-  border: 1px solid color.change($maintheme, $alpha: 0.5);
+  border: 1px solid color-mix(in srgb, var(--theme-main) 50%, transparent);
   border-radius: 1rem 1rem 0 0;
   background: var(--memo-pinned-bg);
 }
@@ -58,7 +57,7 @@
   min-height: 2.5rem;
   max-height: 9rem;
   padding: 0.8rem 1rem;
-  border: 1px solid color.change($maintheme, $alpha: 0.5);
+  border: 1px solid color-mix(in srgb, var(--theme-main) 50%, transparent);
   border-radius: 0.8rem;
   background: var(--memo-input-bg);
   color: var(--input-text);
@@ -69,7 +68,7 @@
   resize: none;
 
   &:focus {
-    outline: 2px solid color.change($maintheme, $alpha: 0.9);
+    outline: 2px solid color-mix(in srgb, var(--theme-main) 90%, transparent);
     outline-offset: 1px;
   }
 }
@@ -109,7 +108,7 @@
 .memo-divider {
   height: 1px;
   margin-top: 0.9rem;
-  background: color.change($maintheme, $alpha: 0.35);
+  background: color-mix(in srgb, var(--theme-main) 35%, transparent);
 }
 
 .memo-list {
@@ -120,7 +119,7 @@
 
 .memo-item {
   min-width: 0;
-  border-bottom: 1px solid color.change($maintheme, $alpha: 0.5);
+  border-bottom: 1px solid color-mix(in srgb, var(--theme-main) 50%, transparent);
 
   &:last-child {
     border-bottom: 0;
@@ -168,13 +167,13 @@
 
 .memo-item-time {
   padding-bottom: 0.35rem;
-  color: color.change($light-text, $alpha: 0.45);
+  color: color-mix(in srgb, var(--foreground) 45%, transparent);
   font-size: 0.72rem;
   white-space: nowrap;
 }
 
 [data-theme='dark'] .memo-item-time {
-  color: color.change($dark-text, $alpha: 0.45);
+  color: color-mix(in srgb, var(--foreground) 45%, transparent);
 }
 
 .memo-item-actions {
@@ -205,7 +204,7 @@
 }
 
 .memo-text-button.is-pin {
-  color: color.change($light-text, $alpha: 0.55);
+  color: color-mix(in srgb, var(--foreground) 55%, transparent);
 
   &.is-active {
     color: var(--title-color);
@@ -214,7 +213,7 @@
 }
 
 [data-theme='dark'] .memo-text-button.is-pin {
-  color: color.change($dark-text, $alpha: 0.55);
+  color: color-mix(in srgb, var(--foreground) 55%, transparent);
 }
 
 [data-theme='dark'] .memo-text-button.is-pin.is-active {
@@ -237,11 +236,11 @@
 }
 
 .memo-status {
-  color: color.change($light-text, $alpha: 0.55);
+  color: color-mix(in srgb, var(--foreground) 55%, transparent);
 }
 
 [data-theme='dark'] .memo-status {
-  color: color.change($dark-text, $alpha: 0.55);
+  color: color-mix(in srgb, var(--foreground) 55%, transparent);
 }
 
 .memo-error {

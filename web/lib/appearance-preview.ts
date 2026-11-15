@@ -2,11 +2,18 @@
 
 import { useSyncExternalStore } from "react";
 
-import type { LayoutKey, SidePosition } from "@/config/appearance";
+import type {
+  ColorThemeKey,
+  LayoutKey,
+  SidePosition,
+} from "@/config/appearance";
+import type { ColorOverrides } from "@/lib/color-theme";
 
 export interface AppearancePreview {
   layoutKey: LayoutKey;
   sidePosition: SidePosition;
+  colorTheme: ColorThemeKey;
+  colorOverrides: ColorOverrides;
 }
 
 let current: AppearancePreview | null = null;

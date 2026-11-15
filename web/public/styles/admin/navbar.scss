@@ -1,12 +1,19 @@
-@use 'sass:color';
 @use '../variables' as *;
 
 :root {
-  --admin-navbar-active-color: #{$light-bold-text};
+  --admin-navbar-active-color: color-mix(
+    in srgb,
+    var(--title-color) 78%,
+    black
+  );
 }
 
 [data-theme='dark'] {
-  --admin-navbar-active-color: #b0baac;
+  --admin-navbar-active-color: color-mix(
+    in srgb,
+    var(--title-color) 82%,
+    white
+  );
 }
 
 div#content>div>nav {

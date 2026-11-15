@@ -52,3 +52,126 @@ export const SIDE_POSITION_OPTIONS: SidePositionOption[] = [
   { key: "left", label: "왼쪽" },
   { key: "right", label: "오른쪽" },
 ];
+
+export type ColorThemeKey = "mint" | "sepia" | "blue" | "rose";
+
+export interface ColorThemePalette {
+  /** Page background. */
+  background: string;
+  /** Content/card background. */
+  content: string;
+  /** Titles, links and other emphasized ink. */
+  accent: string;
+  text: string;
+  inputBackground: string;
+  emptyBanner: string;
+}
+
+export interface ColorThemeOption {
+  key: ColorThemeKey;
+  label: string;
+  englishLabel: string;
+  description: string;
+  light: ColorThemePalette;
+  dark: ColorThemePalette;
+}
+
+export const DEFAULT_COLOR_THEME: ColorThemeKey = "mint";
+
+export const COLOR_THEME_OPTIONS: ColorThemeOption[] = [
+  {
+    key: "mint",
+    label: "민트",
+    englishLabel: "Mint",
+    description: "사이트의 기본이 되는 차분한 민트빛 테마입니다.",
+    light: {
+      background: "#bedbbb",
+      content: "#fdfbe9",
+      accent: "#2f522b",
+      text: "#171717",
+      inputBackground: "#fffcfc",
+      emptyBanner: "#adcfaa",
+    },
+    dark: {
+      background: "#090c0a",
+      content: "#1f201e",
+      accent: "#55954f",
+      text: "#f3f0dc",
+      inputBackground: "#1f201e",
+      emptyBanner: "#455b43",
+    },
+  },
+  {
+    key: "sepia",
+    label: "세피아",
+    englishLabel: "Sepia",
+    description: "오래된 종이처럼 따뜻하고 부드러운 베이지 테마입니다.",
+    light: {
+      background: "#e7dbc3",
+      content: "#fbf6ea",
+      accent: "#7b5630",
+      text: "#2b241b",
+      inputBackground: "#fffdf7",
+      emptyBanner: "#d3c2a1",
+    },
+    dark: {
+      background: "#14110d",
+      content: "#221d17",
+      accent: "#d0ab7c",
+      text: "#ece1cc",
+      inputBackground: "#221d17",
+      emptyBanner: "#5a4a36",
+    },
+  },
+  {
+    key: "blue",
+    label: "블루",
+    englishLabel: "Blue",
+    description: "맑은 바다를 떠올리는 차갑고 선명한 테마입니다.",
+    light: {
+      background: "#c6d9e7",
+      content: "#f3f8fb",
+      accent: "#235b7a",
+      text: "#15232d",
+      inputBackground: "#fcfdff",
+      emptyBanner: "#a6c6da",
+    },
+    dark: {
+      background: "#070d13",
+      content: "#16222c",
+      accent: "#86bdd9",
+      text: "#d9e8f2",
+      inputBackground: "#16222c",
+      emptyBanner: "#33566b",
+    },
+  },
+  {
+    key: "rose",
+    label: "로즈",
+    englishLabel: "Rose",
+    description: "은은한 장미빛으로 따뜻한 분위기를 내는 테마입니다.",
+    light: {
+      background: "#e9ccd1",
+      content: "#fdf4f5",
+      accent: "#86394a",
+      text: "#2b171b",
+      inputBackground: "#fffcfc",
+      emptyBanner: "#dcb4bb",
+    },
+    dark: {
+      background: "#130b0d",
+      content: "#251a1d",
+      accent: "#dfa3ae",
+      text: "#f3e1e4",
+      inputBackground: "#251a1d",
+      emptyBanner: "#5e3a42",
+    },
+  },
+];
+
+export function getColorThemeOption(key: ColorThemeKey): ColorThemeOption {
+  return (
+    COLOR_THEME_OPTIONS.find((option) => option.key === key) ??
+    COLOR_THEME_OPTIONS[0]
+  );
+}

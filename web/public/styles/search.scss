@@ -10,7 +10,7 @@
 
 .search-eyebrow {
   margin: 0;
-  color: color.change($light-text, $alpha: 0.45);
+  color: color-mix(in srgb, var(--foreground) 45%, transparent);
   font-size: 0.64rem;
   letter-spacing: 0.28em;
   text-transform: uppercase;
@@ -24,7 +24,7 @@
 }
 
 [data-theme='dark'] .search-eyebrow {
-  color: color.change($dark-text, $alpha: 0.45);
+  color: color-mix(in srgb, var(--foreground) 45%, transparent);
 }
 
 .search-form {
@@ -67,7 +67,7 @@
 
 .search-summary {
   margin: 0.75rem 0 0;
-  color: color.change($light-text, $alpha: 0.62);
+  color: color-mix(in srgb, var(--foreground) 62%, transparent);
   font-size: 0.78rem;
 
   strong {
@@ -76,7 +76,7 @@
 }
 
 [data-theme='dark'] .search-summary {
-  color: color.change($dark-text, $alpha: 0.62);
+  color: color-mix(in srgb, var(--foreground) 62%, transparent);
 }
 
 .search-state {
@@ -100,7 +100,7 @@
     font-size: 0.95rem;
 
     span {
-      color: color.change($light-text, $alpha: 0.45);
+      color: color-mix(in srgb, var(--foreground) 45%, transparent);
       font-size: 0.68rem;
       font-weight: normal;
     }
@@ -111,7 +111,7 @@
   border-bottom-color: rgba(255, 255, 255, 0.16);
 
   span {
-    color: color.change($dark-text, $alpha: 0.45);
+    color: color-mix(in srgb, var(--foreground) 45%, transparent);
   }
 }
 
@@ -164,7 +164,7 @@
   display: -webkit-box;
   margin: 0;
   overflow: hidden;
-  color: color.change($light-text, $alpha: 0.7);
+  color: color-mix(in srgb, var(--foreground) 70%, transparent);
   font-size: 0.78rem;
   line-height: 1.5;
   overflow-wrap: anywhere;
@@ -173,17 +173,17 @@
 }
 
 [data-theme='dark'] .search-result__description {
-  color: color.change($dark-text, $alpha: 0.7);
+  color: color-mix(in srgb, var(--foreground) 70%, transparent);
 }
 
 .search-result__meta {
   margin: 0;
-  color: color.change($light-text, $alpha: 0.5);
+  color: color-mix(in srgb, var(--foreground) 50%, transparent);
   font-size: 0.68rem;
 }
 
 [data-theme='dark'] .search-result__meta {
-  color: color.change($dark-text, $alpha: 0.5);
+  color: color-mix(in srgb, var(--foreground) 50%, transparent);
 }
 
 .search-result__tags {
@@ -206,7 +206,7 @@
   overflow: hidden;
   border-radius: 0.55rem;
   background: var(--subtheme);
-  color: color.change($light-text, $alpha: 0.5);
+  color: color-mix(in srgb, var(--foreground) 50%, transparent);
   font-size: 0.62rem;
   text-align: center;
 
@@ -219,7 +219,7 @@
 }
 
 [data-theme='dark'] .search-result__thumb {
-  color: color.change($dark-text, $alpha: 0.5);
+  color: color-mix(in srgb, var(--foreground) 50%, transparent);
 }
 
 .search-result__body {

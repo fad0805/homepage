@@ -14,6 +14,7 @@ import { FooterShortcut } from "@/components/footer-shortcut";
 import { Navbar } from "@/components/navbar";
 import { ThemeToggle } from "@/components/theme-toggle";
 import type {
+  ColorThemeKey,
   LayoutKey,
   SidePosition,
 } from "@/config/appearance";
@@ -21,10 +22,16 @@ import {
   clearAppearancePreview,
   useAppearancePreview,
 } from "@/lib/appearance-preview";
+import {
+  applyColorTheme,
+  type ColorOverrides,
+} from "@/lib/color-theme";
 
 interface SiteShellProps {
   layoutKey: LayoutKey;
   sidePosition: SidePosition;
+  colorTheme: ColorThemeKey;
+  colorOverrides: ColorOverrides;
   children: ReactNode;
 }
 
@@ -45,6 +52,8 @@ function SiteTitle() {
 export function SiteShell({
   layoutKey,
   sidePosition,
+  colorTheme,
+  colorOverrides,
   children,
 }: SiteShellProps) {
   const pathname = usePathname();
@@ -58,6 +67,8 @@ export function SiteShell({
 
   const activeLayoutKey = preview?.layoutKey ?? layoutKey;
   const activeSidePosition = preview?.sidePosition ?? sidePosition;
+  const activeColorTheme = preview?.colorTheme ?? colorTheme;
+  const activeColorOverrides = preview?.colorOverrides ?? colorOverrides;
   const isSide = activeLayoutKey === "side";
   const isBottom = activeLayoutKey === "collapsible";
   const isDrawer = activeLayoutKey === "drawer";
@@ -84,6 +95,14 @@ export function SiteShell({
   useEffect(() => {
     document.documentElement.dataset.appearance = activeLayoutKey;
   }, [activeLayoutKey]);
+
+  useEffect(() => {
+    applyColorTheme(
+      document.documentElement,
+      activeColorTheme,
+      activeColorOverrides,
+    );
+  }, [activeColorTheme, activeColorOverrides]);
 
   useEffect(() => {
     if (!pathname.startsWith("/admin/appearance")) {

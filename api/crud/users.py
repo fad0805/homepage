@@ -145,17 +145,25 @@ def update_author_settings(
     return settings
 
 
-def update_author_layout(
+def update_author_appearance(
     db: Session,
     user: User,
     *,
     layout_key: str,
     side_position: str,
+    color_theme: str,
+    color_background: str | None = None,
+    color_content: str | None = None,
+    color_accent: str | None = None,
 ) -> AuthorSettings:
-    """Update the signed-in author's layout."""
+    """Update the signed-in author's layout and color theme."""
     settings = ensure_author_settings(db, user)
     settings.layout_key = layout_key
     settings.side_position = side_position
+    settings.color_theme = color_theme
+    settings.color_background = color_background
+    settings.color_content = color_content
+    settings.color_accent = color_accent
     db.commit()
     db.refresh(settings)
     return settings
