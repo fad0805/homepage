@@ -71,7 +71,15 @@ export const SIDE_POSITION_OPTIONS: SidePositionOption[] = [
   { key: "right", label: "오른쪽" },
 ];
 
-export type ColorThemeKey = "mint" | "sepia" | "blue" | "rose" | "mono";
+export type ColorThemeKey =
+  | "mint"
+  | "sepia"
+  | "blue"
+  | "rose"
+  | "mono"
+  | "aromantic"
+  | "agender"
+  | "asexual";
 
 export interface ColorThemePalette {
   /** Page background. */
@@ -206,6 +214,75 @@ export const COLOR_THEME_OPTIONS: ColorThemeOption[] = [
       text: "#ededed",
       inputBackground: "#1a1a1a",
       emptyBanner: "#2a2a2a",
+    },
+  },
+  {
+    key: "aromantic",
+    label: "에이로맨스",
+    englishLabel: "Aromantic",
+    description:
+      "그린·화이트·그레이·블랙으로 구성한 에이로맨스 프라이드 테마입니다.",
+    light: {
+      background: "#bad5a9",
+      content: "#f6fbee",
+      accent: "#2f7030",
+      text: "#1a2615",
+      inputBackground: "#f6fbee",
+      emptyBanner: "#a9c99b",
+    },
+    dark: {
+      background: "#070907",
+      content: "#141a14",
+      accent: "#a7d379",
+      text: "#edf2ea",
+      inputBackground: "#141a14",
+      emptyBanner: "#384635",
+    },
+  },
+  {
+    key: "agender",
+    label: "에이젠더",
+    englishLabel: "Agender",
+    description:
+      "그린·화이트·그레이·블랙으로 구성한 에이젠더 프라이드 테마입니다.",
+    light: {
+      background: "#c0d3b4",
+      content: "#f4faee",
+      accent: "#476a2e",
+      text: "#192315",
+      inputBackground: "#f4faee",
+      emptyBanner: "#b2c6a6",
+    },
+    dark: {
+      background: "#070807",
+      content: "#171a16",
+      accent: "#b3ed7f",
+      text: "#eff2ec",
+      inputBackground: "#171a16",
+      emptyBanner: "#3b4038",
+    },
+  },
+  {
+    key: "asexual",
+    label: "에이섹슈얼",
+    englishLabel: "Asexual",
+    description:
+      "블랙·그레이·화이트·퍼플로 구성한 에이섹슈얼 프라이드 테마입니다.",
+    light: {
+      background: "#d8cede",
+      content: "#fbf9fc",
+      accent: "#563756",
+      text: "#221d23",
+      inputBackground: "#fbf9fc",
+      emptyBanner: "#c0b3c5",
+    },
+    dark: {
+      background: "#080608",
+      content: "#1a151b",
+      accent: "#cf8bcf",
+      text: "#efe9f0",
+      inputBackground: "#1a151b",
+      emptyBanner: "#4a3d4b",
     },
   },
 ];

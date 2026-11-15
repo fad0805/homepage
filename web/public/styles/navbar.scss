@@ -21,6 +21,22 @@
   --navbar-active-color: #f5f5f5;
 }
 
+:root:is(
+  [data-color-theme='aromantic'],
+  [data-color-theme='agender'],
+  [data-color-theme='asexual']
+):not([data-theme='dark']) {
+  --navbar-active-color: #2f2f2f;
+}
+
+[data-theme='dark']:is(
+  [data-color-theme='aromantic'],
+  [data-color-theme='agender'],
+  [data-color-theme='asexual']
+) {
+  --navbar-active-color: #ffffff;
+}
+
 nav {
   display: flex;
   width: 80%;
