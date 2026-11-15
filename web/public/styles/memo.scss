@@ -13,7 +13,7 @@
 #memo-page {
   display: flex;
   justify-content: center;
-  padding: 2rem 2rem 7rem;
+  padding: 2rem 3rem 7rem;
 }
 
 #memo-page main {
@@ -27,10 +27,6 @@
 /* The bottom-menu shell aligns page content to the left. */
 #container.site-layout--collapsible #memo-page {
   justify-content: flex-start;
-}
-
-#container.site-layout--collapsible #memo-page main {
-  margin-left: 2.8rem;
 }
 
 .memo-pinned-section {
