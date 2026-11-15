@@ -9,6 +9,10 @@
   --navbar-active-color: #{$dark-active-text};
 }
 
+:root[data-color-theme='sepia']:not([data-theme='dark']) {
+  --navbar-active-color: #7b4545;
+}
+
 nav {
   display: flex;
   width: 80%;
