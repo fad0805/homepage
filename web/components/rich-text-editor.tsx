@@ -446,253 +446,267 @@ export function RichTextEditor({
   return (
     <div className={`admin-editor${compact ? " admin-editor--compact" : ""}`}>
       <div className="admin-editor__toolbar">
-        <ToolbarButton
-          onClick={() => editor?.chain().focus().toggleBold().run()}
-          active={editor?.isActive("bold")}
-          disabled={!editor}
-        >
-          <strong>B</strong>
-        </ToolbarButton>
-        <ToolbarButton
-          onClick={() => editor?.chain().focus().toggleItalic().run()}
-          active={editor?.isActive("italic")}
-          disabled={!editor}
-        >
-          <em>I</em>
-        </ToolbarButton>
-        <ToolbarButton
-          onClick={() => editor?.chain().focus().toggleUnderline().run()}
-          active={editor?.isActive("underline")}
-          disabled={!editor}
-        >
-          <u>U</u>
-        </ToolbarButton>
-        <ToolbarButton
-          onClick={() => editor?.chain().focus().toggleStrike().run()}
-          active={editor?.isActive("strike")}
-          disabled={!editor}
-        >
-          <s>S</s>
-        </ToolbarButton>
-        <ToolbarButton
-          onClick={() =>
-            editor?.chain().focus().toggleHeading({ level: 2 }).run()
-          }
-          active={editor?.isActive("heading", { level: 2 })}
-          disabled={!editor}
-        >
-          H2
-        </ToolbarButton>
-        <ToolbarButton
-          onClick={() =>
-            editor?.chain().focus().toggleHeading({ level: 3 }).run()
-          }
-          active={editor?.isActive("heading", { level: 3 })}
-          disabled={!editor}
-        >
-          H3
-        </ToolbarButton>
-        {enableFontSize ? (
-          <label className="admin-editor__font-size">
-            <span>크기</span>
-            <select
-              value={
-                (editor?.getAttributes("textStyle").fontSize as string) ??
-                ""
-              }
-              disabled={!editor}
-              onChange={(event) => {
-                const size = event.target.value;
-                if (size) {
-                  editor?.chain().focus().setFontSize(size).run();
-                } else {
-                  editor?.chain().focus().unsetFontSize().run();
+        <div className="admin-editor__toolbar-row">
+          {enableFontSize ? (
+            <label className="admin-editor__font-size">
+              <span>크기</span>
+              <select
+                value={
+                  (editor?.getAttributes("textStyle").fontSize as string) ??
+                  ""
                 }
-              }}
-            >
-              <option value="">기본</option>
-              <option value="10pt">10pt</option>
-              <option value="11pt">11pt</option>
-              <option value="12pt">12pt</option>
-              <option value="14pt">14pt</option>
-              <option value="16pt">16pt</option>
-              <option value="18pt">18pt</option>
-              <option value="21pt">21pt</option>
-              <option value="24pt">24pt</option>
-              <option value="30pt">30pt</option>
-              <option value="36pt">36pt</option>
-            </select>
-          </label>
-        ) : null}
-        <ToolbarMenu
-          label="정렬"
-          active={
-            editor?.isActive({ textAlign: "center" }) ||
-            editor?.isActive({ textAlign: "right" })
-          }
-          disabled={!editor}
-          items={[
-            {
-              label: "왼쪽 정렬",
-              active: editor?.isActive({ textAlign: "left" }),
-              onSelect: () =>
-                editor?.chain().focus().setTextAlign("left").run(),
-            },
-            {
-              label: "가운데 정렬",
-              active: editor?.isActive({ textAlign: "center" }),
-              onSelect: () =>
-                editor?.chain().focus().setTextAlign("center").run(),
-            },
-            {
-              label: "오른쪽 정렬",
-              active: editor?.isActive({ textAlign: "right" }),
-              onSelect: () =>
-                editor?.chain().focus().setTextAlign("right").run(),
-            },
-          ]}
-        />
-        <ToolbarMenu
-          label="목록"
-          active={
-            editor?.isActive("bulletList") ||
-            editor?.isActive("orderedList")
-          }
-          disabled={!editor}
-          items={[
-            {
-              label: "글머리 목록",
-              active: editor?.isActive("bulletList"),
-              onSelect: () =>
-                editor?.chain().focus().toggleBulletList().run(),
-            },
-            {
-              label: "번호 목록",
-              active: editor?.isActive("orderedList"),
-              onSelect: () =>
-                editor?.chain().focus().toggleOrderedList().run(),
-            },
-          ]}
-        />
-        <ToolbarButton
-          onClick={() => editor?.chain().focus().toggleBlockquote().run()}
-          active={editor?.isActive("blockquote")}
-          disabled={!editor}
-        >
-          인용
-        </ToolbarButton>
-        <ToolbarButton
-          onClick={() => editor?.chain().focus().toggleCode().run()}
-          active={editor?.isActive("code")}
-          disabled={!editor}
-        >
-          코드
-        </ToolbarButton>
-        <ToolbarButton
-          onClick={setLink}
-          active={editor?.isActive("link")}
-          disabled={!editor}
-        >
-          링크
-        </ToolbarButton>
-        <ToolbarButton
-          onClick={insertPagePreview}
-          disabled={!editor || loadingPagePreview}
-          title="페이지 미리보기 임베드"
-        >
-          {loadingPagePreview ? "불러오는 중..." : "페이지"}
-        </ToolbarButton>
-        <div className="admin-editor__color">
-          <span>색</span>
-          <input
-            type="color"
-            value={textColor}
+                disabled={!editor}
+                onChange={(event) => {
+                  const size = event.target.value;
+                  if (size) {
+                    editor?.chain().focus().setFontSize(size).run();
+                  } else {
+                    editor?.chain().focus().unsetFontSize().run();
+                  }
+                }}
+              >
+                <option value="">기본</option>
+                <option value="10pt">10pt</option>
+                <option value="11pt">11pt</option>
+                <option value="12pt">12pt</option>
+                <option value="14pt">14pt</option>
+                <option value="16pt">16pt</option>
+                <option value="18pt">18pt</option>
+                <option value="21pt">21pt</option>
+                <option value="24pt">24pt</option>
+                <option value="30pt">30pt</option>
+                <option value="36pt">36pt</option>
+              </select>
+            </label>
+          ) : null}
+          <ToolbarButton
+            onClick={() => editor?.chain().focus().toggleBold().run()}
+            active={editor?.isActive("bold")}
             disabled={!editor}
-            aria-label="글자 색"
-            onChange={(event) =>
-              editor?.chain().focus().setColor(event.target.value).run()
-            }
-          />
-          <button
-            type="button"
-            className="admin-editor__color-reset"
-            onClick={() => editor?.chain().focus().unsetColor().run()}
-            disabled={!editor}
-            title="기본 색으로 초기화"
-            aria-label="색 초기화"
           >
-            ×
-          </button>
-        </div>
-        {enableHighlight ? (
-          <div className="admin-editor__highlight">
-            <button
-              type="button"
-              className={`admin-editor__button${
-                editor?.isActive("highlight") ? " is-active" : ""
-              }`}
-              onClick={() =>
-                editor
-                  ?.chain()
-                  .focus()
-                  .toggleHighlight({ color: highlightColor })
-                  .run()
-              }
-              disabled={!editor}
-              title="형광펜"
-            >
-              형광
-            </button>
+            <strong>B</strong>
+          </ToolbarButton>
+          <ToolbarButton
+            onClick={() => editor?.chain().focus().toggleItalic().run()}
+            active={editor?.isActive("italic")}
+            disabled={!editor}
+          >
+            <em>I</em>
+          </ToolbarButton>
+          <ToolbarButton
+            onClick={() => editor?.chain().focus().toggleUnderline().run()}
+            active={editor?.isActive("underline")}
+            disabled={!editor}
+          >
+            <u>U</u>
+          </ToolbarButton>
+          <ToolbarButton
+            onClick={() => editor?.chain().focus().toggleStrike().run()}
+            active={editor?.isActive("strike")}
+            disabled={!editor}
+          >
+            <s>S</s>
+          </ToolbarButton>
+          <ToolbarMenu
+            label="형식"
+            active={editor?.isActive("heading")}
+            disabled={!editor}
+            items={[
+              {
+                label: "본문",
+                active:
+                  editor?.isActive("paragraph") &&
+                  !editor?.isActive("heading"),
+                onSelect: () => editor?.chain().focus().setParagraph().run(),
+              },
+              {
+                label: "H2",
+                active: editor?.isActive("heading", { level: 2 }),
+                onSelect: () =>
+                  editor?.chain().focus().setHeading({ level: 2 }).run(),
+              },
+              {
+                label: "H3",
+                active: editor?.isActive("heading", { level: 3 }),
+                onSelect: () =>
+                  editor?.chain().focus().setHeading({ level: 3 }).run(),
+              },
+            ]}
+          />
+          <ToolbarMenu
+            label="정렬"
+            active={
+              editor?.isActive({ textAlign: "center" }) ||
+              editor?.isActive({ textAlign: "right" })
+            }
+            disabled={!editor}
+            items={[
+              {
+                label: "왼쪽 정렬",
+                active: editor?.isActive({ textAlign: "left" }),
+                onSelect: () =>
+                  editor?.chain().focus().setTextAlign("left").run(),
+              },
+              {
+                label: "가운데 정렬",
+                active: editor?.isActive({ textAlign: "center" }),
+                onSelect: () =>
+                  editor?.chain().focus().setTextAlign("center").run(),
+              },
+              {
+                label: "오른쪽 정렬",
+                active: editor?.isActive({ textAlign: "right" }),
+                onSelect: () =>
+                  editor?.chain().focus().setTextAlign("right").run(),
+              },
+            ]}
+          />
+          <ToolbarMenu
+            label="목록"
+            active={
+              editor?.isActive("bulletList") ||
+              editor?.isActive("orderedList")
+            }
+            disabled={!editor}
+            items={[
+              {
+                label: "글머리 목록",
+                active: editor?.isActive("bulletList"),
+                onSelect: () =>
+                  editor?.chain().focus().toggleBulletList().run(),
+              },
+              {
+                label: "번호 목록",
+                active: editor?.isActive("orderedList"),
+                onSelect: () =>
+                  editor?.chain().focus().toggleOrderedList().run(),
+              },
+            ]}
+          />
+          <div className="admin-editor__color">
+            <span>색</span>
             <input
               type="color"
-              value={highlightColor}
+              value={textColor}
               disabled={!editor}
-              aria-label="형광 배경색"
+              aria-label="글자 색"
               onChange={(event) =>
-                editor
-                  ?.chain()
-                  .focus()
-                  .setHighlight({ color: event.target.value })
-                  .run()
+                editor?.chain().focus().setColor(event.target.value).run()
               }
             />
             <button
               type="button"
               className="admin-editor__color-reset"
-              onClick={() => editor?.chain().focus().unsetHighlight().run()}
+              onClick={() => editor?.chain().focus().unsetColor().run()}
               disabled={!editor}
-              title="형광 초기화"
-              aria-label="형광 초기화"
+              title="기본 색으로 초기화"
+              aria-label="색 초기화"
             >
               ×
             </button>
           </div>
-        ) : null}
-        <ToolbarButton
-          onClick={() => imageInputRef.current?.click()}
-          disabled={!editor || uploadingImage}
-        >
-          {uploadingImage ? "업로드 중..." : "이미지"}
-        </ToolbarButton>
-        <input
-          ref={imageInputRef}
-          type="file"
-          accept="image/png,image/jpeg,image/webp,image/gif"
-          hidden
-          onChange={handleImageFile}
-        />
-        <ToolbarButton
-          onClick={() => editor?.chain().focus().undo().run()}
-          disabled={!editor || !editor.can().undo()}
-        >
-          ↶
-        </ToolbarButton>
-        <ToolbarButton
-          onClick={() => editor?.chain().focus().redo().run()}
-          disabled={!editor || !editor.can().redo()}
-        >
-          ↷
-        </ToolbarButton>
+          {enableHighlight ? (
+            <div className="admin-editor__highlight">
+              <button
+                type="button"
+                className={`admin-editor__button${
+                  editor?.isActive("highlight") ? " is-active" : ""
+                }`}
+                onClick={() =>
+                  editor
+                    ?.chain()
+                    .focus()
+                    .toggleHighlight({ color: highlightColor })
+                    .run()
+                }
+                disabled={!editor}
+                title="형광펜"
+              >
+                형광
+              </button>
+              <input
+                type="color"
+                value={highlightColor}
+                disabled={!editor}
+                aria-label="형광 배경색"
+                onChange={(event) =>
+                  editor
+                    ?.chain()
+                    .focus()
+                    .setHighlight({ color: event.target.value })
+                    .run()
+                }
+              />
+              <button
+                type="button"
+                className="admin-editor__color-reset"
+                onClick={() =>
+                  editor?.chain().focus().unsetHighlight().run()
+                }
+                disabled={!editor}
+                title="형광 초기화"
+                aria-label="형광 초기화"
+              >
+                ×
+              </button>
+            </div>
+          ) : null}
+          <ToolbarButton
+            onClick={() => editor?.chain().focus().undo().run()}
+            disabled={!editor || !editor.can().undo()}
+          >
+            ↶
+          </ToolbarButton>
+          <ToolbarButton
+            onClick={() => editor?.chain().focus().redo().run()}
+            disabled={!editor || !editor.can().redo()}
+          >
+            ↷
+          </ToolbarButton>
+        </div>
+        <div className="admin-editor__toolbar-row admin-editor__toolbar-row--secondary">
+          <ToolbarButton
+            onClick={() => editor?.chain().focus().toggleBlockquote().run()}
+            active={editor?.isActive("blockquote")}
+            disabled={!editor}
+          >
+            인용
+          </ToolbarButton>
+          <ToolbarButton
+            onClick={() => editor?.chain().focus().toggleCode().run()}
+            active={editor?.isActive("code")}
+            disabled={!editor}
+          >
+            코드
+          </ToolbarButton>
+          <ToolbarButton
+            onClick={setLink}
+            active={editor?.isActive("link")}
+            disabled={!editor}
+          >
+            링크
+          </ToolbarButton>
+          <ToolbarButton
+            onClick={insertPagePreview}
+            disabled={!editor || loadingPagePreview}
+            title="페이지 미리보기 임베드"
+          >
+            {loadingPagePreview ? "불러오는 중..." : "페이지"}
+          </ToolbarButton>
+          <ToolbarButton
+            onClick={() => imageInputRef.current?.click()}
+            disabled={!editor || uploadingImage}
+          >
+            {uploadingImage ? "업로드 중..." : "이미지"}
+          </ToolbarButton>
+          <input
+            ref={imageInputRef}
+            type="file"
+            accept="image/png,image/jpeg,image/webp,image/gif"
+            hidden
+            onChange={handleImageFile}
+          />
+        </div>
       </div>
       {editor?.isActive("image") ? (
         <div className="admin-editor__image-controls">

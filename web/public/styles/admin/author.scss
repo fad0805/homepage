@@ -112,11 +112,23 @@
 
 .admin-editor__toolbar {
   display: flex;
-  flex-wrap: wrap;
-  gap: 0.25rem;
+  flex-direction: column;
+  gap: 0.3rem;
   padding: 0.45rem;
   border-bottom: 1px solid var(--admin-border);
   background: rgba(0, 0, 0, 0.025);
+}
+
+.admin-editor__toolbar-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.admin-editor__toolbar-row--secondary {
+  padding-top: 0.3rem;
+  border-top: 1px solid color-mix(in srgb, var(--admin-border) 65%, transparent);
 }
 
 .admin-editor__button {
