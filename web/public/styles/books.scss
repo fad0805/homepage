@@ -18,7 +18,10 @@
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
+  width: 100%;
+  max-width: 100%;
   min-width: 0;
+  box-sizing: border-box;
 }
 
 .books-books__rss {
@@ -215,11 +218,15 @@
   display: flex;
   flex-direction: column;
   gap: 0.15rem;
+  width: 100%;
+  max-width: 100%;
   min-width: 0;
   max-height: calc(100vh - 14rem);
   padding-top: 0.75rem;
   padding-right: 0.35rem;
   border-top: 1px solid rgba(0, 0, 0, 0.14);
+  box-sizing: border-box;
+  overflow-x: hidden;
   overflow-y: auto;
   scrollbar-gutter: stable;
 }
@@ -227,6 +234,8 @@
 .books-group {
   display: flex;
   flex-direction: column;
+  min-width: 0;
+  max-width: 100%;
 
   & + & {
     margin-top: 0.6rem;
@@ -239,6 +248,8 @@
   justify-content: space-between;
   gap: 0.4rem;
   width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
   margin: 0 0 0.3rem;
   padding: 0.15rem 0 0.15rem 0.15rem;
   border: 0;
@@ -264,7 +275,13 @@
   flex-direction: column;
   gap: 0.1rem;
   min-width: 0;
+  max-width: 100%;
   text-align: left;
+
+  > span:first-child {
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
 }
 
 .books-group__meta {
@@ -290,7 +307,13 @@
   flex-direction: column;
   gap: 0.1rem;
   min-width: 0;
+  max-width: 100%;
   text-align: left;
+
+  > span:first-child {
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
 }
 
 .books-group__meta {
@@ -313,6 +336,8 @@
   align-items: baseline;
   gap: 0.5rem;
   width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
   padding: 0.65rem 0.6rem;
   border: 0;
   border-radius: 0.5rem;
@@ -449,6 +474,8 @@
   align-items: baseline;
   gap: 0.5rem;
   width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
   padding: 0.6rem;
   border: 0;
   border-radius: 0.5rem;
@@ -858,7 +885,23 @@
   }
 
   .books-layout {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+  }
+
+  .books-books {
+    width: 100%;
+    max-width: 100%;
+    padding-right: 0;
+    scrollbar-gutter: auto;
+    overflow-x: hidden;
+  }
+
+  .books-books-column {
+    width: 100%;
+    max-width: 100%;
   }
 
   .books-panel {
