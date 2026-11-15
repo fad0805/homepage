@@ -466,6 +466,7 @@ export default function AdminProfile() {
               placeholder="작가소개 내용을 입력해주세요."
               uploadUrl="/api/profiles/upload"
               onNotice={setNotice}
+              enableHighlight
             />
           </div>
 

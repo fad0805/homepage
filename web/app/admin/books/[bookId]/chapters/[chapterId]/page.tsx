@@ -919,6 +919,7 @@ export default function AdminChapterEdit() {
                   placeholder="챕터 본문을 입력해주세요."
                   uploadUrl="/api/chapters/upload"
                   onNotice={(notice) => notify(notice.type, notice.text)}
+                  enableHighlight
                 />
               </div>
               <label className="admin-field">
