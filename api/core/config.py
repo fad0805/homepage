@@ -26,7 +26,8 @@ GALLERY_INVITE_RETENTION_DAYS = int(
     os.getenv('GALLERY_INVITE_RETENTION_DAYS', 30)
 )
 
-# S3-compatible object storage
+# S3-compatible object storage. Image columns store object keys; the public
+# base URL below is applied when records are read.
 S3_ENDPOINT_URL = os.getenv('S3_ENDPOINT_URL')
 S3_REGION = os.getenv('S3_REGION') or 'ap-northeast-2'
 S3_BUCKET = os.getenv('S3_BUCKET')

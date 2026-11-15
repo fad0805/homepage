@@ -2,6 +2,7 @@ from sqlalchemy import Boolean, Column, Date, Integer, String, DateTime, Text, F
 from sqlalchemy.orm import relationship
 
 from db.base import Base
+from db.types import ImageUrl
 from models.users import User
 
 
@@ -15,8 +16,8 @@ class Character(Base):
         nullable=False,
         index=True,
     )
-    thumbnail = Column(String, nullable=True)
-    detail_image = Column(String, nullable=True)
+    thumbnail = Column(ImageUrl(), nullable=True)
+    detail_image = Column(ImageUrl(), nullable=True)
     location_id = Column(Integer, ForeignKey("locations.id"), nullable=True, index=True)
     name = Column(String, nullable=False)
     alt_name = Column(String, nullable=True)

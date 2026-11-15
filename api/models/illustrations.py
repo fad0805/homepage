@@ -14,6 +14,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import relationship
 
 from db.base import Base
+from db.types import ImageUrl
 from models.users import User
 
 
@@ -35,7 +36,7 @@ class Illustration(Base):
     tags = Column(JSON, nullable=False, default=list)
     taken_at = Column(Date, nullable=True)
     representative_image_id = Column(Integer, nullable=True)
-    representative_url = Column(String(1000), nullable=True)
+    representative_url = Column(ImageUrl(1000), nullable=True)
     order = Column(Integer, nullable=False, default=0)
     visible = Column(Boolean, nullable=False, default=True)
     # visible + protected: public, protected (code required), or private.
@@ -83,7 +84,7 @@ class IllustrationImage(Base):
         nullable=False,
         index=True,
     )
-    url = Column(String(1000), nullable=False)
+    url = Column(ImageUrl(1000), nullable=False)
     order = Column(Integer, nullable=False, default=0)
 
     illustration = relationship("Illustration", back_populates="images")

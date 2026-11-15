@@ -6,7 +6,7 @@ from contextlib import contextmanager
 from io import BytesIO
 from pathlib import Path
 from typing import Any
-from urllib.parse import unquote, urlparse
+from urllib.parse import unquote
 
 import boto3
 from botocore.config import Config as BotoConfig
@@ -22,9 +22,13 @@ from core.config import (
     S3_BUCKET,
     S3_ENDPOINT_URL,
     S3_KEY_PREFIX,
-    S3_PUBLIC_BASE_URL,
     S3_REGION,
     S3_SECRET_ACCESS_KEY,
+)
+from core.image_urls import (
+    build_public_url,
+    is_external_reference,
+    s3_key_from_url,
 )
 
 logger = logging.getLogger(__name__)
@@ -93,34 +97,6 @@ def _build_key(folder: str, extension: str) -> str:
     return "/".join(parts)
 
 
-def _build_public_url(key: str) -> str:
-    if S3_PUBLIC_BASE_URL:
-        return f"{S3_PUBLIC_BASE_URL.rstrip('/')}/{key}"
-    if S3_ENDPOINT_URL:
-        return f"{S3_ENDPOINT_URL.rstrip('/')}/{S3_BUCKET}/{key}"
-    return f"https://{S3_BUCKET}.s3.{S3_REGION}.amazonaws.com/{key}"
-
-
-def _s3_key_from_url(url: str) -> str | None:
-    """Return the object key if ``url`` points at an object we uploaded."""
-    parsed = urlparse(url)
-    if parsed.scheme not in ("http", "https"):
-        return None
-
-    normalized = f"{parsed.scheme}://{parsed.netloc}{parsed.path}"
-    bases: list[str] = []
-    if S3_PUBLIC_BASE_URL:
-        bases.append(S3_PUBLIC_BASE_URL.rstrip("/"))
-    if S3_ENDPOINT_URL:
-        bases.append(f"{S3_ENDPOINT_URL.rstrip('/')}/{S3_BUCKET}")
-    bases.append(f"https://{S3_BUCKET}.s3.{S3_REGION}.amazonaws.com")
-
-    for base in bases:
-        if normalized.startswith(f"{base}/"):
-            return unquote(normalized[len(base) + 1 :])
-    return None
-
-
 def _local_path_from_url(url: str) -> Path | None:
     """Return the local upload path if ``url`` points at the legacy store."""
     # Local uploads are stored as relative URLs (``/uploads/...``). Do not
@@ -144,7 +120,7 @@ def _local_path_from_url(url: str) -> Path | None:
 
 
 def _storage_identity(url: str | None) -> tuple[str, str] | None:
-    """Identify a stored object so two URLs can be compared."""
+    """Identify a stored object so two references can be compared."""
     if not url:
         return None
 
@@ -152,9 +128,12 @@ def _storage_identity(url: str | None) -> tuple[str, str] | None:
     if local_path is not None:
         return ("local", str(local_path))
 
-    key = _s3_key_from_url(url)
+    key = s3_key_from_url(url)
     if key is not None:
         return ("s3", key)
+
+    if not is_external_reference(url):
+        return ("s3", url.lstrip("/"))
     return None
 
 
@@ -220,7 +199,9 @@ def delete_uploaded_file(url: str | None) -> None:
             logger.warning("Failed to delete local upload: %s", url, exc_info=True)
         return
 
-    key = _s3_key_from_url(url)
+    key = s3_key_from_url(url)
+    if key is None and not is_external_reference(url):
+        key = url.lstrip("/")
     if key is None or not _s3_is_configured():
         return
 
@@ -271,7 +252,7 @@ def _save_to_s3(
             detail="이미지를 업로드하지 못했습니다.",
         )
 
-    return _build_public_url(key)
+    return build_public_url(key)
 
 
 def _save_to_local(content: bytes, extension: str, folder: str) -> str:
@@ -374,7 +355,12 @@ def _sanitize_image(content: bytes) -> tuple[bytes, str, str]:
 
 
 async def save_banner(file: UploadFile, folder: str = "banners") -> str:
-    """Upload a banner or thumbnail image and return its public URL."""
+    """Upload a banner or thumbnail image and return its public URL.
+
+    Database models store only the object path through their ``ImageUrl``
+    type; upload responses still use a full URL so the browser can preview the
+    image immediately.
+    """
     if file.content_type not in ALLOWED_CONTENT_TYPES:
         raise HTTPException(
             status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,

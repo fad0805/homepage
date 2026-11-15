@@ -2,6 +2,7 @@ from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, func
 from sqlalchemy.orm import relationship
 
 from db.base import Base
+from db.types import ImageUrl
 from models.users import User
 
 
@@ -33,7 +34,7 @@ class Link(Base):
     owner = Column(String(255), nullable=False)
     name = Column(String(255), nullable=False)
     url = Column(String(255), nullable=False)
-    banner_url = Column(String(255), nullable=True)
+    banner_url = Column(ImageUrl(255), nullable=True)
     category = Column(Integer, ForeignKey("links-categories.id"), nullable=False, index=True)
     description = Column(String(255), nullable=True)
     created_at = Column(DateTime, default=func.now())
