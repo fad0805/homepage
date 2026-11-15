@@ -140,6 +140,12 @@ html:has(#container.site-layout--side) {
   background: var(--background);
 }
 
+/* Keep drawer-layout banners in step with the author directory banner. */
+#container.site-layout--drawer .illustration-card,
+#container.site-layout--drawer .character-author-card__face {
+  border-radius: 0.35rem;
+}
+
 @media (min-width: 769px) {
   #container.site-layout--drawer {
     height: 100vh;
