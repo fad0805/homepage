@@ -1,6 +1,6 @@
 """add category visibility and gallery category grants
 
-Revision ID: e1f2a3b4c5d6
+Revision ID: a1c2e3f4b5d6
 Revises: d2e3f4a5b6c7
 Create Date: 2026-11-16 09:00:00.000000
 
@@ -11,7 +11,7 @@ from alembic import op
 import sqlalchemy as sa
 
 
-revision: str = "e1f2a3b4c5d6"
+revision: str = "a1c2e3f4b5d6"
 down_revision: Union[str, None] = "d2e3f4a5b6c7"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
