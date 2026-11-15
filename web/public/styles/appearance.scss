@@ -140,9 +140,10 @@ html:has(#container.site-layout--side) {
   background: var(--background);
 }
 
-/* Keep drawer-layout banners in step with the author directory banner. */
-#container.site-layout--drawer .illustration-card,
-#container.site-layout--drawer .character-author-card__face {
+/* Keep the drawer and side layouts' banners in step with the author card. */
+#container:is(.site-layout--drawer, .site-layout--side) .illustration-card,
+#container:is(.site-layout--drawer, .site-layout--side)
+  .character-author-card__face {
   border-radius: 0.35rem;
 }
 
@@ -479,38 +480,6 @@ html:has(#container.site-layout--side) {
 
 #container.site-layout--side.is-side-right > .site-main-column {
   order: 1;
-}
-
-/* Public side layout: use a flat, square-cornered surface throughout. */
-body:not(:has(.admin-layout)) #container.site-layout--side,
-body:not(:has(.admin-layout)) #container.site-layout--side * {
-  border-radius: 0;
-}
-
-/* Keep the links banner shape consistent with the other layouts. */
-body:not(:has(.admin-layout)) #container.site-layout--side .links-banner {
-  border-end-start-radius: 1rem;
-  border-start-end-radius: 1rem;
-}
-
-body:not(:has(.admin-layout))
-  #container.site-layout--side
-  .links-banner__image,
-body:not(:has(.admin-layout)) #container.site-layout--side .links-banner img,
-body:not(:has(.admin-layout))
-  #container.site-layout--side
-  .links-banner__placeholder {
-  border-start-end-radius: 1rem;
-}
-
-body:not(:has(.admin-layout)) #container.site-layout--side .memo-pinned-section {
-  border-top-left-radius: 1rem;
-  border-top-right-radius: 1rem;
-}
-
-#container.site-layout--side .admin-layout,
-#container.site-layout--side .admin-layout * {
-  border-radius: 0;
 }
 
 .site-sidebar__header {
