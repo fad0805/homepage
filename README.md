@@ -40,14 +40,14 @@ cd homepage
 docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
 
 # 또는 이미 빌드된 이미지로 실행 (Ctrl+C 시 스택 정리)
-bin/dev.sh
+bin/dev
 ```
 
 - **Frontend**: http://localhost:2222
 - **API**: http://localhost:8000
 - 계정: `admin` / `admin` (개발 환경에서 `DEV_ADMIN_SEED=true`일 때 자동 생성)
 
-> ⚠️ 운영 서버에서는 `docker-compose.dev.yml` 또는 `bin/dev.sh`를 사용하지 마세요.
+> ⚠️ 운영 서버에서는 `docker-compose.dev.yml` 또는 `bin/dev`를 사용하지 마세요.
 > 개발용 compose는 `ENVIRONMENT=development`로 실행되며, `DEV_ADMIN_SEED=true`가
 > 설정되어 있어 개발용 `admin` 계정을 만들 수 있습니다.
 
