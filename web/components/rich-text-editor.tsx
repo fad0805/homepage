@@ -224,7 +224,9 @@ export function RichTextEditor({
   const toggleHtmlMode = useCallback(() => {
     if (!editor) return;
     if (htmlMode) {
-      editor.commands.setContent(htmlSource || "<p></p>");
+      editor.commands.setContent(htmlSource || "<p></p>", {
+        emitUpdate: true,
+      });
       const nextHtml = editor.getHTML();
       onChangeRef.current(nextHtml);
       setHtmlMode(false);
