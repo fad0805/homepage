@@ -583,6 +583,20 @@ export function RichTextEditor({
               },
             ]}
           />
+          <ToolbarButton
+            onClick={() => editor?.chain().focus().undo().run()}
+            disabled={!editor || !editor.can().undo()}
+          >
+            ↶
+          </ToolbarButton>
+          <ToolbarButton
+            onClick={() => editor?.chain().focus().redo().run()}
+            disabled={!editor || !editor.can().redo()}
+          >
+            ↷
+          </ToolbarButton>
+        </div>
+        <div className="admin-editor__toolbar-row admin-editor__toolbar-row--secondary">
           <div className="admin-editor__color">
             <span>색</span>
             <input
@@ -651,20 +665,6 @@ export function RichTextEditor({
               </button>
             </div>
           ) : null}
-          <ToolbarButton
-            onClick={() => editor?.chain().focus().undo().run()}
-            disabled={!editor || !editor.can().undo()}
-          >
-            ↶
-          </ToolbarButton>
-          <ToolbarButton
-            onClick={() => editor?.chain().focus().redo().run()}
-            disabled={!editor || !editor.can().redo()}
-          >
-            ↷
-          </ToolbarButton>
-        </div>
-        <div className="admin-editor__toolbar-row admin-editor__toolbar-row--secondary">
           <ToolbarButton
             onClick={() => editor?.chain().focus().toggleBlockquote().run()}
             active={editor?.isActive("blockquote")}
