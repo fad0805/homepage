@@ -5,7 +5,7 @@ import httpx
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.concurrency import run_in_threadpool
 
-from core.url_safety import validate_external_url
+from core.url_safety import UnsafeUrlError, pin_external_url
 
 from .utils import require_admin
 
@@ -89,7 +89,7 @@ def _host_label(url: str) -> str:
 
 
 async def _fetch_page(url: str) -> tuple[str, str]:
-    """Fetch an HTML page, validating every redirect target."""
+    """Fetch an HTML page, validating and pinning every redirect target."""
     current_url = url
 
     try:
@@ -104,13 +104,24 @@ async def _fetch_page(url: str) -> tuple[str, str]:
             },
         ) as client:
             for _ in range(6):
-                await run_in_threadpool(
-                    validate_external_url,
-                    current_url,
-                    resource_label="페이지 URL",
-                )
+                try:
+                    target = await run_in_threadpool(
+                        pin_external_url,
+                        current_url,
+                        resource_label="페이지 URL",
+                    )
+                except UnsafeUrlError as error:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail=str(error),
+                    ) from error
 
-                async with client.stream("GET", current_url) as response:
+                async with client.stream(
+                    "GET",
+                    target.url,
+                    headers=target.headers,
+                    extensions=target.extensions,
+                ) as response:
                     location = response.headers.get("location")
                     if (
                         status.HTTP_300_MULTIPLE_CHOICES
@@ -118,7 +129,7 @@ async def _fetch_page(url: str) -> tuple[str, str]:
                         < status.HTTP_400_BAD_REQUEST
                         and location
                     ):
-                        current_url = urljoin(str(response.url), location)
+                        current_url = urljoin(current_url, location)
                         continue
 
                     if response.status_code != status.HTTP_200_OK:
@@ -164,7 +175,7 @@ async def _fetch_page(url: str) -> tuple[str, str]:
                         response.encoding or "utf-8",
                         errors="replace",
                     )
-                    return str(response.url), html
+                    return current_url, html
     except HTTPException:
         raise
     except httpx.HTTPError:
