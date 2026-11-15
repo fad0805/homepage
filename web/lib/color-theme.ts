@@ -100,8 +100,11 @@ function ensureContrast(foreground: string, background: string, min = 4.5) {
     relativeLuminance(background) > 0.35 ? "#000000" : "#ffffff";
   let next = foreground;
 
+  // Start close to the chosen color and only blend toward the target as
+  // much as needed. Using `step / 10` here would jump straight to a nearly
+  // black/white color and destroy the selected accent's saturation.
   for (let step = 1; step <= 10; step += 1) {
-    next = mixColor(foreground, target, step / 10);
+    next = mixColor(foreground, target, 1 - step / 10);
     if (contrastRatio(next, background) >= min) return next;
   }
 
