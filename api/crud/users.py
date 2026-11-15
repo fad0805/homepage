@@ -151,6 +151,7 @@ def update_author_appearance(
     *,
     layout_key: str,
     side_position: str,
+    default_theme: str,
     color_theme: str,
     color_background: str | None = None,
     color_content: str | None = None,
@@ -160,6 +161,7 @@ def update_author_appearance(
     settings = ensure_author_settings(db, user)
     settings.layout_key = layout_key
     settings.side_position = side_position
+    settings.default_theme = default_theme
     settings.color_theme = color_theme
     settings.color_background = color_background
     settings.color_content = color_content

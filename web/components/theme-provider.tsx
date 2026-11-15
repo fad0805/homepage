@@ -23,27 +23,34 @@ const DEFAULT_THEME_COLORS: Record<Theme, string> = {
     dark: "#090c0a",
 };
 
-function readStoredTheme(): Theme {
-    if (typeof window === "undefined") return "light";
+function readStoredTheme(defaultTheme: Theme): Theme {
+    if (typeof window === "undefined") return defaultTheme;
 
     try {
-        return window.localStorage.getItem("theme") === "dark" ? "dark" : "light";
+        const stored = window.localStorage.getItem("theme");
+        return stored === "dark" || stored === "light"
+            ? stored
+            : defaultTheme;
     } catch {
-        return "light";
+        return defaultTheme;
     }
 }
 
 export const ThemeProvider = ({
 children,
 themeColors,
+defaultTheme = "light",
 }:{
 children: React.ReactNode;
 themeColors?: Record<Theme, string>;
+defaultTheme?: Theme;
 }) => {
     const colors = themeColors ?? DEFAULT_THEME_COLORS;
     const lightColor = colors.light;
     const darkColor = colors.dark;
-    const [theme, setThemeState] = useState<Theme>(readStoredTheme);
+    const [theme, setThemeState] = useState<Theme>(() =>
+        readStoredTheme(defaultTheme),
+    );
 
     const setTheme = useCallback((nextTheme: Theme) => {
         setThemeState(nextTheme);
@@ -77,7 +84,11 @@ themeColors?: Record<Theme, string>;
                     __html: `
                         (function() {
                             try {
-                                const theme = localStorage.getItem('theme');
+                                const storedTheme = localStorage.getItem('theme');
+                                const theme =
+                                    storedTheme === 'dark' || storedTheme === 'light'
+                                        ? storedTheme
+                                        : '${defaultTheme}';
                                 const isDark = theme === 'dark';
 
                                 if (isDark) {

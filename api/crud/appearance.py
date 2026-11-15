@@ -33,6 +33,11 @@ def get_public_appearance(db: Session) -> dict:
             if settings
             else DEFAULT_SIDE_POSITION
         ),
+        "default_theme": (
+            settings.default_theme
+            if settings
+            else "light"
+        ),
         "color_theme": (
             settings.color_theme
             if settings

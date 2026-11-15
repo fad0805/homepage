@@ -49,6 +49,13 @@ class AuthorSettings(Base):
         default="left",
         server_default="left",
     )
+    # Theme shown to visitors who have not chosen light/dark themselves.
+    default_theme = Column(
+        String(16),
+        nullable=False,
+        default="light",
+        server_default="light",
+    )
     color_theme = Column(
         String(32),
         nullable=False,

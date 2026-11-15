@@ -12,12 +12,15 @@ import {
   DEFAULT_COLOR_THEME,
   DEFAULT_LAYOUT,
   DEFAULT_SIDE_POSITION,
+  DEFAULT_THEME_MODE,
   LAYOUT_OPTIONS,
   SIDE_POSITION_OPTIONS,
+  THEME_MODE_OPTIONS,
   getColorThemeOption,
   type ColorThemeKey,
   type LayoutKey,
   type SidePosition,
+  type ThemeMode,
 } from "@/config/appearance";
 import { apiFetch } from "@/lib/api";
 import {
@@ -35,6 +38,7 @@ import "@/public/styles/admin/appearance.scss";
 interface Appearance {
   layout_key: LayoutKey;
   side_position: SidePosition;
+  default_theme: ThemeMode;
   color_theme: ColorThemeKey;
   color_background: string | null;
   color_content: string | null;
@@ -86,6 +90,10 @@ export default function AdminAppearance() {
     useState<SidePosition>(DEFAULT_SIDE_POSITION);
   const [savedSidePosition, setSavedSidePosition] =
     useState<SidePosition>(DEFAULT_SIDE_POSITION);
+  const [defaultTheme, setDefaultTheme] =
+    useState<ThemeMode>(DEFAULT_THEME_MODE);
+  const [savedDefaultTheme, setSavedDefaultTheme] =
+    useState<ThemeMode>(DEFAULT_THEME_MODE);
   const [colorTheme, setColorTheme] =
     useState<ColorThemeKey>(DEFAULT_COLOR_THEME);
   const [savedColorTheme, setSavedColorTheme] =
@@ -106,12 +114,16 @@ export default function AdminAppearance() {
       );
       const savedSide =
         data.side_position ?? DEFAULT_SIDE_POSITION;
+      const savedDefaultTheme =
+        data.default_theme ?? DEFAULT_THEME_MODE;
       const savedTheme = data.color_theme ?? DEFAULT_COLOR_THEME;
       const savedOverrides = overridesFromAppearance(data);
       const activePreview = getAppearancePreview();
 
       setSavedLayoutKey(data.layout_key);
       setSavedSidePosition(savedSide);
+      setDefaultTheme(savedDefaultTheme);
+      setSavedDefaultTheme(savedDefaultTheme);
       setSavedColorTheme(savedTheme);
       setSavedColorOverrides(savedOverrides);
       setLayoutKey(activePreview?.layoutKey ?? data.layout_key);
@@ -165,6 +177,7 @@ export default function AdminAppearance() {
           body: JSON.stringify({
             layout_key: layoutKey,
             side_position: sidePosition,
+            default_theme: defaultTheme,
             color_theme: colorTheme,
             color_background:
               normalizeHex(colorOverrides.background),
@@ -176,6 +189,8 @@ export default function AdminAppearance() {
       );
       const savedSide =
         data.side_position ?? DEFAULT_SIDE_POSITION;
+      const savedDefaultTheme =
+        data.default_theme ?? DEFAULT_THEME_MODE;
       const savedTheme = data.color_theme ?? DEFAULT_COLOR_THEME;
       const savedOverrides = overridesFromAppearance(data);
 
@@ -183,6 +198,8 @@ export default function AdminAppearance() {
       setSavedLayoutKey(data.layout_key);
       setSidePosition(savedSide);
       setSavedSidePosition(savedSide);
+      setDefaultTheme(savedDefaultTheme);
+      setSavedDefaultTheme(savedDefaultTheme);
       setColorTheme(savedTheme);
       setSavedColorTheme(savedTheme);
       setColorOverrides(savedOverrides);
@@ -220,6 +237,7 @@ export default function AdminAppearance() {
   const isDirty =
     layoutKey !== savedLayoutKey ||
     sidePosition !== savedSidePosition ||
+    defaultTheme !== savedDefaultTheme ||
     colorTheme !== savedColorTheme ||
     !sameOverrides(colorOverrides, savedColorOverrides);
   const savedSideLabel =
@@ -260,7 +278,8 @@ export default function AdminAppearance() {
           </p>
         </div>
         <span className="admin-appearance-current">
-          현재 적용: {saved.label} · {savedColor.label}
+          현재 적용: {saved.label} · {savedColor.label} · 기본{" "}
+          {savedDefaultTheme === "dark" ? "다크" : "라이트"}
           {savedLayoutKey === "side" ? ` · ${savedSideLabel}` : ""}
         </span>
       </header>
@@ -363,6 +382,48 @@ export default function AdminAppearance() {
               </div>
             </div>
           </div>
+
+          <section className="admin-appearance-default-theme">
+            <div className="admin-appearance-section-head">
+              <div>
+                <h2>기본 테마</h2>
+                <p className="admin-appearance-hint">
+                  저장된 테마가 없는 방문자에게 처음 보여줄
+                  라이트/다크 테마를 정합니다. 방문자가 직접
+                  전환한 테마는 그대로 유지됩니다.
+                </p>
+              </div>
+            </div>
+            <div
+              className="admin-appearance-theme-options"
+              role="radiogroup"
+              aria-label="기본 테마 선택"
+            >
+              {THEME_MODE_OPTIONS.map((option) => {
+                const isSelected = defaultTheme === option.key;
+                return (
+                  <button
+                    key={option.key}
+                    type="button"
+                    role="radio"
+                    aria-checked={isSelected}
+                    className={`admin-appearance-theme-card${
+                      isSelected ? " is-selected" : ""
+                    }`}
+                    onClick={() => setDefaultTheme(option.key)}
+                  >
+                    {isSelected ? (
+                      <span className="admin-appearance-theme-card__selected">
+                        ✓ 선택됨
+                      </span>
+                    ) : null}
+                    <strong>{option.label}</strong>
+                    <span>{option.description}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </section>
 
           <section className="admin-appearance-colors">
             <div className="admin-appearance-section-head">

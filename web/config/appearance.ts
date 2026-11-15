@@ -5,6 +5,7 @@ export type LayoutKey =
   | "drawer";
 
 export type SidePosition = "left" | "right";
+export type ThemeMode = "light" | "dark";
 
 export interface LayoutOption {
   key: LayoutKey;
@@ -20,6 +21,23 @@ export interface SidePositionOption {
 
 export const DEFAULT_LAYOUT: LayoutKey = "editorial";
 export const DEFAULT_SIDE_POSITION: SidePosition = "left";
+export const DEFAULT_THEME_MODE: ThemeMode = "light";
+export const THEME_MODE_OPTIONS: Array<{
+  key: ThemeMode;
+  label: string;
+  description: string;
+}> = [
+  {
+    key: "light",
+    label: "라이트",
+    description: "처음 방문한 사용자에게 밝은 테마를 보여줍니다.",
+  },
+  {
+    key: "dark",
+    label: "다크",
+    description: "처음 방문한 사용자에게 어두운 테마를 보여줍니다.",
+  },
+];
 
 export const LAYOUT_OPTIONS: LayoutOption[] = [
   {

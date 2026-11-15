@@ -4,9 +4,11 @@ import {
   DEFAULT_COLOR_THEME,
   DEFAULT_LAYOUT,
   DEFAULT_SIDE_POSITION,
+  DEFAULT_THEME_MODE,
   type ColorThemeKey,
   type LayoutKey,
   type SidePosition,
+  type ThemeMode,
 } from "@/config/appearance";
 import {
   buildColorThemeStyle,
@@ -77,6 +79,7 @@ export default async function RootLayout({
   const currentUser = await getCurrentUser();
   let layoutKey: LayoutKey = DEFAULT_LAYOUT;
   let sidePosition: SidePosition = DEFAULT_SIDE_POSITION;
+  let defaultTheme: ThemeMode = DEFAULT_THEME_MODE;
   let colorTheme: ColorThemeKey = DEFAULT_COLOR_THEME;
   let colorOverrides: ColorOverrides = {};
 
@@ -84,6 +87,7 @@ export default async function RootLayout({
     const appearance = await serverApiFetch<{
       layout_key: LayoutKey;
       side_position: SidePosition;
+      default_theme?: ThemeMode;
       color_theme?: ColorThemeKey;
       color_background?: string | null;
       color_content?: string | null;
@@ -97,6 +101,7 @@ export default async function RootLayout({
     );
     layoutKey = appearance.layout_key;
     sidePosition = appearance.side_position ?? DEFAULT_SIDE_POSITION;
+    defaultTheme = appearance.default_theme ?? DEFAULT_THEME_MODE;
     colorTheme = appearance.color_theme ?? DEFAULT_COLOR_THEME;
     colorOverrides = {
       background: appearance.color_background,
@@ -119,7 +124,10 @@ export default async function RootLayout({
       suppressHydrationWarning
     >
       <body>
-        <ThemeProvider themeColors={themeColors}>
+        <ThemeProvider
+          themeColors={themeColors}
+          defaultTheme={defaultTheme}
+        >
           <AuthProvider>
             <VisitTracker />
             <Shortcuts>
