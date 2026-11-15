@@ -3,7 +3,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-ResourceType = Literal["illustration", "chapter", "book"]
+ResourceType = Literal["illustration", "chapter", "book", "category"]
 
 
 class GalleryResourceRead(BaseModel):

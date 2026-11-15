@@ -22,6 +22,7 @@ from core.security import (
 from crud import gallery as gallery_crud
 from db.session import get_db
 from models.books import Book, Chapter
+from models.books import BookCategory
 from models.illustrations import Illustration
 from models.users import User
 from routers.utils import get_client_ip, is_admin, require_auth
@@ -109,6 +110,8 @@ def _resource(
     relation,
     owner_names: dict[int, str],
     grant_id: int | None = None,
+    *,
+    category_id: int | None = None,
 ):
     owner_id = relation.user_id if relation is not None else None
     owner_name = owner_names.get(owner_id) if owner_id is not None else None
@@ -142,6 +145,15 @@ def _resource(
             "owner_name": owner_name,
             "grant_id": grant_id,
         }
+    if category_id is not None:
+        return {
+            "type": "category",
+            "id": category_id,
+            "title": relation.name if relation is not None else "",
+            "owner_id": owner_id,
+            "owner_name": owner_name,
+            "grant_id": grant_id,
+        }
     return None
 
 
@@ -152,6 +164,8 @@ def _invite_owner_id(invite) -> int | None:
         return invite.chapter.user_id
     if invite.book_id is not None and invite.book is not None:
         return invite.book.user_id
+    if invite.category_id is not None and invite.category is not None:
+        return invite.category.user_id
     return None
 
 
@@ -179,6 +193,15 @@ def _invite_resource(invite, owner_names: dict[int, str]):
             invite.book_id,
             invite.book,
             owner_names,
+        )
+    if invite.category_id is not None:
+        return _resource(
+            None,
+            None,
+            None,
+            invite.category,
+            owner_names,
+            category_id=invite.category_id,
         )
     return None
 
@@ -211,6 +234,16 @@ def _grant_resource(grant, owner_names: dict[int, str]):
             owner_names,
             grant.id,
         )
+    if grant.category_id is not None:
+        return _resource(
+            None,
+            None,
+            None,
+            grant.category,
+            owner_names,
+            grant.id,
+            category_id=grant.category_id,
+        )
     return None
 
 
@@ -221,6 +254,8 @@ def _grant_owner_id(grant) -> int | None:
         return grant.chapter.user_id
     if grant.book_id is not None and grant.book is not None:
         return grant.book.user_id
+    if grant.category_id is not None and grant.category is not None:
+        return grant.category.user_id
     return None
 
 
@@ -328,11 +363,17 @@ def unlock_gallery(
             session.id,
             chapter_id=invite.chapter_id,
         )
-    else:
+    elif invite.book_id is not None:
         gallery_crud.add_grant(
             db,
             session.id,
             book_id=invite.book_id,
+        )
+    else:
+        gallery_crud.add_grant(
+            db,
+            session.id,
+            category_id=invite.category_id,
         )
 
     db.commit()
@@ -360,6 +401,7 @@ def gallery_status(
         "illustration_ids": [],
         "chapter_ids": [],
         "book_ids": [],
+        "category_ids": [],
     }
     token = request.cookies.get(GALLERY_COOKIE_NAME)
     if not token:
@@ -403,6 +445,11 @@ def gallery_status(
             for grant in session.grants
             if grant.book_id is not None
         ],
+        "category_ids": [
+            grant.category_id
+            for grant in session.grants
+            if grant.category_id is not None
+        ],
         "expires_at": session.expires_at,
     }
 
@@ -420,6 +467,7 @@ def create_gallery_invite(
     illustration_id = None
     chapter_id = None
     book_id = None
+    category_id = None
 
     if payload.resource_type == "illustration":
         target = db.get(Illustration, payload.resource_id)
@@ -427,6 +475,9 @@ def create_gallery_invite(
     elif payload.resource_type == "chapter":
         target = db.get(Chapter, payload.resource_id)
         chapter_id = payload.resource_id
+    elif payload.resource_type == "category":
+        target = db.get(BookCategory, payload.resource_id)
+        category_id = payload.resource_id
     else:
         target = db.get(Book, payload.resource_id)
         book_id = payload.resource_id
@@ -450,6 +501,7 @@ def create_gallery_invite(
         illustration_id,
         chapter_id,
         book_id,
+        category_id,
         note,
         expires_at,
         user.id,
@@ -461,7 +513,8 @@ def create_gallery_invite(
         "resource": {
             "type": payload.resource_type,
             "id": target.id,
-            "title": target.title,
+            "title": getattr(target, "title", None)
+            or getattr(target, "name", ""),
         },
         "code": code,
         "note": invite.note,

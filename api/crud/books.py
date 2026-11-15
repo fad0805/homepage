@@ -57,6 +57,8 @@ def _serialize_book(book: Book) -> dict:
                 "id": category.id,
                 "name": category.name,
                 "order": category.order,
+                "visible": category.visible,
+                "protected": bool(category.protected),
             }
             if category
             else None
@@ -74,6 +76,8 @@ def _serialize_book_category(category: BookCategory) -> dict:
         "id": category.id,
         "name": category.name,
         "order": category.order,
+        "visible": category.visible,
+        "protected": bool(category.protected),
     }
 
 
@@ -135,7 +139,13 @@ def create_book_category(
         if payload.order is not None
         else _next_book_category_order(db, user_id)
     )
-    category = BookCategory(user_id=user_id, name=name, order=order)
+    category = BookCategory(
+        user_id=user_id,
+        name=name,
+        order=order,
+        visible=payload.visible,
+        protected=payload.protected,
+    )
     db.add(category)
     db.commit()
     db.refresh(category)
@@ -269,6 +279,13 @@ def get_all_books(
             )
         )
     books = query.order_by(Book.order, Book.id).all()
+    if not include_hidden:
+        books = [
+            book
+            for book in books
+            if book.category_relation is None
+            or book.category_relation.visible is not False
+        ]
     return [_serialize_book(book) for book in books]
 
 
@@ -293,6 +310,14 @@ def get_book(
             )
         )
     book = query.first()
+    if (
+        book is not None
+        and owner_user_id is None
+        and not include_hidden
+        and book.category_relation is not None
+        and book.category_relation.visible is False
+    ):
+        book = None
     if not book:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

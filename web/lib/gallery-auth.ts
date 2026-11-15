@@ -14,18 +14,21 @@ interface GalleryStatusResponse {
   illustration_ids?: number[];
   chapter_ids?: number[];
   book_ids?: number[];
+  category_ids?: number[];
 }
 
 export interface GalleryGrants {
   illustrations: Set<number>;
   chapters: Set<number>;
   books: Set<number>;
+  categories: Set<number>;
 }
 
 const EMPTY_GRANTS: GalleryGrants = {
   illustrations: new Set<number>(),
   chapters: new Set<number>(),
   books: new Set<number>(),
+  categories: new Set<number>(),
 };
 
 function toNumberSet(values: unknown): Set<number> {
@@ -72,6 +75,7 @@ export const getGalleryGrants = cache(async (): Promise<GalleryGrants> => {
       illustrations: toNumberSet(data.illustration_ids),
       chapters: toNumberSet(data.chapter_ids),
       books: toNumberSet(data.book_ids),
+      categories: toNumberSet(data.category_ids),
     };
   } catch (error) {
     console.error("Failed to check gallery access.", error);

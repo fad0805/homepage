@@ -6,6 +6,8 @@ from pydantic import BaseModel, Field
 class BookCategoryBase(BaseModel):
     name: str
     order: int | None = None
+    visible: bool = True
+    protected: bool = False
 
 
 class BookCategoryCreate(BookCategoryBase):
@@ -15,6 +17,8 @@ class BookCategoryCreate(BookCategoryBase):
 class BookCategoryUpdate(BaseModel):
     name: str | None = None
     order: int | None = None
+    visible: bool | None = None
+    protected: bool | None = None
 
 
 class BookCategoryReorderItem(BaseModel):

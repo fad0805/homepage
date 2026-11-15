@@ -10,7 +10,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import relationship
 
 from db.base import Base
-from models.books import Book, Chapter
+from models.books import Book, BookCategory, Chapter
 from models.illustrations import Illustration
 from models.users import User
 
@@ -46,6 +46,12 @@ class GalleryInvite(Base):
         nullable=True,
         index=True,
     )
+    category_id = Column(
+        Integer,
+        ForeignKey("book_categories.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True,
+    )
     note = Column(String(255), nullable=True)
     created_at = Column(DateTime, default=func.now(), nullable=False)
     expires_at = Column(DateTime, nullable=False, index=True)
@@ -56,6 +62,8 @@ class GalleryInvite(Base):
     illustration = relationship(Illustration)
     chapter = relationship(Chapter)
     book = relationship(Book)
+    category = relationship(BookCategory)
+    category = relationship(BookCategory)
     user = relationship(User)
 
 
@@ -100,6 +108,11 @@ class GallerySessionGrant(Base):
             "book_id",
             name="uq_gallery_session_book",
         ),
+        UniqueConstraint(
+            "session_id",
+            "category_id",
+            name="uq_gallery_session_category",
+        ),
     )
 
     id = Column(Integer, primary_key=True, autoincrement=True)
@@ -127,9 +140,16 @@ class GallerySessionGrant(Base):
         nullable=True,
         index=True,
     )
+    category_id = Column(
+        Integer,
+        ForeignKey("book_categories.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True,
+    )
     created_at = Column(DateTime, default=func.now(), nullable=False)
 
     session = relationship("GallerySession", back_populates="grants")
     illustration = relationship(Illustration)
     chapter = relationship(Chapter)
     book = relationship(Book)
+    category = relationship(BookCategory)
