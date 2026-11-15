@@ -13,6 +13,14 @@
   --navbar-active-color: #a05252;
 }
 
+:root[data-color-theme='mono']:not([data-theme='dark']) {
+  --navbar-active-color: #111111;
+}
+
+[data-theme='dark'][data-color-theme='mono'] {
+  --navbar-active-color: #f5f5f5;
+}
+
 nav {
   display: flex;
   width: 80%;

@@ -71,7 +71,7 @@ export const SIDE_POSITION_OPTIONS: SidePositionOption[] = [
   { key: "right", label: "오른쪽" },
 ];
 
-export type ColorThemeKey = "mint" | "sepia" | "blue" | "rose";
+export type ColorThemeKey = "mint" | "sepia" | "blue" | "rose" | "mono";
 
 export interface ColorThemePalette {
   /** Page background. */
@@ -183,6 +183,29 @@ export const COLOR_THEME_OPTIONS: ColorThemeOption[] = [
       text: "#f3e1e4",
       inputBackground: "#251a1d",
       emptyBanner: "#5e3a42",
+    },
+  },
+  {
+    key: "mono",
+    label: "화이트 · 블랙",
+    englishLabel: "White / Black",
+    description:
+      "라이트 모드는 화이트, 다크 모드는 블랙으로 표시하는 무채색 테마입니다.",
+    light: {
+      background: "#f5f5f3",
+      content: "#ffffff",
+      accent: "#111111",
+      text: "#1a1a1a",
+      inputBackground: "#ffffff",
+      emptyBanner: "#e3e3e0",
+    },
+    dark: {
+      background: "#000000",
+      content: "#121212",
+      accent: "#f5f5f5",
+      text: "#ededed",
+      inputBackground: "#1a1a1a",
+      emptyBanner: "#2a2a2a",
     },
   },
 ];

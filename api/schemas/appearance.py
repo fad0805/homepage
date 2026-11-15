@@ -5,7 +5,7 @@ from pydantic import BaseModel, field_validator
 
 LayoutKey = Literal["editorial", "side", "collapsible", "drawer"]
 SidePosition = Literal["left", "right"]
-ColorThemeKey = Literal["mint", "sepia", "blue", "rose"]
+ColorThemeKey = Literal["mint", "sepia", "blue", "rose", "mono"]
 ThemeMode = Literal["light", "dark"]
 
 _HEX_COLOR = re.compile(r"^#[0-9a-fA-F]{6}$")
