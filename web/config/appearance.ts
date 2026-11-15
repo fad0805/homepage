@@ -129,12 +129,12 @@ export const COLOR_THEME_OPTIONS: ColorThemeOption[] = [
     englishLabel: "Blue",
     description: "맑은 바다를 떠올리는 차갑고 선명한 테마입니다.",
     light: {
-      background: "#c6d9e7",
-      content: "#f3f8fb",
-      accent: "#235b7a",
-      text: "#15232d",
-      inputBackground: "#fcfdff",
-      emptyBanner: "#a6c6da",
+      background: "#a8cbe2",
+      content: "#f8fbfd",
+      accent: "#164e6c",
+      text: "#0d1c26",
+      inputBackground: "#ffffff",
+      emptyBanner: "#7fa9c3",
     },
     dark: {
       background: "#070d13",
