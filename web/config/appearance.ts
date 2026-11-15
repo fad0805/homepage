@@ -223,9 +223,9 @@ export const COLOR_THEME_OPTIONS: ColorThemeOption[] = [
     description:
       "그린·화이트·그레이·블랙으로 구성한 에이로맨스 프라이드 테마입니다.",
     light: {
-      background: "#aac598",
+      background: "#b5cca5",
       content: "#f6fbee",
-      accent: "#1f5720",
+      accent: "#1c4f1d",
       text: "#1a2615",
       inputBackground: "#f6fbee",
       emptyBanner: "#a9c99b",
@@ -246,9 +246,9 @@ export const COLOR_THEME_OPTIONS: ColorThemeOption[] = [
     description:
       "그린·화이트·그레이·블랙으로 구성한 에이젠더 프라이드 테마입니다.",
     light: {
-      background: "#afc5a2",
+      background: "#bacdaf",
       content: "#f4faee",
-      accent: "#36551d",
+      accent: "#314e1a",
       text: "#192315",
       inputBackground: "#f4faee",
       emptyBanner: "#b2c6a6",
@@ -269,9 +269,9 @@ export const COLOR_THEME_OPTIONS: ColorThemeOption[] = [
     description:
       "블랙·그레이·화이트·퍼플로 구성한 에이섹슈얼 프라이드 테마입니다.",
     light: {
-      background: "#c8bccf",
+      background: "#d2c8d8",
       content: "#fbf9fc",
-      accent: "#563756",
+      accent: "#503350",
       text: "#221d23",
       inputBackground: "#fbf9fc",
       emptyBanner: "#c0b3c5",
