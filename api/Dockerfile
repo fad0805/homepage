@@ -5,7 +5,7 @@ WORKDIR /app
 
 COPY requirements.txt .
 RUN pip3 install --break-system-packages -r requirements.txt
-COPY . .
+COPY --chown=1000:1000 . .
 
 RUN adduser -D -u 1000 homepage \
     && mkdir -p /app/uploads \
