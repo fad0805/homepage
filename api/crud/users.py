@@ -56,11 +56,16 @@ def change_user_password(
     current_password: str,
     new_password: str,
 ) -> bool:
-    """Change one user's password after verifying the current one."""
+    """Change a password and revoke every existing device session."""
     if not verify_password(current_password, user.hashed_password):
         raise ValueError("invalid_current_password")
 
     user.hashed_password = hash_password(new_password)
+    # A stolen token must not survive a password change. The route creates a
+    # fresh session for the browser that made this request.
+    db.query(UserSession).filter(
+        UserSession.user_id == user.id
+    ).delete(synchronize_session=False)
     db.commit()
     db.refresh(user)
     return True
