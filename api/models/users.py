@@ -89,11 +89,17 @@ class UserSession(Base):
     __tablename__ = "user_sessions"
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
-    refresh_token = Column(String(255), nullable=False)
-    # The most recently rotated token stays valid for a short grace period so
-    # concurrent refreshes (e.g. several restored tabs waking from sleep) do
-    # not invalidate each other's cookies.
-    previous_refresh_token = Column(String(255), nullable=True)
+    # The database stores SHA-256 digests, never the bearer token itself.
+    # Column names are kept for compatibility with existing installations.
+    refresh_token_hash = Column("refresh_token", String(64), nullable=False)
+    # The most recently rotated token digest stays valid for a short grace
+    # period so concurrent refreshes (e.g. several restored tabs waking from
+    # sleep) do not invalidate each other's cookies.
+    previous_refresh_token_hash = Column(
+        "previous_refresh_token",
+        String(64),
+        nullable=True,
+    )
     refresh_token_rotated_at = Column(DateTime, nullable=True)
     device_info = Column(String(255), nullable=True)
     ip_address = Column(String(45), nullable=True)

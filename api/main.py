@@ -11,6 +11,8 @@ from fastapi.staticfiles import StaticFiles
 from core.config import API_DOCS_ENABLED, ENVIRONMENT
 from core.mastodon import mastodon_publish_loop
 from core.uploads import UPLOAD_DIR, ensure_upload_dir
+from crud.users import hash_legacy_refresh_tokens
+from db.session import SessionLocal
 from routers import (
     appearance,
     archive,
@@ -40,6 +42,8 @@ async def lifespan(app:FastAPI):
             "on a production server."
         )
     users.create_admin_for_dev()
+    with SessionLocal() as db:
+        hash_legacy_refresh_tokens(db)
     mastodon_task = asyncio.create_task(mastodon_publish_loop())
     try:
         yield
