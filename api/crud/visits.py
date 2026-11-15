@@ -215,6 +215,58 @@ def get_visit_stats(db: Session) -> dict:
         )[:5]
     ]
 
+    today_source_rows = (
+        db.query(
+            SiteVisit.source,
+            func.count(SiteVisit.id),
+            func.count(func.distinct(SiteVisit.ip_hash)),
+        )
+        .filter(SiteVisit.visited_on == today)
+        .group_by(SiteVisit.source)
+        .order_by(func.count(SiteVisit.id).desc())
+        .limit(5)
+        .all()
+    )
+    today_sources = [
+        {
+            "source": row[0],
+            "visits": int(row[1] or 0),
+            "visitors": int(row[2] or 0),
+        }
+        for row in today_source_rows
+    ]
+
+    today_search_rows = (
+        db.query(SiteVisit.referrer, SiteVisit.ip_hash)
+        .filter(
+            SiteVisit.visited_on == today,
+            SiteVisit.referrer.isnot(None),
+        )
+        .all()
+    )
+    today_search_map: dict[str, dict] = {}
+    for referrer, ip_hash in today_search_rows:
+        term = extract_search_query(referrer)
+        if not term:
+            continue
+        entry = today_search_map.setdefault(
+            term, {"visits": 0, "visitors": set()}
+        )
+        entry["visits"] += 1
+        entry["visitors"].add(ip_hash)
+
+    today_searches = [
+        {
+            "query": term,
+            "visits": entry["visits"],
+            "visitors": len(entry["visitors"]),
+        }
+        for term, entry in sorted(
+            today_search_map.items(),
+            key=lambda item: (-item[1]["visits"], item[0]),
+        )[:5]
+    ]
+
     return {
         "today": {
             "date": today.isoformat(),
@@ -234,4 +286,6 @@ def get_visit_stats(db: Session) -> dict:
         "daily": daily,
         "sources": sources,
         "searches": searches,
+        "today_sources": today_sources,
+        "today_searches": today_searches,
     }

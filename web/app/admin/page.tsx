@@ -81,6 +81,8 @@ interface VisitStats {
   daily: VisitDay[];
   sources: VisitSource[];
   searches: VisitSearch[];
+  today_sources: VisitSource[];
+  today_searches: VisitSearch[];
 }
 
 interface DashboardData {
@@ -128,6 +130,7 @@ export default function AdminHome() {
   const [error, setError] = useState<string | null>(null);
   const [now, setNow] = useState<number | null>(null);
   const [showAllPosts, setShowAllPosts] = useState(false);
+  const [todayTrafficOnly, setTodayTrafficOnly] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -390,10 +393,49 @@ export default function AdminHome() {
                               (day.visitors / visitMax) * 100,
                             ),
                           );
+                    const isToday =
+                      day.date === data.visits.today.date;
                     return (
                       <div
-                        className="admin-dashboard-chart__bar"
+                        className={`admin-dashboard-chart__bar${
+                          isToday ? " is-today" : ""
+                        }${
+                          isToday && todayTrafficOnly
+                            ? " is-selected"
+                            : ""
+                        }`}
                         key={day.date}
+                        role={isToday ? "button" : undefined}
+                        tabIndex={isToday ? 0 : undefined}
+                        aria-pressed={
+                          isToday ? todayTrafficOnly : undefined
+                        }
+                        title={
+                          isToday
+                            ? "오늘 유입 경로와 검색어 보기"
+                            : undefined
+                        }
+                        onClick={
+                          isToday
+                            ? () =>
+                                setTodayTrafficOnly((current) => !current)
+                            : undefined
+                        }
+                        onKeyDown={
+                          isToday
+                            ? (event) => {
+                                if (
+                                  event.key === "Enter" ||
+                                  event.key === " "
+                                ) {
+                                  event.preventDefault();
+                                  setTodayTrafficOnly(
+                                    (current) => !current,
+                                  );
+                                }
+                              }
+                            : undefined
+                        }
                       >
                         <span className="admin-dashboard-chart__count">
                           {day.visitors}
@@ -417,11 +459,19 @@ export default function AdminHome() {
                 <div className="admin-dashboard-sources">
                   <div className="admin-dashboard-subhead">
                     <h3>유입 경로</h3>
-                    <span>최근 7일</span>
+                    <span>
+                      {todayTrafficOnly ? "오늘" : "최근 7일"}
+                    </span>
                   </div>
-                  {data.visits.sources.length ? (
+                  {(todayTrafficOnly
+                    ? data.visits.today_sources
+                    : data.visits.sources
+                  ).length ? (
                     <ul>
-                      {data.visits.sources.map((source) => (
+                      {(todayTrafficOnly
+                        ? data.visits.today_sources
+                        : data.visits.sources
+                      ).map((source) => (
                         <li key={source.source}>
                           <span
                             className="admin-dashboard-sources__name"
@@ -445,11 +495,19 @@ export default function AdminHome() {
                 <div className="admin-dashboard-sources admin-dashboard-searches">
                   <div className="admin-dashboard-subhead">
                     <h3>유입 검색어</h3>
-                    <span>최근 7일</span>
+                    <span>
+                      {todayTrafficOnly ? "오늘" : "최근 7일"}
+                    </span>
                   </div>
-                  {data.visits.searches.length ? (
+                  {(todayTrafficOnly
+                    ? data.visits.today_searches
+                    : data.visits.searches
+                  ).length ? (
                     <ul>
-                      {data.visits.searches.map((search) => (
+                      {(todayTrafficOnly
+                        ? data.visits.today_searches
+                        : data.visits.searches
+                      ).map((search) => (
                         <li key={search.query}>
                           <span
                             className="admin-dashboard-sources__name"
