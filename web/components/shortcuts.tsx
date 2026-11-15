@@ -37,12 +37,17 @@ children: React.ReactNode;
                 event.key === 'q' ||
                 event.key === 'Q'
             ) {
-                if(!pathname.startsWith('/admin') && pathname !== '/signin') {
-                    isAuthenticated(router).then(isAuth => {
-                        if(isAuth) router.push('/admin');
-                        else router.push('/signin');
-                    });
+                if (pathname === '/signin') return;
+
+                if (pathname.startsWith('/admin')) {
+                    router.push('/');
+                    return;
                 }
+
+                isAuthenticated(router).then(isAuth => {
+                    if(isAuth) router.push('/admin');
+                    else router.push('/signin');
+                });
             }
         };
 
