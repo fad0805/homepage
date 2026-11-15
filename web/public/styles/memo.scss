@@ -24,6 +24,11 @@
   min-width: 0;
 }
 
+/* The bottom-menu shell aligns page content to the left. */
+#container.site-layout--collapsible #memo-page {
+  justify-content: flex-start;
+}
+
 .memo-pinned-section {
   min-width: 0;
   padding: 0.55rem 0.8rem 0.2rem;
