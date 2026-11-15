@@ -1,6 +1,7 @@
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session, joinedload
 
+from core.html_sanitizer import sanitize_index_html
 from core.uploads import delete_replaced_upload, delete_uploaded_file
 from models.profiles import Profile
 from models.users import User
@@ -24,7 +25,7 @@ def _serialize_profile(profile: Profile) -> dict:
         "title": profile.title,
         "subtitle": profile.subtitle,
         "banner_url": profile.banner_url,
-        "profile": profile.profile,
+        "profile": sanitize_index_html(profile.profile),
     }
 
 
@@ -74,6 +75,7 @@ def create_profile(db: Session, profile: ProfileCreate, user_id: int):
     Create a new profile owned by the signed-in author.
     """
     data = profile.model_dump(exclude={"user_id"})
+    data["profile"] = sanitize_index_html(data.get("profile"))
     db_profile = Profile(**data, user_id=user_id)
     db.add(db_profile)
     db.commit()
@@ -109,6 +111,8 @@ def update_profile(
 
     old_banner_url = profile.banner_url
     data = updated_profile.model_dump(exclude_unset=True)
+    if "profile" in data:
+        data["profile"] = sanitize_index_html(data["profile"])
 
     for key, value in data.items():
         setattr(profile, key, value)
