@@ -13,7 +13,7 @@ const INVITES_PER_PAGE = 10;
 
 type InviteStatus = "unused" | "used" | "expired" | "revoked";
 type SessionStatus = "active" | "expired" | "revoked";
-type ResourceType = "illustration" | "chapter" | "book";
+type ResourceType = "illustration" | "chapter" | "book" | "category";
 
 interface GalleryResource {
   type: ResourceType;
@@ -64,6 +64,7 @@ const TYPE_LABEL: Record<ResourceType, string> = {
   illustration: "삽화",
   chapter: "게시물",
   book: "책",
+  category: "카테고리",
 };
 
 function resourceLabel(resource: GalleryResource | null) {

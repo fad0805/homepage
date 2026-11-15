@@ -38,6 +38,8 @@ interface BookCategory {
   id: number;
   name: string;
   order: number;
+  visible: boolean;
+  protected: boolean;
 }
 
 interface Book {
@@ -168,6 +170,177 @@ function SortableBookRow({
   );
 }
 
+function CategoryManagerModal({
+  category,
+  onClose,
+  onChanged,
+}: {
+  category: BookCategory;
+  onClose: () => void;
+  onChanged: () => void;
+}) {
+  const [name, setName] = useState(category.name);
+  const [visibility, setVisibility] = useState<"public" | "private" | "protected">(
+    category.protected
+      ? "protected"
+      : category.visible === false
+        ? "private"
+        : "public",
+  );
+  const [saving, setSaving] = useState(false);
+  const [code, setCode] = useState<string | null>(null);
+  const [issuing, setIssuing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [onClose]);
+
+  const save = async () => {
+    const nextName = name.trim();
+    if (!nextName) {
+      setError("카테고리 이름을 입력해주세요.");
+      return;
+    }
+    setSaving(true);
+    setError(null);
+    try {
+      await apiFetch(`/api/books/categories/${category.id}`, {
+        method: "PUT",
+        body: JSON.stringify({
+          name: nextName,
+          visible: visibility !== "private",
+          protected: visibility === "protected",
+        }),
+      });
+      onChanged();
+      onClose();
+    } catch (reason) {
+      setError(
+        reason instanceof Error
+          ? reason.message
+          : "카테고리를 저장하지 못했습니다.",
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const issueCode = async () => {
+    setIssuing(true);
+    setError(null);
+    try {
+      const result = await apiFetch<{ code: string }>(
+        "/api/gallery/invites",
+        {
+          method: "POST",
+          body: JSON.stringify({
+            resource_type: "category",
+            resource_id: category.id,
+          }),
+        },
+      );
+      setCode(result.code);
+    } catch (reason) {
+      setError(
+        reason instanceof Error
+          ? reason.message
+          : "열람 코드를 발급하지 못했습니다.",
+      );
+    } finally {
+      setIssuing(false);
+    }
+  };
+
+  return (
+    <div
+      className="admin-modal-backdrop"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+    >
+      <div className="admin-modal" role="dialog" aria-modal="true">
+        <div className="admin-modal-header">
+          <h2>카테고리 관리</h2>
+          <button
+            type="button"
+            className="admin-modal-close"
+            onClick={onClose}
+            aria-label="닫기"
+          >
+            ×
+          </button>
+        </div>
+        <div className="admin-modal-body admin-books-modal-form">
+          {error ? (
+            <div className="admin-notice admin-notice-error">{error}</div>
+          ) : null}
+          <label className="admin-field">
+            <span>카테고리 이름</span>
+            <input
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+            />
+          </label>
+          <label className="admin-field">
+            <span>공개 설정</span>
+            <select
+              value={visibility}
+              onChange={(event) =>
+                setVisibility(
+                  event.target.value as
+                    | "public"
+                    | "private"
+                    | "protected",
+                )
+              }
+            >
+              <option value="public">공개</option>
+              <option value="private">비공개</option>
+              <option value="protected">보호</option>
+            </select>
+          </label>
+          {visibility === "protected" ? (
+            <div className="admin-books-access">
+              <button
+                type="button"
+                className="admin-button"
+                onClick={() => void issueCode()}
+                disabled={issuing}
+              >
+                {issuing ? "발급 중..." : "열람 코드 발급"}
+              </button>
+              {code ? <code>{code}</code> : null}
+            </div>
+          ) : null}
+        </div>
+        <div className="admin-modal-footer">
+          <button type="button" className="admin-button" onClick={onClose}>
+            닫기
+          </button>
+          <button
+            type="button"
+            className="admin-button primary"
+            onClick={save}
+            disabled={saving}
+          >
+            {saving ? "저장 중..." : "저장"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function SortableBookGroup({
   category,
   books,
@@ -176,6 +349,7 @@ function SortableBookGroup({
   latestChapterUpdates,
   canManageCategory,
   onEditCategory,
+  onManageCategory,
   onDeleteCategory,
 }: {
   category: BookCategory | null;
@@ -185,6 +359,7 @@ function SortableBookGroup({
   latestChapterUpdates: Map<number, string>;
   canManageCategory: boolean;
   onEditCategory: (category: BookCategory) => void;
+  onManageCategory: (category: BookCategory) => void;
   onDeleteCategory: (category: BookCategory) => void;
 }) {
   const {
@@ -236,9 +411,9 @@ function SortableBookGroup({
           <div className="admin-books-group-actions">
             <button
               type="button"
-              onClick={() => onEditCategory(category)}
+              onClick={() => onManageCategory(category)}
             >
-              이름 변경
+              카테고리 관리
             </button>
             <button
               type="button"
@@ -308,6 +483,8 @@ export default function AdminBooks() {
     null,
   );
   const [categorySaving, setCategorySaving] = useState(false);
+  const [managedCategory, setManagedCategory] =
+    useState<BookCategory | null>(null);
 
   const noticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -873,6 +1050,7 @@ export default function AdminBooks() {
                   latestChapterUpdates={chapterStats.latest}
                   canManageCategory
                   onEditCategory={openEditCategory}
+                  onManageCategory={setManagedCategory}
                   onDeleteCategory={handleDeleteCategory}
                 />
               ))}
@@ -1075,6 +1253,16 @@ export default function AdminBooks() {
             </div>
           </div>
         </div>
+      ) : null}
+
+      {managedCategory ? (
+        <CategoryManagerModal
+          category={managedCategory}
+          onClose={() => setManagedCategory(null)}
+          onChanged={() => {
+            void load();
+          }}
+        />
       ) : null}
     </div>
   );

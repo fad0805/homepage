@@ -15,6 +15,7 @@ def create_invite(
     illustration_id: int | None,
     chapter_id: int | None,
     book_id: int | None,
+    category_id: int | None,
     note: str | None,
     expires_at: datetime,
     user_id: int,
@@ -25,6 +26,7 @@ def create_invite(
         illustration_id=illustration_id,
         chapter_id=chapter_id,
         book_id=book_id,
+        category_id=category_id,
         note=note,
         expires_at=expires_at,
     )
@@ -49,6 +51,7 @@ def list_invites(
         selectinload(GalleryInvite.illustration),
         selectinload(GalleryInvite.chapter),
         selectinload(GalleryInvite.book),
+        selectinload(GalleryInvite.category),
     )
     if owner_user_id is not None:
         query = query.filter(GalleryInvite.user_id == owner_user_id)
@@ -153,6 +156,7 @@ def add_grant(
     illustration_id: int | None = None,
     chapter_id: int | None = None,
     book_id: int | None = None,
+    category_id: int | None = None,
 ) -> GallerySessionGrant:
     query = db.query(GallerySessionGrant).filter(
         GallerySessionGrant.session_id == session_id
@@ -167,6 +171,10 @@ def add_grant(
         )
     elif book_id is not None:
         query = query.filter(GallerySessionGrant.book_id == book_id)
+    elif category_id is not None:
+        query = query.filter(
+            GallerySessionGrant.category_id == category_id
+        )
     else:
         raise ValueError("a grant needs a resource")
 
@@ -179,6 +187,7 @@ def add_grant(
         illustration_id=illustration_id,
         chapter_id=chapter_id,
         book_id=book_id,
+        category_id=category_id,
     )
     db.add(grant)
     db.flush()
@@ -192,6 +201,8 @@ def _grant_owner_id(grant: GallerySessionGrant) -> int | None:
         return grant.chapter.user_id
     if grant.book_id is not None and grant.book is not None:
         return grant.book.user_id
+    if grant.category_id is not None and grant.category is not None:
+        return grant.category.user_id
     return None
 
 
@@ -210,6 +221,9 @@ def list_sessions(
             ),
             selectinload(GallerySession.grants).selectinload(
                 GallerySessionGrant.book
+            ),
+            selectinload(GallerySession.grants).selectinload(
+                GallerySessionGrant.category
             ),
         )
         .order_by(GallerySession.created_at.desc(), GallerySession.id.desc())
@@ -302,6 +316,9 @@ def revoke_session_grants(
             ),
             selectinload(GallerySession.grants).selectinload(
                 GallerySessionGrant.book
+            ),
+            selectinload(GallerySession.grants).selectinload(
+                GallerySessionGrant.category
             ),
         )
         .filter(GallerySession.id == session_id)

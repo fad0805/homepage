@@ -28,6 +28,13 @@ class BookCategory(Base):
     )
     name = Column(String, nullable=False)
     order = Column(Integer, nullable=False, default=0, server_default="0")
+    visible = Column(Boolean, nullable=False, default=True, server_default="true")
+    protected = Column(
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default="false",
+    )
 
     books = relationship("Book", back_populates="category_relation")
     user = relationship(User)

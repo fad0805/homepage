@@ -117,6 +117,7 @@ export default async function BooksPage({
       initialBookId={initialBookId}
       initialChapterId={initialChapterId}
       initialIsMobile={initialIsMobile}
+      initialUnlockedCategoryIds={[...grants.categories]}
     />
   );
 }

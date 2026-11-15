@@ -2,6 +2,8 @@ export interface BookCategory {
   id: number;
   name: string;
   order: number;
+  visible: boolean;
+  protected: boolean;
 }
 
 export interface Book {

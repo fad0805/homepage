@@ -210,6 +210,7 @@ interface BooksClientProps {
   initialBookId: number | null;
   initialChapterId: number | null;
   initialIsMobile: boolean;
+  initialUnlockedCategoryIds?: number[];
 }
 
 export default function BooksClient({
@@ -218,8 +219,9 @@ export default function BooksClient({
   initialBookId,
   initialChapterId,
   initialIsMobile,
+  initialUnlockedCategoryIds = [],
 }: BooksClientProps) {
-  const { isLoggedIn } = useAuth();
+  const { isLoggedIn, isAdmin } = useAuth();
   const books = initialBooks;
   const chapters = initialChapters;
   const [activeBookId, setActiveBookId] = useState<number | null>(() => {
@@ -240,6 +242,16 @@ export default function BooksClient({
   const [chapterPage, setChapterPage] = useState(1);
   const [isMobile, setIsMobile] = useState(initialIsMobile);
   const [now, setNow] = useState(() => Date.now());
+  const [unlockedCategories, setUnlockedCategories] = useState<Set<number>>(
+    () => new Set(initialUnlockedCategoryIds),
+  );
+  const [unlockCategory, setUnlockCategory] =
+    useState<BookCategory | null>(null);
+  const [categoryCode, setCategoryCode] = useState("");
+  const [categoryCodeError, setCategoryCodeError] = useState<string | null>(
+    null,
+  );
+  const [categoryCodeLoading, setCategoryCodeLoading] = useState(false);
   const viewDepthRef = useRef(0);
   const initialViewRef = useRef({
     bookId: activeBookId,
@@ -300,9 +312,13 @@ export default function BooksClient({
   const visibleBooks = useMemo(
     () =>
       books
-        .filter((book) => isLoggedIn || book.visible !== false)
+        .filter(
+          (book) =>
+            (isLoggedIn || book.visible !== false) &&
+            (isAdmin || book.category?.visible !== false),
+        )
         .sort((a, b) => a.order - b.order || a.id - b.id),
-    [books, isLoggedIn],
+    [books, isAdmin, isLoggedIn],
   );
 
   const categoryList = useMemo(() => {
@@ -535,16 +551,63 @@ export default function BooksClient({
     </button>
   );
 
-  const toggleCategory = (categoryId: number) => {
+  const toggleCategory = (category: BookCategory) => {
+    const locked =
+      category.protected &&
+      !isAdmin &&
+      !unlockedCategories.has(category.id);
+    if (locked && !expandedCategories.has(category.id)) {
+      setCategoryCode("");
+      setCategoryCodeError(null);
+      setUnlockCategory(category);
+      return;
+    }
     setExpandedCategories((prev) => {
       const next = new Set(prev);
-      if (next.has(categoryId)) {
-        next.delete(categoryId);
+      if (next.has(category.id)) {
+        next.delete(category.id);
       } else {
-        next.add(categoryId);
+        next.add(category.id);
       }
       return next;
     });
+  };
+
+  const submitCategoryUnlock = async (
+    event: FormEvent<HTMLFormElement>,
+  ) => {
+    event.preventDefault();
+    if (!unlockCategory || categoryCodeLoading) return;
+    setCategoryCodeLoading(true);
+    setCategoryCodeError(null);
+    try {
+      const response = await fetch("/api/gallery/unlock", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ code: categoryCode }),
+      });
+      if (!response.ok) {
+        let detail = "비밀번호가 올바르지 않거나 만료되었습니다.";
+        try {
+          const data = (await response.json()) as { detail?: unknown };
+          if (typeof data.detail === "string") detail = data.detail;
+        } catch {
+          // Ignore malformed error bodies.
+        }
+        setCategoryCodeError(detail);
+        return;
+      }
+      const categoryId = unlockCategory.id;
+      setUnlockedCategories((prev) => new Set(prev).add(categoryId));
+      setExpandedCategories((prev) => new Set(prev).add(categoryId));
+      setUnlockCategory(null);
+      setCategoryCode("");
+    } catch {
+      setCategoryCodeError("요청에 실패했습니다. 잠시 후 다시 시도해주세요.");
+    } finally {
+      setCategoryCodeLoading(false);
+    }
   };
 
   const handleSearchChange = (value: string) => {
@@ -594,15 +657,32 @@ export default function BooksClient({
                   <button
                     type="button"
                     className="books-group__toggle"
-                    onClick={() => toggleCategory(categoryId)}
+                    onClick={() =>
+                      group.category
+                        ? toggleCategory(group.category)
+                        : undefined
+                    }
                     aria-expanded={isOpen}
                   >
-                    <span>{group.category.name}</span>
-                    <span
-                      className="books-group__chevron"
-                      aria-hidden="true"
-                    >
-                      ▸
+                    <span className="books-group__label">
+                      <span>{group.category.name}</span>
+                      {group.category.visible === false ? (
+                        <span className="books-private-badge">비공개</span>
+                      ) : null}
+                    </span>
+                    <span className="books-group__meta">
+                      {group.category.visible !== false &&
+                      group.category.protected ? (
+                        <span className="books-protected-badge">
+                          보호
+                        </span>
+                      ) : null}
+                      <span
+                        className="books-group__chevron"
+                        aria-hidden="true"
+                      >
+                        ▸
+                      </span>
                     </span>
                   </button>
                 ) : null}
@@ -792,6 +872,57 @@ export default function BooksClient({
           </aside>
         </div>
       )}
+
+      {unlockCategory ? (
+        <div
+          className="books-category-unlock-backdrop"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) {
+              setUnlockCategory(null);
+            }
+          }}
+        >
+          <div
+            className="books-category-unlock"
+            role="dialog"
+            aria-modal="true"
+            aria-label="카테고리 열람 비밀번호"
+          >
+            <header>
+              <h2>{unlockCategory.name}</h2>
+              <button
+                type="button"
+                aria-label="닫기"
+                onClick={() => setUnlockCategory(null)}
+              >
+                ×
+              </button>
+            </header>
+            <p>이 카테고리는 열람 비밀번호가 필요합니다.</p>
+            <form onSubmit={submitCategoryUnlock}>
+              <input
+                type="text"
+                value={categoryCode}
+                onChange={(event) => setCategoryCode(event.target.value)}
+                placeholder="XXXX-XXXX-XXXX"
+                autoComplete="one-time-code"
+                autoCapitalize="characters"
+                spellCheck={false}
+                autoFocus
+                required
+              />
+              {categoryCodeError ? (
+                <p className="books-category-unlock__error">
+                  {categoryCodeError}
+                </p>
+              ) : null}
+              <button type="submit" disabled={categoryCodeLoading}>
+                {categoryCodeLoading ? "확인 중..." : "열기"}
+              </button>
+            </form>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
