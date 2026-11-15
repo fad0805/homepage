@@ -4,9 +4,11 @@ import { useRouter } from "next/navigation";
 import {
   useCallback,
   useEffect,
+  useRef,
   useState,
 } from "react";
 
+import { useTheme, type Theme } from "@/components/theme-provider";
 import {
   COLOR_THEME_OPTIONS,
   DEFAULT_COLOR_THEME,
@@ -111,6 +113,8 @@ function overrideKeyFor(field: ColorFieldKey, mode: ColorMode) {
 
 export default function AdminAppearance() {
   const router = useRouter();
+  const { theme } = useTheme();
+  const initialThemeRef = useRef<Theme | null>(null);
   const [layoutKey, setLayoutKey] = useState<LayoutKey>(DEFAULT_LAYOUT);
   const [savedLayoutKey, setSavedLayoutKey] =
     useState<LayoutKey>(DEFAULT_LAYOUT);
@@ -134,6 +138,25 @@ export default function AdminAppearance() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState<Notice | null>(null);
+
+  useEffect(() => {
+    if (initialThemeRef.current === null) {
+      initialThemeRef.current = theme;
+    }
+    setColorMode(theme);
+  }, [theme]);
+
+  useEffect(() => {
+    return () => {
+      const originalTheme = initialThemeRef.current;
+      if (originalTheme) {
+        document.documentElement.setAttribute(
+          "data-theme",
+          originalTheme,
+        );
+      }
+    };
+  }, []);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -246,6 +269,12 @@ export default function AdminAppearance() {
         colorOverrides: savedOverrides,
       });
       document.documentElement.dataset.appearance = data.layout_key;
+      const originalTheme = initialThemeRef.current ?? theme;
+      setColorMode(originalTheme);
+      document.documentElement.setAttribute(
+        "data-theme",
+        originalTheme,
+      );
       router.refresh();
       setNotice({
         type: "success",
@@ -306,6 +335,13 @@ export default function AdminAppearance() {
     const next = { ...colorOverrides, [key]: value };
     setColorOverrides(next);
     preview({ colorOverrides: next });
+  };
+
+  const toggleColorMode = () => {
+    const next: ColorMode =
+      colorMode === "light" ? "dark" : "light";
+    setColorMode(next);
+    document.documentElement.setAttribute("data-theme", next);
   };
 
   return (
@@ -603,11 +639,7 @@ export default function AdminAppearance() {
                   <button
                     type="button"
                     className="admin-appearance-color-mode-toggle"
-                    onClick={() =>
-                      setColorMode(
-                        colorMode === "light" ? "dark" : "light",
-                      )
-                    }
+                    onClick={toggleColorMode}
                     aria-pressed={colorMode === "dark"}
                     aria-label={`${
                       colorMode === "light" ? "라이트" : "다크"
