@@ -1,6 +1,23 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useState } from "react";
+import {
+  DndContext,
+  KeyboardSensor,
+  PointerSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  arrayMove,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 
 import {
   WEEKDAY_SHORT,
@@ -252,6 +269,73 @@ function monthLabel(value: string) {
   return `${date.getUTCFullYear()}년 ${date.getUTCMonth() + 1}월`;
 }
 
+function SortableMoodTagItem({
+  tag,
+  saving,
+  onEdit,
+  onDelete,
+}: {
+  tag: BookmarkMoodTag;
+  saving: boolean;
+  onEdit: (tag: BookmarkMoodTag) => void;
+  onDelete: (tag: BookmarkMoodTag) => void;
+}) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: tag.id, disabled: saving });
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.45 : 1,
+    zIndex: isDragging ? 2 : undefined,
+  };
+
+  return (
+    <li
+      ref={setNodeRef}
+      style={style}
+      className={`bookmark-category-item${
+        isDragging ? " is-dragging" : ""
+      }`}
+    >
+      <span>{tag.name}</span>
+      <div className="bookmark-category-actions">
+        <button
+          type="button"
+          className="bookmark-drag-handle"
+          aria-label={`${tag.name} 순서 변경`}
+          disabled={saving}
+          {...attributes}
+          {...listeners}
+        >
+          ⠿
+        </button>
+        <button
+          type="button"
+          className="bookmark-text-button"
+          disabled={saving}
+          onClick={() => onEdit(tag)}
+        >
+          수정
+        </button>
+        <button
+          type="button"
+          className="bookmark-text-button is-danger"
+          disabled={saving}
+          onClick={() => onDelete(tag)}
+        >
+          삭제
+        </button>
+      </div>
+    </li>
+  );
+}
+
 export default function BookmarkClient({ username }: { username: string }) {
   const initialToday = todayDateInputValue();
   const [view, setView] = useState<BookmarkView>("today");
@@ -272,6 +356,8 @@ export default function BookmarkClient({ username }: { username: string }) {
   const [moodTags, setMoodTags] = useState<BookmarkMoodTag[]>([]);
   const [moodTagModalOpen, setMoodTagModalOpen] = useState(false);
   const [newMoodTagName, setNewMoodTagName] = useState("");
+  const [editingMoodTag, setEditingMoodTag] =
+    useState<BookmarkMoodTag | null>(null);
   const [moodTagSaving, setMoodTagSaving] = useState(false);
   const [moodTagError, setMoodTagError] = useState<string | null>(
     null,
@@ -282,6 +368,15 @@ export default function BookmarkClient({ username }: { username: string }) {
   const [reviewContent, setReviewContent] = useState("");
   const [reviewSaving, setReviewSaving] = useState(false);
   const [reviewSaved, setReviewSaved] = useState(false);
+
+  const moodSensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: { distance: 5 },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    }),
+  );
 
   const [routineModalOpen, setRoutineModalOpen] = useState(false);
   const [editingRoutine, setEditingRoutine] =
@@ -885,12 +980,26 @@ export default function BookmarkClient({ username }: { username: string }) {
   const openMoodTagModal = () => {
     setMoodTagModalOpen(true);
     setNewMoodTagName("");
+    setEditingMoodTag(null);
+    setMoodTagError(null);
+  };
+
+  const startEditMoodTag = (tag: BookmarkMoodTag) => {
+    setEditingMoodTag(tag);
+    setNewMoodTagName(tag.name);
+    setMoodTagError(null);
+  };
+
+  const cancelEditMoodTag = () => {
+    setEditingMoodTag(null);
+    setNewMoodTagName("");
     setMoodTagError(null);
   };
 
   const closeMoodTagModal = () => {
     setMoodTagModalOpen(false);
     setNewMoodTagName("");
+    setEditingMoodTag(null);
     setMoodTagError(null);
   };
 
@@ -899,33 +1008,38 @@ export default function BookmarkClient({ username }: { username: string }) {
     setMoodTagSaving(true);
     setMoodTagError(null);
     try {
-      await apiFetch<BookmarkMoodTag>("/api/bookmark/mood-tags", {
-        method: "POST",
-        body: JSON.stringify({ name: newMoodTagName }),
-      });
+      if (editingMoodTag) {
+        await apiFetch<BookmarkMoodTag>(
+          `/api/bookmark/mood-tags/${editingMoodTag.id}`,
+          {
+            method: "PATCH",
+            body: JSON.stringify({ name: newMoodTagName }),
+          },
+        );
+        setEditingMoodTag(null);
+      } else {
+        await apiFetch<BookmarkMoodTag>("/api/bookmark/mood-tags", {
+          method: "POST",
+          body: JSON.stringify({ name: newMoodTagName }),
+        });
+      }
       setNewMoodTagName("");
       await loadMoodTags();
     } catch (reason) {
       setMoodTagError(
         reason instanceof Error
           ? reason.message
-          : "기분 태그를 추가하지 못했습니다.",
+          : editingMoodTag
+            ? "기분 태그를 수정하지 못했습니다."
+            : "기분 태그를 추가하지 못했습니다.",
       );
     } finally {
       setMoodTagSaving(false);
     }
   };
 
-  const handleMoveMoodTag = async (
-    tagId: number,
-    direction: -1 | 1,
-  ) => {
+  const persistMoodTagOrder = async (next: BookmarkMoodTag[]) => {
     if (moodTagSaving) return;
-    const index = moodTags.findIndex((tag) => tag.id === tagId);
-    const target = index + direction;
-    if (index < 0 || target < 0 || target >= moodTags.length) return;
-    const next = [...moodTags];
-    [next[index], next[target]] = [next[target], next[index]];
     setMoodTags(next);
     setMoodTagSaving(true);
     setMoodTagError(null);
@@ -952,6 +1066,19 @@ export default function BookmarkClient({ username }: { username: string }) {
     }
   };
 
+  const handleMoodDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id || moodTagSaving) return;
+    const oldIndex = moodTags.findIndex(
+      (tag) => tag.id === active.id,
+    );
+    const newIndex = moodTags.findIndex(
+      (tag) => tag.id === over.id,
+    );
+    if (oldIndex < 0 || newIndex < 0) return;
+    void persistMoodTagOrder(arrayMove(moodTags, oldIndex, newIndex));
+  };
+
   const handleDeleteMoodTag = async (tag: BookmarkMoodTag) => {
     if (moodTagSaving) return;
     if (!window.confirm(`"${tag.name}" 기분 태그를 삭제할까요?`)) {
@@ -963,6 +1090,10 @@ export default function BookmarkClient({ username }: { username: string }) {
       await apiFetch(`/api/bookmark/mood-tags/${tag.id}`, {
         method: "DELETE",
       });
+      if (editingMoodTag?.id === tag.id) {
+        setEditingMoodTag(null);
+        setNewMoodTagName("");
+      }
       await loadMoodTags();
       await loadPeriod();
     } catch (reason) {
@@ -1700,15 +1831,15 @@ export default function BookmarkClient({ username }: { username: string }) {
                     >
                       태그 관리
                     </button>
+                    <button
+                      type="button"
+                      className="bookmark-primary bookmark-day-meta-save"
+                      disabled={dayMetaSaving}
+                      onClick={() => void handleSaveDayMeta()}
+                    >
+                      {dayMetaSaving ? "저장 중..." : "저장"}
+                    </button>
                   </div>
-                  <button
-                    type="button"
-                    className="bookmark-primary bookmark-record-save"
-                    disabled={dayMetaSaving}
-                    onClick={() => void handleSaveDayMeta()}
-                  >
-                    {dayMetaSaving ? "저장 중..." : "저장"}
-                  </button>
                 </section>
               ) : null}
 
@@ -2227,6 +2358,11 @@ export default function BookmarkClient({ username }: { username: string }) {
               <p className="bookmark-error">{moodTagError}</p>
             ) : null}
 
+            {editingMoodTag ? (
+              <p className="bookmark-form-hint">
+                {editingMoodTag.name} 태그 수정 중
+              </p>
+            ) : null}
             <form
               className="bookmark-category-add"
               onSubmit={(event) => {
@@ -2238,7 +2374,9 @@ export default function BookmarkClient({ username }: { username: string }) {
                 type="text"
                 value={newMoodTagName}
                 maxLength={40}
-                placeholder="새 기분 태그"
+                placeholder={
+                  editingMoodTag ? "기분 태그 이름" : "새 기분 태그"
+                }
                 onChange={(event) =>
                   setNewMoodTagName(event.target.value)
                 }
@@ -2248,8 +2386,18 @@ export default function BookmarkClient({ username }: { username: string }) {
                 className="bookmark-primary"
                 disabled={moodTagSaving || !newMoodTagName.trim()}
               >
-                추가
+                {editingMoodTag ? "저장" : "추가"}
               </button>
+              {editingMoodTag ? (
+                <button
+                  type="button"
+                  className="bookmark-text-button"
+                  disabled={moodTagSaving}
+                  onClick={cancelEditMoodTag}
+                >
+                  취소
+                </button>
+              ) : null}
             </form>
 
             {moodTags.length === 0 ? (
@@ -2257,48 +2405,30 @@ export default function BookmarkClient({ username }: { username: string }) {
                 아직 기분 태그가 없습니다.
               </p>
             ) : (
-              <ul className="bookmark-category-list">
-                {moodTags.map((tag, index) => (
-                  <li key={tag.id}>
-                    <span>{tag.name}</span>
-                    <div className="bookmark-category-actions">
-                      <button
-                        type="button"
-                        className="bookmark-text-button"
-                        aria-label="위로 이동"
-                        disabled={moodTagSaving || index === 0}
-                        onClick={() =>
-                          void handleMoveMoodTag(tag.id, -1)
+              <DndContext
+                sensors={moodSensors}
+                collisionDetection={closestCenter}
+                onDragEnd={handleMoodDragEnd}
+              >
+                <SortableContext
+                  items={moodTags.map((tag) => tag.id)}
+                  strategy={verticalListSortingStrategy}
+                >
+                  <ul className="bookmark-category-list">
+                    {moodTags.map((tag) => (
+                      <SortableMoodTagItem
+                        key={tag.id}
+                        tag={tag}
+                        saving={moodTagSaving}
+                        onEdit={startEditMoodTag}
+                        onDelete={(item) =>
+                          void handleDeleteMoodTag(item)
                         }
-                      >
-                        ↑
-                      </button>
-                      <button
-                        type="button"
-                        className="bookmark-text-button"
-                        aria-label="아래로 이동"
-                        disabled={
-                          moodTagSaving ||
-                          index === moodTags.length - 1
-                        }
-                        onClick={() =>
-                          void handleMoveMoodTag(tag.id, 1)
-                        }
-                      >
-                        ↓
-                      </button>
-                      <button
-                        type="button"
-                        className="bookmark-text-button is-danger"
-                        disabled={moodTagSaving}
-                        onClick={() => void handleDeleteMoodTag(tag)}
-                      >
-                        삭제
-                      </button>
-                    </div>
-                  </li>
-                ))}
-              </ul>
+                      />
+                    ))}
+                  </ul>
+                </SortableContext>
+              </DndContext>
             )}
             <p className="bookmark-form-hint">
               삭제한 태그를 선택한 날짜 기록은 기분 없음으로 바뀝니다.
