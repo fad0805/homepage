@@ -11,7 +11,53 @@ export interface AuthorProfile {
   title: string;
   subtitle?: string | null;
   banner_url?: string | null;
+  author_banner_url?: string | null;
+  character_modal_banner_url?: string | null;
   profile: string;
+}
+
+export interface AuthorPageAppearance {
+  layout_key: "editorial" | "side" | "collapsible" | "drawer";
+  side_position: "left" | "right";
+  default_theme?: "light" | "dark";
+  color_theme?: "mint" | "sepia" | "blue" | "rose";
+  color_background?: string | null;
+  color_content?: string | null;
+  color_accent?: string | null;
+  color_background_dark?: string | null;
+  color_content_dark?: string | null;
+  color_accent_dark?: string | null;
+}
+
+export interface AuthorPageData {
+  user_id: number;
+  slug: string;
+  display_order: number;
+  nickname: string;
+  profile: AuthorProfile | null;
+  author_banner_url: string | null;
+  character_modal_banner_url: string | null;
+  links_banner_url: string | null;
+  links_integrated_banner_url: string | null;
+  links_integrated_banner_visible: boolean;
+  links_integrated_banner_order: number;
+  index_html: string;
+  appearance: AuthorPageAppearance | null;
+}
+
+export interface AuthorDirectoryEntry {
+  user_id: number;
+  display_order: number;
+  nickname: string;
+  slug: string | null;
+  color_theme: "mint" | "sepia" | "blue" | "rose";
+  color_background: string | null;
+  color_content: string | null;
+  color_accent: string | null;
+  author_banner_url: string | null;
+  character_modal_banner_url: string | null;
+  links_banner_url: string | null;
+  profile: AuthorProfile | null;
 }
 
 /**
