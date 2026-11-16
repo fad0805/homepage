@@ -1,0 +1,130 @@
+@use 'variables' as *;
+
+.index-content {
+  width: 100%;
+  padding: 4rem 3.5rem 7rem;
+  box-sizing: border-box;
+  color: var(--foreground);
+
+  /* Only the small label directly before a title is treated as an
+     eyebrow. A plain paragraph entered on its own keeps normal body text. */
+  > p:first-child:has(+ h2) {
+    margin: 0 0 1.1rem;
+    color: var(--home-muted);
+    font-size: 0.64rem;
+    letter-spacing: 0.24em;
+    text-transform: uppercase;
+  }
+
+  h1,
+  > h2:first-of-type {
+    margin: 0;
+    color: var(--title-color);
+    font-family: Eulyoo1945-SemiBold, Arial, Helvetica, sans-serif;
+    font-size: clamp(1.89rem, 3.78vw, 2.7rem);
+    line-height: 1.36;
+    letter-spacing: -0.015em;
+  }
+
+  > h2:not(:first-of-type),
+  h3 {
+    margin: 1.5rem 0 0.5rem;
+    color: var(--title-color);
+    font-family: Eulyoo1945-SemiBold, Arial, Helvetica, sans-serif;
+    font-size: 1.25rem;
+    line-height: 1.4;
+  }
+
+  p {
+    margin: 1.4rem 0 0;
+    color: var(--foreground);
+    font-size: 1.05rem;
+    line-height: 1.9;
+  }
+
+  em {
+    color: var(--home-highlight);
+    background: linear-gradient(
+      180deg,
+      transparent 62%,
+      var(--home-highlight-bg) 62%
+    );
+    font-style: normal;
+  }
+
+  strong {
+    color: var(--title-color);
+  }
+
+  mark {
+    padding: 0 0.12em;
+    border-radius: 0.15em;
+    color: inherit;
+  }
+
+  a {
+    color: var(--title-color);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+
+  img {
+    display: block;
+    max-width: 100%;
+    height: auto;
+    margin: 1.2rem 0;
+    border-radius: 0.6rem;
+  }
+
+  ul,
+  ol {
+    margin: 1rem 0;
+    padding-left: 1.5rem;
+    color: var(--foreground);
+    font-size: 1.05rem;
+    line-height: 1.8;
+  }
+
+  blockquote {
+    margin: 1.2rem 0;
+    padding: 0.8rem 1.1rem;
+    border-left: 3px solid var(--title-color);
+    background: color-mix(in srgb, var(--theme-sub) 55%, transparent);
+    color: var(--foreground);
+  }
+
+  hr {
+    margin: 1.5rem 0;
+    border: none;
+    border-top: 1px solid rgba(0, 0, 0, 0.15);
+  }
+}
+
+.index-content--author {
+  padding: 0 0 2.5rem;
+  margin-bottom: 2.5rem;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.12);
+
+  > p:first-child:has(+ h2) {
+    margin-bottom: 1rem;
+  }
+
+  h1,
+  > h2:first-of-type {
+    font-size: clamp(1.7rem, 4vw, 2.35rem);
+  }
+}
+
+[data-theme='dark'] .index-content--author {
+  border-bottom-color: rgba(255, 255, 255, 0.14);
+}
+
+@media (max-width: $breakpoint-md) {
+  .index-content {
+    padding: 3rem 1.95rem 5rem;
+  }
+
+  .index-content--author {
+    padding: 0 0 2rem;
+  }
+}

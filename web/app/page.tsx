@@ -1,27 +1,34 @@
-import "@/public/styles/main.scss";
+import { redirect } from "next/navigation";
 
-export default function Home() {
+import { IndexContent } from "@/components/index-content";
+import { DEFAULT_INDEX_HTML } from "@/config/index-page";
+import { fetchSingleAuthorSlug } from "@/lib/author-page";
+import { serverApiFetch } from "@/lib/server-api";
+
+import "@/public/styles/main.scss";
+import "@/public/styles/index-content.scss";
+
+export default async function Home() {
+  const singleAuthorSlug = await fetchSingleAuthorSlug();
+  if (singleAuthorSlug) {
+    redirect(`/@${singleAuthorSlug}`);
+  }
+
+  let contentHtml = DEFAULT_INDEX_HTML;
+
+  try {
+    const page = await serverApiFetch<{ content_html: string }>(
+      "/index-page?scope=integrated",
+      { tags: ["index"] },
+    );
+    contentHtml = page.content_html;
+  } catch (error) {
+    console.error("Failed to load the integrated index page.", error);
+  }
+
   return (
     <div id="main">
-      <section className="hero">
-        <div className="hero__copy">
-          <p className="hero__eyebrow">Missing Island · Story Archive</p>
-
-          <h1 className="hero__title">
-            당신은 어떤
-            <br />
-            <span className="hero__title-accent">이야기</span>를
-            <br />
-            가지고 있나요?
-          </h1>
-
-          <p className="hero__lead">
-            어서오세요.
-            <br />
-            이 곳은 어디에나 있지만, 어디에도 없는 섬.
-          </p>
-        </div>
-      </section>
+      <IndexContent html={contentHtml} />
     </div>
   );
 }

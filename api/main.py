@@ -23,6 +23,7 @@ from routers import (
     embeds,
     gallery,
     illustrations,
+    index_page,
     links,
     memos,
     profiles,
@@ -98,6 +99,7 @@ ensure_upload_dir()
 app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
 
 app.include_router(appearance.router, prefix="/appearance", tags=["appearance"])
+app.include_router(index_page.router, prefix="/index-page", tags=["index-page"])
 app.include_router(archive.router, prefix="/archive", tags=["archive"])
 app.include_router(characters.router, prefix="/characters", tags=["characters"])
 app.include_router(embeds.router, prefix="/embeds", tags=["embeds"])

@@ -44,11 +44,21 @@ export function middleware(request: NextRequest) {
   requestHeaders.set("x-nonce", nonce);
   requestHeaders.set("Content-Security-Policy", csp);
 
+  const handle = pathname.startsWith("/@") ? pathname.split("/")[1] ?? "" : "";
+  const slug = handle.slice(1);
+  const rest = slug ? pathname.slice(1 + handle.length) : "";
+  const authorAdmin =
+    Boolean(slug) && (rest === "/admin" || rest.startsWith("/admin/"));
+  const authorMemo =
+    Boolean(slug) && (rest === "/memo" || rest.startsWith("/memo/"));
+
   const requiresAuth =
     pathname === "/memo" ||
     pathname.startsWith("/memo/") ||
     pathname === "/admin" ||
-    pathname.startsWith("/admin/");
+    pathname.startsWith("/admin/") ||
+    authorAdmin ||
+    authorMemo;
 
   if (requiresAuth) {
     const hasAuthCookie =
@@ -56,11 +66,29 @@ export function middleware(request: NextRequest) {
       request.cookies.has("refresh_token");
 
     if (!hasAuthCookie) {
+      const signinPath =
+        authorAdmin || authorMemo ? `/${handle}/signin` : "/signin";
       return withSecurityHeaders(
-        NextResponse.redirect(new URL("/signin", request.url)),
+        NextResponse.redirect(new URL(signinPath, request.url)),
         csp,
       );
     }
+  }
+
+  if (slug) {
+    requestHeaders.set("x-author-slug", slug);
+    const target = request.nextUrl.clone();
+    target.pathname = `/authors/${slug}${rest}`;
+    const response = NextResponse.rewrite(target, {
+      request: { headers: requestHeaders },
+    });
+    if (authorAdmin || authorMemo) {
+      response.headers.set(
+        "X-Robots-Tag",
+        "noindex, nofollow, noarchive, noimageindex",
+      );
+    }
+    return withSecurityHeaders(response, csp);
   }
 
   return withSecurityHeaders(

@@ -17,7 +17,6 @@ import {
   type ColorOverrides,
 } from "@/lib/color-theme";
 import { serverApiFetch } from "@/lib/server-api";
-import { getCurrentUser } from "@/lib/server-auth";
 
 import "@/public/styles/globals.scss";
 import "@/public/styles/appearance.scss";
@@ -77,8 +76,8 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const currentUser = await getCurrentUser();
   const requestHeaders = await headers();
+  const authorSlug = requestHeaders.get("x-author-slug");
   const nonce = requestHeaders.get("x-nonce") ?? undefined;
   let layoutKey: LayoutKey = DEFAULT_LAYOUT;
   let sidePosition: SidePosition = DEFAULT_SIDE_POSITION;
@@ -86,8 +85,47 @@ export default async function RootLayout({
   let colorTheme: ColorThemeKey = DEFAULT_COLOR_THEME;
   let colorOverrides: ColorOverrides = {};
 
-  try {
-    const appearance = await serverApiFetch<{
+  if (authorSlug) {
+    try {
+      const author = await serverApiFetch<{
+        appearance: {
+          layout_key: LayoutKey;
+          side_position: SidePosition;
+          default_theme?: ThemeMode;
+          color_theme?: ColorThemeKey;
+          color_background?: string | null;
+          color_content?: string | null;
+          color_accent?: string | null;
+          color_background_dark?: string | null;
+          color_content_dark?: string | null;
+          color_accent_dark?: string | null;
+        } | null;
+      }>(`/profiles/by-slug/${encodeURIComponent(authorSlug)}`, {
+        tags: ["profiles"],
+      });
+      const appearance = author.appearance;
+      if (appearance) {
+        layoutKey = appearance.layout_key;
+        sidePosition = appearance.side_position;
+        defaultTheme = appearance.default_theme ?? DEFAULT_THEME_MODE;
+        colorTheme = appearance.color_theme ?? DEFAULT_COLOR_THEME;
+        colorOverrides = {
+          background: appearance.color_background,
+          content: appearance.color_content,
+          accent: appearance.color_accent,
+          darkBackground: appearance.color_background_dark,
+          darkContent: appearance.color_content_dark,
+          darkAccent: appearance.color_accent_dark,
+        };
+      }
+    } catch (error) {
+      console.error("Failed to load the author appearance.", error);
+    }
+  }
+
+  if (!authorSlug) {
+    try {
+      const appearance = await serverApiFetch<{
       layout_key: LayoutKey;
       side_position: SidePosition;
       default_theme?: ThemeMode;
@@ -99,9 +137,8 @@ export default async function RootLayout({
       color_content_dark?: string | null;
       color_accent_dark?: string | null;
     }>(
-      currentUser ? "/users/me/appearance" : "/appearance",
+      "/appearance",
       {
-        auth: Boolean(currentUser),
         tags: ["appearance"],
       },
     );
@@ -117,8 +154,9 @@ export default async function RootLayout({
       darkContent: appearance.color_content_dark,
       darkAccent: appearance.color_accent_dark,
     };
-  } catch (error) {
-    console.error("Failed to load the site appearance.", error);
+    } catch (error) {
+      console.error("Failed to load the site appearance.", error);
+    }
   }
 
   const colorStyle = buildColorThemeStyle(colorTheme, colorOverrides);
@@ -142,6 +180,7 @@ export default async function RootLayout({
             <VisitTracker />
             <Shortcuts>
               <SiteShell
+                authorSlug={authorSlug}
                 layoutKey={layoutKey}
                 sidePosition={sidePosition}
                 colorTheme={colorTheme}
