@@ -28,6 +28,7 @@ from models.characters import Character, CharacterRelationship, Location
 from models.index_page import IndexPage
 from models.illustrations import Illustration, IllustrationImage
 from models.links import Category, Link
+from models.memos import Memo
 from models.planner import PlannerEvent
 from models.profiles import Profile
 from models.users import AuthorSettings, User
@@ -122,6 +123,10 @@ def _owner_from_user_id(obj: Any) -> int | None:
 def _owner_from_actor_or_user(obj: IndexPage) -> int | None:
     return getattr(obj, "user_id", None) or get_audit_actor()
 
+
+# Memos are frequently used scratch notes. They deliberately never create
+# planner history, including create/update/delete events.
+_IGNORED_MODELS = (Memo,)
 
 TRACKED: dict[type, _Tracked] = {
     BookCategory: _Tracked(
@@ -258,6 +263,9 @@ _IMAGE_FIELDS = frozenset(
         "representative_image_id",
     }
 )
+
+# Field-level safety net for scratch fields that should never be audited.
+_IGNORED_FIELDS = frozenset({"notes"})
 
 _HTML_BLOCK_TAGS = {
     "p",
@@ -408,6 +416,8 @@ def _changes_for_field(
     old: Any,
     new: Any,
 ) -> list[dict]:
+    if field in _IGNORED_FIELDS:
+        return []
     if field == "hashed_password":
         return [{"field": "password", "kind": "password_changed"}]
     if field in tracked.html_fields:
@@ -456,6 +466,8 @@ def _dedupe_changes(changes: list[dict]) -> list[dict]:
 
 
 def _meta_for(obj: Any) -> _Tracked | None:
+    if isinstance(obj, _IGNORED_MODELS):
+        return None
     return TRACKED.get(type(obj))
 
 
