@@ -530,6 +530,7 @@ function PlannerNoteContent({
                     className={`planner-note-check${
                       item.checked ? " is-done" : ""
                     }`}
+                    onClick={(event) => event.stopPropagation()}
                   >
                     <input
                       type="checkbox"
@@ -617,6 +618,7 @@ export default function PlannerClient({ username }: { username: string }) {
   const [error, setError] = useState<string | null>(null);
   const [recordCompleted, setRecordCompleted] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState<PlannerEvent | null>(null);
+  const [selectedTask, setSelectedTask] = useState<PlannerTask | null>(null);
   const [preview, setPreview] = useState<PlannerEventPreview | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [taskModalOpen, setTaskModalOpen] = useState(false);
@@ -723,12 +725,24 @@ export default function PlannerClient({ username }: { username: string }) {
   }, [activeTab]);
 
   useEffect(() => {
-    if (!selectedEvent && !taskModalOpen && !chipManagerOpen) return;
+    if (
+      !selectedEvent &&
+      !selectedTask &&
+      !taskModalOpen &&
+      !chipManagerOpen
+    ) {
+      return;
+    }
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
       if (selectedEvent) {
         setSelectedEvent(null);
         setPreview(null);
+        return;
+      }
+      if (selectedTask) {
+        setSelectedTask(null);
+        setError(null);
         return;
       }
       if (taskModalOpen) {
@@ -750,7 +764,7 @@ export default function PlannerClient({ username }: { username: string }) {
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [selectedEvent, taskModalOpen, chipManagerOpen, today]);
+  }, [selectedEvent, selectedTask, taskModalOpen, chipManagerOpen, today]);
 
   const cells = useMemo(() => monthCells(viewMonth), [viewMonth]);
   const activeTasks = useMemo(
@@ -1272,6 +1286,7 @@ export default function PlannerClient({ username }: { username: string }) {
       task.schedule_type === "undated"
         ? "single"
         : task.schedule_type;
+    setSelectedTask(null);
     setEditingId(task.id);
     setRecordCompleted(false);
     setForm({
@@ -1410,6 +1425,9 @@ export default function PlannerClient({ username }: { username: string }) {
       await apiFetch(`/api/planner/tasks/${task.id}/complete`, {
         method: "POST",
       });
+      setSelectedTask((previous) =>
+        previous?.id === task.id ? null : previous,
+      );
       if (editingId === task.id) resetForm();
       await refresh();
     } catch (reason) {
@@ -1440,6 +1458,9 @@ export default function PlannerClient({ username }: { username: string }) {
         `/api/planner/tasks/${task.id}/deactivate`,
         { method: "POST" },
       );
+      setSelectedTask((previous) =>
+        previous?.id === task.id ? null : previous,
+      );
       if (editingId === task.id) closeTaskModal();
       await refresh();
     } catch (reason) {
@@ -1467,6 +1488,9 @@ export default function PlannerClient({ username }: { username: string }) {
     setError(null);
     try {
       await apiFetch(`/api/planner/tasks/${task.id}`, { method: "DELETE" });
+      setSelectedTask((previous) =>
+        previous?.id === task.id ? null : previous,
+      );
       if (editingId === task.id) resetForm();
       await refresh();
     } catch (reason) {
@@ -1538,10 +1562,16 @@ export default function PlannerClient({ username }: { username: string }) {
     setBusyKey(key);
     setError(null);
     try {
-      await apiFetch<PlannerTask>(`/api/planner/tasks/${task.id}`, {
-        method: "PATCH",
-        body: JSON.stringify({ pinned: !task.pinned }),
-      });
+      const updated = await apiFetch<PlannerTask>(
+        `/api/planner/tasks/${task.id}`,
+        {
+          method: "PATCH",
+          body: JSON.stringify({ pinned: !task.pinned }),
+        },
+      );
+      setSelectedTask((previous) =>
+        previous?.id === task.id ? updated : previous,
+      );
       await refresh();
     } catch (reason) {
       setError(
@@ -1559,6 +1589,9 @@ export default function PlannerClient({ username }: { username: string }) {
       previous.map((task) =>
         task.id === taskId ? { ...task, notes } : task,
       ),
+    );
+    setSelectedTask((previous) =>
+      previous?.id === taskId ? { ...previous, notes } : previous,
     );
     setSearchResults((previous) =>
       previous
@@ -1903,6 +1936,16 @@ export default function PlannerClient({ username }: { username: string }) {
     setPreviewLoading(false);
   };
 
+  const openTaskDetail = (task: PlannerTask) => {
+    setError(null);
+    setSelectedTask(task);
+  };
+
+  const closeTaskDetail = () => {
+    setSelectedTask(null);
+    setError(null);
+  };
+
   const renderTaskMeta = (task: PlannerTask) => {
     if (
       task.schedule_type === "undated" ||
@@ -1939,20 +1982,29 @@ export default function PlannerClient({ username }: { username: string }) {
   };
 
   const renderActiveTask = (task: PlannerTask) => (
-    <li className="planner-task-item" key={task.id}>
+    <li
+      className="planner-task-item planner-task-card"
+      key={task.id}
+      role="button"
+      tabIndex={0}
+      onClick={() => openTaskDetail(task)}
+      onKeyDown={(event) => {
+        if (event.target !== event.currentTarget) return;
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          openTaskDetail(task);
+        }
+      }}
+    >
       <div className="planner-task-main">
         <div className="planner-task-title-row">
-          <span
-            className="planner-task-color"
-            style={{ backgroundColor: taskColor(task) }}
-            aria-hidden="true"
-          />
           <strong>{task.title}</strong>
-          {task.pinned ? (
-            <span className="planner-pin-badge">고정</span>
-          ) : null}
         </div>
-        {renderTaskMeta(task)}
+        <p className="planner-task-meta planner-task-deadline">
+          {task.end_date
+            ? `마감 ${formatDateOnly(task.end_date)}`
+            : "마감 미지정"}
+        </p>
         {task.notes ? (
           <PlannerNoteContent
             notes={task.notes}
@@ -1962,55 +2014,6 @@ export default function PlannerClient({ username }: { username: string }) {
             }
           />
         ) : null}
-      </div>
-      <div className="planner-task-actions">
-        <button
-          type="button"
-          className={`planner-text-button${task.pinned ? " is-active" : ""}`}
-          aria-pressed={task.pinned}
-          disabled={busyKey !== null}
-          onClick={() => handlePin(task)}
-        >
-          {busyKey === `pin-${task.id}`
-            ? "변경 중"
-            : task.pinned
-              ? "고정 해제"
-              : "고정"}
-        </button>
-        <button
-          type="button"
-          className="planner-text-button"
-          disabled={busyKey !== null}
-          onClick={() => startEditing(task)}
-        >
-          수정
-        </button>
-        <button
-          type="button"
-          className="planner-text-button"
-          disabled={busyKey !== null}
-          onClick={() => handleDeactivate(task)}
-        >
-          {busyKey === `deactivate-${task.id}`
-            ? "비활성 중"
-            : "비활성화"}
-        </button>
-        <button
-          type="button"
-          className="planner-text-button is-accent"
-          disabled={busyKey !== null}
-          onClick={() => handleComplete(task)}
-        >
-          {busyKey === `complete-${task.id}` ? "완료 중" : "완료"}
-        </button>
-        <button
-          type="button"
-          className="planner-text-button is-danger"
-          disabled={busyKey !== null}
-          onClick={() => handleTrash(task)}
-        >
-          {busyKey === `trash-${task.id}` ? "이동 중" : "삭제"}
-        </button>
       </div>
     </li>
   );
@@ -3134,6 +3137,115 @@ export default function PlannerClient({ username }: { username: string }) {
                         : "추가"}
               </button>
             </form>
+          </div>
+        </div>
+      ) : null}
+
+      {selectedTask ? (
+        <div
+          className="planner-modal-overlay is-task"
+          role="presentation"
+          onClick={closeTaskDetail}
+        >
+          <div
+            className="planner-modal planner-task-detail-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-label="일정 상세"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="planner-modal-header">
+              <div>
+                <p className="planner-modal-eyebrow">일정</p>
+                <h2>{selectedTask.title}</h2>
+                <p className="planner-task-detail-meta">
+                  <span>
+                    {selectedTask.end_date
+                      ? `마감 ${formatDateOnly(selectedTask.end_date)}`
+                      : "마감 미지정"}
+                  </span>
+                  {selectedTask.pinned ? (
+                    <span className="planner-pin-badge">고정</span>
+                  ) : null}
+                </p>
+              </div>
+              <button
+                type="button"
+                className="planner-icon-button"
+                aria-label="닫기"
+                onClick={closeTaskDetail}
+              >
+                ×
+              </button>
+            </div>
+            {error ? <p className="planner-error">{error}</p> : null}
+            {selectedTask.notes ? (
+              <div className="planner-task-detail-notes">
+                <h3>메모</h3>
+                <PlannerNoteContent
+                  notes={selectedTask.notes}
+                  disabled={noteSavingId !== null}
+                  onToggle={(index) =>
+                    void handleToggleTaskNote(selectedTask, index)
+                  }
+                />
+              </div>
+            ) : null}
+            <div className="planner-task-detail-actions">
+              <button
+                type="button"
+                className={`planner-text-button${
+                  selectedTask.pinned ? " is-active" : ""
+                }`}
+                aria-pressed={selectedTask.pinned}
+                disabled={busyKey !== null}
+                onClick={() => handlePin(selectedTask)}
+              >
+                {busyKey === `pin-${selectedTask.id}`
+                  ? "변경 중"
+                  : selectedTask.pinned
+                    ? "고정 해제"
+                    : "고정"}
+              </button>
+              <button
+                type="button"
+                className="planner-text-button"
+                disabled={busyKey !== null}
+                onClick={() => startEditing(selectedTask)}
+              >
+                수정
+              </button>
+              <button
+                type="button"
+                className="planner-text-button"
+                disabled={busyKey !== null}
+                onClick={() => handleDeactivate(selectedTask)}
+              >
+                {busyKey === `deactivate-${selectedTask.id}`
+                  ? "비활성 중"
+                  : "비활성화"}
+              </button>
+              <button
+                type="button"
+                className="planner-text-button is-accent"
+                disabled={busyKey !== null}
+                onClick={() => handleComplete(selectedTask)}
+              >
+                {busyKey === `complete-${selectedTask.id}`
+                  ? "완료 중"
+                  : "완료"}
+              </button>
+              <button
+                type="button"
+                className="planner-text-button is-danger"
+                disabled={busyKey !== null}
+                onClick={() => handleTrash(selectedTask)}
+              >
+                {busyKey === `trash-${selectedTask.id}`
+                  ? "이동 중"
+                  : "삭제"}
+              </button>
+            </div>
           </div>
         </div>
       ) : null}

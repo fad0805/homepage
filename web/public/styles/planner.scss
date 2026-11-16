@@ -920,6 +920,32 @@
   background: color-mix(in srgb, var(--input-background) 52%, transparent);
 }
 
+.planner-task-card {
+  cursor: pointer;
+  transition:
+    border-color 0.16s ease,
+    background 0.16s ease,
+    box-shadow 0.16s ease;
+
+  &:hover {
+    border-color: color-mix(
+      in srgb,
+      var(--theme-main) 58%,
+      transparent
+    );
+    background: var(--planner-soft-bg);
+  }
+
+  &:focus-visible {
+    outline: 1px solid var(--title-color);
+    outline-offset: 1px;
+  }
+}
+
+.planner-task-card .planner-task-meta {
+  margin-top: 0.3rem;
+}
+
 .planner-task-main {
   min-width: 0;
 }
@@ -1202,6 +1228,54 @@
 
 .planner-task-modal {
   width: min(32rem, 100%);
+}
+
+.planner-task-detail-modal {
+  width: min(32rem, 100%);
+}
+
+.planner-task-detail-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0.35rem 0 0;
+  font-size: 0.68rem;
+  opacity: 0.65;
+}
+
+.planner-task-detail-modal .planner-error {
+  margin-top: 0.75rem;
+}
+
+.planner-task-detail-notes {
+  margin-top: 0.9rem;
+  padding-top: 0.85rem;
+  border-top: 1px solid
+    color-mix(in srgb, var(--theme-main) 24%, transparent);
+
+  h3 {
+    margin: 0;
+    color: var(--title-color);
+    font-size: 0.76rem;
+    font-weight: normal;
+  }
+
+  .planner-note-content {
+    margin-top: 0.45rem;
+    font-size: 0.74rem;
+    opacity: 0.88;
+  }
+}
+
+.planner-task-detail-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-top: 1rem;
+  padding-top: 0.85rem;
+  border-top: 1px solid
+    color-mix(in srgb, var(--theme-main) 24%, transparent);
 }
 
 .planner-chip-modal {
