@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 
-function CloverIcon({ filled }: { filled: boolean }) {
+export function CloverIcon({ filled }: { filled: boolean }) {
   return (
     <svg
       className="clover-icon"

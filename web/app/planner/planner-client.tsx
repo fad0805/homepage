@@ -12,12 +12,9 @@ import {
   useState,
 } from "react";
 
+import { CloverIcon } from "@/app/bookmark/clover-rating";
 import { apiFetch } from "@/lib/api";
-import {
-  routineScheduleLabel,
-  type BookmarkPeriod,
-  type BookmarkRoutine,
-} from "@/lib/bookmark";
+import type { BookmarkPeriod } from "@/lib/bookmark";
 import {
   dateInputValue,
   formatDateTime,
@@ -628,10 +625,8 @@ export default function PlannerClient({ username }: { username: string }) {
   const [recordCompleted, setRecordCompleted] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState<PlannerEvent | null>(null);
   const [selectedTask, setSelectedTask] = useState<PlannerTask | null>(null);
-  const [dayRoutines, setDayRoutines] = useState<BookmarkRoutine[]>([]);
-  const [routineSavingId, setRoutineSavingId] = useState<number | null>(
-    null,
-  );
+  const [dayBookmark, setDayBookmark] =
+    useState<BookmarkPeriod | null>(null);
   const [preview, setPreview] = useState<PlannerEventPreview | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [taskModalOpen, setTaskModalOpen] = useState(false);
@@ -713,15 +708,15 @@ export default function PlannerClient({ username }: { username: string }) {
     }
   }, []);
 
-  const loadDayRoutines = useCallback(async (date: string) => {
+  const loadDayBookmark = useCallback(async (date: string) => {
     try {
       const data = await apiFetch<BookmarkPeriod>(
         `/api/bookmark?period_type=day&period_start=${date}`,
         { cache: "no-store" },
       );
-      setDayRoutines(data.routines);
+      setDayBookmark(data);
     } catch {
-      setDayRoutines([]);
+      setDayBookmark(null);
     }
   }, []);
 
@@ -738,8 +733,8 @@ export default function PlannerClient({ username }: { username: string }) {
   }, [loadEvents, viewMonth]);
 
   useEffect(() => {
-    void loadDayRoutines(selectedDate);
-  }, [loadDayRoutines, selectedDate]);
+    void loadDayBookmark(selectedDate);
+  }, [loadDayBookmark, selectedDate]);
 
   useEffect(() => {
     if (activeTab === "colors") return;
@@ -1691,52 +1686,6 @@ export default function PlannerClient({ username }: { username: string }) {
     }
   };
 
-  const handleToggleDayRoutine = async (routine: BookmarkRoutine) => {
-    if (routineSavingId !== null) return;
-    const occurrence = routine.occurrences[0];
-    const occurrenceDate = occurrence?.date ?? selectedDate;
-    const nextCount = occurrence?.done ? 0 : 1;
-    setRoutineSavingId(routine.id);
-    setError(null);
-    setDayRoutines((previous) =>
-      previous.map((current) =>
-        current.id === routine.id
-          ? {
-              ...current,
-              completed_count: nextCount,
-              occurrences: current.occurrences.map((item) =>
-                item.date === occurrenceDate
-                  ? { ...item, done: nextCount > 0 }
-                  : item,
-              ),
-            }
-          : current,
-      ),
-    );
-    try {
-      await apiFetch<BookmarkRoutine>(
-        `/api/bookmark/routines/${routine.id}/check`,
-        {
-          method: "PUT",
-          body: JSON.stringify({
-            period_type: "day",
-            period_start: occurrenceDate,
-            count: nextCount,
-          }),
-        },
-      );
-    } catch (reason) {
-      setError(
-        reason instanceof Error
-          ? reason.message
-          : "루틴 체크 상태를 변경하지 못했습니다.",
-      );
-      await loadDayRoutines(selectedDate);
-    } finally {
-      setRoutineSavingId(null);
-    }
-  };
-
   const handleCreateColor = async (selectForForm: boolean) => {
     if (colorSaving) return;
     setColorSaving(true);
@@ -2134,53 +2083,56 @@ export default function PlannerClient({ username }: { username: string }) {
     </div>
   );
 
-  const renderDayRoutines = () =>
-    dayRoutines.length === 0 ? null : (
-      <div className="planner-routine-section">
-        <h3>루틴</h3>
-        <ul className="planner-routine-list">
-          {dayRoutines.map((routine) => {
-            const occurrence = routine.occurrences[0];
-            const done = occurrence?.done ?? false;
-            return (
-              <li
-                className={`planner-routine-item${
-                  done ? " is-done" : ""
-                }`}
-                key={routine.id}
-              >
-                <label className="planner-routine-check">
-                  <input
-                    type="checkbox"
-                    checked={done}
-                    disabled={routineSavingId !== null}
-                    onChange={() =>
-                      void handleToggleDayRoutine(routine)
-                    }
-                  />
-                  <span>{routine.title}</span>
-                </label>
-                <p className="planner-routine-schedule">
-                  {routineScheduleLabel(routine)}
-                </p>
-                {routine.notes ? (
-                  <p className="planner-routine-notes">
-                    {routine.notes}
-                  </p>
-                ) : null}
-              </li>
-            );
-          })}
-        </ul>
+  const renderDayBookmark = () => {
+    const goal = dayBookmark?.goal;
+    const rating = dayBookmark?.rating?.rating ?? 0;
+    const review = dayBookmark?.review;
+    if (!goal?.content && rating <= 0 && !review?.content) {
+      return null;
+    }
+    return (
+      <div className="planner-bookmark-section">
+        <h3>책갈피 기록</h3>
+        {goal?.content ? (
+          <div className="planner-bookmark-block">
+            <span className="planner-bookmark-label">목표</span>
+            <p className="planner-bookmark-text">{goal.content}</p>
+          </div>
+        ) : null}
+        {rating > 0 ? (
+          <div className="planner-bookmark-block">
+            <span className="planner-bookmark-label">별점</span>
+            <span
+              className="planner-bookmark-rating"
+              aria-label={`${rating}점`}
+            >
+              {[1, 2, 3, 4, 5].map((score) => (
+                <span className="planner-clover" key={score}>
+                  <CloverIcon filled={score <= rating} />
+                </span>
+              ))}
+              <span className="planner-bookmark-rating-value">
+                {rating} / 5
+              </span>
+            </span>
+          </div>
+        ) : null}
+        {review?.content ? (
+          <div className="planner-bookmark-block">
+            <span className="planner-bookmark-label">회고</span>
+            <p className="planner-bookmark-text">{review.content}</p>
+          </div>
+        ) : null}
       </div>
     );
+  };
 
   const renderDayDetail = (
     dateTasks: PlannerTask[],
     dateEvents: PlannerEvent[],
   ) => (
     <>
-      {renderDayRoutines()}
+      {renderDayBookmark()}
       {renderDayTasks(dateTasks)}
       {renderHistory(dateEvents)}
     </>
