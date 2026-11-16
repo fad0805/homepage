@@ -110,6 +110,13 @@
   }
 }
 
+.bookmark-today-date {
+  padding: 0.2rem 0.45rem;
+  color: var(--title-color);
+  font-size: 0.72rem;
+  opacity: 0.72;
+}
+
 .bookmark-period-nav {
   display: flex;
   align-items: center;
@@ -961,6 +968,11 @@
 
   .bookmark-period-tabs {
     justify-content: center;
+  }
+
+  .bookmark-today-date {
+    width: 100%;
+    text-align: center;
   }
 
   .bookmark-period-nav {

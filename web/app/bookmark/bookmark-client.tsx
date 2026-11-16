@@ -24,6 +24,7 @@ import { CloverRating } from "./clover-rating";
 import "@/public/styles/bookmark.scss";
 
 type MonthlyMode = "day" | "nth";
+type BookmarkView = "today" | BookmarkPeriodType;
 
 const PERIOD_TYPES: BookmarkPeriodType[] = [
   "year",
@@ -38,6 +39,11 @@ const PERIOD_LABELS: Record<BookmarkPeriodType, string> = {
   month: "월",
   week: "주",
   day: "일",
+};
+const VIEWS: BookmarkView[] = ["today", ...PERIOD_TYPES];
+const VIEW_LABELS: Record<BookmarkView, string> = {
+  today: "오늘",
+  ...PERIOD_LABELS,
 };
 const PERIOD_FREQUENCY: Record<
   BookmarkPeriodType,
@@ -152,14 +158,23 @@ function shiftPeriod(
   );
 }
 
-function occurrenceLabel(value: string, type: BookmarkPeriodType) {
+function occurrenceLabel(
+  value: string,
+  view: BookmarkView,
+  frequency: BookmarkRoutineFrequency,
+) {
   const date = parseDateKey(value);
-  if (type === "week") {
+  if (view === "week") {
     return `${WEEKDAY_SHORT[date.getUTCDay()]} ${date.getUTCDate()}`;
   }
-  if (type === "day") return "완료";
-  if (type === "month") return "이번 달";
-  if (type === "quarter") return "이번 분기";
+  if (view === "today") {
+    if (frequency === "monthly") return "이번 달";
+    if (frequency === "yearly") return "올해";
+    return "오늘";
+  }
+  if (view === "day") return "완료";
+  if (view === "month") return "이번 달";
+  if (view === "quarter") return "이번 분기";
   return "올해";
 }
 
@@ -210,10 +225,8 @@ function periodLabel(value: string, type: BookmarkPeriodType) {
 
 export default function BookmarkClient({ username }: { username: string }) {
   const initialToday = todayDateInputValue();
-  const [periodType, setPeriodType] = useState<BookmarkPeriodType>("day");
-  const [periodStart, setPeriodStart] = useState(() =>
-    startOfPeriod(initialToday, "day"),
-  );
+  const [view, setView] = useState<BookmarkView>("today");
+  const [periodStart, setPeriodStart] = useState(initialToday);
   const [data, setData] = useState<BookmarkPeriod | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -253,10 +266,13 @@ export default function BookmarkClient({ username }: { username: string }) {
     setLoading(true);
     setError(null);
     try {
-      const next = await apiFetch<BookmarkPeriod>(
-        `/api/bookmark?period_type=${periodType}&period_start=${periodStart}`,
-        { cache: "no-store" },
-      );
+      const endpoint =
+        view === "today"
+          ? `/api/bookmark/today?period_start=${periodStart}`
+          : `/api/bookmark?period_type=${view}&period_start=${periodStart}`;
+      const next = await apiFetch<BookmarkPeriod>(endpoint, {
+        cache: "no-store",
+      });
       setData(next);
       setGoalContent(next.goal?.content ?? "");
       setRating(next.rating?.rating ?? 0);
@@ -272,29 +288,37 @@ export default function BookmarkClient({ username }: { username: string }) {
     } finally {
       setLoading(false);
     }
-  }, [periodStart, periodType]);
+  }, [periodStart, view]);
 
   useEffect(() => {
     void loadPeriod();
   }, [loadPeriod]);
 
-  const changePeriodType = (next: BookmarkPeriodType) => {
-    setPeriodType(next);
-    setPeriodStart((previous) => startOfPeriod(previous, next));
+  const changeView = (next: BookmarkView) => {
+    setView(next);
+    if (next === "today") {
+      setPeriodStart(todayDateInputValue());
+    } else {
+      setPeriodStart((previous) => startOfPeriod(previous, next));
+    }
     closeRoutineModal();
   };
 
   const goToday = () => {
-    setPeriodStart(startOfPeriod(todayDateInputValue(), periodType));
+    const type = view === "today" ? "day" : view;
+    setPeriodStart(startOfPeriod(todayDateInputValue(), type));
   };
 
   const movePeriod = (delta: number) => {
-    setPeriodStart((previous) =>
-      shiftPeriod(previous, periodType, delta),
-    );
+    if (view === "today") return;
+    setPeriodStart((previous) => shiftPeriod(previous, view, delta));
   };
 
   const routines = data?.routines ?? [];
+  const recordPeriodType: BookmarkPeriodType =
+    view === "today" ? "day" : view;
+  const unitView: BookmarkPeriodType =
+    view === "today" ? "day" : view;
 
   const openCreateRoutine = () => {
     setRoutineModalOpen(true);
@@ -369,7 +393,8 @@ export default function BookmarkClient({ username }: { username: string }) {
   };
 
   const modalFrequency =
-    editingRoutine?.frequency ?? PERIOD_FREQUENCY[periodType];
+    editingRoutine?.frequency ??
+    (view === "today" ? "daily" : PERIOD_FREQUENCY[view]);
 
   const routinePayload = () => {
     if (modalFrequency === "weekly") {
@@ -553,7 +578,7 @@ export default function BookmarkClient({ username }: { username: string }) {
       const saved = await apiFetch<BookmarkGoal>("/api/bookmark/goals", {
         method: "PUT",
         body: JSON.stringify({
-          period_type: periodType,
+          period_type: recordPeriodType,
           period_start: periodStart,
           content: goalContent,
         }),
@@ -586,7 +611,7 @@ export default function BookmarkClient({ username }: { username: string }) {
         {
           method: "PUT",
           body: JSON.stringify({
-            period_type: periodType,
+            period_type: recordPeriodType,
             period_start: periodStart,
             rating: nextRating,
           }),
@@ -620,7 +645,7 @@ export default function BookmarkClient({ username }: { username: string }) {
         {
           method: "PUT",
           body: JSON.stringify({
-            period_type: periodType,
+            period_type: recordPeriodType,
             period_start: periodStart,
             content: reviewContent,
           }),
@@ -645,7 +670,9 @@ export default function BookmarkClient({ username }: { username: string }) {
   const renderRoutines = () =>
     routines.length === 0 ? (
       <p className="bookmark-empty-row">
-        이 기간에 예정된 루틴이 없습니다.
+        {view === "today"
+          ? "오늘 수행할 루틴이 없습니다. 연·분기·월·주·일 탭에서 루틴을 추가할 수 있습니다."
+          : "이 기간에 예정된 루틴이 없습니다."}
       </p>
     ) : (
       <ul className="bookmark-item-list">
@@ -687,7 +714,7 @@ export default function BookmarkClient({ username }: { username: string }) {
                         }
                       />
                       <span>
-                        {occurrenceLabel(occurrence.date, periodType)}
+                        {occurrenceLabel(occurrence.date, view, routine.frequency)}
                       </span>
                     </label>
                   ))}
@@ -726,53 +753,60 @@ export default function BookmarkClient({ username }: { username: string }) {
             <p className="bookmark-eyebrow">{username}의 비공개 기록</p>
             <h1>책갈피</h1>
             <p className="bookmark-description">
-              연·분기·월·주·일 단위로 루틴을 체크하고, 목표와 별점,
-              회고를 남깁니다. 이 화면은 로그인한 본인에게만 보입니다.
+              오늘 수행할 루틴을 먼저 모아 보여주고, 연·분기·월·주·일
+              단위의 현황도 함께 확인할 수 있습니다. 목표와 별점,
+              회고는 선택한 기간에 남깁니다.
             </p>
           </div>
         </header>
 
         <div className="bookmark-period-bar">
           <div className="bookmark-period-tabs" role="tablist">
-            {PERIOD_TYPES.map((type) => (
+            {VIEWS.map((type) => (
               <button
                 type="button"
                 role="tab"
                 key={type}
-                aria-selected={periodType === type}
-                className={periodType === type ? "is-active" : ""}
-                onClick={() => changePeriodType(type)}
+                aria-selected={view === type}
+                className={view === type ? "is-active" : ""}
+                onClick={() => changeView(type)}
               >
-                {PERIOD_LABELS[type]}
+                {VIEW_LABELS[type]}
               </button>
             ))}
           </div>
-          <div className="bookmark-period-nav">
-            <button
-              type="button"
-              className="bookmark-icon-button"
-              aria-label="이전 기간"
-              onClick={() => movePeriod(-1)}
-            >
-              ‹
-            </button>
-            <strong>{periodLabel(periodStart, periodType)}</strong>
-            <button
-              type="button"
-              className="bookmark-icon-button"
-              aria-label="다음 기간"
-              onClick={() => movePeriod(1)}
-            >
-              ›
-            </button>
-            <button
-              type="button"
-              className="bookmark-text-button"
-              onClick={goToday}
-            >
-              오늘
-            </button>
-          </div>
+          {view === "today" ? (
+            <span className="bookmark-today-date">
+              {periodLabel(periodStart, "day")}
+            </span>
+          ) : (
+            <div className="bookmark-period-nav">
+              <button
+                type="button"
+                className="bookmark-icon-button"
+                aria-label="이전 기간"
+                onClick={() => movePeriod(-1)}
+              >
+                ‹
+              </button>
+              <strong>{periodLabel(periodStart, unitView)}</strong>
+              <button
+                type="button"
+                className="bookmark-icon-button"
+                aria-label="다음 기간"
+                onClick={() => movePeriod(1)}
+              >
+                ›
+              </button>
+              <button
+                type="button"
+                className="bookmark-text-button"
+                onClick={goToday}
+              >
+                오늘
+              </button>
+            </div>
+          )}
         </div>
 
         {error ? <p className="bookmark-error">{error}</p> : null}
@@ -786,17 +820,25 @@ export default function BookmarkClient({ username }: { username: string }) {
                 <header className="bookmark-panel-header">
                   <div>
                     <p className="bookmark-panel-eyebrow">
-                      {ROUTINE_SECTION_LABELS[periodType]}
+                      {view === "today"
+                        ? "오늘 수행 가능"
+                        : ROUTINE_SECTION_LABELS[unitView]}
                     </p>
-                    <h2>할일 / 루틴</h2>
+                    <h2>
+                      {view === "today"
+                        ? "오늘의 루틴"
+                        : "할일 / 루틴"}
+                    </h2>
                   </div>
-                  <button
-                    type="button"
-                    className="bookmark-primary"
-                    onClick={openCreateRoutine}
-                  >
-                    추가
-                  </button>
+                  {view !== "today" ? (
+                    <button
+                      type="button"
+                      className="bookmark-primary"
+                      onClick={openCreateRoutine}
+                    >
+                      추가
+                    </button>
+                  ) : null}
                 </header>
                 {renderRoutines()}
               </section>

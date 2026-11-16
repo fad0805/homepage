@@ -227,6 +227,36 @@ def _routine_due(routine: BookmarkRoutine, period_start: date) -> bool:
     return True
 
 
+def _routine_actionable_on(
+    routine: BookmarkRoutine,
+    day: date,
+) -> bool:
+    if routine.frequency == "daily":
+        return True
+    if routine.frequency == "weekly":
+        return day.weekday() in _routine_weekdays(routine)
+    if routine.frequency == "monthly":
+        if routine.day_of_month is not None:
+            return day.day == routine.day_of_month
+        if routine.nth_week is not None and routine.weekday is not None:
+            return (
+                _nth_weekday_day(
+                    day.year,
+                    day.month,
+                    routine.nth_week,
+                    routine.weekday,
+                )
+                == day.day
+            )
+        return False
+    if routine.frequency == "yearly":
+        return (
+            routine.month == day.month
+            and routine.day_of_month == day.day
+        )
+    return False
+
+
 def _routine_weekdays(routine: BookmarkRoutine) -> list[int]:
     values = routine.weekdays
     if not values and routine.weekday is not None:
@@ -605,6 +635,137 @@ def _get_routine_or_404(
             detail="책갈피 루틴을 찾을 수 없습니다.",
         )
     return routine
+
+
+def get_today(
+    db: Session,
+    user_id: int,
+    *,
+    day: date | None = None,
+) -> dict[str, Any]:
+    target = day or _kst_today()
+    routines = (
+        db.query(BookmarkRoutine)
+        .filter(
+            BookmarkRoutine.user_id == user_id,
+            BookmarkRoutine.active.is_(True),
+        )
+        .order_by(BookmarkRoutine.position, BookmarkRoutine.id)
+        .all()
+    )
+    routines = [
+        routine for routine in routines if _routine_actionable_on(routine, target)
+    ]
+    frequency_order = {
+        "daily": 0,
+        "weekly": 1,
+        "monthly": 2,
+        "yearly": 3,
+    }
+    routines.sort(
+        key=lambda routine: (
+            frequency_order.get(routine.frequency, 9),
+            routine.position,
+            routine.id,
+        )
+    )
+    month_start = _month_start(target)
+    year_start = date(target.year, 1, 1)
+    day_ids = [
+        routine.id
+        for routine in routines
+        if routine.frequency in {"daily", "weekly"}
+    ]
+    month_ids = [
+        routine.id
+        for routine in routines
+        if routine.frequency == "monthly"
+    ]
+    year_ids = [
+        routine.id
+        for routine in routines
+        if routine.frequency == "yearly"
+    ]
+
+    def done_ids(
+        routine_ids: list[int],
+        period_type: str,
+        period_start: date,
+    ) -> set[int]:
+        if not routine_ids:
+            return set()
+        rows = (
+            db.query(BookmarkRoutineCheck.routine_id)
+            .filter(
+                BookmarkRoutineCheck.user_id == user_id,
+                BookmarkRoutineCheck.routine_id.in_(routine_ids),
+                BookmarkRoutineCheck.period_type == period_type,
+                BookmarkRoutineCheck.period_start == period_start,
+                BookmarkRoutineCheck.done.is_(True),
+            )
+            .all()
+        )
+        return {row[0] for row in rows}
+
+    day_done = done_ids(day_ids, "day", target)
+    month_done = done_ids(month_ids, "month", month_start)
+    year_done = done_ids(year_ids, "year", year_start)
+
+    def routine_entry(routine: BookmarkRoutine) -> dict[str, Any]:
+        if routine.frequency in {"daily", "weekly"}:
+            period_type = "day"
+            occurrence_date = target
+            done = routine.id in day_done
+        elif routine.frequency == "monthly":
+            period_type = "month"
+            occurrence_date = month_start
+            done = routine.id in month_done
+        else:
+            period_type = "year"
+            occurrence_date = year_start
+            done = routine.id in year_done
+        return _routine_period_dict(
+            routine,
+            period_type=period_type,
+            period_start=occurrence_date,
+            occurrences=[{"date": occurrence_date, "done": done}],
+        )
+
+    goal = (
+        db.query(BookmarkGoal)
+        .filter(
+            BookmarkGoal.user_id == user_id,
+            BookmarkGoal.period_type == "day",
+            BookmarkGoal.period_start == target,
+        )
+        .first()
+    )
+    rating = (
+        db.query(BookmarkRating)
+        .filter(
+            BookmarkRating.user_id == user_id,
+            BookmarkRating.period_type == "day",
+            BookmarkRating.period_start == target,
+        )
+        .first()
+    )
+    review = (
+        db.query(BookmarkReview)
+        .filter(
+            BookmarkReview.user_id == user_id,
+            BookmarkReview.period_type == "day",
+            BookmarkReview.period_start == target,
+        )
+        .first()
+    )
+    return {
+        "period_type": "day",
+        "period_start": target,
+        "routines": [routine_entry(routine) for routine in routines],
+        "goal": goal,
+        "rating": rating,
+        "review": review,
+    }
 
 
 def get_period(

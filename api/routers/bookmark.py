@@ -8,6 +8,7 @@ from crud.bookmark import (
     delete_routine,
     get_period,
     get_routine_history,
+    get_today,
     save_goal,
     save_rating,
     save_review,
@@ -54,6 +55,17 @@ def read_period(
         period_type=period_type,
         period_start=period_start,
     )
+
+
+@router.get("/today", response_model=BookmarkPeriodRead)
+def read_today(
+    response: Response,
+    period_start: date | None = None,
+    db: Session = Depends(get_db),
+    user=Depends(require_auth),
+):
+    _no_store(response)
+    return get_today(db, user.id, day=period_start)
 
 
 @router.post("/routines", response_model=BookmarkRoutineRead)
