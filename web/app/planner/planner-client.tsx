@@ -13,6 +13,7 @@ import {
 } from "react";
 
 import { apiFetch } from "@/lib/api";
+import type { BookmarkPeriod, BookmarkRoutine } from "@/lib/bookmark";
 import {
   dateInputValue,
   formatDateTime,
@@ -623,6 +624,10 @@ export default function PlannerClient({ username }: { username: string }) {
   const [recordCompleted, setRecordCompleted] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState<PlannerEvent | null>(null);
   const [selectedTask, setSelectedTask] = useState<PlannerTask | null>(null);
+  const [dayRoutines, setDayRoutines] = useState<BookmarkRoutine[]>([]);
+  const [routineSavingId, setRoutineSavingId] = useState<number | null>(
+    null,
+  );
   const [preview, setPreview] = useState<PlannerEventPreview | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [taskModalOpen, setTaskModalOpen] = useState(false);
@@ -704,6 +709,18 @@ export default function PlannerClient({ username }: { username: string }) {
     }
   }, []);
 
+  const loadDayRoutines = useCallback(async (date: string) => {
+    try {
+      const data = await apiFetch<BookmarkPeriod>(
+        `/api/bookmark?period_type=day&period_start=${date}`,
+        { cache: "no-store" },
+      );
+      setDayRoutines(data.routines);
+    } catch {
+      setDayRoutines([]);
+    }
+  }, []);
+
   useEffect(() => {
     void loadTasks();
   }, [loadTasks]);
@@ -715,6 +732,10 @@ export default function PlannerClient({ username }: { username: string }) {
   useEffect(() => {
     void loadEvents(viewMonth);
   }, [loadEvents, viewMonth]);
+
+  useEffect(() => {
+    void loadDayRoutines(selectedDate);
+  }, [loadDayRoutines, selectedDate]);
 
   useEffect(() => {
     if (activeTab === "colors") return;
@@ -1666,6 +1687,42 @@ export default function PlannerClient({ username }: { username: string }) {
     }
   };
 
+  const handleToggleDayRoutine = async (routine: BookmarkRoutine) => {
+    if (routineSavingId !== null) return;
+    const nextDone = !routine.done;
+    setRoutineSavingId(routine.id);
+    setError(null);
+    setDayRoutines((previous) =>
+      previous.map((current) =>
+        current.id === routine.id
+          ? { ...current, done: nextDone }
+          : current,
+      ),
+    );
+    try {
+      await apiFetch<BookmarkRoutine>(
+        `/api/bookmark/routines/${routine.id}/check`,
+        {
+          method: "PUT",
+          body: JSON.stringify({
+            period_type: "day",
+            period_start: selectedDate,
+            done: nextDone,
+          }),
+        },
+      );
+    } catch (reason) {
+      setError(
+        reason instanceof Error
+          ? reason.message
+          : "루틴 체크 상태를 변경하지 못했습니다.",
+      );
+      await loadDayRoutines(selectedDate);
+    } finally {
+      setRoutineSavingId(null);
+    }
+  };
+
   const handleCreateColor = async (selectForForm: boolean) => {
     if (colorSaving) return;
     setColorSaving(true);
@@ -2063,11 +2120,42 @@ export default function PlannerClient({ username }: { username: string }) {
     </div>
   );
 
+  const renderDayRoutines = () =>
+    dayRoutines.length === 0 ? null : (
+      <div className="planner-routine-section">
+        <h3>루틴</h3>
+        <ul className="planner-routine-list">
+          {dayRoutines.map((routine) => (
+            <li
+              className={`planner-routine-item${
+                routine.done ? " is-done" : ""
+              }`}
+              key={routine.id}
+            >
+              <label className="planner-routine-check">
+                <input
+                  type="checkbox"
+                  checked={routine.done}
+                  disabled={routineSavingId !== null}
+                  onChange={() => void handleToggleDayRoutine(routine)}
+                />
+                <span>{routine.title}</span>
+              </label>
+              {routine.notes ? (
+                <p className="planner-routine-notes">{routine.notes}</p>
+              ) : null}
+            </li>
+          ))}
+        </ul>
+      </div>
+    );
+
   const renderDayDetail = (
     dateTasks: PlannerTask[],
     dateEvents: PlannerEvent[],
   ) => (
     <>
+      {renderDayRoutines()}
       {renderDayTasks(dateTasks)}
       {renderHistory(dateEvents)}
     </>
