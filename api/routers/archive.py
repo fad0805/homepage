@@ -32,10 +32,12 @@ from core.uploads import get_upload_source, open_uploaded_file
 from db.session import SessionLocal, get_db
 from models.books import Book, BookCategory, Chapter
 from models.characters import Character, CharacterRelationship, Doll, Location
+from models.index_page import IndexPage
 from models.illustrations import Illustration
 from models.links import Category as LinkCategory
 from models.links import Link
 from models.memos import Memo
+from models.planner import PlannerColor, PlannerEvent, PlannerTask
 from models.profiles import Profile
 from models.users import User
 
@@ -60,6 +62,8 @@ DATA_CHARACTERS = "data/characters.json"
 DATA_LINKS = "data/links.json"
 DATA_PROFILE = "data/profile.json"
 DATA_MEMOS = "data/memos.json"
+DATA_PLANNER = "data/planner.json"
+DATA_INDEX_PAGES = "data/index_pages.json"
 CHAPTER_LAYOUT = "per_chapter"
 
 CONTENT_KEYS = [
@@ -74,6 +78,10 @@ CONTENT_KEYS = [
     "link_categories",
     "profiles",
     "memos",
+    "planner_tasks",
+    "planner_colors",
+    "planner_events",
+    "index_pages",
 ]
 
 SECTION_LABELS = {
@@ -84,6 +92,8 @@ SECTION_LABELS = {
     "illustrations": "삽화",
     "links": "놀러가기",
     "memos": "주석",
+    "planner": "부록",
+    "index": "인덱스",
 }
 
 SECTION_CONTENT_KEYS = {
@@ -99,6 +109,12 @@ SECTION_CONTENT_KEYS = {
     "illustrations": ["illustrations"],
     "links": ["links", "link_categories"],
     "memos": ["memos"],
+    "planner": [
+        "planner_tasks",
+        "planner_colors",
+        "planner_events",
+    ],
+    "index": ["index_pages"],
 }
 
 
@@ -563,6 +579,93 @@ def _memo_data(
     ]
 
 
+def _planner_data(
+    db: Session,
+    user_id: int | None,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
+    task_query = db.query(PlannerTask)
+    color_query = db.query(PlannerColor)
+    event_query = db.query(PlannerEvent)
+    if user_id is not None:
+        task_query = task_query.filter(PlannerTask.user_id == user_id)
+        color_query = color_query.filter(PlannerColor.user_id == user_id)
+        event_query = event_query.filter(
+            PlannerEvent.owner_user_id == user_id
+        )
+
+    tasks = [
+        {
+            "id": task.id,
+            "user_id": task.user_id,
+            "title": task.title,
+            "notes": task.notes,
+            "color_id": task.color_id,
+            "schedule_type": task.schedule_type,
+            "start_date": _iso(task.start_date),
+            "end_date": _iso(task.end_date),
+            "deadline_base_date": _iso(task.deadline_base_date),
+            "deadline_days": task.deadline_days,
+            "status": task.status,
+            "pinned": bool(task.pinned),
+            "created_at": _iso(task.created_at),
+            "updated_at": _iso(task.updated_at),
+            "inactive_at": _iso(task.inactive_at),
+            "trashed_at": _iso(task.trashed_at),
+        }
+        for task in task_query.order_by(PlannerTask.id).all()
+    ]
+    colors = [
+        {
+            "id": color.id,
+            "user_id": color.user_id,
+            "color": color.color,
+            "name": color.name,
+            "position": color.position,
+            "created_at": _iso(color.created_at),
+        }
+        for color in color_query.order_by(
+            PlannerColor.position,
+            PlannerColor.id,
+        ).all()
+    ]
+    events = [
+        {
+            "id": event.id,
+            "owner_user_id": event.owner_user_id,
+            "actor_user_id": event.actor_user_id,
+            "entity_type": event.entity_type,
+            "entity_id": event.entity_id,
+            "action": event.action,
+            "title": event.title,
+            "notes": event.notes,
+            "changes": event.changes,
+            "occurred_at": _iso(event.occurred_at),
+        }
+        for event in event_query.order_by(PlannerEvent.id).all()
+    ]
+    return tasks, colors, events
+
+
+def _index_page_data(
+    db: Session,
+    user_id: int | None,
+) -> list[dict[str, Any]]:
+    query = db.query(IndexPage)
+    if user_id is not None:
+        query = query.filter(IndexPage.user_id == user_id)
+    return [
+        {
+            "id": page.id,
+            "scope": page.scope,
+            "user_id": page.user_id,
+            "content_html": page.content_html,
+            "created_at": _iso(page.created_at),
+            "updated_at": _iso(page.updated_at),
+        }
+        for page in query.order_by(IndexPage.id).all()
+    ]
+
+
 def _build_export(
     db: Session,
     section: str,
@@ -649,6 +752,28 @@ def _build_export(
             "memos": memos,
         }
         counts["memos"] = len(memos)
+
+    if section in ("all", "planner"):
+        tasks, colors, events = _planner_data(db, user_id)
+        sections[DATA_PLANNER] = {
+            "schema_version": SCHEMA_VERSION,
+            "kind": "planner",
+            "tasks": tasks,
+            "colors": colors,
+            "events": events,
+        }
+        counts["planner_tasks"] = len(tasks)
+        counts["planner_colors"] = len(colors)
+        counts["planner_events"] = len(events)
+
+    if section in ("all", "index"):
+        pages = _index_page_data(db, user_id)
+        sections[DATA_INDEX_PAGES] = {
+            "schema_version": SCHEMA_VERSION,
+            "kind": "index_pages",
+            "index_pages": pages,
+        }
+        counts["index_pages"] = len(pages)
 
     return _PreparedArchive(
         section=section,
@@ -821,6 +946,14 @@ def _readme(
         components.append("- `data/profile.json` — 프로필")
     if "memos" in included:
         components.append("- `data/memos.json` — 주석")
+    if "planner_tasks" in included:
+        components.append(
+            "- `data/planner.json` — 부록 일정·색상 칩·완료/변경 이력"
+        )
+    if "index_pages" in included:
+        components.append(
+            "- `data/index_pages.json` — 통합/작가 인덱스 내용"
+        )
     if includes_images:
         components.append(
             "- `images/` — 원본 이미지. 파일명은 해시로 저장되며 각 JSON의 "

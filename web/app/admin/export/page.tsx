@@ -69,6 +69,16 @@ const SECTIONS = [
     label: "놀러가기",
     description: "링크와 카테고리",
   },
+  {
+    section: "planner",
+    label: "부록",
+    description: "일정·색상 칩·완료/변경 이력",
+  },
+  {
+    section: "index",
+    label: "인덱스",
+    description: "통합/작가 인덱스 내용",
+  },
 ] as const;
 
 const STATUS_LABELS: Record<JobStatus, string> = {
@@ -307,7 +317,7 @@ export default function AdminExportPage() {
         <header className="admin-dashboard-panel__head">
           <div>
             <h2>전체 내보내기</h2>
-            <p>책·삽화·등장인물·링크·프로필·주석을 모두 담습니다.</p>
+            <p>책·삽화·등장인물·링크·프로필·주석·부록·인덱스를 모두 담습니다.</p>
           </div>
         </header>
         <div className="admin-dashboard-archive__body">
