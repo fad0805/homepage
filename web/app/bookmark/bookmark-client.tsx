@@ -27,11 +27,11 @@ type BookmarkView = "today" | BookmarkPeriodType;
 type MonthlyMode = "day" | "nth";
 
 const PERIOD_TYPES: BookmarkPeriodType[] = [
-  "year",
-  "quarter",
-  "month",
-  "week",
   "day",
+  "week",
+  "month",
+  "quarter",
+  "year",
 ];
 const PERIOD_LABELS: Record<BookmarkPeriodType, string> = {
   year: "연",
