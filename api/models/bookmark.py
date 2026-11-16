@@ -33,6 +33,13 @@ class BookmarkRoutine(Base):
     title = Column(String(255), nullable=False)
     notes = Column(Text, nullable=True)
     frequency = Column(String(10), nullable=False)
+    target_count = Column(
+        Integer,
+        nullable=False,
+        default=1,
+        server_default="1",
+    )
+    # Legacy schedule columns kept for existing data.
     # 0 = Monday ... 6 = Sunday.
     weekday = Column(Integer, nullable=True)
     weekdays = Column(JSON, nullable=True, default=list)
@@ -92,6 +99,12 @@ class BookmarkRoutineCheck(Base):
         nullable=False,
         default=False,
         server_default="false",
+    )
+    count = Column(
+        Integer,
+        nullable=False,
+        default=0,
+        server_default="0",
     )
     completed_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=func.now(), nullable=False)

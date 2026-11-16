@@ -17,21 +17,13 @@ class BookmarkRoutineCreate(BaseModel):
     frequency: BookmarkRoutineFrequency
     title: str = Field(min_length=1, max_length=255)
     notes: str | None = Field(default=None, max_length=4000)
-    weekday: int | None = Field(default=None, ge=0, le=6)
-    weekdays: list[int] | None = None
-    day_of_month: int | None = Field(default=None, ge=1, le=31)
-    nth_week: int | None = Field(default=None, ge=1, le=5)
-    month: int | None = Field(default=None, ge=1, le=12)
+    target_count: int = Field(default=1, ge=1, le=1000)
 
 
 class BookmarkRoutineUpdate(BaseModel):
     title: str | None = Field(default=None, min_length=1, max_length=255)
     notes: str | None = Field(default=None, max_length=4000)
-    weekday: int | None = Field(default=None, ge=0, le=6)
-    weekdays: list[int] | None = None
-    day_of_month: int | None = Field(default=None, ge=1, le=31)
-    nth_week: int | None = Field(default=None, ge=1, le=5)
-    month: int | None = Field(default=None, ge=1, le=12)
+    target_count: int | None = Field(default=None, ge=1, le=1000)
     active: bool | None = None
 
 
@@ -40,11 +32,7 @@ class BookmarkRoutineRead(BaseModel):
     title: str
     notes: str | None = None
     frequency: BookmarkRoutineFrequency
-    weekday: int | None = None
-    weekdays: list[int] | None = None
-    day_of_month: int | None = None
-    nth_week: int | None = None
-    month: int | None = None
+    target_count: int
     active: bool
     position: int
     created_at: datetime
@@ -62,6 +50,7 @@ class BookmarkRoutineOccurrenceRead(BaseModel):
 class BookmarkRoutinePeriodRead(BookmarkRoutineRead):
     period_type: BookmarkPeriodType
     period_start: date
+    completed_count: int = 0
     occurrences: list[BookmarkRoutineOccurrenceRead] = Field(
         default_factory=list
     )
@@ -70,7 +59,7 @@ class BookmarkRoutinePeriodRead(BookmarkRoutineRead):
 class BookmarkRoutineCheckUpdate(BaseModel):
     period_type: BookmarkPeriodType
     period_start: date
-    done: bool
+    count: int = Field(ge=0, le=1000)
 
 
 class BookmarkRoutineHistoryDayRead(BaseModel):

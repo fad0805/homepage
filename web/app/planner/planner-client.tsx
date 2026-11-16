@@ -1695,7 +1695,7 @@ export default function PlannerClient({ username }: { username: string }) {
     if (routineSavingId !== null) return;
     const occurrence = routine.occurrences[0];
     const occurrenceDate = occurrence?.date ?? selectedDate;
-    const nextDone = !(occurrence?.done ?? false);
+    const nextCount = occurrence?.done ? 0 : 1;
     setRoutineSavingId(routine.id);
     setError(null);
     setDayRoutines((previous) =>
@@ -1703,9 +1703,10 @@ export default function PlannerClient({ username }: { username: string }) {
         current.id === routine.id
           ? {
               ...current,
+              completed_count: nextCount,
               occurrences: current.occurrences.map((item) =>
                 item.date === occurrenceDate
-                  ? { ...item, done: nextDone }
+                  ? { ...item, done: nextCount > 0 }
                   : item,
               ),
             }
@@ -1720,7 +1721,7 @@ export default function PlannerClient({ username }: { username: string }) {
           body: JSON.stringify({
             period_type: "day",
             period_start: occurrenceDate,
-            done: nextDone,
+            count: nextCount,
           }),
         },
       );
