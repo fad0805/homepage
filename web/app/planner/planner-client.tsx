@@ -2087,15 +2087,38 @@ export default function PlannerClient({ username }: { username: string }) {
     const goal = dayBookmark?.goal;
     const rating = dayBookmark?.rating?.rating ?? 0;
     const review = dayBookmark?.review;
-    if (!goal?.content && rating <= 0 && !review?.content) {
+    if (
+      !goal?.content &&
+      !goal?.wake_time &&
+      !goal?.mood_tag_name &&
+      rating <= 0 &&
+      !review?.content
+    ) {
       return null;
     }
     return (
       <div className="planner-bookmark-section">
-        {goal?.content ? (
+        {goal?.content || goal?.wake_time || goal?.mood_tag_name ? (
           <div className="planner-bookmark-block">
-            <span className="planner-bookmark-label">목표</span>
-            <p className="planner-bookmark-text">{goal.content}</p>
+            <div className="planner-bookmark-label-row">
+              <span className="planner-bookmark-label">목표</span>
+              {goal?.wake_time || goal?.mood_tag_name ? (
+                <span className="planner-bookmark-meta">
+                  {goal?.wake_time
+                    ? `기상 ${goal.wake_time.slice(0, 5)}`
+                    : null}
+                  {goal?.wake_time && goal?.mood_tag_name
+                    ? " · "
+                    : null}
+                  {goal?.mood_tag_name
+                    ? `기분 ${goal.mood_tag_name}`
+                    : null}
+                </span>
+              ) : null}
+            </div>
+            {goal?.content ? (
+              <p className="planner-bookmark-text">{goal.content}</p>
+            ) : null}
           </div>
         ) : null}
         {review?.content || rating > 0 ? (

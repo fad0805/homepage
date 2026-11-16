@@ -722,6 +722,52 @@
   min-height: 10rem;
 }
 
+.bookmark-day-meta-fields {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.5rem;
+  margin-top: 0.65rem;
+
+  label {
+    display: flex;
+    flex-direction: column;
+    gap: 0.24rem;
+
+    > span {
+      color: var(--title-color);
+      font-size: 0.62rem;
+      opacity: 0.62;
+    }
+  }
+
+  input,
+  select {
+    box-sizing: border-box;
+    min-width: 0;
+    padding: 0.38rem 0.5rem;
+    border: 1px solid
+      color-mix(in srgb, var(--theme-main) 38%, transparent);
+    border-radius: 0.55rem;
+    background: var(--input-background);
+    color: var(--input-text);
+    font-family: inherit;
+    font-size: 0.72rem;
+  }
+
+  input[type='time'] {
+    width: 7.2rem;
+  }
+
+  select {
+    min-width: 7rem;
+  }
+
+  .bookmark-text-button {
+    margin-bottom: 0.1rem;
+  }
+}
+
 .bookmark-record-textarea,
 .bookmark-review-textarea {
   box-sizing: border-box;

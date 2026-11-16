@@ -14,6 +14,7 @@ import {
   type BookmarkRoutineCategory,
   type BookmarkRoutineFrequency,
   type BookmarkRoutineHistory,
+  type BookmarkMoodTag,
   type BookmarkTrackingMode,
   routineScheduleLabel,
 } from "@/lib/bookmark";
@@ -259,8 +260,19 @@ export default function BookmarkClient({ username }: { username: string }) {
   const [error, setError] = useState<string | null>(null);
 
   const [goalContent, setGoalContent] = useState("");
+  const [goalWakeTime, setGoalWakeTime] = useState("");
+  const [goalMoodTagId, setGoalMoodTagId] = useState<number | null>(
+    null,
+  );
   const [goalSaving, setGoalSaving] = useState(false);
   const [goalSaved, setGoalSaved] = useState(false);
+  const [moodTags, setMoodTags] = useState<BookmarkMoodTag[]>([]);
+  const [moodTagModalOpen, setMoodTagModalOpen] = useState(false);
+  const [newMoodTagName, setNewMoodTagName] = useState("");
+  const [moodTagSaving, setMoodTagSaving] = useState(false);
+  const [moodTagError, setMoodTagError] = useState<string | null>(
+    null,
+  );
   const [rating, setRating] = useState(0);
   const [ratingDraft, setRatingDraft] = useState(0);
   const [ratingSaving, setRatingSaving] = useState(false);
@@ -325,6 +337,8 @@ export default function BookmarkClient({ username }: { username: string }) {
       });
       setData(next);
       setGoalContent(next.goal?.content ?? "");
+      setGoalWakeTime(next.goal?.wake_time?.slice(0, 5) ?? "");
+      setGoalMoodTagId(next.goal?.mood_tag_id ?? null);
       setRating(next.rating?.rating ?? 0);
       setRatingDraft(next.rating?.rating ?? 0);
       setReviewContent(next.review?.content ?? "");
@@ -360,6 +374,22 @@ export default function BookmarkClient({ username }: { username: string }) {
   useEffect(() => {
     void loadCategories();
   }, [loadCategories]);
+
+  const loadMoodTags = useCallback(async () => {
+    try {
+      const next = await apiFetch<BookmarkMoodTag[]>(
+        "/api/bookmark/mood-tags",
+        { cache: "no-store" },
+      );
+      setMoodTags(next);
+    } catch {
+      // Mood can still be cleared if tags fail to load.
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadMoodTags();
+  }, [loadMoodTags]);
 
   const changeView = (next: BookmarkView) => {
     setView(next);
@@ -848,6 +878,64 @@ export default function BookmarkClient({ username }: { username: string }) {
     }
   };
 
+  const openMoodTagModal = () => {
+    setMoodTagModalOpen(true);
+    setNewMoodTagName("");
+    setMoodTagError(null);
+  };
+
+  const closeMoodTagModal = () => {
+    setMoodTagModalOpen(false);
+    setNewMoodTagName("");
+    setMoodTagError(null);
+  };
+
+  const handleAddMoodTag = async () => {
+    if (!newMoodTagName.trim() || moodTagSaving) return;
+    setMoodTagSaving(true);
+    setMoodTagError(null);
+    try {
+      await apiFetch<BookmarkMoodTag>("/api/bookmark/mood-tags", {
+        method: "POST",
+        body: JSON.stringify({ name: newMoodTagName }),
+      });
+      setNewMoodTagName("");
+      await loadMoodTags();
+    } catch (reason) {
+      setMoodTagError(
+        reason instanceof Error
+          ? reason.message
+          : "기분 태그를 추가하지 못했습니다.",
+      );
+    } finally {
+      setMoodTagSaving(false);
+    }
+  };
+
+  const handleDeleteMoodTag = async (tag: BookmarkMoodTag) => {
+    if (moodTagSaving) return;
+    if (!window.confirm(`"${tag.name}" 기분 태그를 삭제할까요?`)) {
+      return;
+    }
+    setMoodTagSaving(true);
+    setMoodTagError(null);
+    try {
+      await apiFetch(`/api/bookmark/mood-tags/${tag.id}`, {
+        method: "DELETE",
+      });
+      await loadMoodTags();
+      await loadPeriod();
+    } catch (reason) {
+      setMoodTagError(
+        reason instanceof Error
+          ? reason.message
+          : "기분 태그를 삭제하지 못했습니다.",
+      );
+    } finally {
+      setMoodTagSaving(false);
+    }
+  };
+
   const handleSaveGoal = async () => {
     if (goalSaving) return;
     setGoalSaving(true);
@@ -860,12 +948,18 @@ export default function BookmarkClient({ username }: { username: string }) {
           period_type: recordPeriodType,
           period_start: periodStart,
           content: goalContent,
+          wake_time:
+            recordPeriodType === "day" ? goalWakeTime || null : null,
+          mood_tag_id:
+            recordPeriodType === "day" ? goalMoodTagId : null,
         }),
       });
       setData((previous) =>
         previous ? { ...previous, goal: saved } : previous,
       );
       setGoalContent(saved.content);
+      setGoalWakeTime(saved.wake_time?.slice(0, 5) ?? "");
+      setGoalMoodTagId(saved.mood_tag_id ?? null);
       setGoalSaved(true);
     } catch (reason) {
       setError(
@@ -1467,6 +1561,49 @@ export default function BookmarkClient({ username }: { username: string }) {
                     <span className="bookmark-saved">저장됨</span>
                   ) : null}
                 </header>
+                {recordPeriodType === "day" ? (
+                  <div className="bookmark-day-meta-fields">
+                    <label>
+                      <span>기상</span>
+                      <input
+                        type="time"
+                        value={goalWakeTime}
+                        onChange={(event) => {
+                          setGoalWakeTime(event.target.value);
+                          setGoalSaved(false);
+                        }}
+                      />
+                    </label>
+                    <label>
+                      <span>기분</span>
+                      <select
+                        value={goalMoodTagId ?? ""}
+                        onChange={(event) => {
+                          setGoalMoodTagId(
+                            event.target.value
+                              ? Number(event.target.value)
+                              : null,
+                          );
+                          setGoalSaved(false);
+                        }}
+                      >
+                        <option value="">선택 안 함</option>
+                        {moodTags.map((tag) => (
+                          <option value={tag.id} key={tag.id}>
+                            {tag.name}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <button
+                      type="button"
+                      className="bookmark-text-button"
+                      onClick={openMoodTagModal}
+                    >
+                      태그 관리
+                    </button>
+                  </div>
+                ) : null}
                 <textarea
                   className="bookmark-record-textarea"
                   value={goalContent}
@@ -1483,7 +1620,11 @@ export default function BookmarkClient({ username }: { username: string }) {
                   disabled={goalSaving}
                   onClick={() => void handleSaveGoal()}
                 >
-                  {goalSaving ? "저장 중..." : "목표 저장"}
+                  {goalSaving
+                    ? "저장 중..."
+                    : recordPeriodType === "day"
+                      ? "기록 저장"
+                      : "목표 저장"}
                 </button>
               </section>
 
@@ -1967,6 +2108,90 @@ export default function BookmarkClient({ username }: { username: string }) {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      ) : null}
+
+      {moodTagModalOpen ? (
+        <div
+          className="bookmark-modal-overlay"
+          role="presentation"
+          onClick={closeMoodTagModal}
+        >
+          <div
+            className="bookmark-modal bookmark-category-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-label="기분 태그 관리"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <header className="bookmark-modal-header">
+              <div>
+                <p className="bookmark-panel-eyebrow">MOOD</p>
+                <h2>기분 태그</h2>
+              </div>
+              <button
+                type="button"
+                className="bookmark-text-button"
+                onClick={closeMoodTagModal}
+              >
+                닫기
+              </button>
+            </header>
+
+            {moodTagError ? (
+              <p className="bookmark-error">{moodTagError}</p>
+            ) : null}
+
+            <form
+              className="bookmark-category-add"
+              onSubmit={(event) => {
+                event.preventDefault();
+                void handleAddMoodTag();
+              }}
+            >
+              <input
+                type="text"
+                value={newMoodTagName}
+                maxLength={40}
+                placeholder="새 기분 태그"
+                onChange={(event) =>
+                  setNewMoodTagName(event.target.value)
+                }
+              />
+              <button
+                type="submit"
+                className="bookmark-primary"
+                disabled={moodTagSaving || !newMoodTagName.trim()}
+              >
+                추가
+              </button>
+            </form>
+
+            {moodTags.length === 0 ? (
+              <p className="bookmark-empty-row">
+                아직 기분 태그가 없습니다.
+              </p>
+            ) : (
+              <ul className="bookmark-category-list">
+                {moodTags.map((tag) => (
+                  <li key={tag.id}>
+                    <span>{tag.name}</span>
+                    <button
+                      type="button"
+                      className="bookmark-text-button is-danger"
+                      disabled={moodTagSaving}
+                      onClick={() => void handleDeleteMoodTag(tag)}
+                    >
+                      삭제
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <p className="bookmark-form-hint">
+              삭제한 태그를 선택한 날짜 기록은 기분 없음으로 바뀝니다.
+            </p>
           </div>
         </div>
       ) : null}

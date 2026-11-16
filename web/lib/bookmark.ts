@@ -70,6 +70,17 @@ export interface BookmarkGoal {
   period_type: BookmarkPeriodType;
   period_start: string;
   content: string;
+  wake_time: string | null;
+  mood_tag_id: number | null;
+  mood_tag_name: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface BookmarkMoodTag {
+  id: number;
+  name: string;
+  position: number;
   created_at: string;
   updated_at: string;
 }

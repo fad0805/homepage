@@ -12,6 +12,7 @@ from sqlalchemy import (
     Integer,
     String,
     Text,
+    Time,
     UniqueConstraint,
     func,
 )
@@ -260,6 +261,49 @@ class BookmarkRoutineMonthlyStat(Base):
     )
 
 
+class BookmarkMoodTag(Base):
+    """A user-defined mood tag available on daily records."""
+
+    __tablename__ = "bookmark_mood_tags"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(
+        Integer,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    name = Column(String(40), nullable=False)
+    position = Column(
+        Integer,
+        nullable=False,
+        default=0,
+        server_default="0",
+    )
+    created_at = Column(DateTime, default=func.now(), nullable=False)
+    updated_at = Column(
+        DateTime,
+        default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+    user = relationship("User")
+
+    __table_args__ = (
+        UniqueConstraint(
+            "user_id",
+            "name",
+            name="uq_bookmark_mood_tags_user_name",
+        ),
+        Index(
+            "ix_bookmark_mood_tags_user_position",
+            "user_id",
+            "position",
+        ),
+    )
+
+
 class BookmarkGoal(Base):
     """One goal text attached to a user's period."""
 
@@ -275,6 +319,13 @@ class BookmarkGoal(Base):
     period_type = Column(String(10), nullable=False)
     period_start = Column(Date, nullable=False)
     content = Column(Text, nullable=False, default="", server_default="")
+    wake_time = Column(Time, nullable=True)
+    mood_tag_id = Column(
+        Integer,
+        ForeignKey("bookmark_mood_tags.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     created_at = Column(DateTime, default=func.now(), nullable=False)
     updated_at = Column(
         DateTime,
@@ -284,6 +335,11 @@ class BookmarkGoal(Base):
     )
 
     user = relationship("User")
+    mood_tag = relationship("BookmarkMoodTag")
+
+    @property
+    def mood_tag_name(self) -> str | None:
+        return self.mood_tag.name if self.mood_tag else None
 
     __table_args__ = (
         UniqueConstraint(

@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from models.bookmark import (
     BookmarkGoal,
+    BookmarkMoodTag,
     BookmarkRating,
     BookmarkReview,
     BookmarkRoutine,
@@ -18,6 +19,8 @@ from models.bookmark import (
 )
 from schemas.bookmark import (
     BookmarkGoalUpdate,
+    BookmarkMoodTagCreate,
+    BookmarkMoodTagUpdate,
     BookmarkRoutineCategoryCreate,
     BookmarkRoutineCategoryUpdate,
     BookmarkRatingUpdate,
@@ -361,6 +364,29 @@ def _resolve_category_id(
             detail="루틴 카테고리를 찾을 수 없습니다.",
         )
     return category.id
+
+
+def _resolve_mood_tag_id(
+    db: Session,
+    user_id: int,
+    mood_tag_id: int | None,
+) -> int | None:
+    if mood_tag_id is None or mood_tag_id <= 0:
+        return None
+    tag = (
+        db.query(BookmarkMoodTag)
+        .filter(
+            BookmarkMoodTag.id == mood_tag_id,
+            BookmarkMoodTag.user_id == user_id,
+        )
+        .first()
+    )
+    if tag is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="기분 태그를 찾을 수 없습니다.",
+        )
+    return tag.id
 
 
 def _period_check_count(
@@ -1393,6 +1419,133 @@ def delete_routine_category(
     return {"success": True}
 
 
+def list_mood_tags(
+    db: Session,
+    user_id: int,
+) -> list[BookmarkMoodTag]:
+    return (
+        db.query(BookmarkMoodTag)
+        .filter(BookmarkMoodTag.user_id == user_id)
+        .order_by(BookmarkMoodTag.position, BookmarkMoodTag.id)
+        .all()
+    )
+
+
+def create_mood_tag(
+    db: Session,
+    payload: BookmarkMoodTagCreate,
+    user_id: int,
+) -> BookmarkMoodTag:
+    name = (payload.name or "").strip()
+    if not name:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="기분 태그 이름을 입력해주세요.",
+        )
+    exists = (
+        db.query(BookmarkMoodTag.id)
+        .filter(
+            BookmarkMoodTag.user_id == user_id,
+            BookmarkMoodTag.name == name,
+        )
+        .first()
+    )
+    if exists is not None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="이미 같은 이름의 기분 태그가 있습니다.",
+        )
+    max_position = (
+        db.query(func.max(BookmarkMoodTag.position))
+        .filter(BookmarkMoodTag.user_id == user_id)
+        .scalar()
+    )
+    tag = BookmarkMoodTag(
+        user_id=user_id,
+        name=name,
+        position=(max_position or -1) + 1,
+    )
+    db.add(tag)
+    db.commit()
+    db.refresh(tag)
+    return tag
+
+
+def update_mood_tag(
+    db: Session,
+    tag_id: int,
+    payload: BookmarkMoodTagUpdate,
+    user_id: int,
+) -> BookmarkMoodTag:
+    tag = (
+        db.query(BookmarkMoodTag)
+        .filter(
+            BookmarkMoodTag.id == tag_id,
+            BookmarkMoodTag.user_id == user_id,
+        )
+        .first()
+    )
+    if tag is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="기분 태그를 찾을 수 없습니다.",
+        )
+    name = (payload.name or "").strip()
+    if not name:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="기분 태그 이름을 입력해주세요.",
+        )
+    duplicate = (
+        db.query(BookmarkMoodTag.id)
+        .filter(
+            BookmarkMoodTag.user_id == user_id,
+            BookmarkMoodTag.name == name,
+            BookmarkMoodTag.id != tag.id,
+        )
+        .first()
+    )
+    if duplicate is not None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="이미 같은 이름의 기분 태그가 있습니다.",
+        )
+    tag.name = name
+    db.commit()
+    db.refresh(tag)
+    return tag
+
+
+def delete_mood_tag(
+    db: Session,
+    tag_id: int,
+    user_id: int,
+) -> dict:
+    tag = (
+        db.query(BookmarkMoodTag)
+        .filter(
+            BookmarkMoodTag.id == tag_id,
+            BookmarkMoodTag.user_id == user_id,
+        )
+        .first()
+    )
+    if tag is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="기분 태그를 찾을 수 없습니다.",
+        )
+    db.query(BookmarkGoal).filter(
+        BookmarkGoal.user_id == user_id,
+        BookmarkGoal.mood_tag_id == tag.id,
+    ).update(
+        {BookmarkGoal.mood_tag_id: None},
+        synchronize_session=False,
+    )
+    db.delete(tag)
+    db.commit()
+    return {"success": True}
+
+
 def save_goal(
     db: Session,
     payload: BookmarkGoalUpdate,
@@ -1408,16 +1561,28 @@ def save_goal(
         )
         .first()
     )
+    mood_tag_id = (
+        _resolve_mood_tag_id(db, user_id, payload.mood_tag_id)
+        if payload.period_type == "day"
+        else None
+    )
+    wake_time = (
+        payload.wake_time if payload.period_type == "day" else None
+    )
     if goal is None:
         goal = BookmarkGoal(
             user_id=user_id,
             period_type=payload.period_type,
             period_start=payload.period_start,
             content=payload.content,
+            wake_time=wake_time,
+            mood_tag_id=mood_tag_id,
         )
         db.add(goal)
     else:
         goal.content = payload.content
+        goal.wake_time = wake_time
+        goal.mood_tag_id = mood_tag_id
     db.commit()
     db.refresh(goal)
     return goal

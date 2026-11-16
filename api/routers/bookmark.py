@@ -4,19 +4,23 @@ from fastapi import APIRouter, Depends, Response
 from sqlalchemy.orm import Session
 
 from crud.bookmark import (
+    create_mood_tag,
     create_routine,
     create_routine_category,
+    delete_mood_tag,
     delete_routine,
     delete_routine_category,
     get_period,
     get_routine_history,
     get_today,
+    list_mood_tags,
     list_routine_categories,
     save_goal,
     save_rating,
     save_review,
     set_routine_check,
     stop_routine,
+    update_mood_tag,
     update_routine,
     update_routine_category,
 )
@@ -25,6 +29,9 @@ from routers.utils import require_auth
 from schemas.bookmark import (
     BookmarkGoalRead,
     BookmarkGoalUpdate,
+    BookmarkMoodTagCreate,
+    BookmarkMoodTagRead,
+    BookmarkMoodTagUpdate,
     BookmarkRoutineCategoryCreate,
     BookmarkRoutineCategoryRead,
     BookmarkRoutineCategoryUpdate,
@@ -63,6 +70,53 @@ def read_period(
         period_type=period_type,
         period_start=period_start,
     )
+
+
+@router.get("/mood-tags", response_model=list[BookmarkMoodTagRead])
+def read_mood_tags(
+    response: Response,
+    db: Session = Depends(get_db),
+    user=Depends(require_auth),
+):
+    _no_store(response)
+    return list_mood_tags(db, user.id)
+
+
+@router.post("/mood-tags", response_model=BookmarkMoodTagRead)
+def post_mood_tag(
+    payload: BookmarkMoodTagCreate,
+    response: Response,
+    db: Session = Depends(get_db),
+    user=Depends(require_auth),
+):
+    _no_store(response)
+    return create_mood_tag(db, payload, user.id)
+
+
+@router.patch(
+    "/mood-tags/{tag_id}",
+    response_model=BookmarkMoodTagRead,
+)
+def patch_mood_tag(
+    tag_id: int,
+    payload: BookmarkMoodTagUpdate,
+    response: Response,
+    db: Session = Depends(get_db),
+    user=Depends(require_auth),
+):
+    _no_store(response)
+    return update_mood_tag(db, tag_id, payload, user.id)
+
+
+@router.delete("/mood-tags/{tag_id}")
+def remove_mood_tag(
+    tag_id: int,
+    response: Response,
+    db: Session = Depends(get_db),
+    user=Depends(require_auth),
+):
+    _no_store(response)
+    return delete_mood_tag(db, tag_id, user.id)
 
 
 @router.get(

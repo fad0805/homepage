@@ -1,4 +1,4 @@
-from datetime import date, datetime
+from datetime import date, datetime, time
 from typing import Literal
 
 from pydantic import BaseModel, Field
@@ -128,10 +128,31 @@ class BookmarkRoutineHistoryRead(BaseModel):
     )
 
 
+class BookmarkMoodTagCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=40)
+
+
+class BookmarkMoodTagUpdate(BaseModel):
+    name: str = Field(min_length=1, max_length=40)
+
+
+class BookmarkMoodTagRead(BaseModel):
+    id: int
+    name: str
+    position: int
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
 class BookmarkGoalUpdate(BaseModel):
     period_type: BookmarkPeriodType
     period_start: date
     content: str = Field(max_length=20000)
+    wake_time: time | None = None
+    mood_tag_id: int | None = None
 
 
 class BookmarkGoalRead(BaseModel):
@@ -139,6 +160,9 @@ class BookmarkGoalRead(BaseModel):
     period_type: BookmarkPeriodType
     period_start: date
     content: str
+    wake_time: time | None = None
+    mood_tag_id: int | None = None
+    mood_tag_name: str | None = None
     created_at: datetime
     updated_at: datetime
 
