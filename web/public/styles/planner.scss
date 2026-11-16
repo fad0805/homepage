@@ -268,31 +268,39 @@
 }
 
 .planner-calendar-header {
+  position: relative;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   align-items: center;
-  gap: 0.8rem;
+  gap: 0.45rem;
   padding: 0.2rem 0.2rem 0.75rem;
-
-  h2 {
-    margin: 0;
-    color: var(--title-color);
-    font-family: Eulyoo1945-SemiBold, GowunDodum, sans-serif;
-    font-size: 1.15rem;
-    font-weight: normal;
-    text-align: center;
-  }
 }
 
 .planner-calendar-prev {
+  justify-self: end;
+}
+
+.planner-calendar-next {
   justify-self: start;
 }
 
-.planner-calendar-actions {
-  display: flex;
-  align-items: center;
-  justify-self: end;
-  gap: 0.4rem;
+.planner-calendar-month {
+  padding: 0.15rem 0.35rem;
+  border: 0;
+  border-radius: 0.45rem;
+  background: transparent;
+  color: var(--title-color);
+  font-family: Eulyoo1945-SemiBold, GowunDodum, sans-serif;
+  font-size: 1.15rem;
+  font-weight: normal;
+  text-align: center;
+  white-space: nowrap;
+  cursor: pointer;
+
+  &:hover,
+  &:focus-visible {
+    background: var(--planner-soft-bg);
+  }
 }
 
 .planner-calendar-hint {
@@ -617,6 +625,10 @@
 }
 
 .planner-special-open {
+  position: absolute;
+  top: 50%;
+  right: 0.2rem;
+  transform: translateY(-50%);
   white-space: nowrap;
 }
 
@@ -1441,6 +1453,42 @@
   width: min(30rem, 100%);
   max-height: min(88vh, 48rem);
   overflow-y: auto;
+}
+
+.planner-month-picker-modal {
+  width: min(22rem, 100%);
+}
+
+.planner-month-picker-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+  margin-top: 1rem;
+}
+
+.planner-month-picker-fields {
+  display: flex;
+  gap: 0.6rem;
+
+  label {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: 0.25rem;
+    color: var(--title-color);
+    font-size: 0.66rem;
+  }
+
+  select {
+    padding: 0.45rem 0.5rem;
+    border: 1px solid
+      color-mix(in srgb, var(--theme-main) 32%, transparent);
+    border-radius: 0.55rem;
+    background: var(--input-background);
+    color: var(--foreground);
+    font-family: inherit;
+    font-size: 0.8rem;
+  }
 }
 
 .planner-special-list {

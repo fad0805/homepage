@@ -611,6 +611,13 @@ export default function PlannerClient({ username }: { username: string }) {
   const [events, setEvents] = useState<PlannerEvent[]>([]);
   const [savedColors, setSavedColors] = useState<PlannerColor[]>([]);
   const [specialDates, setSpecialDates] = useState<PlannerSpecialDate[]>([]);
+  const [monthPickerOpen, setMonthPickerOpen] = useState(false);
+  const [monthPickerYear, setMonthPickerYear] = useState(
+    Number(initialToday.slice(0, 4)),
+  );
+  const [monthPickerMonth, setMonthPickerMonth] = useState(
+    Number(initialToday.slice(5, 7)),
+  );
   const [specialModalOpen, setSpecialModalOpen] = useState(false);
   const [editingSpecialId, setEditingSpecialId] = useState<number | null>(
     null,
@@ -827,6 +834,7 @@ export default function PlannerClient({ username }: { username: string }) {
       !selectedTask &&
       !taskModalOpen &&
       !chipManagerOpen &&
+      !monthPickerOpen &&
       !specialModalOpen
     ) {
       return;
@@ -860,6 +868,10 @@ export default function PlannerClient({ username }: { username: string }) {
         setError(null);
         return;
       }
+      if (monthPickerOpen) {
+        setMonthPickerOpen(false);
+        return;
+      }
       if (specialModalOpen) {
         setSpecialModalOpen(false);
         setEditingSpecialId(null);
@@ -875,11 +887,23 @@ export default function PlannerClient({ username }: { username: string }) {
     selectedTask,
     taskModalOpen,
     chipManagerOpen,
+    monthPickerOpen,
     specialModalOpen,
     today,
   ]);
 
   const cells = useMemo(() => monthCells(viewMonth), [viewMonth]);
+  const monthPickerYears = useMemo(() => {
+    const years = Array.from(
+      { length: 201 },
+      (_, index) => 1900 + index,
+    );
+    if (!years.includes(monthPickerYear)) {
+      years.push(monthPickerYear);
+      years.sort((a, b) => a - b);
+    }
+    return years;
+  }, [monthPickerYear]);
   const activeTasks = useMemo(
     () => tasks.filter((task) => task.status === "active"),
     [tasks],
@@ -1230,6 +1254,32 @@ export default function PlannerClient({ username }: { username: string }) {
     } finally {
       setSearching(false);
     }
+  };
+
+  const openMonthPicker = () => {
+    setMonthPickerYear(Number(viewMonth.slice(0, 4)));
+    setMonthPickerMonth(Number(viewMonth.slice(5, 7)));
+    setMonthPickerOpen(true);
+  };
+
+  const closeMonthPicker = () => {
+    setMonthPickerOpen(false);
+  };
+
+  const applyMonthPicker = () => {
+    const monthKey = `${monthPickerYear}-${pad2(monthPickerMonth)}`;
+    const lastDay = new Date(
+      Date.UTC(monthPickerYear, monthPickerMonth, 0),
+    ).getUTCDate();
+    const preferredDay =
+      monthKey === today.slice(0, 7)
+        ? Number(today.slice(8, 10))
+        : 1;
+    setViewMonth(monthKey);
+    setSelectedDate(
+      `${monthKey}-${pad2(Math.min(preferredDay, lastDay))}`,
+    );
+    setMonthPickerOpen(false);
   };
 
   const resetSpecialForm = () => {
@@ -2559,24 +2609,31 @@ export default function PlannerClient({ username }: { username: string }) {
                 >
                   ‹
                 </button>
-                <h2>{monthLabel(viewMonth)}</h2>
-                <div className="planner-calendar-actions">
-                  <button
-                    type="button"
-                    className="planner-icon-button"
-                    aria-label="다음 달"
-                    onClick={() => changeMonth(1)}
-                  >
-                    ›
-                  </button>
-                  <button
-                    type="button"
-                    className="planner-text-button planner-special-open"
-                    onClick={openSpecialManager}
-                  >
-                    기념일
-                  </button>
-                </div>
+                <button
+                  type="button"
+                  className="planner-calendar-month"
+                  aria-haspopup="dialog"
+                  aria-expanded={monthPickerOpen}
+                  aria-label={`${monthLabel(viewMonth)} 년월 선택`}
+                  onClick={openMonthPicker}
+                >
+                  {monthLabel(viewMonth)}
+                </button>
+                <button
+                  type="button"
+                  className="planner-icon-button planner-calendar-next"
+                  aria-label="다음 달"
+                  onClick={() => changeMonth(1)}
+                >
+                  ›
+                </button>
+                <button
+                  type="button"
+                  className="planner-text-button planner-special-open"
+                  onClick={openSpecialManager}
+                >
+                  기념일
+                </button>
               </div>
               <p className="planner-calendar-hint">
                 날짜를 드래그하면 범위 일정을 만들 수 있습니다.
@@ -3984,6 +4041,87 @@ export default function PlannerClient({ username }: { username: string }) {
                 </button>
               </div>
             ) : null}
+          </div>
+        </div>
+      ) : null}
+      {monthPickerOpen ? (
+        <div
+          className="planner-modal-overlay is-task"
+          role="presentation"
+          onClick={closeMonthPicker}
+        >
+          <div
+            className="planner-modal planner-month-picker-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-label="년월 선택"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <header className="planner-modal-header">
+              <div>
+                <p className="planner-eyebrow">CALENDAR</p>
+                <h2>년월 선택</h2>
+              </div>
+              <button
+                type="button"
+                className="planner-text-button"
+                onClick={closeMonthPicker}
+              >
+                닫기
+              </button>
+            </header>
+            <form
+              className="planner-month-picker-form"
+              onSubmit={(event) => {
+                event.preventDefault();
+                applyMonthPicker();
+              }}
+            >
+              <div className="planner-month-picker-fields">
+                <label>
+                  <span>년</span>
+                  <select
+                    value={monthPickerYear}
+                    onChange={(event) =>
+                      setMonthPickerYear(Number(event.target.value))
+                    }
+                  >
+                    {monthPickerYears.map((year) => (
+                      <option value={year} key={year}>
+                        {year}년
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  <span>월</span>
+                  <select
+                    value={monthPickerMonth}
+                    onChange={(event) =>
+                      setMonthPickerMonth(Number(event.target.value))
+                    }
+                  >
+                    {Array.from({ length: 12 }, (_, index) => (
+                      <option value={index + 1} key={index + 1}>
+                        {index + 1}월
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+              <div className="planner-form-actions">
+                <button
+                  type="button"
+                  className="planner-text-button"
+                  onClick={closeMonthPicker}
+                >
+                  취소
+                </button>
+                <button type="submit" className="planner-primary">
+                  이동
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       ) : null}
