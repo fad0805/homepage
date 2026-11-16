@@ -2105,14 +2105,12 @@ export default function PlannerClient({ username }: { username: string }) {
               {goal?.wake_time || goal?.mood_tag_name ? (
                 <span className="planner-bookmark-meta">
                   {goal?.wake_time
-                    ? `기상 ${goal.wake_time.slice(0, 5)}`
+                    ? goal.wake_time.slice(0, 5)
                     : null}
                   {goal?.wake_time && goal?.mood_tag_name
                     ? " · "
                     : null}
-                  {goal?.mood_tag_name
-                    ? `기분 ${goal.mood_tag_name}`
-                    : null}
+                  {goal?.mood_tag_name ?? null}
                 </span>
               ) : null}
             </div>
