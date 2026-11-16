@@ -436,6 +436,7 @@ export default function PlannerClient({ username }: { username: string }) {
     start: string;
     end: string;
   } | null>(null);
+  const [dragWarning, setDragWarning] = useState<string | null>(null);
   const dragStartRef = useRef<string | null>(null);
   const dragCurrentRef = useRef<string | null>(null);
   const [viewMonth, setViewMonth] = useState(initialToday.slice(0, 7));
@@ -855,6 +856,7 @@ export default function PlannerClient({ username }: { username: string }) {
     const next = shiftMonth(viewMonth, delta);
     setViewMonth(next);
     setSelectedDate(`${next}-01`);
+    setDragWarning(null);
   };
 
   const selectDate = (date: string) => {
@@ -862,6 +864,7 @@ export default function PlannerClient({ username }: { username: string }) {
     setSearchOpen(false);
     setSearchResults(null);
     setSearching(false);
+    setDragWarning(null);
     const monthKey = date.slice(0, 7);
     if (monthKey !== viewMonth) {
       setViewMonth(monthKey);
@@ -870,19 +873,22 @@ export default function PlannerClient({ username }: { username: string }) {
 
   const openNewRangeTask = (first: string, second: string) => {
     const [from, to] = orderedRange(first, second);
-    const startDate = from < today ? today : from;
-    const endDate = to < startDate ? startDate : to;
+    if (from < today) {
+      setDragWarning("과거 일정은 잡을 수 없습니다.");
+      return;
+    }
+    setDragWarning(null);
     setEditingId(null);
     setForm({
-      ...emptyForm(startDate),
+      ...emptyForm(from),
       scheduleType: "range",
-      startDate,
-      endDate,
+      startDate: from,
+      endDate: to,
     });
     setShowChipCreator(false);
     setError(null);
     setTaskModalOpen(true);
-    selectDate(startDate);
+    selectDate(from);
   };
 
   const selectDateRef = useRef(selectDate);
@@ -966,6 +972,7 @@ export default function PlannerClient({ username }: { username: string }) {
     date: string,
   ) => {
     if (event.button !== 0) return;
+    setDragWarning(null);
     dragStartRef.current = date;
     dragCurrentRef.current = date;
     setDragRange({ start: date, end: date });
@@ -1755,8 +1762,14 @@ export default function PlannerClient({ username }: { username: string }) {
                   ›
                 </button>
               </div>
-              <p className="planner-calendar-hint">
-                날짜를 드래그하면 범위 일정을 만들 수 있습니다.
+              <p
+                className={`planner-calendar-hint${
+                  dragWarning ? " is-warning" : ""
+                }`}
+                role={dragWarning ? "alert" : undefined}
+              >
+                {dragWarning ||
+                  "날짜를 드래그하면 범위 일정을 만들 수 있습니다."}
               </p>
               <div className="planner-weekdays" aria-hidden="true">
                 {["일", "월", "화", "수", "목", "금", "토"].map((day) => (
