@@ -2,7 +2,7 @@ import asyncio
 import logging
 import os
 import re
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from urllib.parse import urlparse
 
 import httpx
@@ -18,6 +18,12 @@ logger = logging.getLogger("uvicorn.error")
 STATUS_LIMIT = 500
 REQUEST_TIMEOUT = 15.0
 NOTIFY_SCOPES = {"all", "books", "book", "illustrations"}
+
+# Delivery rows only prevent duplicate posts for a short window. The content
+# row's mastodon_status_id remains the permanent "already announced" marker.
+NOTIFICATION_DELIVERY_RETENTION_DAYS = 3
+NOTIFICATION_DELIVERY_PURGE_HOURS = 24
+_last_delivery_purge: datetime | None = None
 
 
 class MastodonError(Exception):
@@ -114,6 +120,38 @@ def _record_delivery(
             posted_at=datetime.utcnow(),
         )
     )
+
+
+def purge_notification_deliveries(
+    db: Session,
+    *,
+    force: bool = False,
+) -> int:
+    """Delete delivery rows older than the short dedupe window.
+
+    The content's ``mastodon_status_id`` is the permanent "already posted"
+    marker, so these rows are only needed to avoid duplicate posts while a
+    notification is still recent. Purging them keeps the table bounded.
+    """
+    global _last_delivery_purge
+    now = datetime.utcnow()
+    if (
+        not force
+        and _last_delivery_purge is not None
+        and now - _last_delivery_purge
+        < timedelta(hours=NOTIFICATION_DELIVERY_PURGE_HOURS)
+    ):
+        return 0
+
+    cutoff = now - timedelta(days=NOTIFICATION_DELIVERY_RETENTION_DAYS)
+    deleted = (
+        db.query(NotificationDelivery)
+        .filter(NotificationDelivery.posted_at < cutoff)
+        .delete(synchronize_session=False)
+    )
+    db.commit()
+    _last_delivery_purge = now
+    return deleted
 
 
 def _notify_scope(settings: MastodonSettings | None) -> str:
@@ -690,6 +728,11 @@ def publish_pending_chapters() -> int:
     db = SessionLocal()
     posted = 0
     try:
+        try:
+            purge_notification_deliveries(db)
+        except Exception:
+            logger.exception("Could not purge old Mastodon delivery records")
+
         now = datetime.utcnow()
         chapters = (
             db.query(Chapter)
