@@ -807,6 +807,9 @@ def _special_date_dict(routine: BookmarkRoutine) -> dict[str, Any]:
         "event_date": routine.start_date if kind == "dday" else None,
         "month": routine.month if kind == "yearly" else None,
         "day": routine.day_of_month if kind == "yearly" else None,
+        "pinned": bool(routine.calendar_pinned)
+        if kind == "dday"
+        else False,
         "created_at": routine.created_at,
         "updated_at": routine.updated_at,
     }
@@ -923,6 +926,7 @@ def create_special_date(
         )
         .scalar()
     )
+    pinned = bool(payload.pinned) if payload.kind == "dday" else False
     routine = BookmarkRoutine(
         user_id=user_id,
         title=_clean_title(payload.title),
@@ -935,6 +939,7 @@ def create_special_date(
         target_count=1,
         active=True,
         calendar_only=True,
+        calendar_pinned=pinned,
         position=(max_position or -1) + 1,
     )
     _apply_special_date_schedule(
@@ -1010,6 +1015,12 @@ def update_special_date(
         month=month,
         day=day,
     )
+    if kind == "dday":
+        routine.calendar_pinned = bool(
+            data.get("pinned", routine.calendar_pinned)
+        )
+    else:
+        routine.calendar_pinned = False
     _clear_special_date_stats(db, routine.id)
     db.commit()
     db.refresh(routine)

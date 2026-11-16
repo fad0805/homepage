@@ -102,6 +102,7 @@ interface PlannerSpecialDate {
   event_date: string | null;
   month: number | null;
   day: number | null;
+  pinned: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -631,6 +632,7 @@ export default function PlannerClient({ username }: { username: string }) {
   const [specialEventDate, setSpecialEventDate] = useState(initialToday);
   const [specialMonth, setSpecialMonth] = useState(1);
   const [specialDay, setSpecialDay] = useState(1);
+  const [specialPinned, setSpecialPinned] = useState(false);
   const [specialSaving, setSpecialSaving] = useState(false);
   const [selectedDate, setSelectedDate] = useState(initialToday);
   const [dragRange, setDragRange] = useState<{
@@ -1048,29 +1050,45 @@ export default function PlannerClient({ username }: { username: string }) {
       ),
     [specialDates, selectedDate],
   );
+  const ddaySpecialDates = useMemo(
+    () => specialDates.filter((item) => item.kind === "dday"),
+    [specialDates],
+  );
+  const editingSpecial =
+    editingSpecialId === null
+      ? null
+      : specialDates.find((item) => item.id === editingSpecialId) ??
+        null;
   const filteredSpecialDates = useMemo(() => {
     const query = specialSearch.trim().toLowerCase();
-    if (!query) return specialDates;
-    return specialDates.filter((item) =>
+    if (!query) return ddaySpecialDates;
+    return ddaySpecialDates.filter((item) =>
       item.title.toLowerCase().includes(query),
     );
-  }, [specialDates, specialSearch]);
-  const upcomingDdays = useMemo(
-    () =>
-      specialDates
-        .filter(
-          (item) =>
-            item.kind === "dday" &&
-            item.event_date !== null &&
-            item.event_date >= today &&
-            !specialDateAppearsOn(item, selectedDate),
-        )
-        .sort((a, b) =>
-          (a.event_date ?? "").localeCompare(b.event_date ?? ""),
-        )
-        .slice(0, 3),
-    [specialDates, selectedDate, today],
-  );
+  }, [ddaySpecialDates, specialSearch]);
+  const upcomingDdays = useMemo(() => {
+    const candidates = ddaySpecialDates.filter(
+      (item) =>
+        item.event_date !== null &&
+        !specialDateAppearsOn(item, selectedDate),
+    );
+    const upcoming = candidates
+      .filter((item) => (item.event_date ?? "") >= today)
+      .sort((a, b) =>
+        (a.event_date ?? "").localeCompare(b.event_date ?? ""),
+      )
+      .slice(0, 3);
+    const pinnedPast = candidates
+      .filter(
+        (item) =>
+          (item.event_date ?? "") < today && item.pinned,
+      )
+      .sort((a, b) =>
+        (b.event_date ?? "").localeCompare(a.event_date ?? ""),
+      )
+      .slice(0, 3);
+    return [...upcoming, ...pinnedPast];
+  }, [ddaySpecialDates, selectedDate, today]);
   const eventDates = useMemo(
     () => new Set(events.map(eventDate)),
     [events],
@@ -1317,6 +1335,7 @@ export default function PlannerClient({ username }: { username: string }) {
     setSpecialEventDate(todayDateInputValue());
     setSpecialMonth(1);
     setSpecialDay(1);
+    setSpecialPinned(false);
   };
 
   const openSpecialManager = () => {
@@ -1343,6 +1362,7 @@ export default function PlannerClient({ username }: { username: string }) {
     );
     setSpecialMonth(item.month ?? 1);
     setSpecialDay(item.day ?? 1);
+    setSpecialPinned(item.pinned);
     setError(null);
   };
 
@@ -1356,6 +1376,17 @@ export default function PlannerClient({ username }: { username: string }) {
     setSpecialSearch("");
     setSpecialTab("list");
     setSpecialModalOpen(true);
+  };
+
+  const handleSpecialEventDateChange = (value: string) => {
+    setSpecialEventDate(value);
+    if (
+      editingSpecialId === null &&
+      value &&
+      value < today
+    ) {
+      setSpecialPinned(true);
+    }
   };
 
   const handleSubmitSpecial = async (
@@ -1372,6 +1403,7 @@ export default function PlannerClient({ username }: { username: string }) {
         specialKind === "dday" ? specialEventDate : null,
       month: specialKind === "yearly" ? specialMonth : null,
       day: specialKind === "yearly" ? specialDay : null,
+      pinned: specialKind === "dday" ? specialPinned : false,
     };
     try {
       if (editingSpecialId !== null) {
@@ -1428,6 +1460,30 @@ export default function PlannerClient({ username }: { username: string }) {
         reason instanceof Error
           ? reason.message
           : "기념일을 삭제하지 못했습니다.",
+      );
+    } finally {
+      setSpecialSaving(false);
+    }
+  };
+
+  const handleToggleSpecialPin = async (item: PlannerSpecialDate) => {
+    if (specialSaving) return;
+    setSpecialSaving(true);
+    setError(null);
+    try {
+      await apiFetch<PlannerSpecialDate>(
+        `/api/bookmark/special-dates/${item.id}`,
+        {
+          method: "PATCH",
+          body: JSON.stringify({ pinned: !item.pinned }),
+        },
+      );
+      await loadSpecialDates();
+    } catch (reason) {
+      setError(
+        reason instanceof Error
+          ? reason.message
+          : "디데이 고정 상태를 바꾸지 못했습니다.",
       );
     } finally {
       setSpecialSaving(false);
@@ -2449,7 +2505,7 @@ export default function PlannerClient({ username }: { username: string }) {
     return (
       <div className="planner-dday-section">
         <div className="planner-dday-heading">
-          <span>다가오는 디데이</span>
+          <span>디데이</span>
           <button
             type="button"
             className="planner-text-button"
@@ -4259,7 +4315,7 @@ export default function PlannerClient({ username }: { username: string }) {
                 className={specialTab === "list" ? "is-active" : ""}
                 onClick={() => setSpecialTab("list")}
               >
-                목록 {specialDates.length}
+                디데이 목록 {ddaySpecialDates.length}
               </button>
             </div>
 
@@ -4339,12 +4395,36 @@ export default function PlannerClient({ username }: { username: string }) {
                     value={specialEventDate}
                     required
                     onChange={(event) =>
-                      setSpecialEventDate(event.target.value)
+                      handleSpecialEventDateChange(event.target.value)
                     }
                   />
                 </label>
               )}
+              {specialKind === "dday" ? (
+                <label className="planner-checkbox planner-special-pin">
+                  <input
+                    type="checkbox"
+                    checked={specialPinned}
+                    onChange={(event) =>
+                      setSpecialPinned(event.target.checked)
+                    }
+                  />
+                  <span>
+                    날짜가 지나도 D+ 카운트로 계속 표시
+                  </span>
+                </label>
+              ) : null}
               <div className="planner-form-actions">
+                {editingSpecial !== null ? (
+                  <button
+                    type="button"
+                    className="planner-text-button is-danger planner-special-delete"
+                    disabled={specialSaving}
+                    onClick={() => void handleDeleteSpecial(editingSpecial)}
+                  >
+                    삭제
+                  </button>
+                ) : null}
                 {editingSpecialId !== null ? (
                   <button
                     type="button"
@@ -4373,8 +4453,8 @@ export default function PlannerClient({ username }: { username: string }) {
                   type="search"
                   className="planner-special-search"
                   value={specialSearch}
-                  placeholder="이름으로 기념일 검색"
-                  aria-label="기념일 검색"
+                  placeholder="이름으로 디데이 검색"
+                  aria-label="디데이 검색"
                   onChange={(event) =>
                     setSpecialSearch(event.target.value)
                   }
@@ -4382,8 +4462,8 @@ export default function PlannerClient({ username }: { username: string }) {
                 <div className="planner-special-list">
                   {filteredSpecialDates.length === 0 ? (
                     <p className="planner-empty">
-                      {specialDates.length === 0
-                        ? "아직 등록된 기념일이 없습니다."
+                      {ddaySpecialDates.length === 0
+                        ? "아직 등록된 디데이가 없습니다."
                         : "검색 결과가 없습니다."}
                     </p>
                   ) : (
@@ -4405,6 +4485,17 @@ export default function PlannerClient({ username }: { username: string }) {
                                   item.event_date ?? "",
                                 )}`}
                           </span>
+                        </button>
+                        <button
+                          type="button"
+                          className={`planner-text-button planner-special-pin-toggle${
+                            item.pinned ? " is-active" : ""
+                          }`}
+                          aria-pressed={item.pinned}
+                          disabled={specialSaving}
+                          onClick={() => void handleToggleSpecialPin(item)}
+                        >
+                          {item.pinned ? "고정 해제" : "고정"}
                         </button>
                         <button
                           type="button"

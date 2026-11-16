@@ -21,6 +21,7 @@ class BookmarkSpecialDateCreate(BaseModel):
     event_date: date | None = None
     month: int | None = Field(default=None, ge=1, le=12)
     day: int | None = Field(default=None, ge=1, le=31)
+    pinned: bool = False
 
 
 class BookmarkSpecialDateUpdate(BaseModel):
@@ -29,6 +30,7 @@ class BookmarkSpecialDateUpdate(BaseModel):
     event_date: date | None = None
     month: int | None = Field(default=None, ge=1, le=12)
     day: int | None = Field(default=None, ge=1, le=31)
+    pinned: bool | None = None
 
 
 class BookmarkSpecialDateRead(BaseModel):
@@ -38,6 +40,7 @@ class BookmarkSpecialDateRead(BaseModel):
     event_date: date | None = None
     month: int | None = None
     day: int | None = None
+    pinned: bool = False
     created_at: datetime
     updated_at: datetime
 

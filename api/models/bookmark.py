@@ -129,6 +129,12 @@ class BookmarkRoutine(Base):
         server_default="false",
         index=True,
     )
+    calendar_pinned = Column(
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default="false",
+    )
     position = Column(
         Integer,
         nullable=False,
