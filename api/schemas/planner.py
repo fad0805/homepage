@@ -74,10 +74,15 @@ class PlannerColorUpdate(BaseModel):
     name: str | None = Field(default=None, max_length=80)
 
 
+class PlannerColorReorder(BaseModel):
+    ids: list[int] = Field(default_factory=list)
+
+
 class PlannerColorRead(BaseModel):
     id: int
     color: str
     name: str | None = None
+    position: int = 0
     created_at: datetime
 
     class Config:

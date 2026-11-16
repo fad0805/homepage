@@ -14,6 +14,7 @@ from crud.planner import (
     get_event_preview,
     get_events,
     get_tasks,
+    reorder_colors,
     restore_task,
     save_color,
     search_planner,
@@ -26,6 +27,7 @@ from routers.utils import require_auth
 from schemas.planner import (
     PlannerColorCreate,
     PlannerColorRead,
+    PlannerColorReorder,
     PlannerColorsResponse,
     PlannerColorUpdate,
     PlannerCompletedCreate,
@@ -54,6 +56,17 @@ def read_colors(
 ):
     _no_store(response)
     return get_colors(db, user.id)
+
+
+@router.put("/colors/order", response_model=PlannerColorsResponse)
+def put_color_order(
+    payload: PlannerColorReorder,
+    response: Response,
+    db: Session = Depends(get_db),
+    user=Depends(require_auth),
+):
+    _no_store(response)
+    return reorder_colors(db, payload, user.id)
 
 
 @router.post("/colors", response_model=PlannerColorRead)

@@ -19,6 +19,7 @@ from models.planner import PlannerColor, PlannerEvent, PlannerTask
 from models.profiles import Profile
 from models.users import AuthorSettings
 from schemas.planner import (
+    PlannerColorReorder,
     PlannerColorUpdate,
     PlannerCompletedCreate,
     PlannerEventPreview,
@@ -214,6 +215,7 @@ def _serialize_color(saved: PlannerColor) -> dict:
         "id": saved.id,
         "color": saved.color,
         "name": saved.name,
+        "position": saved.position,
         "created_at": saved.created_at,
     }
 
@@ -227,7 +229,7 @@ def get_colors(db: Session, user_id: int) -> dict:
     colors = (
         db.query(PlannerColor)
         .filter(PlannerColor.user_id == user_id)
-        .order_by(PlannerColor.created_at.asc(), PlannerColor.id.asc())
+        .order_by(PlannerColor.position.asc(), PlannerColor.id.asc())
         .all()
     )
     return {"colors": [_serialize_color(color) for color in colors]}
@@ -261,15 +263,55 @@ def save_color(
             db.refresh(existing)
         return _serialize_color(existing)
 
+    last = (
+        db.query(PlannerColor.position)
+        .filter(PlannerColor.user_id == user_id)
+        .order_by(PlannerColor.position.desc(), PlannerColor.id.desc())
+        .first()
+    )
+    next_position = (last[0] + 1) if last is not None else 0
     saved = PlannerColor(
         user_id=user_id,
         color=normalized,
         name=clean_name,
+        position=next_position,
     )
     db.add(saved)
     db.commit()
     db.refresh(saved)
     return _serialize_color(saved)
+
+
+def reorder_colors(
+    db: Session,
+    payload: PlannerColorReorder,
+    user_id: int,
+) -> dict:
+    colors = (
+        db.query(PlannerColor)
+        .filter(PlannerColor.user_id == user_id)
+        .order_by(PlannerColor.position.asc(), PlannerColor.id.asc())
+        .all()
+    )
+    by_id = {color.id: color for color in colors}
+    ordered: list[PlannerColor] = []
+    seen: set[int] = set()
+    for color_id in payload.ids:
+        color = by_id.get(color_id)
+        if color is None or color.id in seen:
+            continue
+        ordered.append(color)
+        seen.add(color.id)
+
+    # A chip created in another tab may be missing from the request. Keep it
+    # after the explicitly ordered chips instead of dropping it.
+    ordered.extend(
+        color for color in colors if color.id not in seen
+    )
+    for index, color in enumerate(ordered):
+        color.position = index
+    db.commit()
+    return get_colors(db, user_id)
 
 
 def update_color(

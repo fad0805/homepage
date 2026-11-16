@@ -102,6 +102,12 @@ class PlannerColor(Base):
     )
     color = Column(String(7), nullable=False)
     name = Column(String(80), nullable=True)
+    position = Column(
+        Integer,
+        nullable=False,
+        default=0,
+        server_default="0",
+    )
     created_at = Column(DateTime, default=func.now(), nullable=False)
 
     user = relationship("User")
@@ -111,6 +117,11 @@ class PlannerColor(Base):
             "user_id",
             "color",
             name="uq_planner_colors_user_color",
+        ),
+        Index(
+            "ix_planner_colors_user_position",
+            "user_id",
+            "position",
         ),
     )
 

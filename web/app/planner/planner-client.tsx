@@ -78,6 +78,7 @@ interface PlannerColor {
   id: number;
   color: string;
   name: string | null;
+  position: number;
   created_at: string;
 }
 
@@ -453,6 +454,7 @@ export default function PlannerClient({ username }: { username: string }) {
   const [eventsLoading, setEventsLoading] = useState(false);
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [colorSaving, setColorSaving] = useState(false);
+  const [colorOrderSaving, setColorOrderSaving] = useState(false);
   const [newChipColor, setNewChipColor] = useState(DEFAULT_TASK_COLOR);
   const [showChipCreator, setShowChipCreator] = useState(false);
   const [newChipName, setNewChipName] = useState("");
@@ -688,6 +690,9 @@ export default function PlannerClient({ username }: { username: string }) {
         });
       }
     }
+    const savedOrder = new Map(
+      savedColors.map((color, index) => [color.id, index]),
+    );
     return Array.from(groups.entries())
       .map(([key, group]) => ({
         key,
@@ -701,9 +706,24 @@ export default function PlannerClient({ username }: { username: string }) {
         if (aUnassigned !== bUnassigned) {
           return aUnassigned ? 1 : -1;
         }
+        const aChip = a.key.startsWith("chip:")
+          ? Number(a.key.slice(5))
+          : null;
+        const bChip = b.key.startsWith("chip:")
+          ? Number(b.key.slice(5))
+          : null;
+        const aIndex =
+          aChip === null
+            ? Number.MAX_SAFE_INTEGER
+            : (savedOrder.get(aChip) ?? Number.MAX_SAFE_INTEGER);
+        const bIndex =
+          bChip === null
+            ? Number.MAX_SAFE_INTEGER
+            : (savedOrder.get(bChip) ?? Number.MAX_SAFE_INTEGER);
         return (
-          b.tasks.length - a.tasks.length ||
-          (a.color || "").localeCompare(b.color || "")
+          aIndex - bIndex ||
+          (a.color || "").localeCompare(b.color || "") ||
+          a.key.localeCompare(b.key)
         );
       });
   }, [colorViewTasks, savedColors]);
@@ -1320,6 +1340,55 @@ export default function PlannerClient({ username }: { username: string }) {
     setEditChipName(saved.name || "");
     setShowChipCreator(false);
     setError(null);
+  };
+
+  const handleMoveColor = async (
+    saved: PlannerColor,
+    delta: number,
+  ) => {
+    if (colorOrderSaving) return;
+    const currentIndex = savedColors.findIndex(
+      (color) => color.id === saved.id,
+    );
+    const nextIndex = currentIndex + delta;
+    if (
+      currentIndex < 0 ||
+      nextIndex < 0 ||
+      nextIndex >= savedColors.length
+    ) {
+      return;
+    }
+
+    const previous = savedColors;
+    const next = [...savedColors];
+    [next[currentIndex], next[nextIndex]] = [
+      next[nextIndex],
+      next[currentIndex],
+    ];
+    setSavedColors(next);
+    setColorOrderSaving(true);
+    setError(null);
+    try {
+      const data = await apiFetch<PlannerColorsResponse>(
+        "/api/planner/colors/order",
+        {
+          method: "PUT",
+          body: JSON.stringify({
+            ids: next.map((color) => color.id),
+          }),
+        },
+      );
+      setSavedColors(data.colors);
+    } catch (reason) {
+      setSavedColors(previous);
+      setError(
+        reason instanceof Error
+          ? reason.message
+          : "색상 칩 순서를 변경하지 못했습니다.",
+      );
+    } finally {
+      setColorOrderSaving(false);
+    }
   };
 
   const cancelEditingColor = () => {
@@ -2084,6 +2153,9 @@ export default function PlannerClient({ username }: { username: string }) {
                       <p>
                         활성·비활성 일정 {colorViewTasks.length}개 · 칩{" "}
                         {savedColors.length}개
+                        {savedColors.length > 1
+                          ? " · ↑↓로 순서 변경"
+                          : ""}
                         {selectedColorGroups.length > 0
                           ? ` · 선택 ${selectedColorGroups.length}개`
                           : ""}
@@ -2148,6 +2220,11 @@ export default function PlannerClient({ username }: { username: string }) {
                                 Number(group.key.slice(5)),
                             ) ?? null
                           : null;
+                        const savedIndex = savedColor
+                          ? savedColors.findIndex(
+                              (color) => color.id === savedColor.id,
+                            )
+                          : -1;
                         return (
                           <section
                             className={[
@@ -2206,6 +2283,37 @@ export default function PlannerClient({ username }: { username: string }) {
                               </button>
                               {savedColor ? (
                                 <div className="planner-color-group-actions">
+                                  <button
+                                    type="button"
+                                    className="planner-text-button"
+                                    disabled={
+                                      colorOrderSaving || savedIndex <= 0
+                                    }
+                                    aria-label="색상 칩 위로 이동"
+                                    title="위로"
+                                    onClick={() =>
+                                      void handleMoveColor(savedColor, -1)
+                                    }
+                                  >
+                                    ↑
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="planner-text-button"
+                                    disabled={
+                                      colorOrderSaving ||
+                                      savedIndex < 0 ||
+                                      savedIndex >=
+                                        savedColors.length - 1
+                                    }
+                                    aria-label="색상 칩 아래로 이동"
+                                    title="아래로"
+                                    onClick={() =>
+                                      void handleMoveColor(savedColor, 1)
+                                    }
+                                  >
+                                    ↓
+                                  </button>
                                   <button
                                     type="button"
                                     className="planner-text-button"
