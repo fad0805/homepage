@@ -62,6 +62,7 @@ class _Tracked:
     html_fields: frozenset[str] = frozenset()
     image_fields: frozenset[str] = frozenset()
     skip_create: bool = False
+    track_updates: bool = True
 
 
 def _text(value: Any) -> str:
@@ -134,6 +135,7 @@ TRACKED: dict[type, _Tracked] = {
         _book_category_title,
         _owner_from_user_id,
         frozenset({"name", "visible", "protected"}),
+        track_updates=False,
     ),
     Book: _Tracked(
         "book",
@@ -143,6 +145,7 @@ TRACKED: dict[type, _Tracked] = {
             {"title", "description", "tags", "category_id", "visible", "protected"}
         ),
         html_fields=frozenset(),
+        track_updates=False,
     ),
     Chapter: _Tracked(
         "chapter",
@@ -162,6 +165,7 @@ TRACKED: dict[type, _Tracked] = {
             }
         ),
         html_fields=frozenset({"body"}),
+        track_updates=False,
     ),
     Illustration: _Tracked(
         "illustration",
@@ -180,6 +184,7 @@ TRACKED: dict[type, _Tracked] = {
             }
         ),
         image_fields=frozenset({"representative_image_id", "representative_url"}),
+        track_updates=False,
     ),
     Character: _Tracked(
         "character",
@@ -593,7 +598,7 @@ def _process_extra_changes(session: Session, pending: list[dict]) -> None:
     extras = session.info.pop("planner_audit_extra", [])
     for obj, change in extras:
         tracked = _meta_for(obj)
-        if tracked is None:
+        if tracked is None or not tracked.track_updates:
             continue
         # A newly-created object already has a ``created`` event; the extra
         # change belongs to its initial state, not a follow-up edit.
@@ -616,7 +621,7 @@ def _before_flush(session: Session, flush_context, instances) -> None:
 
     for obj in list(session.dirty):
         tracked = _meta_for(obj)
-        if tracked is None:
+        if tracked is None or not tracked.track_updates:
             continue
         if obj in session.new:
             continue
@@ -635,6 +640,8 @@ def _before_flush(session: Session, flush_context, instances) -> None:
         parent = _child_parent(obj)
         child_meta = _child_meta(obj)
         if parent is None or child_meta is None:
+            continue
+        if not child_meta.track_updates:
             continue
         if _is_child_of_deleted(obj, deleted_objects):
             continue
@@ -671,6 +678,8 @@ def _after_flush(session: Session, flush_context) -> None:
         parent = _child_parent(obj)
         child_meta = _child_meta(obj)
         if parent is None or child_meta is None:
+            continue
+        if not child_meta.track_updates:
             continue
         if _is_child_of_new(obj, new_objects):
             continue
