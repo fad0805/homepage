@@ -13,6 +13,7 @@ const PUBLIC_TAGS = [
   "characters",
   "profiles",
   "illustrations",
+  "index",
 ] as const;
 
 export async function POST(request: Request) {

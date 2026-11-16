@@ -6,6 +6,7 @@ const PUBLIC_CONTENT_PREFIXES = [
   "/api/profiles",
   "/api/illustrations",
   "/api/users/me/appearance",
+  "/api/index-page",
 ];
 
 const MUTATION_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
