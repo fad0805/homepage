@@ -2328,22 +2328,15 @@ export default function PlannerClient({ username }: { username: string }) {
                             {daySingleTasks.length > 0 ? (
                               <span className="planner-day-marks">
                                 <span className="planner-day-task-colors">
-                                  {daySingleTasks
-                                    .slice(0, 3)
-                                    .map((task) => (
-                                      <span
-                                        key={task.id}
-                                        className="planner-day-task-color"
-                                        style={{
-                                          backgroundColor: taskColor(task),
-                                        }}
-                                      />
-                                    ))}
-                                  {daySingleTasks.length > 3 ? (
-                                    <span className="planner-day-task-more">
-                                      +{daySingleTasks.length - 3}
-                                    </span>
-                                  ) : null}
+                                  {daySingleTasks.map((task) => (
+                                    <span
+                                      key={task.id}
+                                      className="planner-day-task-color"
+                                      style={{
+                                        backgroundColor: taskColor(task),
+                                      }}
+                                    />
+                                  ))}
                                 </span>
                               </span>
                             ) : null}
