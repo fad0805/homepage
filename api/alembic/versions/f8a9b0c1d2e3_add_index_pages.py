@@ -1,7 +1,7 @@
 """add author and integrated index pages
 
 Revision ID: f8a9b0c1d2e3
-Revises: e7f8a9b0c1d2
+Revises: f9e8d7c6b5a4
 Create Date: 2026-11-15 23:00:00.000000
 
 """
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 
 
 revision: str = "f8a9b0c1d2e3"
-down_revision: Union[str, None] = "e7f8a9b0c1d2"
+down_revision: Union[str, None] = "f9e8d7c6b5a4"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
