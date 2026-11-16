@@ -2092,35 +2092,32 @@ export default function PlannerClient({ username }: { username: string }) {
     }
     return (
       <div className="planner-bookmark-section">
-        <h3>책갈피 기록</h3>
         {goal?.content ? (
           <div className="planner-bookmark-block">
             <span className="planner-bookmark-label">목표</span>
             <p className="planner-bookmark-text">{goal.content}</p>
           </div>
         ) : null}
-        {rating > 0 ? (
+        {review?.content || rating > 0 ? (
           <div className="planner-bookmark-block">
-            <span className="planner-bookmark-label">별점</span>
-            <span
-              className="planner-bookmark-rating"
-              aria-label={`${rating}점`}
-            >
-              {[1, 2, 3, 4, 5].map((score) => (
-                <span className="planner-clover" key={score}>
-                  <CloverIcon filled={score <= rating} />
+            <div className="planner-bookmark-label-row">
+              <span className="planner-bookmark-label">회고</span>
+              {rating > 0 ? (
+                <span
+                  className="planner-bookmark-rating"
+                  aria-label={`${rating}점`}
+                >
+                  {[1, 2, 3, 4, 5].map((score) => (
+                    <span className="planner-clover" key={score}>
+                      <CloverIcon filled={score <= rating} />
+                    </span>
+                  ))}
                 </span>
-              ))}
-              <span className="planner-bookmark-rating-value">
-                {rating} / 5
-              </span>
-            </span>
-          </div>
-        ) : null}
-        {review?.content ? (
-          <div className="planner-bookmark-block">
-            <span className="planner-bookmark-label">회고</span>
-            <p className="planner-bookmark-text">{review.content}</p>
+              ) : null}
+            </div>
+            {review?.content ? (
+              <p className="planner-bookmark-text">{review.content}</p>
+            ) : null}
           </div>
         ) : null}
       </div>

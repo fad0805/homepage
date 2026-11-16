@@ -1141,6 +1141,13 @@
   margin-top: 0.5rem;
 }
 
+.planner-bookmark-label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
 .planner-bookmark-label {
   color: var(--title-color);
   font-size: 0.61rem;
@@ -1160,7 +1167,6 @@
   display: flex;
   align-items: center;
   gap: 0.18rem;
-  margin-top: 0.12rem;
 }
 
 .planner-clover {
@@ -1174,13 +1180,6 @@
     width: 100%;
     height: 100%;
   }
-}
-
-.planner-bookmark-rating-value {
-  margin-left: 0.3rem;
-  color: var(--foreground);
-  font-size: 0.6rem;
-  opacity: 0.55;
 }
 
 [data-theme='dark'] .planner-clover {

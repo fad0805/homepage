@@ -75,9 +75,6 @@ export function CloverRating({
           <CloverIcon filled={score <= display} />
         </button>
       ))}
-      <span className="clover-rating-value">
-        {value > 0 ? `${value} / 5` : "0 / 5"}
-      </span>
     </div>
   );
 }

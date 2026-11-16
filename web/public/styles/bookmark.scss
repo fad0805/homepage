@@ -693,17 +693,35 @@
   white-space: nowrap;
 }
 
-.bookmark-rating-panel {
-  display: flex;
-  flex-direction: column;
+.bookmark-review-header {
+  flex-wrap: wrap;
 }
 
-.bookmark-rating-description {
-  margin: 0.65rem 0 0;
-  color: var(--foreground);
-  font-size: 0.68rem;
-  line-height: 1.55;
-  opacity: 0.6;
+.bookmark-review-side {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.18rem;
+  min-width: 0;
+}
+
+.bookmark-review-rating {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.3rem;
+
+  .clover-rating {
+    flex-wrap: nowrap;
+    margin-top: 0;
+  }
+}
+
+.bookmark-rating-save {
+  padding: 0.3rem 0.55rem;
+  font-size: 0.64rem;
+  white-space: nowrap;
 }
 
 .clover-rating {
@@ -750,13 +768,6 @@
   display: block;
   width: 100%;
   height: 100%;
-}
-
-.clover-rating-value {
-  margin-left: 0.3rem;
-  color: var(--title-color);
-  font-size: 0.64rem;
-  opacity: 0.55;
 }
 
 [data-theme='dark'] .clover-rating-button {

@@ -239,7 +239,6 @@ export default function BookmarkClient({ username }: { username: string }) {
   const [rating, setRating] = useState(0);
   const [ratingDraft, setRatingDraft] = useState(0);
   const [ratingSaving, setRatingSaving] = useState(false);
-  const [ratingSaved, setRatingSaved] = useState(false);
   const [reviewContent, setReviewContent] = useState("");
   const [reviewSaving, setReviewSaving] = useState(false);
   const [reviewSaved, setReviewSaved] = useState(false);
@@ -298,7 +297,6 @@ export default function BookmarkClient({ username }: { username: string }) {
       setRatingDraft(next.rating?.rating ?? 0);
       setReviewContent(next.review?.content ?? "");
       setGoalSaved(false);
-      setRatingSaved(false);
       setReviewSaved(false);
     } catch (reason) {
       setError(
@@ -803,14 +801,12 @@ export default function BookmarkClient({ username }: { username: string }) {
   const handleRatingChange = (nextRating: number) => {
     if (ratingSaving) return;
     setRatingDraft(nextRating);
-    setRatingSaved(false);
   };
 
   const handleSaveRating = async () => {
     if (ratingSaving || ratingDraft === rating) return;
     setRatingSaving(true);
     setError(null);
-    setRatingSaved(false);
     try {
       const saved = await apiFetch<BookmarkRating | null>(
         "/api/bookmark/rating",
@@ -829,7 +825,6 @@ export default function BookmarkClient({ username }: { username: string }) {
       setData((previous) =>
         previous ? { ...previous, rating: saved } : previous,
       );
-      setRatingSaved(true);
     } catch (reason) {
       setError(
         reason instanceof Error
@@ -1201,44 +1196,34 @@ export default function BookmarkClient({ username }: { username: string }) {
                 </button>
               </section>
 
-              <section className="bookmark-panel bookmark-rating-panel">
-                <header className="bookmark-panel-header">
-                  <div>
-                    <p className="bookmark-panel-eyebrow">RATING</p>
-                    <h2>별점</h2>
-                  </div>
-                  {ratingSaved ? (
-                    <span className="bookmark-saved">저장됨</span>
-                  ) : null}
-                </header>
-                <p className="bookmark-rating-description">
-                  세잎클로버를 선택한 뒤 저장 버튼을 눌러주세요. 같은
-                  점수를 다시 누르면 초기화됩니다.
-                </p>
-                <CloverRating
-                  value={ratingDraft}
-                  onChange={handleRatingChange}
-                  disabled={ratingSaving}
-                />
-                <button
-                  type="button"
-                  className="bookmark-primary bookmark-record-save"
-                  disabled={ratingSaving || ratingDraft === rating}
-                  onClick={() => void handleSaveRating()}
-                >
-                  {ratingSaving ? "저장 중..." : "저장"}
-                </button>
-              </section>
-
               <section className="bookmark-panel bookmark-record-panel bookmark-review-panel">
-                <header className="bookmark-panel-header">
+                <header className="bookmark-panel-header bookmark-review-header">
                   <div>
                     <p className="bookmark-panel-eyebrow">REVIEW</p>
                     <h2>회고</h2>
                   </div>
-                  {reviewSaved ? (
-                    <span className="bookmark-saved">저장됨</span>
-                  ) : null}
+                  <div className="bookmark-review-side">
+                    <div className="bookmark-review-rating">
+                      <CloverRating
+                        value={ratingDraft}
+                        onChange={handleRatingChange}
+                        disabled={ratingSaving}
+                      />
+                      <button
+                        type="button"
+                        className="bookmark-primary bookmark-rating-save"
+                        disabled={
+                          ratingSaving || ratingDraft === rating
+                        }
+                        onClick={() => void handleSaveRating()}
+                      >
+                        {ratingSaving ? "저장 중..." : "저장"}
+                      </button>
+                    </div>
+                    {reviewSaved ? (
+                      <span className="bookmark-saved">저장됨</span>
+                    ) : null}
+                  </div>
                 </header>
                 <textarea
                   className="bookmark-record-textarea"
