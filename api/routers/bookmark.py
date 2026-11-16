@@ -4,23 +4,23 @@ from fastapi import APIRouter, Depends, Response
 from sqlalchemy.orm import Session
 
 from crud.bookmark import (
-    create_goal,
     create_routine,
-    delete_goal,
     delete_routine,
     get_period,
+    save_goal,
+    save_rating,
     save_review,
     set_routine_check,
-    update_goal,
     update_routine,
 )
 from db.session import get_db
 from routers.utils import require_auth
 from schemas.bookmark import (
-    BookmarkGoalCreate,
     BookmarkGoalRead,
     BookmarkGoalUpdate,
     BookmarkPeriodRead,
+    BookmarkRatingRead,
+    BookmarkRatingUpdate,
     BookmarkReviewRead,
     BookmarkReviewUpdate,
     BookmarkRoutineCheckUpdate,
@@ -103,38 +103,26 @@ def put_routine_check(
     return set_routine_check(db, routine_id, payload, user.id)
 
 
-@router.post("/goals", response_model=BookmarkGoalRead)
-def post_goal(
-    payload: BookmarkGoalCreate,
-    response: Response,
-    db: Session = Depends(get_db),
-    user=Depends(require_auth),
-):
-    _no_store(response)
-    return create_goal(db, payload, user.id)
-
-
-@router.patch("/goals/{goal_id}", response_model=BookmarkGoalRead)
-def patch_goal(
-    goal_id: int,
+@router.put("/goals", response_model=BookmarkGoalRead)
+def put_goal(
     payload: BookmarkGoalUpdate,
     response: Response,
     db: Session = Depends(get_db),
     user=Depends(require_auth),
 ):
     _no_store(response)
-    return update_goal(db, goal_id, payload, user.id)
+    return save_goal(db, payload, user.id)
 
 
-@router.delete("/goals/{goal_id}")
-def remove_goal(
-    goal_id: int,
+@router.put("/rating", response_model=BookmarkRatingRead | None)
+def put_rating(
+    payload: BookmarkRatingUpdate,
     response: Response,
     db: Session = Depends(get_db),
     user=Depends(require_auth),
 ):
     _no_store(response)
-    return delete_goal(db, goal_id, user.id)
+    return save_rating(db, payload, user.id)
 
 
 @router.put("/review", response_model=BookmarkReviewRead)

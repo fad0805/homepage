@@ -1,6 +1,7 @@
 from sqlalchemy import (
     JSON,
     Boolean,
+    CheckConstraint,
     Column,
     Date,
     DateTime,
@@ -120,7 +121,7 @@ class BookmarkRoutineCheck(Base):
 
 
 class BookmarkGoal(Base):
-    """One goal attached to a user's year/month/week/day."""
+    """One goal text attached to a user's period."""
 
     __tablename__ = "bookmark_goals"
 
@@ -133,20 +134,7 @@ class BookmarkGoal(Base):
     )
     period_type = Column(String(10), nullable=False)
     period_start = Column(Date, nullable=False)
-    title = Column(String(255), nullable=False)
-    notes = Column(Text, nullable=True)
-    done = Column(
-        Boolean,
-        nullable=False,
-        default=False,
-        server_default="false",
-    )
-    position = Column(
-        Integer,
-        nullable=False,
-        default=0,
-        server_default="0",
-    )
+    content = Column(Text, nullable=False, default="", server_default="")
     created_at = Column(DateTime, default=func.now(), nullable=False)
     updated_at = Column(
         DateTime,
@@ -158,11 +146,11 @@ class BookmarkGoal(Base):
     user = relationship("User")
 
     __table_args__ = (
-        Index(
-            "ix_bookmark_goals_user_period",
+        UniqueConstraint(
             "user_id",
             "period_type",
             "period_start",
+            name="uq_bookmark_goals_user_period",
         ),
     )
 
@@ -198,5 +186,44 @@ class BookmarkReview(Base):
             "period_type",
             "period_start",
             name="uq_bookmark_reviews_user_period",
+        ),
+    )
+
+
+class BookmarkRating(Base):
+    """One clover rating for a user's period."""
+
+    __tablename__ = "bookmark_ratings"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(
+        Integer,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    period_type = Column(String(10), nullable=False)
+    period_start = Column(Date, nullable=False)
+    rating = Column(Integer, nullable=False)
+    created_at = Column(DateTime, default=func.now(), nullable=False)
+    updated_at = Column(
+        DateTime,
+        default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+    user = relationship("User")
+
+    __table_args__ = (
+        CheckConstraint(
+            "rating >= 1 AND rating <= 5",
+            name="ck_bookmark_ratings_range",
+        ),
+        UniqueConstraint(
+            "user_id",
+            "period_type",
+            "period_start",
+            name="uq_bookmark_ratings_user_period",
         ),
     )

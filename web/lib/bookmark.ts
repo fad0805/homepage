@@ -35,10 +35,16 @@ export interface BookmarkGoal {
   id: number;
   period_type: BookmarkPeriodType;
   period_start: string;
-  title: string;
-  notes: string | null;
-  done: boolean;
-  position: number;
+  content: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface BookmarkRating {
+  id: number;
+  period_type: BookmarkPeriodType;
+  period_start: string;
+  rating: number;
   created_at: string;
   updated_at: string;
 }
@@ -56,7 +62,8 @@ export interface BookmarkPeriod {
   period_type: BookmarkPeriodType;
   period_start: string;
   routines: BookmarkRoutine[];
-  goals: BookmarkGoal[];
+  goal: BookmarkGoal | null;
+  rating: BookmarkRating | null;
   review: BookmarkReview | null;
 }
 

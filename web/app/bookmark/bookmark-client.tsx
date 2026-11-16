@@ -9,17 +9,19 @@ import {
   type BookmarkGoal,
   type BookmarkPeriod,
   type BookmarkPeriodType,
+  type BookmarkRating,
+  type BookmarkReview,
   type BookmarkRoutine,
   type BookmarkRoutineFrequency,
-  type BookmarkReview,
   routineScheduleLabel,
 } from "@/lib/bookmark";
 import { apiFetch } from "@/lib/api";
 import { todayDateInputValue } from "@/lib/datetime";
 
+import { CloverRating } from "./clover-rating";
+
 import "@/public/styles/bookmark.scss";
 
-type ModalKind = "routine" | "goal";
 type MonthlyMode = "day" | "nth";
 
 const PERIOD_TYPES: BookmarkPeriodType[] = [
@@ -195,16 +197,19 @@ export default function BookmarkClient({ username }: { username: string }) {
   const [data, setData] = useState<BookmarkPeriod | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  const [goalContent, setGoalContent] = useState("");
+  const [goalSaving, setGoalSaving] = useState(false);
+  const [goalSaved, setGoalSaved] = useState(false);
+  const [rating, setRating] = useState(0);
+  const [ratingSaving, setRatingSaving] = useState(false);
   const [reviewContent, setReviewContent] = useState("");
   const [reviewSaving, setReviewSaving] = useState(false);
   const [reviewSaved, setReviewSaved] = useState(false);
 
-  const [modalKind, setModalKind] = useState<ModalKind | null>(null);
+  const [routineModalOpen, setRoutineModalOpen] = useState(false);
   const [editingRoutine, setEditingRoutine] =
     useState<BookmarkRoutine | null>(null);
-  const [editingGoal, setEditingGoal] = useState<BookmarkGoal | null>(
-    null,
-  );
   const [itemTitle, setItemTitle] = useState("");
   const [itemNotes, setItemNotes] = useState("");
   const [itemSaving, setItemSaving] = useState(false);
@@ -227,7 +232,10 @@ export default function BookmarkClient({ username }: { username: string }) {
         { cache: "no-store" },
       );
       setData(next);
+      setGoalContent(next.goal?.content ?? "");
+      setRating(next.rating?.rating ?? 0);
       setReviewContent(next.review?.content ?? "");
+      setGoalSaved(false);
       setReviewSaved(false);
     } catch (reason) {
       setError(
@@ -247,7 +255,7 @@ export default function BookmarkClient({ username }: { username: string }) {
   const changePeriodType = (next: BookmarkPeriodType) => {
     setPeriodType(next);
     setPeriodStart((previous) => startOfPeriod(previous, next));
-    closeModal();
+    closeRoutineModal();
   };
 
   const goToday = () => {
@@ -261,12 +269,10 @@ export default function BookmarkClient({ username }: { username: string }) {
   };
 
   const routines = data?.routines ?? [];
-  const goals = data?.goals ?? [];
 
   const openCreateRoutine = () => {
-    setModalKind("routine");
+    setRoutineModalOpen(true);
     setEditingRoutine(null);
-    setEditingGoal(null);
     setItemTitle("");
     setItemNotes("");
     setRoutineWeekday(0);
@@ -279,9 +285,8 @@ export default function BookmarkClient({ username }: { username: string }) {
   };
 
   const openEditRoutine = (routine: BookmarkRoutine) => {
-    setModalKind("routine");
+    setRoutineModalOpen(true);
     setEditingRoutine(routine);
-    setEditingGoal(null);
     setItemTitle(routine.title);
     setItemNotes(routine.notes ?? "");
     setRoutineWeekday(routine.weekday ?? 0);
@@ -301,39 +306,17 @@ export default function BookmarkClient({ username }: { username: string }) {
     setError(null);
   };
 
-  const openCreateGoal = () => {
-    setModalKind("goal");
+  const closeRoutineModal = () => {
+    setRoutineModalOpen(false);
     setEditingRoutine(null);
-    setEditingGoal(null);
-    setItemTitle("");
-    setItemNotes("");
-    setError(null);
-  };
-
-  const openEditGoal = (goal: BookmarkGoal) => {
-    setModalKind("goal");
-    setEditingGoal(goal);
-    setEditingRoutine(null);
-    setItemTitle(goal.title);
-    setItemNotes(goal.notes ?? "");
-    setError(null);
-  };
-
-  const closeModal = () => {
-    setModalKind(null);
-    setEditingRoutine(null);
-    setEditingGoal(null);
     setItemTitle("");
     setItemNotes("");
   };
 
   const modalFrequency =
-    modalKind === "routine"
-      ? (editingRoutine?.frequency ?? PERIOD_FREQUENCY[periodType])
-      : null;
+    editingRoutine?.frequency ?? PERIOD_FREQUENCY[periodType];
 
   const routinePayload = () => {
-    if (!modalFrequency) return {};
     if (modalFrequency === "weekly") {
       return { weekdays: routineWeekdaySelection };
     }
@@ -381,11 +364,12 @@ export default function BookmarkClient({ username }: { username: string }) {
     );
   };
 
-  const handleSaveItem = async (event: FormEvent<HTMLFormElement>) => {
+  const handleSaveRoutine = async (
+    event: FormEvent<HTMLFormElement>,
+  ) => {
     event.preventDefault();
-    if (!itemTitle.trim() || itemSaving || !modalKind) return;
+    if (!itemTitle.trim() || itemSaving) return;
     if (
-      modalKind === "routine" &&
       modalFrequency === "weekly" &&
       routineWeekdaySelection.length === 0
     ) {
@@ -396,88 +380,61 @@ export default function BookmarkClient({ username }: { username: string }) {
     setItemSaving(true);
     setError(null);
     try {
-      if (modalKind === "routine") {
-        const schedule = routinePayload();
-        if (editingRoutine) {
-          await apiFetch<BookmarkRoutine>(
-            `/api/bookmark/routines/${editingRoutine.id}`,
-            {
-              method: "PATCH",
-              body: JSON.stringify({
-                title: itemTitle,
-                notes: itemNotes || null,
-                ...schedule,
-              }),
-            },
-          );
-        } else {
-          await apiFetch<BookmarkRoutine>("/api/bookmark/routines", {
-            method: "POST",
-            body: JSON.stringify({
-              frequency: modalFrequency,
-              title: itemTitle,
-              notes: itemNotes || null,
-              ...schedule,
-            }),
-          });
-        }
-      } else if (editingGoal) {
-        await apiFetch<BookmarkGoal>(
-          `/api/bookmark/goals/${editingGoal.id}`,
+      const schedule = routinePayload();
+      if (editingRoutine) {
+        await apiFetch<BookmarkRoutine>(
+          `/api/bookmark/routines/${editingRoutine.id}`,
           {
             method: "PATCH",
             body: JSON.stringify({
               title: itemTitle,
               notes: itemNotes || null,
+              ...schedule,
             }),
           },
         );
       } else {
-        await apiFetch<BookmarkGoal>("/api/bookmark/goals", {
+        await apiFetch<BookmarkRoutine>("/api/bookmark/routines", {
           method: "POST",
           body: JSON.stringify({
-            period_type: periodType,
-            period_start: periodStart,
+            frequency: modalFrequency,
             title: itemTitle,
             notes: itemNotes || null,
+            ...schedule,
           }),
         });
       }
-      closeModal();
+      closeRoutineModal();
       await loadPeriod();
     } catch (reason) {
       setError(
         reason instanceof Error
           ? reason.message
-          : "책갈피 항목을 저장하지 못했습니다.",
+          : "루틴을 저장하지 못했습니다.",
       );
     } finally {
       setItemSaving(false);
     }
   };
 
-  const handleDeleteItem = async () => {
-    if (!modalKind) return;
-    const target = editingRoutine ?? editingGoal;
-    if (!target) return;
-    if (!window.confirm(`"${target.title}" 항목을 삭제할까요?`)) {
+  const handleDeleteRoutine = async () => {
+    if (!editingRoutine) return;
+    if (!window.confirm(`"${editingRoutine.title}" 루틴을 삭제할까요?`)) {
       return;
     }
     setItemSaving(true);
     setError(null);
     try {
-      const path =
-        modalKind === "routine"
-          ? `/api/bookmark/routines/${target.id}`
-          : `/api/bookmark/goals/${target.id}`;
-      await apiFetch(path, { method: "DELETE" });
-      closeModal();
+      await apiFetch(`/api/bookmark/routines/${editingRoutine.id}`, {
+        method: "DELETE",
+      });
+      closeRoutineModal();
       await loadPeriod();
     } catch (reason) {
       setError(
         reason instanceof Error
           ? reason.message
-          : "책갈피 항목을 삭제하지 못했습니다.",
+          : "루틴을 삭제하지 못했습니다.",
       );
     } finally {
       setItemSaving(false);
@@ -532,35 +489,68 @@ export default function BookmarkClient({ username }: { username: string }) {
     }
   };
 
-  const toggleGoal = async (goal: BookmarkGoal) => {
+  const handleSaveGoal = async () => {
+    if (goalSaving) return;
+    setGoalSaving(true);
     setError(null);
-    setData((previous) =>
-      previous
-        ? {
-            ...previous,
-            goals: previous.goals.map((current) =>
-              current.id === goal.id
-                ? { ...current, done: !current.done }
-                : current,
-            ),
-          }
-        : previous,
-    );
+    setGoalSaved(false);
     try {
-      await apiFetch<BookmarkGoal>(
-        `/api/bookmark/goals/${goal.id}`,
-        {
-          method: "PATCH",
-          body: JSON.stringify({ done: !goal.done }),
-        },
+      const saved = await apiFetch<BookmarkGoal>("/api/bookmark/goals", {
+        method: "PUT",
+        body: JSON.stringify({
+          period_type: periodType,
+          period_start: periodStart,
+          content: goalContent,
+        }),
+      });
+      setData((previous) =>
+        previous ? { ...previous, goal: saved } : previous,
       );
+      setGoalContent(saved.content);
+      setGoalSaved(true);
     } catch (reason) {
       setError(
         reason instanceof Error
           ? reason.message
-          : "목표 상태를 변경하지 못했습니다.",
+          : "목표를 저장하지 못했습니다.",
+      );
+    } finally {
+      setGoalSaving(false);
+    }
+  };
+
+  const handleSetRating = async (nextRating: number) => {
+    if (ratingSaving) return;
+    const previousRating = rating;
+    setRating(nextRating);
+    setRatingSaving(true);
+    setError(null);
+    try {
+      const saved = await apiFetch<BookmarkRating | null>(
+        "/api/bookmark/rating",
+        {
+          method: "PUT",
+          body: JSON.stringify({
+            period_type: periodType,
+            period_start: periodStart,
+            rating: nextRating,
+          }),
+        },
+      );
+      setRating(saved?.rating ?? 0);
+      setData((previous) =>
+        previous ? { ...previous, rating: saved } : previous,
+      );
+    } catch (reason) {
+      setRating(previousRating);
+      setError(
+        reason instanceof Error
+          ? reason.message
+          : "별점을 저장하지 못했습니다.",
       );
       await loadPeriod();
+    } finally {
+      setRatingSaving(false);
     }
   };
 
@@ -610,9 +600,7 @@ export default function BookmarkClient({ username }: { username: string }) {
             routine.occurrences.every((occurrence) => occurrence.done);
           return (
             <li
-              className={`bookmark-item${
-                allDone ? " is-done" : ""
-              }`}
+              className={`bookmark-item${allDone ? " is-done" : ""}`}
               key={routine.id}
             >
               <div className="bookmark-item-main">
@@ -666,43 +654,6 @@ export default function BookmarkClient({ username }: { username: string }) {
       </ul>
     );
 
-  const renderGoals = () =>
-    goals.length === 0 ? (
-      <p className="bookmark-empty-row">
-        이 기간에 등록된 목표가 없습니다.
-      </p>
-    ) : (
-      <ul className="bookmark-item-list">
-        {goals.map((goal) => (
-          <li
-            className={`bookmark-item${goal.done ? " is-done" : ""}`}
-            key={goal.id}
-          >
-            <div className="bookmark-item-main">
-              <label className="bookmark-item-check">
-                <input
-                  type="checkbox"
-                  checked={goal.done}
-                  onChange={() => void toggleGoal(goal)}
-                />
-                <span>{goal.title}</span>
-              </label>
-              {goal.notes ? (
-                <p className="bookmark-item-notes">{goal.notes}</p>
-              ) : null}
-            </div>
-            <button
-              type="button"
-              className="bookmark-text-button"
-              onClick={() => openEditGoal(goal)}
-            >
-              수정
-            </button>
-          </li>
-        ))}
-      </ul>
-    );
-
   return (
     <div id="bookmark-page">
       <main>
@@ -711,8 +662,8 @@ export default function BookmarkClient({ username }: { username: string }) {
             <p className="bookmark-eyebrow">{username}의 비공개 기록</p>
             <h1>책갈피</h1>
             <p className="bookmark-description">
-              연·분기·월·주·일 단위로 루틴과 목표를 관리하고 회고를
-              남깁니다. 이 화면은 로그인한 본인에게만 보입니다.
+              연·분기·월·주·일 단위로 루틴을 체크하고, 목표와 별점,
+              회고를 남깁니다. 이 화면은 로그인한 본인에게만 보입니다.
             </p>
           </div>
         </header>
@@ -785,93 +736,114 @@ export default function BookmarkClient({ username }: { username: string }) {
                 </header>
                 {renderRoutines()}
               </section>
+            </div>
 
-              <section className="bookmark-panel">
+            <div className="bookmark-record-column">
+              <section className="bookmark-panel bookmark-record-panel">
                 <header className="bookmark-panel-header">
                   <div>
                     <p className="bookmark-panel-eyebrow">GOAL</p>
                     <h2>목표</h2>
                   </div>
-                  <button
-                    type="button"
-                    className="bookmark-primary"
-                    onClick={openCreateGoal}
-                  >
-                    추가
-                  </button>
+                  {goalSaved ? (
+                    <span className="bookmark-saved">저장됨</span>
+                  ) : null}
                 </header>
-                {renderGoals()}
+                <textarea
+                  className="bookmark-record-textarea"
+                  value={goalContent}
+                  maxLength={20000}
+                  placeholder="이 기간에 이루고 싶은 목표나 바람을 적어보세요."
+                  onChange={(event) => {
+                    setGoalContent(event.target.value);
+                    setGoalSaved(false);
+                  }}
+                />
+                <button
+                  type="button"
+                  className="bookmark-primary bookmark-record-save"
+                  disabled={goalSaving}
+                  onClick={() => void handleSaveGoal()}
+                >
+                  {goalSaving ? "저장 중..." : "목표 저장"}
+                </button>
+              </section>
+
+              <section className="bookmark-panel bookmark-rating-panel">
+                <header className="bookmark-panel-header">
+                  <div>
+                    <p className="bookmark-panel-eyebrow">RATING</p>
+                    <h2>별점</h2>
+                  </div>
+                </header>
+                <p className="bookmark-rating-description">
+                  세잎클로버로 이 기간을 최대 5점까지 평가합니다. 같은
+                  점수를 다시 누르면 초기화됩니다.
+                </p>
+                <CloverRating
+                  value={rating}
+                  onChange={(value) => void handleSetRating(value)}
+                  disabled={ratingSaving}
+                />
+              </section>
+
+              <section className="bookmark-panel bookmark-record-panel bookmark-review-panel">
+                <header className="bookmark-panel-header">
+                  <div>
+                    <p className="bookmark-panel-eyebrow">REVIEW</p>
+                    <h2>회고</h2>
+                  </div>
+                  {reviewSaved ? (
+                    <span className="bookmark-saved">저장됨</span>
+                  ) : null}
+                </header>
+                <textarea
+                  className="bookmark-record-textarea"
+                  value={reviewContent}
+                  maxLength={20000}
+                  placeholder="이 기간을 돌아보세요."
+                  onChange={(event) => {
+                    setReviewContent(event.target.value);
+                    setReviewSaved(false);
+                  }}
+                />
+                <button
+                  type="button"
+                  className="bookmark-primary bookmark-record-save"
+                  disabled={reviewSaving}
+                  onClick={() => void handleSaveReview()}
+                >
+                  {reviewSaving ? "저장 중..." : "회고 저장"}
+                </button>
               </section>
             </div>
-
-            <section className="bookmark-panel bookmark-review-panel">
-              <header className="bookmark-panel-header">
-                <div>
-                  <p className="bookmark-panel-eyebrow">REVIEW</p>
-                  <h2>회고</h2>
-                </div>
-                {reviewSaved ? (
-                  <span className="bookmark-saved">저장됨</span>
-                ) : null}
-              </header>
-              <textarea
-                className="bookmark-review-textarea"
-                value={reviewContent}
-                maxLength={20000}
-                placeholder="이 기간을 돌아보세요."
-                onChange={(event) => {
-                  setReviewContent(event.target.value);
-                  setReviewSaved(false);
-                }}
-              />
-              <button
-                type="button"
-                className="bookmark-primary bookmark-review-save"
-                disabled={reviewSaving}
-                onClick={() => void handleSaveReview()}
-              >
-                {reviewSaving ? "저장 중..." : "회고 저장"}
-              </button>
-            </section>
           </div>
         )}
       </main>
 
-      {modalKind ? (
+      {routineModalOpen ? (
         <div
           className="bookmark-modal-overlay"
           role="presentation"
-          onClick={closeModal}
+          onClick={closeRoutineModal}
         >
           <div
             className="bookmark-modal"
             role="dialog"
             aria-modal="true"
-            aria-label={
-              modalKind === "routine"
-                ? "루틴 관리"
-                : editingGoal
-                  ? "목표 수정"
-                  : "목표 추가"
-            }
+            aria-label="루틴 관리"
             onClick={(event) => event.stopPropagation()}
           >
             <form
               className="bookmark-item-form"
-              onSubmit={handleSaveItem}
+              onSubmit={handleSaveRoutine}
             >
               <header className="bookmark-modal-header">
-                <h2>
-                  {modalKind === "routine"
-                    ? `${FREQUENCY_LABELS[modalFrequency ?? "daily"]} 루틴`
-                    : editingGoal
-                      ? "목표 수정"
-                      : "목표 추가"}
-                </h2>
+                <h2>{FREQUENCY_LABELS[modalFrequency]} 루틴</h2>
                 <button
                   type="button"
                   className="bookmark-text-button"
-                  onClick={closeModal}
+                  onClick={closeRoutineModal}
                 >
                   닫기
                 </button>
@@ -886,11 +858,7 @@ export default function BookmarkClient({ username }: { username: string }) {
                   value={itemTitle}
                   maxLength={255}
                   required
-                  placeholder={
-                    modalKind === "goal"
-                      ? "이 기간에 이루고 싶은 목표"
-                      : "반복할 루틴"
-                  }
+                  placeholder="반복할 루틴"
                   onChange={(event) =>
                     setItemTitle(event.target.value)
                   }
@@ -909,131 +877,56 @@ export default function BookmarkClient({ username }: { username: string }) {
                 />
               </label>
 
-              {modalKind === "routine" && modalFrequency ? (
-                <div className="bookmark-schedule">
-                  <span className="bookmark-field-label">
-                    반복 일정
-                  </span>
-                  {modalFrequency === "weekly" ? (
-                    <div className="bookmark-weekday-field">
-                      <span>요일</span>
-                      <div className="bookmark-weekday-picker">
-                        {WEEKDAY_SHORT.map((label, index) => {
-                          const selected =
-                            routineWeekdaySelection.includes(index);
-                          return (
-                            <label
-                              className={
-                                selected ? "is-selected" : ""
-                              }
-                              key={label}
-                            >
-                              <input
-                                type="checkbox"
-                                checked={selected}
-                                onChange={() =>
-                                  toggleRoutineWeekday(index)
-                                }
-                              />
-                              <span>{label}</span>
-                            </label>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  ) : null}
-
-                  {modalFrequency === "monthly" ? (
-                    <>
-                      <label>
-                        <span>방식</span>
-                        <select
-                          value={monthlyMode}
-                          onChange={(event) =>
-                            setMonthlyMode(
-                              event.target.value as MonthlyMode,
-                            )
-                          }
-                        >
-                          <option value="day">날짜</option>
-                          <option value="nth">몇 번째 요일</option>
-                        </select>
-                      </label>
-                      {monthlyMode === "day" ? (
-                        <label>
-                          <span>일</span>
-                          <input
-                            type="number"
-                            min={1}
-                            max={31}
-                            value={routineDayOfMonth}
-                            onChange={(event) =>
-                              setRoutineDayOfMonth(
-                                event.target.value,
-                              )
+              <div className="bookmark-schedule">
+                <span className="bookmark-field-label">
+                  반복 일정
+                </span>
+                {modalFrequency === "weekly" ? (
+                  <div className="bookmark-weekday-field">
+                    <span>요일</span>
+                    <div className="bookmark-weekday-picker">
+                      {WEEKDAY_SHORT.map((label, index) => {
+                        const selected =
+                          routineWeekdaySelection.includes(index);
+                        return (
+                          <label
+                            className={
+                              selected ? "is-selected" : ""
                             }
-                          />
-                        </label>
-                      ) : (
-                        <div className="bookmark-schedule-row">
-                          <label>
-                            <span>번째</span>
-                            <select
-                              value={routineNthWeek}
-                              onChange={(event) =>
-                                setRoutineNthWeek(
-                                  Number(event.target.value),
-                                )
+                            key={label}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={selected}
+                              onChange={() =>
+                                toggleRoutineWeekday(index)
                               }
-                            >
-                              {[1, 2, 3, 4, 5].map((value) => (
-                                <option value={value} key={value}>
-                                  {value}번째
-                                </option>
-                              ))}
-                            </select>
+                            />
+                            <span>{label}</span>
                           </label>
-                          <label>
-                            <span>요일</span>
-                            <select
-                              value={routineWeekday}
-                              onChange={(event) =>
-                                setRoutineWeekday(
-                                  Number(event.target.value),
-                                )
-                              }
-                            >
-                              {WEEKDAY_LABELS.map((label, index) => (
-                                <option value={index} key={label}>
-                                  {label}
-                                </option>
-                              ))}
-                            </select>
-                          </label>
-                        </div>
-                      )}
-                    </>
-                  ) : null}
+                        );
+                      })}
+                    </div>
+                  </div>
+                ) : null}
 
-                  {modalFrequency === "yearly" ? (
-                    <div className="bookmark-schedule-row">
-                      <label>
-                        <span>월</span>
-                        <select
-                          value={routineMonth}
-                          onChange={(event) =>
-                            setRoutineMonth(
-                              Number(event.target.value),
-                            )
-                          }
-                        >
-                          {Array.from({ length: 12 }, (_, index) => (
-                            <option value={index + 1} key={index + 1}>
-                              {index + 1}월
-                            </option>
-                          ))}
-                        </select>
-                      </label>
+                {modalFrequency === "monthly" ? (
+                  <>
+                    <label>
+                      <span>방식</span>
+                      <select
+                        value={monthlyMode}
+                        onChange={(event) =>
+                          setMonthlyMode(
+                            event.target.value as MonthlyMode,
+                          )
+                        }
+                      >
+                        <option value="day">날짜</option>
+                        <option value="nth">몇 번째 요일</option>
+                      </select>
+                    </label>
+                    {monthlyMode === "day" ? (
                       <label>
                         <span>일</span>
                         <input
@@ -1042,30 +935,103 @@ export default function BookmarkClient({ username }: { username: string }) {
                           max={31}
                           value={routineDayOfMonth}
                           onChange={(event) =>
-                            setRoutineDayOfMonth(event.target.value)
+                            setRoutineDayOfMonth(
+                              event.target.value,
+                            )
                           }
                         />
                       </label>
-                    </div>
-                  ) : null}
+                    ) : (
+                      <div className="bookmark-schedule-row">
+                        <label>
+                          <span>번째</span>
+                          <select
+                            value={routineNthWeek}
+                            onChange={(event) =>
+                              setRoutineNthWeek(
+                                Number(event.target.value),
+                              )
+                            }
+                          >
+                            {[1, 2, 3, 4, 5].map((value) => (
+                              <option value={value} key={value}>
+                                {value}번째
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        <label>
+                          <span>요일</span>
+                          <select
+                            value={routineWeekday}
+                            onChange={(event) =>
+                              setRoutineWeekday(
+                                Number(event.target.value),
+                              )
+                            }
+                          >
+                            {WEEKDAY_LABELS.map((label, index) => (
+                              <option value={index} key={label}>
+                                {label}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                      </div>
+                    )}
+                  </>
+                ) : null}
 
-                  {["daily", "quarterly"].includes(modalFrequency) ? (
-                    <p className="bookmark-form-hint">
-                      {modalFrequency === "daily"
-                        ? "매일 체크할 루틴입니다."
-                        : "매분기 체크할 루틴입니다."}
-                    </p>
-                  ) : null}
-                </div>
-              ) : null}
+                {modalFrequency === "yearly" ? (
+                  <div className="bookmark-schedule-row">
+                    <label>
+                      <span>월</span>
+                      <select
+                        value={routineMonth}
+                        onChange={(event) =>
+                          setRoutineMonth(
+                            Number(event.target.value),
+                          )
+                        }
+                      >
+                        {Array.from({ length: 12 }, (_, index) => (
+                          <option value={index + 1} key={index + 1}>
+                            {index + 1}월
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
+                      <span>일</span>
+                      <input
+                        type="number"
+                        min={1}
+                        max={31}
+                        value={routineDayOfMonth}
+                        onChange={(event) =>
+                          setRoutineDayOfMonth(event.target.value)
+                        }
+                      />
+                    </label>
+                  </div>
+                ) : null}
+
+                {["daily", "quarterly"].includes(modalFrequency) ? (
+                  <p className="bookmark-form-hint">
+                    {modalFrequency === "daily"
+                      ? "매일 체크할 루틴입니다."
+                      : "매분기 체크할 루틴입니다."}
+                  </p>
+                ) : null}
+              </div>
 
               <div className="bookmark-modal-actions">
-                {editingRoutine || editingGoal ? (
+                {editingRoutine ? (
                   <button
                     type="button"
                     className="bookmark-text-button is-danger"
                     disabled={itemSaving}
-                    onClick={() => void handleDeleteItem()}
+                    onClick={() => void handleDeleteRoutine()}
                   >
                     삭제
                   </button>

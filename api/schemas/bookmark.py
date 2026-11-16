@@ -73,28 +73,35 @@ class BookmarkRoutineCheckUpdate(BaseModel):
     done: bool
 
 
-class BookmarkGoalCreate(BaseModel):
+class BookmarkGoalUpdate(BaseModel):
     period_type: BookmarkPeriodType
     period_start: date
-    title: str = Field(min_length=1, max_length=255)
-    notes: str | None = Field(default=None, max_length=4000)
-    done: bool = False
-
-
-class BookmarkGoalUpdate(BaseModel):
-    title: str | None = Field(default=None, min_length=1, max_length=255)
-    notes: str | None = Field(default=None, max_length=4000)
-    done: bool | None = None
+    content: str = Field(max_length=20000)
 
 
 class BookmarkGoalRead(BaseModel):
     id: int
     period_type: BookmarkPeriodType
     period_start: date
-    title: str
-    notes: str | None = None
-    done: bool
-    position: int
+    content: str
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class BookmarkRatingUpdate(BaseModel):
+    period_type: BookmarkPeriodType
+    period_start: date
+    rating: int = Field(ge=0, le=5)
+
+
+class BookmarkRatingRead(BaseModel):
+    id: int
+    period_type: BookmarkPeriodType
+    period_start: date
+    rating: int
     created_at: datetime
     updated_at: datetime
 
@@ -124,5 +131,6 @@ class BookmarkPeriodRead(BaseModel):
     period_type: BookmarkPeriodType
     period_start: date
     routines: list[BookmarkRoutinePeriodRead] = Field(default_factory=list)
-    goals: list[BookmarkGoalRead] = Field(default_factory=list)
+    goal: BookmarkGoalRead | None = None
+    rating: BookmarkRatingRead | None = None
     review: BookmarkReviewRead | None = None

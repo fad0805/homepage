@@ -8,13 +8,14 @@ from sqlalchemy.orm import Session
 
 from models.bookmark import (
     BookmarkGoal,
+    BookmarkRating,
     BookmarkReview,
     BookmarkRoutine,
     BookmarkRoutineCheck,
 )
 from schemas.bookmark import (
-    BookmarkGoalCreate,
     BookmarkGoalUpdate,
+    BookmarkRatingUpdate,
     BookmarkReviewUpdate,
     BookmarkRoutineCheckUpdate,
     BookmarkRoutineCreate,
@@ -320,27 +321,6 @@ def _get_routine_or_404(
     return routine
 
 
-def _get_goal_or_404(
-    db: Session,
-    goal_id: int,
-    user_id: int,
-) -> BookmarkGoal:
-    goal = (
-        db.query(BookmarkGoal)
-        .filter(
-            BookmarkGoal.id == goal_id,
-            BookmarkGoal.user_id == user_id,
-        )
-        .first()
-    )
-    if goal is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="책갈피 목표를 찾을 수 없습니다.",
-        )
-    return goal
-
-
 def get_period(
     db: Session,
     user_id: int,
@@ -406,15 +386,23 @@ def get_period(
             for row in check_rows
         }
 
-    goals = (
+    goal = (
         db.query(BookmarkGoal)
         .filter(
             BookmarkGoal.user_id == user_id,
             BookmarkGoal.period_type == period_type,
             BookmarkGoal.period_start == period_start,
         )
-        .order_by(BookmarkGoal.position, BookmarkGoal.id)
-        .all()
+        .first()
+    )
+    rating = (
+        db.query(BookmarkRating)
+        .filter(
+            BookmarkRating.user_id == user_id,
+            BookmarkRating.period_type == period_type,
+            BookmarkRating.period_start == period_start,
+        )
+        .first()
     )
     review = (
         db.query(BookmarkReview)
@@ -444,7 +432,8 @@ def get_period(
             )
             for routine in routines
         ],
-        "goals": goals,
+        "goal": goal,
+        "rating": rating,
         "review": review,
     }
 
@@ -601,60 +590,69 @@ def set_routine_check(
     )
 
 
-def create_goal(
+def save_goal(
     db: Session,
-    payload: BookmarkGoalCreate,
+    payload: BookmarkGoalUpdate,
     user_id: int,
 ) -> BookmarkGoal:
     _validate_period(payload.period_type, payload.period_start)
-    max_position = (
-        db.query(func.max(BookmarkGoal.position))
+    goal = (
+        db.query(BookmarkGoal)
         .filter(
             BookmarkGoal.user_id == user_id,
             BookmarkGoal.period_type == payload.period_type,
             BookmarkGoal.period_start == payload.period_start,
         )
-        .scalar()
+        .first()
     )
-    goal = BookmarkGoal(
-        user_id=user_id,
-        period_type=payload.period_type,
-        period_start=payload.period_start,
-        title=_clean_title(payload.title),
-        notes=_clean_notes(payload.notes),
-        done=bool(payload.done),
-        position=(max_position or -1) + 1,
-    )
-    db.add(goal)
+    if goal is None:
+        goal = BookmarkGoal(
+            user_id=user_id,
+            period_type=payload.period_type,
+            period_start=payload.period_start,
+            content=payload.content,
+        )
+        db.add(goal)
+    else:
+        goal.content = payload.content
     db.commit()
     db.refresh(goal)
     return goal
 
 
-def update_goal(
+def save_rating(
     db: Session,
-    goal_id: int,
-    payload: BookmarkGoalUpdate,
+    payload: BookmarkRatingUpdate,
     user_id: int,
-) -> BookmarkGoal:
-    goal = _get_goal_or_404(db, goal_id, user_id)
-    data = payload.model_dump(exclude_unset=True)
-    if "title" in data:
-        goal.title = _clean_title(data["title"])
-    if "notes" in data:
-        goal.notes = _clean_notes(data["notes"])
-    if "done" in data:
-        goal.done = bool(data["done"])
+) -> BookmarkRating | None:
+    _validate_period(payload.period_type, payload.period_start)
+    rating = (
+        db.query(BookmarkRating)
+        .filter(
+            BookmarkRating.user_id == user_id,
+            BookmarkRating.period_type == payload.period_type,
+            BookmarkRating.period_start == payload.period_start,
+        )
+        .first()
+    )
+    if payload.rating <= 0:
+        if rating is not None:
+            db.delete(rating)
+            db.commit()
+        return None
+    if rating is None:
+        rating = BookmarkRating(
+            user_id=user_id,
+            period_type=payload.period_type,
+            period_start=payload.period_start,
+            rating=payload.rating,
+        )
+        db.add(rating)
+    else:
+        rating.rating = payload.rating
     db.commit()
-    db.refresh(goal)
-    return goal
-
-
-def delete_goal(db: Session, goal_id: int, user_id: int) -> dict:
-    goal = _get_goal_or_404(db, goal_id, user_id)
-    db.delete(goal)
-    db.commit()
-    return {"success": True}
+    db.refresh(rating)
+    return rating
 
 
 def save_review(
