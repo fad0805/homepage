@@ -63,6 +63,7 @@ class _Tracked:
     image_fields: frozenset[str] = frozenset()
     skip_create: bool = False
     track_updates: bool = True
+    occurred_at: Callable[[Any], datetime | None] | None = None
 
 
 def _text(value: Any) -> str:
@@ -79,6 +80,18 @@ def _book_title(obj: Book) -> str:
 
 def _chapter_title(obj: Chapter) -> str:
     return _text(obj.title) or "챕터"
+
+
+def _chapter_occurred_at(obj: Chapter) -> datetime | None:
+    """Anchor a post's history on its publication time, not its edit time."""
+    value = getattr(obj, "published_at", None)
+    if value is None:
+        value = getattr(obj, "created_at", None)
+    if value is None:
+        return None
+    if value.tzinfo is not None:
+        value = value.astimezone(timezone.utc).replace(tzinfo=None)
+    return value
 
 
 def _illustration_title(obj: Illustration) -> str:
@@ -157,15 +170,13 @@ TRACKED: dict[type, _Tracked] = {
                 "subtitle",
                 "body",
                 "tags",
-                "book_id",
                 "visible",
-                "pinned",
                 "protected",
                 "published_at",
             }
         ),
         html_fields=frozenset({"body"}),
-        track_updates=False,
+        occurred_at=_chapter_occurred_at,
     ),
     Illustration: _Tracked(
         "illustration",
@@ -559,6 +570,10 @@ def _queue(
                 )
             return
 
+    occurred_at = (
+        tracked.occurred_at(target) if tracked.occurred_at else None
+    ) or datetime.now(timezone.utc).replace(tzinfo=None)
+
     pending.append(
         {
             "_key": key,
@@ -569,7 +584,7 @@ def _queue(
             "action": action,
             "title": _event_title(target, tracked),
             "changes": _dedupe_changes(changes or []) or None,
-            "occurred_at": datetime.now(timezone.utc).replace(tzinfo=None),
+            "occurred_at": occurred_at,
         }
     )
 
