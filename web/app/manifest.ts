@@ -50,6 +50,7 @@ export default function manifest(): MetadataRoute.Manifest {
       { name: "목차", short_name: "목차", url: "/books" },
       { name: "삽화", short_name: "삽화", url: "/illustrations" },
       { name: "주석", short_name: "주석", url: "/memo" },
+      { name: "책갈피", short_name: "책갈피", url: "/bookmark" },
     ],
   };
 }

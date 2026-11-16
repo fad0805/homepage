@@ -30,6 +30,7 @@ const navigation: Navigation = {
       { href: "/books", label: "목차" },
       { href: "/illustrations", label: "삽화" },
       { href: "/memo", label: "주석", authOnly: true },
+      { href: "/bookmark", label: "책갈피", authOnly: true },
       { href: "/planner", label: "부록", authOnly: true },
       { href: "/links", label: "놀러가기" },
     ],

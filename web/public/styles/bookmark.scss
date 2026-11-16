@@ -1,0 +1,90 @@
+#bookmark-page {
+  display: flex;
+  justify-content: center;
+  padding: 2rem 2rem 7rem;
+}
+
+#bookmark-page main {
+  display: flex;
+  flex-direction: column;
+  gap: 1.2rem;
+  width: 100%;
+  max-width: 44rem;
+  min-width: 0;
+}
+
+#container.site-layout--collapsible #bookmark-page {
+  justify-content: flex-start;
+  padding: 2rem 3rem 7rem;
+}
+
+#container.site-layout--collapsible #bookmark-page main {
+  margin-left: 2.8rem;
+}
+
+.bookmark-header {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.bookmark-eyebrow {
+  margin: 0;
+  color: var(--title-color);
+  font-size: 0.68rem;
+  opacity: 0.6;
+}
+
+.bookmark-header h1 {
+  margin: 0;
+  color: var(--title-color);
+  font-family: Eulyoo1945-SemiBold, GowunDodum, sans-serif;
+  font-size: 1.6rem;
+  font-weight: normal;
+}
+
+.bookmark-description {
+  max-width: 34rem;
+  margin: 0;
+  color: var(--foreground);
+  font-size: 0.78rem;
+  line-height: 1.65;
+  opacity: 0.7;
+}
+
+.bookmark-empty {
+  padding: 1.4rem;
+  border: 1px solid
+    color-mix(in srgb, var(--theme-main) 40%, transparent);
+  border-radius: 1.2rem;
+  background: color-mix(
+    in srgb,
+    var(--input-background) 62%,
+    transparent
+  );
+
+  p {
+    margin: 0;
+    font-size: 0.82rem;
+    line-height: 1.6;
+  }
+}
+
+.bookmark-empty-note {
+  margin-top: 0.35rem !important;
+  color: var(--title-color);
+  font-size: 0.7rem !important;
+  opacity: 0.6;
+}
+
+@media (width <= 720px) {
+  #container.site-layout--collapsible #bookmark-page,
+  #bookmark-page {
+    justify-content: center;
+    padding: 1.2rem 0.85rem 6rem;
+  }
+
+  #container.site-layout--collapsible #bookmark-page main {
+    margin-left: 0;
+  }
+}
