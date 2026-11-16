@@ -227,6 +227,14 @@ function periodLabel(value: string, type: BookmarkPeriodType) {
   }${endMonth}월 ${endDay}일`;
 }
 
+function weekRangeLabel(value: string) {
+  const start = parseDateKey(startOfPeriod(value, "week"));
+  const end = parseDateKey(shiftPeriod(dateKey(start), "day", 6));
+  return `${start.getUTCMonth() + 1}/${start.getUTCDate()} ~ ${
+    end.getUTCMonth() + 1
+  }/${end.getUTCDate()}`;
+}
+
 function monthCalendarDays(monthStart: string) {
   const date = parseDateKey(monthStart);
   const year = date.getUTCFullYear();
@@ -1557,6 +1565,13 @@ export default function BookmarkClient({ username }: { username: string }) {
                 <span key={day}>{day}</span>
               ))}
             </div>
+            {view === "week" ? (
+              <p className="bookmark-calendar-hint">
+                {calendarHoverDate
+                  ? `선택 범위: ${weekRangeLabel(calendarHoverDate)}`
+                  : "날짜에 마우스를 올리면 해당 주 전체가 선택 범위로 표시됩니다."}
+              </p>
+            ) : null}
             <div
               className="bookmark-calendar-grid"
               onMouseLeave={() => setCalendarHoverDate(null)}

@@ -999,6 +999,14 @@
   opacity: 0.5;
 }
 
+.bookmark-calendar-hint {
+  margin: 0.55rem 0 0;
+  color: var(--foreground);
+  font-size: 0.64rem;
+  line-height: 1.45;
+  opacity: 0.58;
+}
+
 .bookmark-calendar-grid {
   display: grid;
   grid-template-columns: repeat(7, minmax(0, 1fr));
@@ -1045,9 +1053,12 @@
   &.is-hovered {
     background: color-mix(
       in srgb,
-      var(--theme-main) 24%,
+      var(--theme-main) 32%,
       transparent
     );
+    box-shadow: inset 0 0 0 1px
+      color-mix(in srgb, var(--theme-main) 58%, transparent);
+    color: var(--title-color);
   }
 
   &.is-selected {
