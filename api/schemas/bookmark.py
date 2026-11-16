@@ -151,6 +151,10 @@ class BookmarkGoalUpdate(BaseModel):
     period_type: BookmarkPeriodType
     period_start: date
     content: str = Field(max_length=20000)
+
+
+class BookmarkDayMetaUpdate(BaseModel):
+    period_start: date
     wake_time: time | None = None
     mood_tag_id: int | None = None
 

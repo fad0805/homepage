@@ -18,6 +18,7 @@ from models.bookmark import (
     BookmarkRoutineMonthlyStat,
 )
 from schemas.bookmark import (
+    BookmarkDayMetaUpdate,
     BookmarkGoalUpdate,
     BookmarkMoodTagCreate,
     BookmarkMoodTagUpdate,
@@ -1561,27 +1562,52 @@ def save_goal(
         )
         .first()
     )
-    mood_tag_id = (
-        _resolve_mood_tag_id(db, user_id, payload.mood_tag_id)
-        if payload.period_type == "day"
-        else None
-    )
-    wake_time = (
-        payload.wake_time if payload.period_type == "day" else None
-    )
     if goal is None:
         goal = BookmarkGoal(
             user_id=user_id,
             period_type=payload.period_type,
             period_start=payload.period_start,
             content=payload.content,
-            wake_time=wake_time,
-            mood_tag_id=mood_tag_id,
         )
         db.add(goal)
     else:
         goal.content = payload.content
-        goal.wake_time = wake_time
+    db.commit()
+    db.refresh(goal)
+    return goal
+
+
+def save_day_meta(
+    db: Session,
+    payload: BookmarkDayMetaUpdate,
+    user_id: int,
+) -> BookmarkGoal:
+    goal = (
+        db.query(BookmarkGoal)
+        .filter(
+            BookmarkGoal.user_id == user_id,
+            BookmarkGoal.period_type == "day",
+            BookmarkGoal.period_start == payload.period_start,
+        )
+        .first()
+    )
+    mood_tag_id = _resolve_mood_tag_id(
+        db,
+        user_id,
+        payload.mood_tag_id,
+    )
+    if goal is None:
+        goal = BookmarkGoal(
+            user_id=user_id,
+            period_type="day",
+            period_start=payload.period_start,
+            content="",
+            wake_time=payload.wake_time,
+            mood_tag_id=mood_tag_id,
+        )
+        db.add(goal)
+    else:
+        goal.wake_time = payload.wake_time
         goal.mood_tag_id = mood_tag_id
     db.commit()
     db.refresh(goal)

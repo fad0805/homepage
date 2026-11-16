@@ -266,6 +266,8 @@ export default function BookmarkClient({ username }: { username: string }) {
   );
   const [goalSaving, setGoalSaving] = useState(false);
   const [goalSaved, setGoalSaved] = useState(false);
+  const [dayMetaSaving, setDayMetaSaving] = useState(false);
+  const [dayMetaSaved, setDayMetaSaved] = useState(false);
   const [moodTags, setMoodTags] = useState<BookmarkMoodTag[]>([]);
   const [moodTagModalOpen, setMoodTagModalOpen] = useState(false);
   const [newMoodTagName, setNewMoodTagName] = useState("");
@@ -343,6 +345,7 @@ export default function BookmarkClient({ username }: { username: string }) {
       setRatingDraft(next.rating?.rating ?? 0);
       setReviewContent(next.review?.content ?? "");
       setGoalSaved(false);
+      setDayMetaSaved(false);
       setReviewSaved(false);
     } catch (reason) {
       setError(
@@ -948,18 +951,12 @@ export default function BookmarkClient({ username }: { username: string }) {
           period_type: recordPeriodType,
           period_start: periodStart,
           content: goalContent,
-          wake_time:
-            recordPeriodType === "day" ? goalWakeTime || null : null,
-          mood_tag_id:
-            recordPeriodType === "day" ? goalMoodTagId : null,
         }),
       });
       setData((previous) =>
         previous ? { ...previous, goal: saved } : previous,
       );
       setGoalContent(saved.content);
-      setGoalWakeTime(saved.wake_time?.slice(0, 5) ?? "");
-      setGoalMoodTagId(saved.mood_tag_id ?? null);
       setGoalSaved(true);
     } catch (reason) {
       setError(
@@ -975,6 +972,40 @@ export default function BookmarkClient({ username }: { username: string }) {
   const handleRatingChange = (nextRating: number) => {
     if (ratingSaving) return;
     setRatingDraft(nextRating);
+  };
+
+  const handleSaveDayMeta = async () => {
+    if (dayMetaSaving) return;
+    setDayMetaSaving(true);
+    setError(null);
+    setDayMetaSaved(false);
+    try {
+      const saved = await apiFetch<BookmarkGoal>(
+        "/api/bookmark/day-meta",
+        {
+          method: "PUT",
+          body: JSON.stringify({
+            period_start: periodStart,
+            wake_time: goalWakeTime || null,
+            mood_tag_id: goalMoodTagId,
+          }),
+        },
+      );
+      setGoalWakeTime(saved.wake_time?.slice(0, 5) ?? "");
+      setGoalMoodTagId(saved.mood_tag_id ?? null);
+      setData((previous) =>
+        previous ? { ...previous, goal: saved } : previous,
+      );
+      setDayMetaSaved(true);
+    } catch (reason) {
+      setError(
+        reason instanceof Error
+          ? reason.message
+          : "기상·기분 기록을 저장하지 못했습니다.",
+      );
+    } finally {
+      setDayMetaSaving(false);
+    }
   };
 
   const handleSaveRating = async () => {
@@ -1561,7 +1592,37 @@ export default function BookmarkClient({ username }: { username: string }) {
                     <span className="bookmark-saved">저장됨</span>
                   ) : null}
                 </header>
-                {recordPeriodType === "day" ? (
+                <textarea
+                  className="bookmark-record-textarea"
+                  value={goalContent}
+                  maxLength={20000}
+                  placeholder="이 기간에 이루고 싶은 목표나 바람을 적어보세요."
+                  onChange={(event) => {
+                    setGoalContent(event.target.value);
+                    setGoalSaved(false);
+                  }}
+                />
+                <button
+                  type="button"
+                  className="bookmark-primary bookmark-record-save"
+                  disabled={goalSaving}
+                  onClick={() => void handleSaveGoal()}
+                >
+                  {goalSaving ? "저장 중..." : "목표 저장"}
+                </button>
+              </section>
+
+              {recordPeriodType === "day" ? (
+                <section className="bookmark-panel bookmark-day-meta-panel">
+                  <header className="bookmark-panel-header">
+                    <div>
+                      <p className="bookmark-panel-eyebrow">MORNING</p>
+                      <h2>기상 / 기분</h2>
+                    </div>
+                    {dayMetaSaved ? (
+                      <span className="bookmark-saved">저장됨</span>
+                    ) : null}
+                  </header>
                   <div className="bookmark-day-meta-fields">
                     <label>
                       <span>기상</span>
@@ -1570,7 +1631,7 @@ export default function BookmarkClient({ username }: { username: string }) {
                         value={goalWakeTime}
                         onChange={(event) => {
                           setGoalWakeTime(event.target.value);
-                          setGoalSaved(false);
+                          setDayMetaSaved(false);
                         }}
                       />
                     </label>
@@ -1584,7 +1645,7 @@ export default function BookmarkClient({ username }: { username: string }) {
                               ? Number(event.target.value)
                               : null,
                           );
-                          setGoalSaved(false);
+                          setDayMetaSaved(false);
                         }}
                       >
                         <option value="">선택 안 함</option>
@@ -1603,30 +1664,16 @@ export default function BookmarkClient({ username }: { username: string }) {
                       태그 관리
                     </button>
                   </div>
-                ) : null}
-                <textarea
-                  className="bookmark-record-textarea"
-                  value={goalContent}
-                  maxLength={20000}
-                  placeholder="이 기간에 이루고 싶은 목표나 바람을 적어보세요."
-                  onChange={(event) => {
-                    setGoalContent(event.target.value);
-                    setGoalSaved(false);
-                  }}
-                />
-                <button
-                  type="button"
-                  className="bookmark-primary bookmark-record-save"
-                  disabled={goalSaving}
-                  onClick={() => void handleSaveGoal()}
-                >
-                  {goalSaving
-                    ? "저장 중..."
-                    : recordPeriodType === "day"
-                      ? "기록 저장"
-                      : "목표 저장"}
-                </button>
-              </section>
+                  <button
+                    type="button"
+                    className="bookmark-primary bookmark-record-save"
+                    disabled={dayMetaSaving}
+                    onClick={() => void handleSaveDayMeta()}
+                  >
+                    {dayMetaSaving ? "저장 중..." : "저장"}
+                  </button>
+                </section>
+              ) : null}
 
               <section className="bookmark-panel bookmark-record-panel bookmark-review-panel">
                 <header className="bookmark-panel-header bookmark-review-header">

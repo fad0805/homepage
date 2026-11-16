@@ -15,6 +15,7 @@ from crud.bookmark import (
     get_today,
     list_mood_tags,
     list_routine_categories,
+    save_day_meta,
     save_goal,
     save_rating,
     save_review,
@@ -27,6 +28,7 @@ from crud.bookmark import (
 from db.session import get_db
 from routers.utils import require_auth
 from schemas.bookmark import (
+    BookmarkDayMetaUpdate,
     BookmarkGoalRead,
     BookmarkGoalUpdate,
     BookmarkMoodTagCreate,
@@ -258,6 +260,17 @@ def put_routine_check(
 ):
     _no_store(response)
     return set_routine_check(db, routine_id, payload, user.id)
+
+
+@router.put("/day-meta", response_model=BookmarkGoalRead)
+def put_day_meta(
+    payload: BookmarkDayMetaUpdate,
+    response: Response,
+    db: Session = Depends(get_db),
+    user=Depends(require_auth),
+):
+    _no_store(response)
+    return save_day_meta(db, payload, user.id)
 
 
 @router.put("/goals", response_model=BookmarkGoalRead)

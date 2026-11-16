@@ -722,6 +722,11 @@
   min-height: 10rem;
 }
 
+.bookmark-day-meta-panel {
+  display: flex;
+  flex-direction: column;
+}
+
 .bookmark-day-meta-fields {
   display: flex;
   flex-wrap: wrap;
