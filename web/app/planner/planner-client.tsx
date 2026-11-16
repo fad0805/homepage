@@ -530,7 +530,11 @@ function PlannerNoteContent({
                     className={`planner-note-check${
                       item.checked ? " is-done" : ""
                     }`}
-                    onClick={(event) => event.stopPropagation()}
+                    onClick={(event) => {
+                      if (!disabled) {
+                        event.stopPropagation();
+                      }
+                    }}
                   >
                     <input
                       type="checkbox"
@@ -1515,13 +1519,21 @@ export default function PlannerClient({ username }: { username: string }) {
     setBusyKey(key);
     setError(null);
     try {
-      await apiFetch<PlannerTask>(`/api/planner/tasks/${task.id}/restore`, {
-        method: "POST",
-      });
+      const restored = await apiFetch<PlannerTask>(
+        `/api/planner/tasks/${task.id}/restore`,
+        { method: "POST" },
+      );
+      setSelectedTask((previous) =>
+        previous?.id === task.id ? null : previous,
+      );
       await refresh();
-      setActiveTab("active");
-      setSelectedDate(today);
-      setViewMonth(today.slice(0, 7));
+      if (restored.status === "active") {
+        setActiveTab("active");
+        setSelectedDate(today);
+        setViewMonth(today.slice(0, 7));
+      } else {
+        setActiveTab("inactive");
+      }
     } catch (reason) {
       setError(
         reason instanceof Error
@@ -1549,6 +1561,9 @@ export default function PlannerClient({ username }: { username: string }) {
       await apiFetch(`/api/planner/tasks/${task.id}/permanent`, {
         method: "DELETE",
       });
+      setSelectedTask((previous) =>
+        previous?.id === task.id ? null : previous,
+      );
       await refresh();
     } catch (reason) {
       setError(
@@ -1951,42 +1966,7 @@ export default function PlannerClient({ username }: { username: string }) {
     setError(null);
   };
 
-  const renderTaskMeta = (task: PlannerTask) => {
-    if (
-      task.schedule_type === "undated" ||
-      !task.start_date ||
-      !task.end_date
-    ) {
-      return (
-        <p className="planner-task-meta">
-          등록일 미지정 · 비활성
-          {task.pinned ? " · 고정" : ""}
-        </p>
-      );
-    }
-    return (
-      <p className="planner-task-meta">
-        {task.schedule_type === "single" ? (
-          <>
-            단일 ·{" "}
-            {task.start_date > today
-              ? `시작 ${formatDateOnly(task.start_date)} · `
-              : ""}
-            마감 {formatDateOnly(task.end_date)}
-            {task.deadline_days ? ` · ${task.deadline_days}일` : ""}
-          </>
-        ) : (
-          <>
-            범위 · {formatDateOnly(task.start_date)} ~{" "}
-            {formatDateOnly(task.end_date)}
-          </>
-        )}
-        {task.pinned ? " · 고정" : ""}
-      </p>
-    );
-  };
-
-  const renderActiveTask = (task: PlannerTask) => (
+  const renderTaskCard = (task: PlannerTask) => (
     <li
       className="planner-task-item planner-task-card"
       key={task.id}
@@ -2013,109 +1993,19 @@ export default function PlannerClient({ username }: { username: string }) {
         <p className="planner-task-meta planner-task-deadline">
           {task.end_date
             ? `마감 ${formatDateOnly(task.end_date)}`
-            : "마감 미지정"}
+            : "등록일 미지정"}
         </p>
         {task.notes ? (
           <PlannerNoteContent
             notes={task.notes}
-            disabled={noteSavingId !== null}
+            disabled={
+              task.status === "trashed" || noteSavingId !== null
+            }
             onToggle={(index) =>
               void handleToggleTaskNote(task, index)
             }
           />
         ) : null}
-      </div>
-    </li>
-  );
-
-  const renderStoredTask = (task: PlannerTask, trashed: boolean) => (
-    <li className="planner-task-item" key={task.id}>
-      <div className="planner-task-main">
-        <div className="planner-task-title-row">
-          <span
-            className="planner-task-color"
-            style={{ backgroundColor: taskColor(task) }}
-            aria-hidden="true"
-          />
-          <strong>{task.title}</strong>
-          {task.pinned ? (
-            <span className="planner-pin-badge">고정</span>
-          ) : null}
-        </div>
-        {renderTaskMeta(task)}
-        <p className="planner-task-meta">
-          {trashed
-            ? `휴지통 이동 ${formatDateTime(task.trashed_at)} · 30일 뒤 영구 삭제`
-            : task.schedule_type === "undated"
-              ? "수정해서 날짜를 지정하면 활성화됩니다."
-              : task.pinned
-                ? `비활성 ${formatDateTime(task.inactive_at)} · 고정됨 (자동 휴지통 이동 방지)`
-                : `비활성 ${formatDateTime(task.inactive_at)} · 마감 30일 뒤 휴지통`}
-        </p>
-        {task.notes ? (
-          <PlannerNoteContent
-            notes={task.notes}
-            disabled={trashed || noteSavingId !== null}
-            onToggle={(index) =>
-              void handleToggleTaskNote(task, index)
-            }
-          />
-        ) : null}
-      </div>
-      <div className="planner-task-actions">
-        {!trashed && task.schedule_type === "undated" ? (
-          <button
-            type="button"
-            className="planner-text-button is-accent"
-            disabled={busyKey !== null}
-            onClick={() => startEditing(task)}
-          >
-            수정
-          </button>
-        ) : (
-          <button
-            type="button"
-            className="planner-text-button is-accent"
-            disabled={busyKey !== null}
-            onClick={() => handleRestore(task)}
-          >
-            {busyKey === `restore-${task.id}` ? "복구 중" : "복구"}
-          </button>
-        )}
-        {!trashed ? (
-          <button
-            type="button"
-            className={`planner-text-button${task.pinned ? " is-active" : ""}`}
-            aria-pressed={task.pinned}
-            disabled={busyKey !== null}
-            onClick={() => handlePin(task)}
-          >
-            {busyKey === `pin-${task.id}`
-              ? "변경 중"
-              : task.pinned
-                ? "고정 해제"
-                : "고정"}
-          </button>
-        ) : null}
-        {trashed ? (
-          <button
-            type="button"
-            className="planner-text-button is-danger"
-            disabled={busyKey !== null}
-            onClick={() => handlePermanentDelete(task)}
-          >
-            {busyKey === `permanent-${task.id}` ? "삭제 중" : "영구 삭제"}
-          </button>
-        ) : (
-          <button
-            type="button"
-            className="planner-text-button is-danger"
-            disabled={busyKey !== null}
-            onClick={() => handleTrash(task)}
-          >
-            {busyKey === `trash-${task.id}` ? "이동 중" : "휴지통"}
-          </button>
-        )}
       </div>
     </li>
   );
@@ -2127,7 +2017,7 @@ export default function PlannerClient({ username }: { username: string }) {
       </p>
     ) : (
       <ul className="planner-task-list">
-        {dateTasks.map(renderActiveTask)}
+        {dateTasks.map(renderTaskCard)}
       </ul>
     );
 
@@ -2525,14 +2415,7 @@ export default function PlannerClient({ username }: { username: string }) {
                           </p>
                         ) : (
                           <ul className="planner-task-list">
-                            {searchResults.tasks.map((task) =>
-                              task.status === "active"
-                                ? renderActiveTask(task)
-                                : renderStoredTask(
-                                    task,
-                                    task.status === "trashed",
-                                  ),
-                            )}
+                            {searchResults.tasks.map(renderTaskCard)}
                           </ul>
                         )}
                       </div>
@@ -2684,7 +2567,7 @@ export default function PlannerClient({ username }: { username: string }) {
                           ) : (
                             <ul className="planner-task-list">
                               {selectedColorGroup.tasks.map(
-                                renderActiveTask,
+                                renderTaskCard,
                               )}
                             </ul>
                           )}
@@ -2809,9 +2692,7 @@ export default function PlannerClient({ username }: { username: string }) {
                         </p>
                       ) : (
                         <ul className="planner-task-list">
-                          {visibleInactiveTasks.map((task) =>
-                            renderStoredTask(task, false),
-                          )}
+                          {visibleInactiveTasks.map(renderTaskCard)}
                         </ul>
                       )}
                     </>
@@ -2819,9 +2700,7 @@ export default function PlannerClient({ username }: { username: string }) {
                     <p className="planner-empty">휴지통이 비어 있습니다.</p>
                   ) : (
                     <ul className="planner-task-list">
-                      {trashedTasks.map((task) =>
-                        renderStoredTask(task, true),
-                      )}
+                      {trashedTasks.map(renderTaskCard)}
                     </ul>
                   )}
                 </section>
@@ -3186,8 +3065,13 @@ export default function PlannerClient({ username }: { username: string }) {
                   <span>
                     {selectedTask.end_date
                       ? `마감 ${formatDateOnly(selectedTask.end_date)}`
-                      : "마감 미지정"}
+                      : "등록일 미지정"}
                   </span>
+                  {selectedTask.status === "inactive" ? (
+                    <span className="planner-pin-badge">비활성</span>
+                  ) : selectedTask.status === "trashed" ? (
+                    <span className="planner-pin-badge">휴지통</span>
+                  ) : null}
                   {selectedTask.pinned ? (
                     <span className="planner-pin-badge">고정</span>
                   ) : null}
@@ -3208,7 +3092,10 @@ export default function PlannerClient({ username }: { username: string }) {
                 <h3>메모</h3>
                 <PlannerNoteContent
                   notes={selectedTask.notes}
-                  disabled={noteSavingId !== null}
+                  disabled={
+                    selectedTask.status === "trashed" ||
+                    noteSavingId !== null
+                  }
                   onToggle={(index) =>
                     void handleToggleTaskNote(selectedTask, index)
                   }
@@ -3216,59 +3103,134 @@ export default function PlannerClient({ username }: { username: string }) {
               </div>
             ) : null}
             <div className="planner-task-detail-actions">
-              <button
-                type="button"
-                className={`planner-text-button${
-                  selectedTask.pinned ? " is-active" : ""
-                }`}
-                aria-pressed={selectedTask.pinned}
-                disabled={busyKey !== null}
-                onClick={() => handlePin(selectedTask)}
-              >
-                {busyKey === `pin-${selectedTask.id}`
-                  ? "변경 중"
-                  : selectedTask.pinned
-                    ? "고정 해제"
-                    : "고정"}
-              </button>
-              <button
-                type="button"
-                className="planner-text-button"
-                disabled={busyKey !== null}
-                onClick={() => startEditing(selectedTask)}
-              >
-                수정
-              </button>
-              <button
-                type="button"
-                className="planner-text-button"
-                disabled={busyKey !== null}
-                onClick={() => handleDeactivate(selectedTask)}
-              >
-                {busyKey === `deactivate-${selectedTask.id}`
-                  ? "비활성 중"
-                  : "비활성화"}
-              </button>
-              <button
-                type="button"
-                className="planner-text-button is-accent"
-                disabled={busyKey !== null}
-                onClick={() => handleComplete(selectedTask)}
-              >
-                {busyKey === `complete-${selectedTask.id}`
-                  ? "완료 중"
-                  : "완료"}
-              </button>
-              <button
-                type="button"
-                className="planner-text-button is-danger"
-                disabled={busyKey !== null}
-                onClick={() => handleTrash(selectedTask)}
-              >
-                {busyKey === `trash-${selectedTask.id}`
-                  ? "이동 중"
-                  : "삭제"}
-              </button>
+              {selectedTask.status === "trashed" ? (
+                <>
+                  <button
+                    type="button"
+                    className="planner-text-button is-accent"
+                    disabled={busyKey !== null}
+                    onClick={() => handleRestore(selectedTask)}
+                  >
+                    {busyKey === `restore-${selectedTask.id}`
+                      ? "복구 중"
+                      : "복구"}
+                  </button>
+                  <button
+                    type="button"
+                    className="planner-text-button is-danger"
+                    disabled={busyKey !== null}
+                    onClick={() => handlePermanentDelete(selectedTask)}
+                  >
+                    {busyKey === `permanent-${selectedTask.id}`
+                      ? "삭제 중"
+                      : "영구 삭제"}
+                  </button>
+                </>
+              ) : selectedTask.status === "inactive" ? (
+                <>
+                  <button
+                    type="button"
+                    className={`planner-text-button${
+                      selectedTask.pinned ? " is-active" : ""
+                    }`}
+                    aria-pressed={selectedTask.pinned}
+                    disabled={busyKey !== null}
+                    onClick={() => handlePin(selectedTask)}
+                  >
+                    {busyKey === `pin-${selectedTask.id}`
+                      ? "변경 중"
+                      : selectedTask.pinned
+                        ? "고정 해제"
+                        : "고정"}
+                  </button>
+                  <button
+                    type="button"
+                    className="planner-text-button"
+                    disabled={busyKey !== null}
+                    onClick={() => startEditing(selectedTask)}
+                  >
+                    수정
+                  </button>
+                  {selectedTask.schedule_type !== "undated" ? (
+                    <button
+                      type="button"
+                      className="planner-text-button is-accent"
+                      disabled={busyKey !== null}
+                      onClick={() => handleRestore(selectedTask)}
+                    >
+                      {busyKey === `restore-${selectedTask.id}`
+                        ? "복구 중"
+                        : "복구"}
+                    </button>
+                  ) : null}
+                  <button
+                    type="button"
+                    className="planner-text-button is-danger"
+                    disabled={busyKey !== null}
+                    onClick={() => handleTrash(selectedTask)}
+                  >
+                    {busyKey === `trash-${selectedTask.id}`
+                      ? "이동 중"
+                      : "삭제"}
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    className={`planner-text-button${
+                      selectedTask.pinned ? " is-active" : ""
+                    }`}
+                    aria-pressed={selectedTask.pinned}
+                    disabled={busyKey !== null}
+                    onClick={() => handlePin(selectedTask)}
+                  >
+                    {busyKey === `pin-${selectedTask.id}`
+                      ? "변경 중"
+                      : selectedTask.pinned
+                        ? "고정 해제"
+                        : "고정"}
+                  </button>
+                  <button
+                    type="button"
+                    className="planner-text-button"
+                    disabled={busyKey !== null}
+                    onClick={() => startEditing(selectedTask)}
+                  >
+                    수정
+                  </button>
+                  <button
+                    type="button"
+                    className="planner-text-button"
+                    disabled={busyKey !== null}
+                    onClick={() => handleDeactivate(selectedTask)}
+                  >
+                    {busyKey === `deactivate-${selectedTask.id}`
+                      ? "비활성 중"
+                      : "비활성화"}
+                  </button>
+                  <button
+                    type="button"
+                    className="planner-text-button is-accent"
+                    disabled={busyKey !== null}
+                    onClick={() => handleComplete(selectedTask)}
+                  >
+                    {busyKey === `complete-${selectedTask.id}`
+                      ? "완료 중"
+                      : "완료"}
+                  </button>
+                  <button
+                    type="button"
+                    className="planner-text-button is-danger"
+                    disabled={busyKey !== null}
+                    onClick={() => handleTrash(selectedTask)}
+                  >
+                    {busyKey === `trash-${selectedTask.id}`
+                      ? "이동 중"
+                      : "삭제"}
+                  </button>
+                </>
+              )}
             </div>
           </div>
         </div>
