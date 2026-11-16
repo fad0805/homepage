@@ -9,6 +9,7 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from core import audit as _planner_audit  # noqa: F401 - registers history hooks
+from core.bookmark_retention import bookmark_retention_loop
 from core.config import API_DOCS_ENABLED, ENVIRONMENT
 from core.mastodon import mastodon_publish_loop
 from core.uploads import UPLOAD_DIR, ensure_upload_dir
@@ -17,6 +18,7 @@ from db.session import SessionLocal
 from routers import (
     appearance,
     archive,
+    bookmark,
     books,
     chapter_drafts,
     chapters,
@@ -48,12 +50,18 @@ async def lifespan(app:FastAPI):
     with SessionLocal() as db:
         hash_legacy_refresh_tokens(db)
     mastodon_task = asyncio.create_task(mastodon_publish_loop())
+    bookmark_retention_task = asyncio.create_task(
+        bookmark_retention_loop()
+    )
     try:
         yield
     finally:
         mastodon_task.cancel()
+        bookmark_retention_task.cancel()
         with suppress(asyncio.CancelledError):
             await mastodon_task
+        with suppress(asyncio.CancelledError):
+            await bookmark_retention_task
 
 app = FastAPI(
     lifespan=lifespan,
@@ -103,6 +111,7 @@ app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
 app.include_router(appearance.router, prefix="/appearance", tags=["appearance"])
 app.include_router(index_page.router, prefix="/index-page", tags=["index-page"])
 app.include_router(archive.router, prefix="/archive", tags=["archive"])
+app.include_router(bookmark.router, prefix="/bookmark", tags=["bookmark"])
 app.include_router(characters.router, prefix="/characters", tags=["characters"])
 app.include_router(embeds.router, prefix="/embeds", tags=["embeds"])
 app.include_router(gallery.router, prefix="/gallery", tags=["gallery"])

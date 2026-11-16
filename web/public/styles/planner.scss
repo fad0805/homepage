@@ -1121,6 +1121,78 @@
   color: #ff9b9b;
 }
 
+.planner-bookmark-section {
+  margin-bottom: 0.8rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid color-mix(in srgb, var(--theme-main) 24%, transparent);
+
+  h3 {
+    margin: 0;
+    color: var(--title-color);
+    font-size: 0.76rem;
+    font-weight: normal;
+  }
+}
+
+.planner-bookmark-block {
+  display: flex;
+  flex-direction: column;
+  gap: 0.16rem;
+  margin-top: 0.5rem;
+}
+
+.planner-bookmark-label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.planner-bookmark-meta {
+  color: var(--title-color);
+  font-size: 0.58rem;
+  opacity: 0.55;
+  text-align: right;
+}
+
+.planner-bookmark-label {
+  color: var(--title-color);
+  font-size: 0.61rem;
+  opacity: 0.58;
+}
+
+.planner-bookmark-text {
+  margin: 0;
+  color: var(--foreground);
+  font-size: 0.73rem;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.planner-bookmark-rating {
+  display: flex;
+  align-items: center;
+  gap: 0.18rem;
+}
+
+.planner-clover {
+  display: inline-flex;
+  width: 0.76rem;
+  height: 0.76rem;
+  color: #4f8f5b;
+
+  svg {
+    display: block;
+    width: 100%;
+    height: 100%;
+  }
+}
+
+[data-theme='dark'] .planner-clover {
+  color: #8fd39a;
+}
+
 .planner-history-section {
   margin-top: 1rem;
   padding-top: 0.75rem;

@@ -1,4 +1,4 @@
-FROM --platform=linux/amd64 node:23 AS builder
+FROM --platform=linux/amd64 node:22 AS builder
 
 # Installation of dependencies
 RUN apt update && \
@@ -13,7 +13,7 @@ COPY . .
 RUN npm run build
 
 # Set runner image
-FROM --platform=linux/amd64 node:23-alpine AS runner
+FROM --platform=linux/amd64 node:22-alpine AS runner
 
 WORKDIR /app
 

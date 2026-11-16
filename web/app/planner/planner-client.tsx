@@ -12,7 +12,12 @@ import {
   useState,
 } from "react";
 
+import { CloverIcon } from "@/app/bookmark/clover-rating";
 import { apiFetch } from "@/lib/api";
+import {
+  formatTime24h,
+  type BookmarkPeriod,
+} from "@/lib/bookmark";
 import {
   dateInputValue,
   formatDateTime,
@@ -623,6 +628,8 @@ export default function PlannerClient({ username }: { username: string }) {
   const [recordCompleted, setRecordCompleted] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState<PlannerEvent | null>(null);
   const [selectedTask, setSelectedTask] = useState<PlannerTask | null>(null);
+  const [dayBookmark, setDayBookmark] =
+    useState<BookmarkPeriod | null>(null);
   const [preview, setPreview] = useState<PlannerEventPreview | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [taskModalOpen, setTaskModalOpen] = useState(false);
@@ -704,6 +711,18 @@ export default function PlannerClient({ username }: { username: string }) {
     }
   }, []);
 
+  const loadDayBookmark = useCallback(async (date: string) => {
+    try {
+      const data = await apiFetch<BookmarkPeriod>(
+        `/api/bookmark?period_type=day&period_start=${date}`,
+        { cache: "no-store" },
+      );
+      setDayBookmark(data);
+    } catch {
+      setDayBookmark(null);
+    }
+  }, []);
+
   useEffect(() => {
     void loadTasks();
   }, [loadTasks]);
@@ -715,6 +734,10 @@ export default function PlannerClient({ username }: { username: string }) {
   useEffect(() => {
     void loadEvents(viewMonth);
   }, [loadEvents, viewMonth]);
+
+  useEffect(() => {
+    void loadDayBookmark(selectedDate);
+  }, [loadDayBookmark, selectedDate]);
 
   useEffect(() => {
     if (activeTab === "colors") return;
@@ -2063,11 +2086,74 @@ export default function PlannerClient({ username }: { username: string }) {
     </div>
   );
 
+  const renderDayBookmark = () => {
+    const goal = dayBookmark?.goal;
+    const rating = dayBookmark?.rating?.rating ?? 0;
+    const review = dayBookmark?.review;
+    if (
+      !goal?.content &&
+      !goal?.wake_time &&
+      !goal?.mood_tag_name &&
+      rating <= 0 &&
+      !review?.content
+    ) {
+      return null;
+    }
+    return (
+      <div className="planner-bookmark-section">
+        {goal?.content || goal?.wake_time || goal?.mood_tag_name ? (
+          <div className="planner-bookmark-block">
+            <div className="planner-bookmark-label-row">
+              <span className="planner-bookmark-label">목표</span>
+              {goal?.wake_time || goal?.mood_tag_name ? (
+                <span className="planner-bookmark-meta">
+                  {goal?.wake_time
+                    ? formatTime24h(goal.wake_time)
+                    : null}
+                  {goal?.wake_time && goal?.mood_tag_name
+                    ? " · "
+                    : null}
+                  {goal?.mood_tag_name ?? null}
+                </span>
+              ) : null}
+            </div>
+            {goal?.content ? (
+              <p className="planner-bookmark-text">{goal.content}</p>
+            ) : null}
+          </div>
+        ) : null}
+        {review?.content || rating > 0 ? (
+          <div className="planner-bookmark-block">
+            <div className="planner-bookmark-label-row">
+              <span className="planner-bookmark-label">회고</span>
+              {rating > 0 ? (
+                <span
+                  className="planner-bookmark-rating"
+                  aria-label={`${rating}점`}
+                >
+                  {[1, 2, 3, 4, 5].map((score) => (
+                    <span className="planner-clover" key={score}>
+                      <CloverIcon filled={score <= rating} />
+                    </span>
+                  ))}
+                </span>
+              ) : null}
+            </div>
+            {review?.content ? (
+              <p className="planner-bookmark-text">{review.content}</p>
+            ) : null}
+          </div>
+        ) : null}
+      </div>
+    );
+  };
+
   const renderDayDetail = (
     dateTasks: PlannerTask[],
     dateEvents: PlannerEvent[],
   ) => (
     <>
+      {renderDayBookmark()}
       {renderDayTasks(dateTasks)}
       {renderHistory(dateEvents)}
     </>
