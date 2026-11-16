@@ -47,9 +47,9 @@ class PlannerTask(Base):
     # ``deadline_base_date`` is the date used for a single-date task's
     # deadline. It differs from start_date when a task is registered after
     # noon KST: it appears today but its deadline starts tomorrow.
-    start_date = Column(Date, nullable=False, index=True)
+    start_date = Column(Date, nullable=True, index=True)
     deadline_base_date = Column(Date, nullable=True)
-    end_date = Column(Date, nullable=False, index=True)
+    end_date = Column(Date, nullable=True, index=True)
     deadline_days = Column(Integer, nullable=True)
     status = Column(
         String(16),

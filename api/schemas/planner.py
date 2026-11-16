@@ -3,7 +3,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-ScheduleType = Literal["single", "range"]
+ScheduleType = Literal["single", "range", "undated"]
 TaskStatus = Literal["active", "inactive", "trashed"]
 
 
@@ -42,8 +42,8 @@ class PlannerTaskRead(BaseModel):
     color_id: int | None = None
     color: str | None = None
     schedule_type: ScheduleType
-    start_date: date
-    end_date: date
+    start_date: date | None = None
+    end_date: date | None = None
     deadline_days: int | None = None
     status: TaskStatus
     pinned: bool

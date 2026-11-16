@@ -3,7 +3,7 @@ from datetime import date, datetime, time, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 from fastapi import HTTPException, status
-from sqlalchemy import Text, cast, or_
+from sqlalchemy import Text, and_, cast, or_
 from sqlalchemy.orm import Session, selectinload
 
 from core.audit import get_audit_actor
@@ -450,6 +450,19 @@ def maintain_tasks(db: Session, user_id: int) -> None:
         .all()
     )
     for task in tasks:
+        if task.schedule_type == "undated":
+            if task.status != "inactive":
+                task.status = "inactive"
+                task.inactive_at = task.inactive_at or now
+                changed = True
+            continue
+        if task.start_date is None or task.end_date is None:
+            # Undated tasks stay inactive until the user assigns a date.
+            if task.status == "active":
+                task.status = "inactive"
+                task.inactive_at = task.inactive_at or now
+                changed = True
+            continue
         if task.status == "active" and today > task.end_date:
             task.status = "inactive"
             task.inactive_at = now
@@ -497,7 +510,22 @@ def create_task(
     color_id = _validate_color_id(db, user_id, payload.color_id)
     pinned = bool(payload.pinned)
 
-    if payload.schedule_type == "single":
+    if payload.schedule_type == "undated":
+        task = PlannerTask(
+            user_id=user_id,
+            title=title,
+            notes=notes,
+            color_id=color_id,
+            schedule_type="undated",
+            start_date=None,
+            deadline_base_date=None,
+            end_date=None,
+            deadline_days=None,
+            status="inactive",
+            pinned=pinned,
+            inactive_at=_utc_naive_now(),
+        )
+    elif payload.schedule_type == "single":
         start = _validate_start_date(payload.start_date)
         deadline_days = _validate_deadline_days(payload.deadline_days)
         start, base, end = _single_dates(start, deadline_days)
@@ -580,6 +608,21 @@ def update_task(
         task.pinned = bool(data["pinned"])
 
     next_schedule = data.get("schedule_type", task.schedule_type)
+    was_undated = task.schedule_type == "undated"
+
+    if next_schedule == "undated":
+        task.schedule_type = "undated"
+        task.start_date = None
+        task.end_date = None
+        task.deadline_base_date = None
+        task.deadline_days = None
+        if task.status not in ("inactive", "trashed"):
+            task.status = "inactive"
+            task.inactive_at = _utc_naive_now()
+        db.commit()
+        db.refresh(task)
+        return _serialize_task(task)
+
     start_changed = (
         "start_date" in data
         and data["start_date"] != task.start_date
@@ -644,6 +687,10 @@ def update_task(
         task.end_date = end
         task.deadline_base_date = None
         task.deadline_days = None
+
+    if was_undated and task.status == "inactive":
+        task.status = "active"
+        task.inactive_at = None
 
     db.commit()
     db.refresh(task)
@@ -739,6 +786,16 @@ def trash_task(db: Session, task_id: int, user_id: int) -> dict:
 
 def restore_task(db: Session, task_id: int, user_id: int) -> dict:
     task = _get_task_or_404(db, task_id, user_id)
+
+    if task.schedule_type == "undated":
+        task.status = "inactive"
+        if task.inactive_at is None:
+            task.inactive_at = _utc_naive_now()
+        task.trashed_at = None
+        db.commit()
+        db.refresh(task)
+        return _serialize_task(task)
+
     if task.status == "active":
         return _serialize_task(task)
 
@@ -846,8 +903,13 @@ def search_planner(
         .options(selectinload(PlannerTask.color_relation))
         .filter(
             PlannerTask.user_id == user_id,
-            PlannerTask.start_date <= end_date,
-            PlannerTask.end_date >= start_date,
+            or_(
+                PlannerTask.start_date.is_(None),
+                and_(
+                    PlannerTask.start_date <= end_date,
+                    PlannerTask.end_date >= start_date,
+                ),
+            ),
         )
     )
     if tokens:
@@ -871,7 +933,7 @@ def search_planner(
     tasks.sort(
         key=lambda task: (
             status_order.get(task.status, 9),
-            task.start_date,
+            task.start_date or date.max,
             task.id,
         )
     )

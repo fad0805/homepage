@@ -22,6 +22,7 @@ import {
 import "@/public/styles/planner.scss";
 
 type ScheduleType = "single" | "range";
+type TaskScheduleType = ScheduleType | "undated";
 type TaskStatus = "active" | "inactive" | "trashed";
 type PlannerTab = "active" | "colors" | "inactive" | "trashed";
 
@@ -31,9 +32,9 @@ interface PlannerTask {
   notes: string | null;
   color_id: number | null;
   color: string | null;
-  schedule_type: ScheduleType;
-  start_date: string;
-  end_date: string;
+  schedule_type: TaskScheduleType;
+  start_date: string | null;
+  end_date: string | null;
   deadline_days: number | null;
   status: TaskStatus;
   pinned: boolean;
@@ -128,6 +129,7 @@ interface TaskFormState {
   endDate: string;
   deadlineDays: number;
   pinned: boolean;
+  undated: boolean;
 }
 
 const DEFAULT_TASK_COLOR = "#b07a52";
@@ -284,6 +286,9 @@ function buildCalendarWeeks(
     const segments: RangeSegment[] = [];
 
     for (const task of rangeTasks) {
+      if (!task.start_date || !task.end_date) {
+        continue;
+      }
       if (task.end_date < weekStart || task.start_date > weekEnd) {
         continue;
       }
@@ -364,7 +369,14 @@ function eventDate(event: PlannerEvent) {
 }
 
 function taskAppearsOn(task: PlannerTask, date: string, today: string) {
-  if (task.status !== "active") return false;
+  if (
+    task.status !== "active" ||
+    task.schedule_type === "undated" ||
+    !task.start_date ||
+    !task.end_date
+  ) {
+    return false;
+  }
   if (task.schedule_type === "single") {
     if (task.start_date > today) {
       return date === task.start_date;
@@ -380,7 +392,9 @@ function taskColor(task: PlannerTask) {
 
 function sortTasks(tasks: PlannerTask[]) {
   return [...tasks].sort((a, b) => {
-    if (a.end_date !== b.end_date) return a.end_date.localeCompare(b.end_date);
+    const aEnd = a.end_date || "9999-12-31";
+    const bEnd = b.end_date || "9999-12-31";
+    if (aEnd !== bEnd) return aEnd.localeCompare(bEnd);
     return a.id - b.id;
   });
 }
@@ -390,8 +404,10 @@ function sortColorGroupTasks(tasks: PlannerTask[]) {
     if (a.status !== b.status) {
       return a.status === "active" ? -1 : 1;
     }
-    if (a.end_date !== b.end_date) {
-      return a.end_date.localeCompare(b.end_date);
+    const aEnd = a.end_date || "9999-12-31";
+    const bEnd = b.end_date || "9999-12-31";
+    if (aEnd !== bEnd) {
+      return aEnd.localeCompare(bEnd);
     }
     return a.id - b.id;
   });
@@ -419,6 +435,7 @@ function emptyForm(today: string): TaskFormState {
     endDate: addDays(today, 7),
     deadlineDays: 7,
     pinned: false,
+    undated: false,
   };
 }
 
@@ -1059,17 +1076,23 @@ export default function PlannerClient({ username }: { username: string }) {
   };
 
   const startEditing = (task: PlannerTask) => {
+    const isUndated = task.schedule_type === "undated";
+    const scheduleType: ScheduleType =
+      task.schedule_type === "undated"
+        ? "single"
+        : task.schedule_type;
     setEditingId(task.id);
     setRecordCompleted(false);
     setForm({
       title: task.title,
       notes: task.notes || "",
       colorId: task.color_id,
-      scheduleType: task.schedule_type,
-      startDate: task.start_date,
-      endDate: task.end_date,
+      scheduleType,
+      startDate: task.start_date || today,
+      endDate: task.end_date || addDays(today, 7),
       deadlineDays: task.deadline_days || 7,
       pinned: task.pinned,
+      undated: isUndated,
     });
     setError(null);
     setShowChipCreator(false);
@@ -1134,11 +1157,22 @@ export default function PlannerClient({ username }: { username: string }) {
         title: form.title,
         notes: form.notes || null,
         color_id: form.colorId,
-        schedule_type: form.scheduleType,
-        start_date: form.startDate || null,
-        end_date: form.scheduleType === "range" ? form.endDate : null,
-        deadline_days:
-          form.scheduleType === "single" ? form.deadlineDays : null,
+        schedule_type: form.undated
+          ? "undated"
+          : form.scheduleType,
+        start_date: form.undated
+          ? null
+          : form.startDate || null,
+        end_date: form.undated
+          ? null
+          : form.scheduleType === "range"
+            ? form.endDate
+            : null,
+        deadline_days: form.undated
+          ? null
+          : form.scheduleType === "single"
+            ? form.deadlineDays
+            : null,
         pinned: form.pinned,
       };
       if (editingId) {
@@ -1619,26 +1653,40 @@ export default function PlannerClient({ username }: { username: string }) {
     setPreviewLoading(false);
   };
 
-  const renderTaskMeta = (task: PlannerTask) => (
-    <p className="planner-task-meta">
-      {task.schedule_type === "single" ? (
-        <>
-          단일 ·{" "}
-          {task.start_date > today
-            ? `시작 ${formatDateOnly(task.start_date)} · `
-            : ""}
-          마감 {formatDateOnly(task.end_date)}
-          {task.deadline_days ? ` · ${task.deadline_days}일` : ""}
-        </>
-      ) : (
-        <>
-          범위 · {formatDateOnly(task.start_date)} ~{" "}
-          {formatDateOnly(task.end_date)}
-        </>
-      )}
-      {task.pinned ? " · 고정" : ""}
-    </p>
-  );
+  const renderTaskMeta = (task: PlannerTask) => {
+    if (
+      task.schedule_type === "undated" ||
+      !task.start_date ||
+      !task.end_date
+    ) {
+      return (
+        <p className="planner-task-meta">
+          등록일 미지정 · 비활성
+          {task.pinned ? " · 고정" : ""}
+        </p>
+      );
+    }
+    return (
+      <p className="planner-task-meta">
+        {task.schedule_type === "single" ? (
+          <>
+            단일 ·{" "}
+            {task.start_date > today
+              ? `시작 ${formatDateOnly(task.start_date)} · `
+              : ""}
+            마감 {formatDateOnly(task.end_date)}
+            {task.deadline_days ? ` · ${task.deadline_days}일` : ""}
+          </>
+        ) : (
+          <>
+            범위 · {formatDateOnly(task.start_date)} ~{" "}
+            {formatDateOnly(task.end_date)}
+          </>
+        )}
+        {task.pinned ? " · 고정" : ""}
+      </p>
+    );
+  };
 
   const renderActiveTask = (task: PlannerTask) => (
     <li className="planner-task-item" key={task.id}>
@@ -1729,23 +1777,36 @@ export default function PlannerClient({ username }: { username: string }) {
         <p className="planner-task-meta">
           {trashed
             ? `휴지통 이동 ${formatDateTime(task.trashed_at)} · 30일 뒤 영구 삭제`
-            : task.pinned
-              ? `비활성 ${formatDateTime(task.inactive_at)} · 고정됨 (자동 휴지통 이동 방지)`
-              : `비활성 ${formatDateTime(task.inactive_at)} · 마감 30일 뒤 휴지통`}
+            : task.schedule_type === "undated"
+              ? "수정해서 날짜를 지정하면 활성화됩니다."
+              : task.pinned
+                ? `비활성 ${formatDateTime(task.inactive_at)} · 고정됨 (자동 휴지통 이동 방지)`
+                : `비활성 ${formatDateTime(task.inactive_at)} · 마감 30일 뒤 휴지통`}
         </p>
         {task.notes ? (
           <p className="planner-task-notes">{task.notes}</p>
         ) : null}
       </div>
       <div className="planner-task-actions">
-        <button
-          type="button"
-          className="planner-text-button is-accent"
-          disabled={busyKey !== null}
-          onClick={() => handleRestore(task)}
-        >
-          {busyKey === `restore-${task.id}` ? "복구 중" : "복구"}
-        </button>
+        {!trashed && task.schedule_type === "undated" ? (
+          <button
+            type="button"
+            className="planner-text-button is-accent"
+            disabled={busyKey !== null}
+            onClick={() => startEditing(task)}
+          >
+            수정
+          </button>
+        ) : (
+          <button
+            type="button"
+            className="planner-text-button is-accent"
+            disabled={busyKey !== null}
+            onClick={() => handleRestore(task)}
+          >
+            {busyKey === `restore-${task.id}` ? "복구 중" : "복구"}
+          </button>
+        )}
         {!trashed ? (
           <button
             type="button"
@@ -2043,6 +2104,8 @@ export default function PlannerClient({ username }: { username: string }) {
                         const dayTaskCount = dayTasks.length;
                         const hasTaskRecord = colorViewTasks.some(
                           (task) =>
+                            task.start_date &&
+                            task.end_date &&
                             task.start_date <= cell.date &&
                             cell.date <= task.end_date,
                         );
@@ -2375,7 +2438,7 @@ export default function PlannerClient({ username }: { username: string }) {
                       </h2>
                       <p>
                         {activeTab === "inactive"
-                          ? "마감일이 지난 일정입니다. 복구하면 오늘부터 다시 시작합니다."
+                          ? "마감일이 지난 일정과 등록일 미지정 일정입니다. 등록일 미지정 일정은 수정해서 날짜를 지정할 수 있습니다."
                           : "휴지통에 있는 일정은 30일 뒤 영구 삭제됩니다."}
                       </p>
                     </div>
@@ -2478,6 +2541,21 @@ export default function PlannerClient({ username }: { username: string }) {
                 />
               </label>
               {recordCompleted ? null : (
+                <label className="planner-checkbox">
+                  <input
+                    type="checkbox"
+                    checked={form.undated}
+                    onChange={(event) =>
+                      setForm((previous) => ({
+                        ...previous,
+                        undated: event.target.checked,
+                      }))
+                    }
+                  />
+                  <span>등록일 미지정 (항상 비활성)</span>
+                </label>
+              )}
+              {recordCompleted || form.undated ? null : (
                 <div
                   className="planner-segmented"
                   role="group"
@@ -2515,13 +2593,14 @@ export default function PlannerClient({ username }: { username: string }) {
                   </button>
                 </div>
               )}
-              <div
-                className={`planner-form-row${
-                  recordCompleted && form.scheduleType === "single"
-                    ? " is-single"
-                    : ""
-                }`}
-              >
+              {form.undated ? null : (
+                <div
+                  className={`planner-form-row${
+                    recordCompleted && form.scheduleType === "single"
+                      ? " is-single"
+                      : ""
+                  }`}
+                >
                 <label>
                   <span>
                     {recordCompleted && form.scheduleType === "single"
@@ -2576,7 +2655,8 @@ export default function PlannerClient({ username }: { username: string }) {
                     />
                   </label>
                 )}
-              </div>
+                </div>
+              )}
               {recordCompleted ? null : (
                 <div className="planner-color-field">
                   <span className="planner-field-label">색상 칩</span>
@@ -2644,7 +2724,11 @@ export default function PlannerClient({ username }: { username: string }) {
                   ) : null}
                 </div>
               )}
-              {recordCompleted ? (
+              {form.undated ? (
+                <p className="planner-form-hint">
+                  등록일 미지정 일정은 항상 비활성으로 저장됩니다.
+                </p>
+              ) : recordCompleted ? (
                 <p className="planner-form-hint">
                   {form.scheduleType === "range"
                     ? "과거 범위 일정은 완료 이력으로 저장됩니다. 완료일은 범위의 마지막 날이며, 제목·메모·완료일만 남습니다."
