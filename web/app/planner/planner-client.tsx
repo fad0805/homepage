@@ -764,7 +764,7 @@ export default function PlannerClient({ username }: { username: string }) {
         <header className="planner-header">
           <div>
             <p className="planner-eyebrow">{username}의 개인 달력</p>
-            <h1>일정</h1>
+            <h1>부록</h1>
           </div>
           <div className="planner-tabs" role="tablist" aria-label="일정 보기">
             <button
