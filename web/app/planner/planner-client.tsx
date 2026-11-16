@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import {
+  DragEvent as ReactDragEvent,
   FormEvent,
   PointerEvent as ReactPointerEvent,
   useCallback,
@@ -457,6 +458,14 @@ export default function PlannerClient({ username }: { username: string }) {
   const [colorOrderSaving, setColorOrderSaving] = useState(false);
   const [newChipColor, setNewChipColor] = useState(DEFAULT_TASK_COLOR);
   const [showChipCreator, setShowChipCreator] = useState(false);
+  const [chipManagerOpen, setChipManagerOpen] = useState(false);
+  const [draggingColorId, setDraggingColorId] = useState<
+    number | null
+  >(null);
+  const draggingColorIdRef = useRef<number | null>(null);
+  const [dragOverColorId, setDragOverColorId] = useState<
+    number | null
+  >(null);
   const [newChipName, setNewChipName] = useState("");
   const [editingColorId, setEditingColorId] = useState<
     number | null
@@ -574,7 +583,7 @@ export default function PlannerClient({ username }: { username: string }) {
   }, [activeTab]);
 
   useEffect(() => {
-    if (!selectedEvent && !taskModalOpen) return;
+    if (!selectedEvent && !taskModalOpen && !chipManagerOpen) return;
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
       if (selectedEvent) {
@@ -587,11 +596,21 @@ export default function PlannerClient({ username }: { username: string }) {
         setEditingId(null);
         setForm(emptyForm(today));
         setError(null);
+        return;
+      }
+      if (chipManagerOpen) {
+        setChipManagerOpen(false);
+        setEditingColorId(null);
+        setEditChipName("");
+        draggingColorIdRef.current = null;
+        setDraggingColorId(null);
+        setDragOverColorId(null);
+        setError(null);
       }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [selectedEvent, taskModalOpen, today]);
+  }, [selectedEvent, taskModalOpen, chipManagerOpen, today]);
 
   const cells = useMemo(() => monthCells(viewMonth), [viewMonth]);
   const activeTasks = useMemo(
@@ -1342,29 +1361,11 @@ export default function PlannerClient({ username }: { username: string }) {
     setError(null);
   };
 
-  const handleMoveColor = async (
-    saved: PlannerColor,
-    delta: number,
+  const persistColorOrder = async (
+    next: PlannerColor[],
+    previous: PlannerColor[],
   ) => {
     if (colorOrderSaving) return;
-    const currentIndex = savedColors.findIndex(
-      (color) => color.id === saved.id,
-    );
-    const nextIndex = currentIndex + delta;
-    if (
-      currentIndex < 0 ||
-      nextIndex < 0 ||
-      nextIndex >= savedColors.length
-    ) {
-      return;
-    }
-
-    const previous = savedColors;
-    const next = [...savedColors];
-    [next[currentIndex], next[nextIndex]] = [
-      next[nextIndex],
-      next[currentIndex],
-    ];
     setSavedColors(next);
     setColorOrderSaving(true);
     setError(null);
@@ -1389,6 +1390,94 @@ export default function PlannerClient({ username }: { username: string }) {
     } finally {
       setColorOrderSaving(false);
     }
+  };
+
+  const moveColorBy = (saved: PlannerColor, delta: number) => {
+    if (colorOrderSaving) return;
+    const currentIndex = savedColors.findIndex(
+      (color) => color.id === saved.id,
+    );
+    const nextIndex = currentIndex + delta;
+    if (
+      currentIndex < 0 ||
+      nextIndex < 0 ||
+      nextIndex >= savedColors.length
+    ) {
+      return;
+    }
+    const next = [...savedColors];
+    [next[currentIndex], next[nextIndex]] = [
+      next[nextIndex],
+      next[currentIndex],
+    ];
+    void persistColorOrder(next, savedColors);
+  };
+
+  const moveColorForDrop = (
+    items: PlannerColor[],
+    sourceId: number,
+    targetId: number,
+    after: boolean,
+  ) => {
+    const sourceIndex = items.findIndex(
+      (color) => color.id === sourceId,
+    );
+    if (sourceIndex < 0) return items;
+    const next = [...items];
+    const [moved] = next.splice(sourceIndex, 1);
+    const targetIndex = next.findIndex(
+      (color) => color.id === targetId,
+    );
+    if (targetIndex < 0) return items;
+    next.splice(after ? targetIndex + 1 : targetIndex, 0, moved);
+    return next;
+  };
+
+  const handleChipDrop = (
+    event: ReactDragEvent<HTMLLIElement>,
+    target: PlannerColor,
+  ) => {
+    event.preventDefault();
+    const sourceId =
+      draggingColorIdRef.current ??
+      draggingColorId ??
+      Number(event.dataTransfer.getData("text/plain"));
+    draggingColorIdRef.current = null;
+    setDraggingColorId(null);
+    setDragOverColorId(null);
+    if (
+      !Number.isFinite(sourceId) ||
+      sourceId === target.id ||
+      colorOrderSaving
+    ) {
+      return;
+    }
+    const rect = event.currentTarget.getBoundingClientRect();
+    const after = event.clientY > rect.top + rect.height / 2;
+    const next = moveColorForDrop(
+      savedColors,
+      sourceId,
+      target.id,
+      after,
+    );
+    if (next === savedColors) return;
+    void persistColorOrder(next, savedColors);
+  };
+
+  const openChipManager = () => {
+    setError(null);
+    setShowChipCreator(false);
+    setChipManagerOpen(true);
+  };
+
+  const closeChipManager = () => {
+    setChipManagerOpen(false);
+    setEditingColorId(null);
+    setEditChipName("");
+    draggingColorIdRef.current = null;
+    setDraggingColorId(null);
+    setDragOverColorId(null);
+    setError(null);
   };
 
   const cancelEditingColor = () => {
@@ -1738,7 +1827,10 @@ export default function PlannerClient({ username }: { username: string }) {
     </>
   );
 
-  const renderChipCreator = (selectForForm: boolean) => (
+  const renderChipCreator = (
+    selectForForm: boolean,
+    showCancel = true,
+  ) => (
     <div className="planner-color-creator">
       <input
         type="color"
@@ -1766,13 +1858,15 @@ export default function PlannerClient({ username }: { username: string }) {
       >
         {colorSaving ? "추가 중" : "칩 추가"}
       </button>
-      <button
-        type="button"
-        className="planner-text-button"
-        onClick={() => setShowChipCreator(false)}
-      >
-        취소
-      </button>
+      {showCancel ? (
+        <button
+          type="button"
+          className="planner-text-button"
+          onClick={() => setShowChipCreator(false)}
+        >
+          취소
+        </button>
+      ) : null}
     </div>
   );
 
@@ -2153,9 +2247,6 @@ export default function PlannerClient({ username }: { username: string }) {
                       <p>
                         활성·비활성 일정 {colorViewTasks.length}개 · 칩{" "}
                         {savedColors.length}개
-                        {savedColors.length > 1
-                          ? " · ↑↓로 순서 변경"
-                          : ""}
                         {selectedColorGroups.length > 0
                           ? ` · 선택 ${selectedColorGroups.length}개`
                           : ""}
@@ -2191,16 +2282,13 @@ export default function PlannerClient({ username }: { username: string }) {
                       <button
                         type="button"
                         className="planner-primary"
-                        onClick={() =>
-                          setShowChipCreator((previous) => !previous)
-                        }
+                        onClick={openChipManager}
                       >
-                        {showChipCreator ? "닫기" : "칩 추가"}
+                        칩 관리
                       </button>
                     </div>
                   </div>
 
-                  {showChipCreator ? renderChipCreator(false) : null}
                   {colorGroups.length === 0 ? (
                     <p className="planner-empty">
                       색상 칩에 지정된 활성·비활성 일정이 없습니다.
@@ -2213,18 +2301,6 @@ export default function PlannerClient({ username }: { username: string }) {
                         ).length;
                         const inactiveCount =
                           group.tasks.length - activeCount;
-                        const savedColor = group.key.startsWith("chip:")
-                          ? savedColors.find(
-                              (color) =>
-                                color.id ===
-                                Number(group.key.slice(5)),
-                            ) ?? null
-                          : null;
-                        const savedIndex = savedColor
-                          ? savedColors.findIndex(
-                              (color) => color.id === savedColor.id,
-                            )
-                          : -1;
                         return (
                           <section
                             className={[
@@ -2281,114 +2357,7 @@ export default function PlannerClient({ username }: { username: string }) {
                                     : "⌄"}
                                 </span>
                               </button>
-                              {savedColor ? (
-                                <div className="planner-color-group-actions">
-                                  <button
-                                    type="button"
-                                    className="planner-text-button"
-                                    disabled={
-                                      colorOrderSaving || savedIndex <= 0
-                                    }
-                                    aria-label="색상 칩 위로 이동"
-                                    title="위로"
-                                    onClick={() =>
-                                      void handleMoveColor(savedColor, -1)
-                                    }
-                                  >
-                                    ↑
-                                  </button>
-                                  <button
-                                    type="button"
-                                    className="planner-text-button"
-                                    disabled={
-                                      colorOrderSaving ||
-                                      savedIndex < 0 ||
-                                      savedIndex >=
-                                        savedColors.length - 1
-                                    }
-                                    aria-label="색상 칩 아래로 이동"
-                                    title="아래로"
-                                    onClick={() =>
-                                      void handleMoveColor(savedColor, 1)
-                                    }
-                                  >
-                                    ↓
-                                  </button>
-                                  <button
-                                    type="button"
-                                    className="planner-text-button"
-                                    onClick={() =>
-                                      startEditingColor(savedColor)
-                                    }
-                                  >
-                                    수정
-                                  </button>
-                                  <button
-                                    type="button"
-                                    className="planner-text-button is-danger"
-                                    disabled={
-                                      deletingColorId !== null
-                                    }
-                                    onClick={() =>
-                                      void handleDeleteColor(
-                                        savedColor,
-                                      )
-                                    }
-                                  >
-                                    {deletingColorId === savedColor.id
-                                      ? "삭제 중"
-                                      : "삭제"}
-                                  </button>
-                                </div>
-                              ) : null}
                             </div>
-                            {editingColorId === savedColor?.id ? (
-                              <form
-                                className="planner-color-creator planner-color-edit"
-                                onSubmit={handleEditColor}
-                              >
-                                <input
-                                  type="color"
-                                  value={editChipColor}
-                                  aria-label="색상 칩 색상"
-                                  onChange={(event) =>
-                                    setEditChipColor(
-                                      event.target.value,
-                                    )
-                                  }
-                                />
-                                <span className="planner-color-value">
-                                  {editChipColor.toUpperCase()}
-                                </span>
-                                <input
-                                  type="text"
-                                  className="planner-color-name-input"
-                                  value={editChipName}
-                                  maxLength={80}
-                                  placeholder="칩 이름 (선택)"
-                                  aria-label="색상 칩 이름"
-                                  onChange={(event) =>
-                                    setEditChipName(
-                                      event.target.value,
-                                    )
-                                  }
-                                />
-                                <button
-                                  type="submit"
-                                  className="planner-text-button"
-                                  disabled={chipSaving}
-                                >
-                                  {chipSaving ? "저장 중" : "저장"}
-                                </button>
-                                <button
-                                  type="button"
-                                  className="planner-text-button"
-                                  onClick={cancelEditingColor}
-                                >
-                                  취소
-                                </button>
-                              </form>
-                            ) : null}
                             {selectedColorGroups.includes(group.key) ? (
                               group.tasks.length === 0 ? (
                                 <p className="planner-empty">
@@ -2750,6 +2719,225 @@ export default function PlannerClient({ username }: { username: string }) {
                         : "추가"}
               </button>
             </form>
+          </div>
+        </div>
+      ) : null}
+
+      {chipManagerOpen ? (
+        <div
+          className="planner-modal-overlay is-task"
+          role="presentation"
+          onClick={closeChipManager}
+        >
+          <div
+            className="planner-modal planner-chip-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-label="칩 관리"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="planner-modal-header">
+              <div>
+                <p className="planner-modal-eyebrow">색상별</p>
+                <h2>칩 관리</h2>
+                <p className="planner-chip-hint">
+                  드래그해서 순서를 바꾸고, 칩을 추가·수정·삭제할
+                  수 있습니다.
+                </p>
+              </div>
+              <button
+                type="button"
+                className="planner-text-button"
+                onClick={closeChipManager}
+              >
+                닫기
+              </button>
+            </div>
+            {error ? <p className="planner-error">{error}</p> : null}
+            <div className="planner-chip-add">
+              <h3>칩 추가</h3>
+              {renderChipCreator(false, false)}
+            </div>
+            <div className="planner-chip-manager">
+              <h3>칩 순서</h3>
+              {savedColors.length === 0 ? (
+                <p className="planner-empty">
+                  등록된 색상 칩이 없습니다.
+                </p>
+              ) : (
+                <ul className="planner-chip-manager-list">
+                  {savedColors.map((saved) => (
+                    <li
+                      key={saved.id}
+                      data-chip-id={saved.id}
+                      className={[
+                        "planner-chip-manager-item",
+                        draggingColorId === saved.id
+                          ? "is-dragging"
+                          : "",
+                        dragOverColorId === saved.id
+                          ? "is-drag-over"
+                          : "",
+                      ]
+                        .filter(Boolean)
+                        .join(" ")}
+                      onDragOver={(event) => {
+                        const sourceId =
+                          draggingColorIdRef.current ??
+                          draggingColorId;
+                        if (
+                          sourceId === null ||
+                          sourceId === saved.id ||
+                          colorOrderSaving
+                        ) {
+                          return;
+                        }
+                        event.preventDefault();
+                        event.dataTransfer.dropEffect = "move";
+                        setDragOverColorId(saved.id);
+                      }}
+                      onDragLeave={(event) => {
+                        if (
+                          event.relatedTarget instanceof Node &&
+                          event.currentTarget.contains(
+                            event.relatedTarget,
+                          )
+                        ) {
+                          return;
+                        }
+                        setDragOverColorId((previous) =>
+                          previous === saved.id ? null : previous,
+                        );
+                      }}
+                      onDrop={(event) =>
+                        handleChipDrop(event, saved)
+                      }
+                    >
+                      <div className="planner-chip-manager-row">
+                        <span
+                          className="planner-chip-drag-handle"
+                          role="button"
+                          tabIndex={0}
+                          draggable={!colorOrderSaving}
+                          aria-label={`${
+                            saved.name || saved.color
+                          } 순서 변경`}
+                          aria-keyshortcuts="ArrowUp ArrowDown"
+                          title="드래그해서 순서 변경 (↑↓ 키도 가능)"
+                          onDragStart={(event) => {
+                            if (colorOrderSaving) {
+                              event.preventDefault();
+                              return;
+                            }
+                            event.dataTransfer.effectAllowed = "move";
+                            event.dataTransfer.setData(
+                              "text/plain",
+                              String(saved.id),
+                            );
+                            draggingColorIdRef.current = saved.id;
+                            setDraggingColorId(saved.id);
+                            setDragOverColorId(null);
+                          }}
+                          onDragEnd={() => {
+                            draggingColorIdRef.current = null;
+                            setDraggingColorId(null);
+                            setDragOverColorId(null);
+                          }}
+                          onKeyDown={(event) => {
+                            if (event.key === "ArrowUp") {
+                              event.preventDefault();
+                              moveColorBy(saved, -1);
+                            } else if (
+                              event.key === "ArrowDown"
+                            ) {
+                              event.preventDefault();
+                              moveColorBy(saved, 1);
+                            }
+                          }}
+                        >
+                          ⠿
+                        </span>
+                        <span
+                          className="planner-chip-swatch"
+                          style={{ backgroundColor: saved.color }}
+                          aria-hidden="true"
+                        />
+                        <span className="planner-chip-name">
+                          {saved.name || saved.color.toUpperCase()}
+                        </span>
+                        <span className="planner-chip-value">
+                          {saved.color.toUpperCase()}
+                        </span>
+                        <div className="planner-chip-actions">
+                          <button
+                            type="button"
+                            className="planner-text-button"
+                            onClick={() => startEditingColor(saved)}
+                          >
+                            수정
+                          </button>
+                          <button
+                            type="button"
+                            className="planner-text-button is-danger"
+                            disabled={deletingColorId !== null}
+                            onClick={() =>
+                              void handleDeleteColor(saved)
+                            }
+                          >
+                            {deletingColorId === saved.id
+                              ? "삭제 중"
+                              : "삭제"}
+                          </button>
+                        </div>
+                      </div>
+                      {editingColorId === saved.id ? (
+                        <form
+                          className="planner-color-creator planner-color-edit"
+                          onSubmit={handleEditColor}
+                        >
+                          <input
+                            type="color"
+                            value={editChipColor}
+                            aria-label="색상 칩 색상"
+                            onChange={(event) =>
+                              setEditChipColor(event.target.value)
+                            }
+                          />
+                          <span className="planner-color-value">
+                            {editChipColor.toUpperCase()}
+                          </span>
+                          <input
+                            type="text"
+                            className="planner-color-name-input"
+                            value={editChipName}
+                            maxLength={80}
+                            placeholder="칩 이름 (선택)"
+                            aria-label="색상 칩 이름"
+                            onChange={(event) =>
+                              setEditChipName(event.target.value)
+                            }
+                          />
+                          <button
+                            type="submit"
+                            className="planner-text-button"
+                            disabled={chipSaving}
+                          >
+                            {chipSaving ? "저장 중" : "저장"}
+                          </button>
+                          <button
+                            type="button"
+                            className="planner-text-button"
+                            onClick={cancelEditingColor}
+                          >
+                            취소
+                          </button>
+                        </form>
+                      ) : null}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
           </div>
         </div>
       ) : null}

@@ -777,18 +777,6 @@
   gap: 0.35rem;
 }
 
-.planner-color-group-heading .planner-color-group-header {
-  flex: 1 1 10rem;
-  width: auto;
-}
-
-.planner-color-group-actions {
-  display: flex;
-  align-items: center;
-  gap: 0.15rem;
-  margin-left: auto;
-}
-
 .planner-color-group-header {
   display: flex;
   align-items: center;
@@ -810,10 +798,6 @@
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-}
-
-.planner-color-group .planner-color-edit {
-  margin-top: 0.55rem;
 }
 
 .planner-color-group-caret {
@@ -1079,6 +1063,134 @@
 
 .planner-task-modal {
   width: min(32rem, 100%);
+}
+
+.planner-chip-modal {
+  width: min(34rem, 100%);
+}
+
+.planner-chip-hint {
+  margin: 0.35rem 0 0;
+  font-size: 0.68rem;
+  line-height: 1.5;
+  opacity: 0.6;
+}
+
+.planner-chip-modal .planner-error {
+  margin-top: 0.75rem;
+}
+
+.planner-chip-add,
+.planner-chip-manager {
+  margin-top: 0.95rem;
+
+  h3 {
+    margin: 0;
+    color: var(--title-color);
+    font-size: 0.78rem;
+    font-weight: normal;
+  }
+}
+
+.planner-chip-add {
+  padding-bottom: 0.85rem;
+  border-bottom: 1px solid
+    color-mix(in srgb, var(--theme-main) 24%, transparent);
+
+  .planner-color-creator {
+    margin-top: 0.5rem;
+  }
+}
+
+.planner-chip-manager-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  margin: 0.55rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.planner-chip-manager-item {
+  padding: 0.48rem 0.55rem;
+  border: 1px solid
+    color-mix(in srgb, var(--theme-main) 26%, transparent);
+  border-radius: 0.7rem;
+  background: var(--planner-card-bg);
+  transition:
+    border-color 0.16s ease,
+    box-shadow 0.16s ease,
+    opacity 0.16s ease;
+
+  &.is-dragging {
+    opacity: 0.42;
+  }
+
+  &.is-drag-over {
+    border-color: var(--title-color);
+    box-shadow: 0 0 0 1px var(--title-color);
+  }
+
+  .planner-color-edit {
+    margin-top: 0.45rem;
+  }
+}
+
+.planner-chip-manager-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.45rem;
+  min-width: 0;
+}
+
+.planner-chip-drag-handle {
+  padding: 0.08rem 0.16rem;
+  border-radius: 0.35rem;
+  color: var(--title-color);
+  font-size: 0.95rem;
+  line-height: 1;
+  cursor: grab;
+  user-select: none;
+
+  &:active {
+    cursor: grabbing;
+  }
+
+  &:focus-visible {
+    outline: 1px solid var(--title-color);
+    outline-offset: 1px;
+  }
+}
+
+.planner-chip-swatch {
+  width: 0.85rem;
+  height: 0.85rem;
+  flex-shrink: 0;
+  border: 1px solid
+    color-mix(in srgb, var(--foreground) 18%, transparent);
+  border-radius: 999px;
+}
+
+.planner-chip-name {
+  flex: 1 1 8rem;
+  min-width: 0;
+  overflow: hidden;
+  font-size: 0.72rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.planner-chip-value {
+  font-size: 0.6rem;
+  opacity: 0.52;
+}
+
+.planner-chip-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.1rem;
+  margin-left: auto;
 }
 
 .planner-form.is-modal {
