@@ -268,9 +268,9 @@
 }
 
 .planner-calendar-header {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   align-items: center;
-  justify-content: space-between;
   gap: 0.8rem;
   padding: 0.2rem 0.2rem 0.75rem;
 
@@ -280,7 +280,19 @@
     font-family: Eulyoo1945-SemiBold, GowunDodum, sans-serif;
     font-size: 1.15rem;
     font-weight: normal;
+    text-align: center;
   }
+}
+
+.planner-calendar-prev {
+  justify-self: start;
+}
+
+.planner-calendar-actions {
+  display: flex;
+  align-items: center;
+  justify-self: end;
+  gap: 0.4rem;
 }
 
 .planner-calendar-hint {
@@ -522,7 +534,6 @@
 }
 
 .planner-special-open {
-  margin-left: auto;
   white-space: nowrap;
 }
 

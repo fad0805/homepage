@@ -2502,28 +2502,30 @@ export default function PlannerClient({ username }: { username: string }) {
               <div className="planner-calendar-header">
                 <button
                   type="button"
-                  className="planner-icon-button"
+                  className="planner-icon-button planner-calendar-prev"
                   aria-label="이전 달"
                   onClick={() => changeMonth(-1)}
                 >
                   ‹
                 </button>
                 <h2>{monthLabel(viewMonth)}</h2>
-                <button
-                  type="button"
-                  className="planner-icon-button"
-                  aria-label="다음 달"
-                  onClick={() => changeMonth(1)}
-                >
-                  ›
-                </button>
-                <button
-                  type="button"
-                  className="planner-text-button planner-special-open"
-                  onClick={openSpecialManager}
-                >
-                  기념일
-                </button>
+                <div className="planner-calendar-actions">
+                  <button
+                    type="button"
+                    className="planner-icon-button"
+                    aria-label="다음 달"
+                    onClick={() => changeMonth(1)}
+                  >
+                    ›
+                  </button>
+                  <button
+                    type="button"
+                    className="planner-text-button planner-special-open"
+                    onClick={openSpecialManager}
+                  >
+                    기념일
+                  </button>
+                </div>
               </div>
               <p className="planner-calendar-hint">
                 날짜를 드래그하면 범위 일정을 만들 수 있습니다.
@@ -3941,7 +3943,7 @@ export default function PlannerClient({ username }: { username: string }) {
           onClick={closeSpecialManager}
         >
           <div
-            className="planner-task-modal planner-special-modal"
+            className="planner-modal planner-task-modal planner-special-modal"
             role="dialog"
             aria-modal="true"
             aria-label="기념일 관리"
