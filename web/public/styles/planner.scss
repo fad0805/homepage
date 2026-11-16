@@ -575,61 +575,6 @@
   list-style: none;
 }
 
-.planner-chip-filter {
-  margin-top: 0.75rem;
-  overflow: hidden;
-  border: 1px solid color-mix(in srgb, var(--theme-main) 28%, transparent);
-  border-radius: 0.7rem;
-  background: color-mix(in srgb, var(--input-background) 34%, transparent);
-}
-
-.planner-chip-filter-toggle {
-  display: flex;
-  align-items: center;
-  gap: 0.45rem;
-  width: 100%;
-  padding: 0.5rem 0.6rem;
-  border: 0;
-  background: transparent;
-  color: var(--foreground);
-  font-family: inherit;
-  font-size: 0.7rem;
-  text-align: left;
-  cursor: pointer;
-}
-
-.planner-chip-filter-current {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.3rem;
-  margin-left: auto;
-  font-size: 0.62rem;
-  opacity: 0.68;
-}
-
-.planner-chip-filter-dot {
-  width: 0.55rem;
-  height: 0.55rem;
-  border: 1px solid color-mix(in srgb, var(--foreground) 18%, transparent);
-  border-radius: 999px;
-}
-
-.planner-chip-filter-caret {
-  width: 0.9rem;
-  text-align: center;
-  opacity: 0.6;
-}
-
-.planner-chip-filter-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.35rem;
-  max-height: 10rem;
-  padding: 0.55rem 0.6rem;
-  overflow-y: auto;
-  border-top: 1px solid color-mix(in srgb, var(--theme-main) 20%, transparent);
-}
-
 .planner-color-group-list {
   display: flex;
   flex-direction: column;
@@ -647,7 +592,7 @@
   border-radius: 0.8rem;
   background: color-mix(in srgb, var(--input-background) 42%, transparent);
 
-  &.is-selected {
+  &.is-open {
     border-color: var(--title-color);
     box-shadow: 0 0 0 1px var(--title-color);
   }
@@ -661,7 +606,15 @@
   display: flex;
   align-items: center;
   gap: 0.45rem;
+  width: 100%;
   min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--foreground);
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
 
   strong {
     overflow: hidden;
@@ -670,6 +623,13 @@
     text-overflow: ellipsis;
     white-space: nowrap;
   }
+}
+
+.planner-color-group-caret {
+  width: 0.9rem;
+  flex-shrink: 0;
+  text-align: center;
+  opacity: 0.6;
 }
 
 .planner-color-group-swatch {

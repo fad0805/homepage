@@ -407,7 +407,6 @@ export default function PlannerClient({ username }: { username: string }) {
   const [colorSaving, setColorSaving] = useState(false);
   const [newChipColor, setNewChipColor] = useState(DEFAULT_TASK_COLOR);
   const [showChipCreator, setShowChipCreator] = useState(false);
-  const [chipListOpen, setChipListOpen] = useState(false);
   const [calendarColorFilter, setCalendarColorFilter] =
     useState("all");
   const [error, setError] = useState<string | null>(null);
@@ -417,7 +416,6 @@ export default function PlannerClient({ username }: { username: string }) {
   const [taskModalOpen, setTaskModalOpen] = useState(false);
   const initializedToday = useRef(false);
   const eventsRequestRef = useRef(0);
-  const chipFilterRef = useRef<HTMLDivElement>(null);
 
   const loadTasks = useCallback(async () => {
     try {
@@ -503,31 +501,9 @@ export default function PlannerClient({ username }: { username: string }) {
 
   useEffect(() => {
     if (activeTab === "colors") return;
-    setChipListOpen(false);
     setCalendarColorFilter("all");
     setShowChipCreator(false);
   }, [activeTab]);
-
-  useEffect(() => {
-    if (!chipListOpen) return;
-    const handlePointerDown = (event: PointerEvent) => {
-      if (!(event.target instanceof Node)) return;
-      if (!chipFilterRef.current?.contains(event.target)) {
-        setChipListOpen(false);
-      }
-    };
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        setChipListOpen(false);
-      }
-    };
-    window.addEventListener("pointerdown", handlePointerDown);
-    window.addEventListener("keydown", handleKeyDown);
-    return () => {
-      window.removeEventListener("pointerdown", handlePointerDown);
-      window.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [chipListOpen]);
 
   useEffect(() => {
     if (!selectedEvent && !taskModalOpen) return;
@@ -635,23 +611,17 @@ export default function PlannerClient({ username }: { username: string }) {
         );
       });
   }, [colorViewTasks, savedColors]);
-  const currentFilterColor =
-    calendarColorFilter === "all"
-      ? null
-      : calendarColorFilter === "unassigned"
-        ? UNASSIGNED_TASK_COLOR
-        : savedColors.find(
-            (saved) => `chip:${saved.id}` === calendarColorFilter,
-          )?.color || UNASSIGNED_TASK_COLOR;
-  const currentFilterLabel =
-    calendarColorFilter === "all"
-      ? "전체"
-      : calendarColorFilter === "unassigned"
-        ? "미지정"
-        : (currentFilterColor || "").toUpperCase();
-  const hasUnassignedTasks = colorViewTasks.some(
-    (task) => task.color_id === null,
-  );
+
+  useEffect(() => {
+    if (calendarColorFilter === "all") return;
+    if (
+      !colorGroups.some(
+        (group) => group.key === calendarColorFilter,
+      )
+    ) {
+      setCalendarColorFilter("all");
+    }
+  }, [calendarColorFilter, colorGroups]);
 
   const resetForm = () => {
     setEditingId(null);
@@ -1471,101 +1441,6 @@ export default function PlannerClient({ username }: { username: string }) {
                     </div>
                   </div>
 
-                  <div className="planner-chip-filter" ref={chipFilterRef}>
-                    <button
-                      type="button"
-                      className="planner-chip-filter-toggle"
-                      aria-expanded={chipListOpen}
-                      onClick={() =>
-                        setChipListOpen((previous) => !previous)
-                      }
-                    >
-                      <span>칩 목록</span>
-                      <span className="planner-chip-filter-current">
-                        {currentFilterColor ? (
-                          <span
-                            className="planner-chip-filter-dot"
-                            style={{
-                              backgroundColor: currentFilterColor,
-                            }}
-                          />
-                        ) : null}
-                        {currentFilterLabel}
-                      </span>
-                      <span
-                        className="planner-chip-filter-caret"
-                        aria-hidden="true"
-                      >
-                        {chipListOpen ? "⌃" : "⌄"}
-                      </span>
-                    </button>
-                    {chipListOpen ? (
-                      <div className="planner-chip-filter-list">
-                        <button
-                          type="button"
-                          className={`planner-color-chip is-none${
-                            calendarColorFilter === "all"
-                              ? " is-active"
-                              : ""
-                          }`}
-                          aria-pressed={calendarColorFilter === "all"}
-                          onClick={() => {
-                            setCalendarColorFilter("all");
-                            setChipListOpen(false);
-                          }}
-                        >
-                          전체
-                        </button>
-                        {savedColors.map((saved) => (
-                          <button
-                            key={saved.id}
-                            type="button"
-                            className={`planner-color-chip${
-                              calendarColorFilter ===
-                              `chip:${saved.id}`
-                                ? " is-active"
-                                : ""
-                            }`}
-                            style={{
-                              backgroundColor: saved.color,
-                            }}
-                            aria-label={`색상 칩 ${saved.color}`}
-                            aria-pressed={
-                              calendarColorFilter ===
-                              `chip:${saved.id}`
-                            }
-                            title={saved.color}
-                            onClick={() => {
-                              setCalendarColorFilter(
-                                `chip:${saved.id}`,
-                              );
-                              setChipListOpen(false);
-                            }}
-                          />
-                        ))}
-                        {hasUnassignedTasks ? (
-                          <button
-                            type="button"
-                            className={`planner-color-chip is-none${
-                              calendarColorFilter === "unassigned"
-                                ? " is-active"
-                                : ""
-                            }`}
-                            aria-pressed={
-                              calendarColorFilter === "unassigned"
-                            }
-                            onClick={() => {
-                              setCalendarColorFilter("unassigned");
-                              setChipListOpen(false);
-                            }}
-                          >
-                            미지정
-                          </button>
-                        ) : null}
-                      </div>
-                    ) : null}
-                  </div>
-
                   {showChipCreator ? renderChipCreator(false) : null}
                   {colorGroups.length === 0 ? (
                     <p className="planner-empty">
@@ -1584,14 +1459,27 @@ export default function PlannerClient({ username }: { username: string }) {
                             className={[
                               "planner-color-group",
                               calendarColorFilter === group.key
-                                ? "is-selected"
+                                ? "is-open"
                                 : "",
                             ]
                               .filter(Boolean)
                               .join(" ")}
                             key={group.key}
                           >
-                            <div className="planner-color-group-header">
+                            <button
+                              type="button"
+                              className="planner-color-group-header"
+                              aria-expanded={
+                                calendarColorFilter === group.key
+                              }
+                              onClick={() =>
+                                setCalendarColorFilter((previous) =>
+                                  previous === group.key
+                                    ? "all"
+                                    : group.key,
+                                )
+                              }
+                            >
                               <span
                                 className="planner-color-group-swatch"
                                 style={{
@@ -1609,14 +1497,24 @@ export default function PlannerClient({ username }: { username: string }) {
                                 활성 {activeCount} · 비활성{" "}
                                 {inactiveCount}
                               </span>
-                            </div>
-                            <ul className="planner-task-list">
-                              {group.tasks.map((task) =>
-                                task.status === "active"
-                                  ? renderActiveTask(task)
-                                  : renderStoredTask(task, false),
-                              )}
-                            </ul>
+                              <span
+                                className="planner-color-group-caret"
+                                aria-hidden="true"
+                              >
+                                {calendarColorFilter === group.key
+                                  ? "⌃"
+                                  : "⌄"}
+                              </span>
+                            </button>
+                            {calendarColorFilter === group.key ? (
+                              <ul className="planner-task-list">
+                                {group.tasks.map((task) =>
+                                  task.status === "active"
+                                    ? renderActiveTask(task)
+                                    : renderStoredTask(task, false),
+                                )}
+                              </ul>
+                            ) : null}
                           </section>
                         );
                       })}
