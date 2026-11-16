@@ -38,6 +38,7 @@ const navigation: Navigation = {
     rowLabels: ["콘텐츠 관리", "운영"],
     rows: [
       [
+        { href: "/admin/index", label: "인덱스 관리" },
         { href: "/admin/author", label: "프로필 관리" },
         { href: "/admin/characters", label: "등장인물 관리" },
         { href: "/admin/books", label: "책장 관리" },
