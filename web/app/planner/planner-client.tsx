@@ -417,6 +417,7 @@ export default function PlannerClient({ username }: { username: string }) {
   const [taskModalOpen, setTaskModalOpen] = useState(false);
   const initializedToday = useRef(false);
   const eventsRequestRef = useRef(0);
+  const chipFilterRef = useRef<HTMLDivElement>(null);
 
   const loadTasks = useCallback(async () => {
     try {
@@ -508,6 +509,27 @@ export default function PlannerClient({ username }: { username: string }) {
   }, [activeTab]);
 
   useEffect(() => {
+    if (!chipListOpen) return;
+    const handlePointerDown = (event: PointerEvent) => {
+      if (!(event.target instanceof Node)) return;
+      if (!chipFilterRef.current?.contains(event.target)) {
+        setChipListOpen(false);
+      }
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setChipListOpen(false);
+      }
+    };
+    window.addEventListener("pointerdown", handlePointerDown);
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("pointerdown", handlePointerDown);
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [chipListOpen]);
+
+  useEffect(() => {
     if (!selectedEvent && !taskModalOpen) return;
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
@@ -541,11 +563,7 @@ export default function PlannerClient({ username }: { username: string }) {
     [tasks],
   );
   const calendarTasks = useMemo(() => {
-    if (
-      activeTab !== "colors" ||
-      !chipListOpen ||
-      calendarColorFilter === "all"
-    ) {
+    if (activeTab !== "colors" || calendarColorFilter === "all") {
       return activeTasks;
     }
     if (calendarColorFilter === "unassigned") {
@@ -553,12 +571,7 @@ export default function PlannerClient({ username }: { username: string }) {
     }
     const chipId = Number(calendarColorFilter.slice(5));
     return activeTasks.filter((task) => task.color_id === chipId);
-  }, [
-    activeTab,
-    activeTasks,
-    chipListOpen,
-    calendarColorFilter,
-  ]);
+  }, [activeTab, activeTasks, calendarColorFilter]);
   const weeks = useMemo(
     () => buildCalendarWeeks(cells, calendarTasks),
     [cells, calendarTasks],
@@ -1458,17 +1471,14 @@ export default function PlannerClient({ username }: { username: string }) {
                     </div>
                   </div>
 
-                  <div className="planner-chip-filter">
+                  <div className="planner-chip-filter" ref={chipFilterRef}>
                     <button
                       type="button"
                       className="planner-chip-filter-toggle"
                       aria-expanded={chipListOpen}
-                      onClick={() => {
-                        if (chipListOpen) {
-                          setCalendarColorFilter("all");
-                        }
-                        setChipListOpen((previous) => !previous);
-                      }}
+                      onClick={() =>
+                        setChipListOpen((previous) => !previous)
+                      }
                     >
                       <span>칩 목록</span>
                       <span className="planner-chip-filter-current">
@@ -1499,9 +1509,10 @@ export default function PlannerClient({ username }: { username: string }) {
                               : ""
                           }`}
                           aria-pressed={calendarColorFilter === "all"}
-                          onClick={() =>
-                            setCalendarColorFilter("all")
-                          }
+                          onClick={() => {
+                            setCalendarColorFilter("all");
+                            setChipListOpen(false);
+                          }}
                         >
                           전체
                         </button>
@@ -1524,11 +1535,12 @@ export default function PlannerClient({ username }: { username: string }) {
                               `chip:${saved.id}`
                             }
                             title={saved.color}
-                            onClick={() =>
+                            onClick={() => {
                               setCalendarColorFilter(
                                 `chip:${saved.id}`,
-                              )
-                            }
+                              );
+                              setChipListOpen(false);
+                            }}
                           />
                         ))}
                         {hasUnassignedTasks ? (
@@ -1542,9 +1554,10 @@ export default function PlannerClient({ username }: { username: string }) {
                             aria-pressed={
                               calendarColorFilter === "unassigned"
                             }
-                            onClick={() =>
-                              setCalendarColorFilter("unassigned")
-                            }
+                            onClick={() => {
+                              setCalendarColorFilter("unassigned");
+                              setChipListOpen(false);
+                            }}
                           >
                             미지정
                           </button>
@@ -1570,7 +1583,6 @@ export default function PlannerClient({ username }: { username: string }) {
                           <section
                             className={[
                               "planner-color-group",
-                              chipListOpen &&
                               calendarColorFilter === group.key
                                 ? "is-selected"
                                 : "",
