@@ -426,6 +426,16 @@ function orderedRange(a: string, b: string): [string, string] {
   return a <= b ? [a, b] : [b, a];
 }
 
+function colorGroupLabel(group: {
+  key: string;
+  name: string | null;
+  color: string | null;
+}) {
+  return group.key === "unassigned"
+    ? "미지정"
+    : group.name || (group.color || "").toUpperCase();
+}
+
 export default function PlannerClient({ username }: { username: string }) {
   const initialToday = todayDateInputValue();
   const initialSearchBounds = monthBounds(initialToday.slice(0, 7));
@@ -754,6 +764,10 @@ export default function PlannerClient({ username }: { username: string }) {
       return next.length === previous.length ? previous : next;
     });
   }, [colorGroups]);
+  const selectedColorGroup =
+    colorGroups.find(
+      (group) => group.key === selectedColorGroups[0],
+    ) ?? null;
   const selectedFormColor =
     savedColors.find((color) => color.id === form.colorId) ?? null;
   const defaultSearchBounds = monthBounds(viewMonth);
@@ -1462,6 +1476,12 @@ export default function PlannerClient({ username }: { username: string }) {
     );
     if (next === savedColors) return;
     void persistColorOrder(next, savedColors);
+  };
+
+  const selectColorGroup = (key: string) => {
+    setSelectedColorGroups((previous) =>
+      previous.includes(key) ? [] : [key],
+    );
   };
 
   const openChipManager = () => {
@@ -2247,38 +2267,9 @@ export default function PlannerClient({ username }: { username: string }) {
                       <p>
                         활성 일정 {activeTasks.length}개 · 칩{" "}
                         {savedColors.length}개
-                        {selectedColorGroups.length > 0
-                          ? ` · 선택 ${selectedColorGroups.length}개`
-                          : ""}
                       </p>
                     </div>
                     <div className="planner-day-panel-actions">
-                      {colorGroups.length > 0 ? (
-                        <button
-                          type="button"
-                          className="planner-text-button"
-                          disabled={
-                            selectedColorGroups.length ===
-                            colorGroups.length
-                          }
-                          onClick={() =>
-                            setSelectedColorGroups(
-                              colorGroups.map((group) => group.key),
-                            )
-                          }
-                        >
-                          전체 선택
-                        </button>
-                      ) : null}
-                      {selectedColorGroups.length > 0 ? (
-                        <button
-                          type="button"
-                          className="planner-text-button"
-                          onClick={() => setSelectedColorGroups([])}
-                        >
-                          선택 해제
-                        </button>
-                      ) : null}
                       <button
                         type="button"
                         className="planner-primary"
@@ -2294,80 +2285,85 @@ export default function PlannerClient({ username }: { username: string }) {
                       색상 칩에 지정된 활성 일정이 없습니다.
                     </p>
                   ) : (
-                    <div className="planner-color-group-list">
-                      {colorGroups.map((group) => {
-                        const activeCount = group.tasks.length;
-                        return (
-                          <section
-                            className={[
-                              "planner-color-group",
-                              selectedColorGroups.includes(group.key)
-                                ? "is-open"
-                                : "",
-                            ]
-                              .filter(Boolean)
-                              .join(" ")}
-                            key={group.key}
-                          >
-                            <div className="planner-color-group-heading">
-                              <button
-                                type="button"
-                                className="planner-color-group-header"
-                                aria-expanded={selectedColorGroups.includes(
-                                  group.key,
-                                )}
-                                onClick={() =>
-                                  setSelectedColorGroups((previous) =>
-                                    previous.includes(group.key)
-                                      ? previous.filter(
-                                          (key) => key !== group.key,
-                                        )
-                                      : [...previous, group.key],
-                                  )
-                                }
-                              >
-                                <span
-                                  className="planner-color-group-swatch"
-                                  style={{
-                                    backgroundColor:
-                                      group.color ||
-                                      UNASSIGNED_TASK_COLOR,
-                                  }}
-                                />
-                                <strong>
-                                  {group.key === "unassigned"
-                                    ? "미지정"
-                                    : group.name ||
-                                      (group.color || "").toUpperCase()}
-                                </strong>
-                                <span className="planner-color-group-count">
-                                  {activeCount}개
-                                </span>
-                                <span
-                                  className="planner-color-group-caret"
-                                  aria-hidden="true"
-                                >
-                                  {selectedColorGroups.includes(group.key)
-                                    ? "⌃"
-                                    : "⌄"}
-                                </span>
-                              </button>
+                    <>
+                      <div className="planner-color-swatch-grid">
+                        {colorGroups.map((group) => {
+                          const selected =
+                            selectedColorGroups.includes(group.key);
+                          const label = colorGroupLabel(group);
+                          return (
+                            <button
+                              type="button"
+                              key={group.key}
+                              className={[
+                                "planner-color-swatch-button",
+                                selected ? "is-selected" : "",
+                                group.key === "unassigned"
+                                  ? "is-unassigned"
+                                  : "",
+                              ]
+                                .filter(Boolean)
+                                .join(" ")}
+                              style={{
+                                backgroundColor:
+                                  group.color ||
+                                  UNASSIGNED_TASK_COLOR,
+                              }}
+                              aria-label={label}
+                              aria-pressed={selected}
+                              title={label}
+                              onClick={() =>
+                                selectColorGroup(group.key)
+                              }
+                            />
+                          );
+                        })}
+                      </div>
+                      {selectedColorGroup ? (
+                        <div className="planner-color-task-panel">
+                          <div className="planner-color-task-header">
+                            <div className="planner-color-task-title">
+                              <span
+                                className="planner-color-group-swatch"
+                                style={{
+                                  backgroundColor:
+                                    selectedColorGroup.color ||
+                                    UNASSIGNED_TASK_COLOR,
+                                }}
+                              />
+                              <strong>
+                                {colorGroupLabel(selectedColorGroup)}
+                              </strong>
+                              <span className="planner-color-task-count">
+                                활성 {selectedColorGroup.tasks.length}개
+                              </span>
                             </div>
-                            {selectedColorGroups.includes(group.key) ? (
-                              group.tasks.length === 0 ? (
-                                <p className="planner-empty">
-                                  이 칩에 등록된 활성 일정이 없습니다.
-                                </p>
-                              ) : (
-                                <ul className="planner-task-list">
-                                  {group.tasks.map(renderActiveTask)}
-                                </ul>
-                              )
-                            ) : null}
-                          </section>
-                        );
-                      })}
-                    </div>
+                            <button
+                              type="button"
+                              className="planner-text-button"
+                              onClick={() => setSelectedColorGroups([])}
+                            >
+                              선택 해제
+                            </button>
+                          </div>
+                          {selectedColorGroup.tasks.length === 0 ? (
+                            <p className="planner-empty">
+                              이 칩에 등록된 활성 일정이 없습니다.
+                            </p>
+                          ) : (
+                            <ul className="planner-task-list">
+                              {selectedColorGroup.tasks.map(
+                                renderActiveTask,
+                              )}
+                            </ul>
+                          )}
+                        </div>
+                      ) : (
+                        <p className="planner-empty">
+                          색상 칩을 선택하면 해당 일정이 표시됩니다.
+                        </p>
+                      )}
+                    </>
                   )}
                 </section>
               ) : (
