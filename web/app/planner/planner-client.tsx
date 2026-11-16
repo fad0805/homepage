@@ -593,6 +593,12 @@ export default function PlannerClient({ username }: { username: string }) {
       group.tasks.push(task);
       groups.set(key, group);
     }
+    for (const saved of savedColors) {
+      const key = `chip:${saved.id}`;
+      if (!groups.has(key)) {
+        groups.set(key, { color: saved.color, tasks: [] });
+      }
+    }
     return Array.from(groups.entries())
       .map(([key, group]) => ({
         key,
@@ -636,7 +642,11 @@ export default function PlannerClient({ username }: { username: string }) {
   };
 
   const openNewTask = () => {
-    resetForm();
+    const startDate =
+      selectedDate && selectedDate >= today ? selectedDate : today;
+    setEditingId(null);
+    setForm(emptyForm(startDate));
+    setShowChipCreator(false);
     setError(null);
     setTaskModalOpen(true);
   };
@@ -1507,13 +1517,27 @@ export default function PlannerClient({ username }: { username: string }) {
                               </span>
                             </button>
                             {calendarColorFilter === group.key ? (
-                              <ul className="planner-task-list">
-                                {group.tasks.map((task) =>
-                                  task.status === "active"
-                                    ? renderActiveTask(task)
-                                    : renderStoredTask(task, false),
-                                )}
-                              </ul>
+                              group.tasks.length === 0 ? (
+                                <p className="planner-empty">
+                                  이 칩에 등록된 일정이 없습니다.
+                                </p>
+                              ) : (
+                                <>
+                                  {activeCount === 0 ? (
+                                    <p className="planner-empty">
+                                      활성 일정이 없어 캘린더에는
+                                      표시되지 않습니다.
+                                    </p>
+                                  ) : null}
+                                  <ul className="planner-task-list">
+                                    {group.tasks.map((task) =>
+                                      task.status === "active"
+                                        ? renderActiveTask(task)
+                                        : renderStoredTask(task, false),
+                                    )}
+                                  </ul>
+                                </>
+                              )
                             ) : null}
                           </section>
                         );
@@ -1757,9 +1781,13 @@ export default function PlannerClient({ username }: { username: string }) {
               </div>
               {form.scheduleType === "single" ? (
                 <p className="planner-form-hint">
-                  오늘 정오 이전 등록은 오늘부터, 정오 이후 등록은
-                  내일부터 마감 기간이 시작됩니다. 오후에 등록해도
-                  오늘 달력에는 바로 표시됩니다.
+                  {form.startDate === today
+                    ? "오늘 정오 이전 등록은 오늘부터, 정오 이후 등록은 내일부터 마감 기간이 시작됩니다. 오후에 등록해도 오늘 달력에는 바로 표시됩니다."
+                    : form.startDate > today
+                      ? "미래 시작일은 시작일부터 마감 기간이 계산됩니다."
+                      : form.startDate
+                        ? "이미 시작된 일정은 기존 마감 기준을 유지합니다."
+                        : "시작일을 선택해주세요."}
                 </p>
               ) : (
                 <p className="planner-form-hint">
