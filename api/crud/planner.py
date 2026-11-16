@@ -200,6 +200,7 @@ def _serialize_event(event: PlannerEvent) -> dict:
         "entity_id": event.entity_id,
         "action": event.action,
         "title": event.title,
+        "notes": event.notes,
         "changes": event.changes,
         "occurred_at": event.occurred_at,
     }
@@ -620,6 +621,7 @@ def complete_task(db: Session, task_id: int, user_id: int) -> dict:
         entity_id=task.id,
         action="completed",
         title=task.title,
+        notes=task.notes,
         changes=None,
         occurred_at=_utc_naive_now(),
     )

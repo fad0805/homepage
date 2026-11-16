@@ -88,6 +88,7 @@ class PlannerEventRead(BaseModel):
     entity_id: int | None = None
     action: str
     title: str | None = None
+    notes: str | None = None
     changes: list[dict] | None = None
     occurred_at: datetime
 

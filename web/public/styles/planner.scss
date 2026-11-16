@@ -1003,6 +1003,47 @@
   color: #ff9b9b;
 }
 
+.planner-event-notes {
+  margin-top: 0.9rem;
+  padding: 0.6rem 0.7rem;
+  border: 1px solid color-mix(in srgb, var(--theme-main) 26%, transparent);
+  border-radius: 0.7rem;
+  background: var(--planner-card-bg);
+
+  h3 {
+    margin: 0;
+    color: var(--title-color);
+    font-size: 0.7rem;
+    font-weight: normal;
+  }
+
+  p {
+    margin: 0.3rem 0 0;
+    font-size: 0.72rem;
+    line-height: 1.55;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+}
+
+.planner-event-restore {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.55rem;
+  margin-top: 1rem;
+  padding-top: 0.85rem;
+  border-top: 1px solid color-mix(in srgb, var(--theme-main) 24%, transparent);
+
+  .planner-empty {
+    margin: 0;
+  }
+
+  .planner-primary {
+    align-self: flex-start;
+  }
+}
+
 .planner-preview {
   margin-top: 1rem;
   padding-top: 0.85rem;

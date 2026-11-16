@@ -59,6 +59,7 @@ interface PlannerEvent {
   entity_id: number | null;
   action: string;
   title: string | null;
+  notes: string | null;
   changes: PlannerEventChange[] | null;
   occurred_at: string;
 }
@@ -680,6 +681,23 @@ export default function PlannerClient({ username }: { username: string }) {
     setShowChipCreator(false);
     setError(null);
     setTaskModalOpen(true);
+  };
+
+  const startRestoringCompletedTask = (event: PlannerEvent) => {
+    setEditingId(null);
+    setForm({
+      ...emptyForm(today),
+      title: event.title || "완료한 일정",
+      notes: event.notes || "",
+    });
+    setShowChipCreator(false);
+    setError(null);
+    setTaskModalOpen(true);
+    setSelectedEvent(null);
+    setPreview(null);
+    setActiveTab("active");
+    setSelectedDate(today);
+    setViewMonth(today.slice(0, 7));
   };
 
   const refresh = async () => {
@@ -2142,6 +2160,13 @@ export default function PlannerClient({ username }: { username: string }) {
               </button>
             </div>
 
+            {selectedEvent.notes ? (
+              <div className="planner-event-notes">
+                <h3>메모</h3>
+                <p>{selectedEvent.notes}</p>
+              </div>
+            ) : null}
+
             {selectedEvent.changes && selectedEvent.changes.length > 0 ? (
               <div className="planner-change-list">
                 {selectedEvent.changes.map((change, index) => (
@@ -2234,6 +2259,25 @@ export default function PlannerClient({ username }: { username: string }) {
                 </p>
               )}
             </div>
+
+            {selectedEvent.action === "completed" &&
+            selectedEvent.entity_type === "task" ? (
+              <div className="planner-event-restore">
+                <p className="planner-empty">
+                  완료한 일정을 새 일정으로 다시 만들 수 있습니다.
+                  시작일은 새 일정 폼에서 설정하세요.
+                </p>
+                <button
+                  type="button"
+                  className="planner-primary"
+                  onClick={() =>
+                    startRestoringCompletedTask(selectedEvent)
+                  }
+                >
+                  새 일정으로 다시 만들기
+                </button>
+              </div>
+            ) : null}
           </div>
         </div>
       ) : null}

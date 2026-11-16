@@ -118,8 +118,9 @@ class PlannerColor(Base):
 class PlannerEvent(Base):
     """A history entry shown on the owner's calendar.
 
-    Only changed details are stored. Deletions and task completions are
-    intentionally metadata-only; the planner never keeps a content snapshot.
+    Only changed details are stored. Content deletions are metadata-only.
+    Task completions keep the title, notes, and completion time so the user
+    can recreate the task without restoring its original schedule.
     """
 
     __tablename__ = "planner_events"
@@ -140,6 +141,7 @@ class PlannerEvent(Base):
     entity_id = Column(Integer, nullable=True, index=True)
     action = Column(String(16), nullable=False)
     title = Column(String(255), nullable=True)
+    notes = Column(Text, nullable=True)
     changes = Column(JSON, nullable=True)
     occurred_at = Column(DateTime, default=func.now(), nullable=False)
 
