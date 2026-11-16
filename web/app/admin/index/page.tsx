@@ -8,7 +8,6 @@ import {
 } from "react";
 
 import { RichTextEditor } from "@/components/rich-text-editor";
-import { useAuth } from "@/components/auth-provider";
 import { apiFetch } from "@/lib/api";
 
 import "@/public/styles/admin/author.scss";
@@ -21,11 +20,8 @@ interface IndexPage {
 }
 
 type Notice = { type: "success" | "error"; text: string };
-type IndexScope = "author" | "integrated";
 
 export default function AdminIndex() {
-  const { isAdmin } = useAuth();
-  const [scope, setScope] = useState<IndexScope>("author");
   const [content, setContent] = useState("");
   const [savedContent, setSavedContent] = useState("");
   const [loading, setLoading] = useState(true);
@@ -35,11 +31,7 @@ export default function AdminIndex() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await apiFetch<IndexPage>(
-        scope === "integrated"
-          ? "/api/index-page?scope=integrated"
-          : "/api/index-page/mine",
-      );
+      const data = await apiFetch<IndexPage>("/api/index-page?scope=integrated");
       setContent(data.content_html);
       setSavedContent(data.content_html);
     } catch (error) {
@@ -53,25 +45,11 @@ export default function AdminIndex() {
     } finally {
       setLoading(false);
     }
-  }, [scope]);
+  }, []);
 
   useEffect(() => {
     void load();
   }, [load]);
-
-  const handleScopeChange = (next: IndexScope) => {
-    if (next === scope) return;
-    if (
-      content !== savedContent &&
-      !window.confirm(
-        "저장하지 않은 변경사항이 있습니다. 범위를 바꿀까요?",
-      )
-    ) {
-      return;
-    }
-    setNotice(null);
-    setScope(next);
-  };
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -81,7 +59,7 @@ export default function AdminIndex() {
       const updated = await apiFetch<IndexPage>("/api/index-page", {
         method: "PUT",
         body: JSON.stringify({
-          scope,
+          scope: "integrated",
           content_html: content,
         }),
       });
@@ -107,29 +85,8 @@ export default function AdminIndex() {
         <div>
           <h1>인덱스 관리</h1>
           <p className="admin-author-hint">
-            메인 인덱스에 표시할 내용을 리치 텍스트로 편집합니다.
+            메인 인덱스(/)에 표시할 내용을 편집합니다.
           </p>
-        </div>
-        <div className="admin-index-meta">
-          {isAdmin ? (
-            <label className="admin-index-scope">
-              <span>관리 대상</span>
-              <select
-                value={scope}
-                onChange={(event) =>
-                  handleScopeChange(event.target.value as IndexScope)
-                }
-              >
-                <option value="author">내 인덱스</option>
-                <option value="integrated">통합 페이지 인덱스</option>
-              </select>
-            </label>
-          ) : null}
-          <span className="admin-index-target">
-            {scope === "integrated"
-              ? "통합 메인 페이지 /"
-              : "작가 메인 페이지 /@slug"}
-          </span>
         </div>
       </header>
 
