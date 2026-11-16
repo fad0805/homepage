@@ -639,7 +639,7 @@ def create_completed_record(
     payload: PlannerCompletedCreate,
     user_id: int,
 ) -> dict:
-    """Backfill a past range directly as a completion history entry."""
+    """Backfill a past schedule directly as a completion history entry."""
     title = _clean_title(payload.title)
     notes = _clean_notes(payload.notes)
     if payload.completed_on >= kst_today():

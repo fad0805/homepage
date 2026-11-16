@@ -740,17 +740,6 @@ export default function PlannerClient({ username }: { username: string }) {
     setError(null);
   };
 
-  const openNewTask = () => {
-    const startDate =
-      selectedDate && selectedDate >= today ? selectedDate : today;
-    setEditingId(null);
-    setRecordCompleted(false);
-    setForm(emptyForm(startDate));
-    setShowChipCreator(false);
-    setError(null);
-    setTaskModalOpen(true);
-  };
-
   const startRestoringCompletedTask = (event: PlannerEvent) => {
     setEditingId(null);
     setRecordCompleted(false);
@@ -870,6 +859,36 @@ export default function PlannerClient({ username }: { username: string }) {
     if (monthKey !== viewMonth) {
       setViewMonth(monthKey);
     }
+  };
+
+  const openCompletedSingle = (date: string) => {
+    setRecordCompleted(true);
+    setEditingId(null);
+    setForm({
+      ...emptyForm(date),
+      scheduleType: "single",
+      startDate: date,
+      endDate: date,
+    });
+    setShowChipCreator(false);
+    setError(null);
+    setTaskModalOpen(true);
+    selectDate(date);
+  };
+
+  const openNewTask = () => {
+    if (selectedDate && selectedDate < today) {
+      openCompletedSingle(selectedDate);
+      return;
+    }
+    const startDate =
+      selectedDate && selectedDate >= today ? selectedDate : today;
+    setEditingId(null);
+    setRecordCompleted(false);
+    setForm(emptyForm(startDate));
+    setShowChipCreator(false);
+    setError(null);
+    setTaskModalOpen(true);
   };
 
   const openRangeForm = (
@@ -1008,16 +1027,28 @@ export default function PlannerClient({ username }: { username: string }) {
     event.preventDefault();
     if (!form.title.trim() || busyKey !== null) return;
 
+    const completionDate =
+      form.scheduleType === "range" ? form.endDate : form.startDate;
     if (!editingId && recordCompleted) {
-      if (!form.startDate || !form.endDate) {
+      if (
+        form.scheduleType === "range" &&
+        (!form.startDate || !form.endDate)
+      ) {
         setError("시작일과 완료일을 입력해주세요.");
         return;
       }
-      if (form.endDate >= today) {
+      if (!completionDate) {
+        setError("완료일을 입력해주세요.");
+        return;
+      }
+      if (completionDate >= today) {
         setError("완료 기록은 과거 날짜로만 저장할 수 있습니다.");
         return;
       }
-      if (form.endDate < form.startDate) {
+      if (
+        form.scheduleType === "range" &&
+        form.endDate < form.startDate
+      ) {
         setError("종료일은 시작일보다 빠를 수 없습니다.");
         return;
       }
@@ -1033,10 +1064,10 @@ export default function PlannerClient({ username }: { username: string }) {
           body: JSON.stringify({
             title: form.title,
             notes: form.notes || null,
-            completed_on: form.endDate,
+            completed_on: completionDate,
           }),
         });
-        const completedOn = form.endDate;
+        const completedOn = completionDate;
         closeTaskModal();
         selectDate(completedOn);
         await Promise.all([
@@ -2036,7 +2067,9 @@ export default function PlannerClient({ username }: { username: string }) {
                         className="planner-primary"
                         onClick={openNewTask}
                       >
-                        새 일정
+                        {selectedDate && selectedDate < today
+                          ? "완료 기록"
+                          : "새 일정"}
                       </button>
                     </div>
                   </div>
@@ -2426,9 +2459,19 @@ export default function PlannerClient({ username }: { username: string }) {
                   </button>
                 </div>
               )}
-              <div className="planner-form-row">
+              <div
+                className={`planner-form-row${
+                  recordCompleted && form.scheduleType === "single"
+                    ? " is-single"
+                    : ""
+                }`}
+              >
                 <label>
-                  <span>시작일</span>
+                  <span>
+                    {recordCompleted && form.scheduleType === "single"
+                      ? "완료일"
+                      : "시작일"}
+                  </span>
                   <input
                     type="date"
                     value={form.startDate}
@@ -2441,7 +2484,9 @@ export default function PlannerClient({ username }: { username: string }) {
                     }
                   />
                 </label>
-                {form.scheduleType === "single" ? (
+                {recordCompleted && form.scheduleType === "single" ? (
+                  null
+                ) : form.scheduleType === "single" ? (
                   <label>
                     <span>마감 기간(일)</span>
                     <input
@@ -2543,7 +2588,13 @@ export default function PlannerClient({ username }: { username: string }) {
                   ) : null}
                 </div>
               )}
-              {form.scheduleType === "single" ? (
+              {recordCompleted ? (
+                <p className="planner-form-hint">
+                  {form.scheduleType === "range"
+                    ? "과거 범위 일정은 완료 이력으로 저장됩니다. 완료일은 범위의 마지막 날이며, 제목·메모·완료일만 남습니다."
+                    : "과거 일정은 완료 이력으로 저장됩니다. 제목·메모·완료일만 남습니다."}
+                </p>
+              ) : form.scheduleType === "single" ? (
                 <p className="planner-form-hint">
                   {form.startDate === today
                     ? "오늘 정오 이전 등록은 오늘부터, 정오 이후 등록은 내일부터 마감 기간이 시작됩니다. 오후에 등록해도 오늘 달력에는 바로 표시됩니다."
@@ -2555,9 +2606,7 @@ export default function PlannerClient({ username }: { username: string }) {
                 </p>
               ) : (
                 <p className="planner-form-hint">
-                  {recordCompleted
-                    ? "과거 범위 일정은 완료 이력으로 저장됩니다. 완료일은 범위의 마지막 날이며, 제목·메모·완료일만 남습니다."
-                    : "범위 일정은 시작일부터 종료일까지 매일 표시됩니다."}
+                  범위 일정은 시작일부터 종료일까지 매일 표시됩니다.
                 </p>
               )}
               {recordCompleted ? null : (
