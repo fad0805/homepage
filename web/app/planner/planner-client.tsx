@@ -26,6 +26,7 @@ interface PlannerTask {
   id: number;
   title: string;
   notes: string | null;
+  color: string | null;
   schedule_type: ScheduleType;
   start_date: string;
   end_date: string;
@@ -98,12 +99,15 @@ interface CalendarWeek {
 interface TaskFormState {
   title: string;
   notes: string;
+  color: string;
   scheduleType: ScheduleType;
   startDate: string;
   endDate: string;
   deadlineDays: number;
   pinned: boolean;
 }
+
+const DEFAULT_TASK_COLOR = "#b07a52";
 
 const ENTITY_LABELS: Record<string, string> = {
   book: "목차",
@@ -326,6 +330,10 @@ function taskAppearsOn(task: PlannerTask, date: string, today: string) {
   return task.start_date <= date && date <= task.end_date;
 }
 
+function taskColor(task: PlannerTask) {
+  return task.color || DEFAULT_TASK_COLOR;
+}
+
 function sortTasks(tasks: PlannerTask[]) {
   return [...tasks].sort((a, b) => {
     if (a.end_date !== b.end_date) return a.end_date.localeCompare(b.end_date);
@@ -349,6 +357,7 @@ function emptyForm(today: string): TaskFormState {
   return {
     title: "",
     notes: "",
+    color: DEFAULT_TASK_COLOR,
     scheduleType: "single",
     startDate: today,
     endDate: addDays(today, 7),
@@ -582,6 +591,7 @@ export default function PlannerClient({ username }: { username: string }) {
     setForm({
       title: task.title,
       notes: task.notes || "",
+      color: task.color || DEFAULT_TASK_COLOR,
       scheduleType: task.schedule_type,
       startDate: task.start_date,
       endDate: task.end_date,
@@ -604,6 +614,7 @@ export default function PlannerClient({ username }: { username: string }) {
       const payload = {
         title: form.title,
         notes: form.notes || null,
+        color: form.color || null,
         schedule_type: form.scheduleType,
         start_date: form.startDate || null,
         end_date: form.scheduleType === "range" ? form.endDate : null,
@@ -845,6 +856,11 @@ export default function PlannerClient({ username }: { username: string }) {
     <li className="planner-task-item" key={task.id}>
       <div className="planner-task-main">
         <div className="planner-task-title-row">
+          <span
+            className="planner-task-color"
+            style={{ backgroundColor: taskColor(task) }}
+            aria-hidden="true"
+          />
           <strong>{task.title}</strong>
           {task.pinned ? (
             <span className="planner-pin-badge">고정</span>
@@ -911,6 +927,11 @@ export default function PlannerClient({ username }: { username: string }) {
     <li className="planner-task-item" key={task.id}>
       <div className="planner-task-main">
         <div className="planner-task-title-row">
+          <span
+            className="planner-task-color"
+            style={{ backgroundColor: taskColor(task) }}
+            aria-hidden="true"
+          />
           <strong>{task.title}</strong>
           {task.pinned ? (
             <span className="planner-pin-badge">고정</span>
@@ -1142,8 +1163,24 @@ export default function PlannerClient({ username }: { username: string }) {
                             {daySingleTasks.length + dayEvents.length > 0 ? (
                               <span className="planner-day-marks">
                                 {daySingleTasks.length > 0 ? (
-                                  <span className="planner-day-mark is-task">
-                                    {daySingleTasks.length}
+                                  <span className="planner-day-task-colors">
+                                    {daySingleTasks
+                                      .slice(0, 3)
+                                      .map((task) => (
+                                        <span
+                                          key={task.id}
+                                          className="planner-day-task-color"
+                                          style={{
+                                            backgroundColor:
+                                              taskColor(task),
+                                          }}
+                                        />
+                                      ))}
+                                    {daySingleTasks.length > 3 ? (
+                                      <span className="planner-day-task-more">
+                                        +{daySingleTasks.length - 3}
+                                      </span>
+                                    ) : null}
                                   </span>
                                 ) : null}
                                 {dayEvents.length > 0 ? (
@@ -1187,7 +1224,12 @@ export default function PlannerClient({ username }: { username: string }) {
                             <span className="planner-range-title">
                               {segment.task.title}
                             </span>
-                            <span className="planner-range-line" />
+                            <span
+                              className="planner-range-line"
+                              style={{
+                                backgroundColor: taskColor(segment.task),
+                              }}
+                            />
                           </div>
                         ))}
                       </div>
@@ -1397,6 +1439,25 @@ export default function PlannerClient({ username }: { username: string }) {
                   </label>
                 )}
               </div>
+              <label className="planner-color-field">
+                <span>색상</span>
+                <div className="planner-color-row">
+                  <input
+                    type="color"
+                    value={form.color}
+                    aria-label="일정 색상"
+                    onChange={(event) =>
+                      setForm((previous) => ({
+                        ...previous,
+                        color: event.target.value,
+                      }))
+                    }
+                  />
+                  <span className="planner-color-value">
+                    {form.color.toUpperCase()}
+                  </span>
+                </div>
+              </label>
               {form.scheduleType === "single" ? (
                 <p className="planner-form-hint">
                   오늘 정오 이전 등록은 오늘부터, 정오 이후 등록은

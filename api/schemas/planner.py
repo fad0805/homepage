@@ -10,6 +10,10 @@ TaskStatus = Literal["active", "inactive", "trashed"]
 class PlannerTaskCreate(BaseModel):
     title: str = Field(min_length=1, max_length=255)
     notes: str | None = Field(default=None, max_length=4000)
+    color: str | None = Field(
+        default=None,
+        pattern=r"^#[0-9a-fA-F]{6}$",
+    )
     schedule_type: ScheduleType = "single"
     start_date: date | None = None
     end_date: date | None = None
@@ -20,6 +24,10 @@ class PlannerTaskCreate(BaseModel):
 class PlannerTaskUpdate(BaseModel):
     title: str | None = Field(default=None, min_length=1, max_length=255)
     notes: str | None = Field(default=None, max_length=4000)
+    color: str | None = Field(
+        default=None,
+        pattern=r"^#[0-9a-fA-F]{6}$",
+    )
     schedule_type: ScheduleType | None = None
     start_date: date | None = None
     end_date: date | None = None
@@ -31,6 +39,7 @@ class PlannerTaskRead(BaseModel):
     id: int
     title: str
     notes: str | None = None
+    color: str | None = None
     schedule_type: ScheduleType
     start_date: date
     end_date: date

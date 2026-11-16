@@ -312,14 +312,30 @@
   font-size: 0.58rem;
   line-height: 1;
 
-  &.is-task {
-    background: color-mix(in srgb, var(--theme-main) 72%, transparent);
-  }
-
   &.is-history {
     border: 1px solid color-mix(in srgb, var(--title-color) 38%, transparent);
     color: var(--title-color);
   }
+}
+
+.planner-day-task-colors {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.12rem;
+}
+
+.planner-day-task-color {
+  width: 0.46rem;
+  height: 0.46rem;
+  border: 1px solid color-mix(in srgb, var(--foreground) 18%, transparent);
+  border-radius: 999px;
+}
+
+.planner-day-task-more {
+  font-size: 0.5rem;
+  line-height: 1;
+  opacity: 0.62;
 }
 
 .planner-side {
@@ -394,6 +410,35 @@
 .planner-form textarea {
   resize: vertical;
   min-height: 4.2rem;
+}
+
+.planner-form .planner-color-field {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.planner-color-row {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.planner-form input[type='color'] {
+  width: 2.6rem;
+  height: 2.1rem;
+  padding: 0.15rem;
+  border: 1px solid color-mix(in srgb, var(--theme-main) 46%, transparent);
+  border-radius: 0.55rem;
+  background: var(--input-background);
+  cursor: pointer;
+}
+
+.planner-color-value {
+  font-size: 0.66rem;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.62;
 }
 
 .planner-form-row {
@@ -499,6 +544,14 @@
     font-size: 0.84rem;
     font-weight: normal;
   }
+}
+
+.planner-task-color {
+  width: 0.55rem;
+  height: 0.55rem;
+  flex-shrink: 0;
+  border: 1px solid color-mix(in srgb, var(--foreground) 18%, transparent);
+  border-radius: 999px;
 }
 
 .planner-pin-badge {
@@ -918,6 +971,11 @@
     min-width: 0.9rem;
     height: 0.9rem;
     font-size: 0.52rem;
+  }
+
+  .planner-day-task-color {
+    width: 0.4rem;
+    height: 0.4rem;
   }
 
   .planner-range-title {

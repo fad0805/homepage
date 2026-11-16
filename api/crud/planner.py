@@ -1,3 +1,4 @@
+import re
 from datetime import date, datetime, time, timedelta, timezone
 from zoneinfo import ZoneInfo
 
@@ -24,6 +25,7 @@ from schemas.planner import (
 KST = ZoneInfo("Asia/Seoul")
 TRASH_RETENTION_DAYS = 30
 INACTIVE_RETENTION_DAYS = 30
+COLOR_RE = re.compile(r"^#[0-9a-fA-F]{6}$")
 
 
 def kst_now() -> datetime:
@@ -51,6 +53,20 @@ def _clean_title(value: str | None) -> str:
 def _clean_notes(value: str | None) -> str | None:
     notes = (value or "").strip()
     return notes or None
+
+
+def _clean_color(value: str | None) -> str | None:
+    if value is None:
+        return None
+    color = value.strip()
+    if not color:
+        return None
+    if not COLOR_RE.fullmatch(color):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="색상은 #RRGGBB 형식으로 입력해주세요.",
+        )
+    return color.lower()
 
 
 def _validate_deadline_days(value: int | None) -> int:
@@ -134,6 +150,7 @@ def _serialize_task(task: PlannerTask) -> dict:
         "id": task.id,
         "title": task.title,
         "notes": task.notes,
+        "color": task.color,
         "schedule_type": task.schedule_type,
         "start_date": task.start_date,
         "end_date": task.end_date,
@@ -231,6 +248,7 @@ def create_task(
 ) -> dict:
     title = _clean_title(payload.title)
     notes = _clean_notes(payload.notes)
+    color = _clean_color(payload.color)
     pinned = bool(payload.pinned)
 
     if payload.schedule_type == "single":
@@ -241,6 +259,7 @@ def create_task(
             user_id=user_id,
             title=title,
             notes=notes,
+            color=color,
             schedule_type="single",
             start_date=start,
             deadline_base_date=base,
@@ -255,6 +274,7 @@ def create_task(
             user_id=user_id,
             title=title,
             notes=notes,
+            color=color,
             schedule_type="range",
             start_date=start,
             deadline_base_date=None,
@@ -304,6 +324,8 @@ def update_task(
         task.title = _clean_title(data["title"])
     if "notes" in data:
         task.notes = _clean_notes(data["notes"])
+    if "color" in data:
+        task.color = _clean_color(data["color"])
     if "pinned" in data:
         task.pinned = bool(data["pinned"])
 

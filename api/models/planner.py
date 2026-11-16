@@ -30,6 +30,7 @@ class PlannerTask(Base):
     )
     title = Column(String(255), nullable=False)
     notes = Column(Text, nullable=True)
+    color = Column(String(7), nullable=True)
     schedule_type = Column(
         String(16),
         nullable=False,
