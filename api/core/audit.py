@@ -176,6 +176,7 @@ TRACKED: dict[type, _Tracked] = {
             }
         ),
         html_fields=frozenset({"body"}),
+        track_updates=False,
         occurred_at=_chapter_occurred_at,
     ),
     Illustration: _Tracked(

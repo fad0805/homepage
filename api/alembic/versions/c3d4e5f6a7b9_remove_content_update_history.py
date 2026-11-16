@@ -22,6 +22,7 @@ def upgrade() -> None:
         WHERE action = 'updated'
           AND entity_type IN (
               'book',
+              'chapter',
               'book_category',
               'illustration'
           )
