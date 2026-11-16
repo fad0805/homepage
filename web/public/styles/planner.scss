@@ -894,12 +894,63 @@
   opacity: 0.62;
 }
 
-.planner-task-notes {
-  margin: 0.38rem 0 0;
+.planner-note-content {
+  margin-top: 0.38rem;
   font-size: 0.7rem;
   line-height: 1.5;
-  white-space: pre-wrap;
   opacity: 0.78;
+}
+
+.planner-note-line {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.planner-note-line + .planner-note-line {
+  margin-top: 0.15rem;
+}
+
+.planner-note-list {
+  margin: 0;
+  padding-left: 1rem;
+  list-style: disc;
+}
+
+.planner-note-list li {
+  overflow-wrap: anywhere;
+
+  + li {
+    margin-top: 0.12rem;
+  }
+
+  &.is-check {
+    margin-left: -1rem;
+    list-style: none;
+  }
+}
+
+.planner-note-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.35rem;
+  cursor: pointer;
+
+  input {
+    flex-shrink: 0;
+    margin: 0.18rem 0 0;
+    accent-color: var(--theme-main);
+  }
+
+  span {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+
+  &.is-done span {
+    text-decoration: line-through;
+    opacity: 0.5;
+  }
 }
 
 .planner-task-actions {

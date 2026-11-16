@@ -453,6 +453,108 @@ function colorGroupLabel(group: {
     : group.name || (group.color || "").toUpperCase();
 }
 
+const NOTE_CHECK_LINE_RE =
+  /^(\s*(?:[-*]\s+)?\[)([ xX]?)(\]\s*)(.*)$/;
+
+interface PlannerNoteItem {
+  index: number;
+  text: string;
+  checkbox: boolean;
+  checked: boolean;
+}
+
+type PlannerNoteBlock =
+  | { type: "list"; items: PlannerNoteItem[] }
+  | { type: "paragraph"; index: number; text: string };
+
+function parseNoteBlocks(notes: string): PlannerNoteBlock[] {
+  const blocks: PlannerNoteBlock[] = [];
+  let list: PlannerNoteItem[] = [];
+  const flushList = () => {
+    if (list.length > 0) {
+      blocks.push({ type: "list", items: list });
+      list = [];
+    }
+  };
+
+  notes.split(/\r?\n/).forEach((line, index) => {
+    const bullet = line.match(/^\s*[-*]\s+(.*)$/);
+    const content = bullet ? bullet[1] : line;
+    const check = content.match(/^\[([ xX]?)\]\s*(.*)$/);
+    if (bullet || check) {
+      list.push({
+        index,
+        text: check ? check[2] : (bullet?.[1] ?? ""),
+        checkbox: Boolean(check),
+        checked: check
+          ? check[1].toLowerCase() === "x"
+          : false,
+      });
+      return;
+    }
+
+    flushList();
+    if (line.trim()) {
+      blocks.push({ type: "paragraph", index, text: line });
+    }
+  });
+  flushList();
+  return blocks;
+}
+
+function PlannerNoteContent({
+  notes,
+  disabled,
+  onToggle,
+}: {
+  notes: string;
+  disabled: boolean;
+  onToggle: (index: number) => void;
+}) {
+  const blocks = parseNoteBlocks(notes);
+  return (
+    <div className="planner-note-content">
+      {blocks.map((block) =>
+        block.type === "list" ? (
+          <ul
+            className="planner-note-list"
+            key={`list-${block.items[0].index}`}
+          >
+            {block.items.map((item) => (
+              <li
+                key={item.index}
+                className={item.checkbox ? "is-check" : undefined}
+              >
+                {item.checkbox ? (
+                  <label
+                    className={`planner-note-check${
+                      item.checked ? " is-done" : ""
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={item.checked}
+                      disabled={disabled}
+                      onChange={() => onToggle(item.index)}
+                    />
+                    <span>{item.text || "\u00A0"}</span>
+                  </label>
+                ) : (
+                  <span>{item.text || "\u00A0"}</span>
+                )}
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="planner-note-line" key={`p-${block.index}`}>
+            {block.text}
+          </p>
+        ),
+      )}
+    </div>
+  );
+}
+
 export default function PlannerClient({ username }: { username: string }) {
   const initialToday = todayDateInputValue();
   const initialSearchBounds = monthBounds(initialToday.slice(0, 7));
@@ -481,6 +583,7 @@ export default function PlannerClient({ username }: { username: string }) {
   const [loading, setLoading] = useState(true);
   const [eventsLoading, setEventsLoading] = useState(false);
   const [busyKey, setBusyKey] = useState<string | null>(null);
+  const [noteSavingId, setNoteSavingId] = useState<number | null>(null);
   const [colorSaving, setColorSaving] = useState(false);
   const [colorOrderSaving, setColorOrderSaving] = useState(false);
   const [newChipColor, setNewChipColor] = useState(DEFAULT_TASK_COLOR);
@@ -1363,6 +1466,65 @@ export default function PlannerClient({ username }: { username: string }) {
     }
   };
 
+  const applyTaskNotes = (taskId: number, notes: string) => {
+    setTasks((previous) =>
+      previous.map((task) =>
+        task.id === taskId ? { ...task, notes } : task,
+      ),
+    );
+    setSearchResults((previous) =>
+      previous
+        ? {
+            ...previous,
+            tasks: previous.tasks.map((task) =>
+              task.id === taskId ? { ...task, notes } : task,
+            ),
+          }
+        : previous,
+    );
+  };
+
+  const handleToggleTaskNote = async (
+    task: PlannerTask,
+    lineIndex: number,
+  ) => {
+    if (
+      noteSavingId !== null ||
+      task.status === "trashed" ||
+      !task.notes
+    ) {
+      return;
+    }
+    const lines = task.notes.split(/\r?\n/);
+    const line = lines[lineIndex];
+    if (line === undefined) return;
+    const match = line.match(NOTE_CHECK_LINE_RE);
+    if (!match) return;
+
+    const checked = (match[2] || "").toLowerCase() === "x";
+    lines[lineIndex] = `${match[1]}${checked ? " " : "x"}${match[3]}${match[4]}`;
+    const notes = lines.join("\n");
+    const previous = task.notes;
+    setNoteSavingId(task.id);
+    setError(null);
+    applyTaskNotes(task.id, notes);
+    try {
+      await apiFetch<PlannerTask>(`/api/planner/tasks/${task.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ notes }),
+      });
+    } catch (reason) {
+      applyTaskNotes(task.id, previous);
+      setError(
+        reason instanceof Error
+          ? reason.message
+          : "메모를 저장하지 못했습니다.",
+      );
+    } finally {
+      setNoteSavingId(null);
+    }
+  };
+
   const handleCreateColor = async (selectForForm: boolean) => {
     if (colorSaving) return;
     setColorSaving(true);
@@ -1704,7 +1866,13 @@ export default function PlannerClient({ username }: { username: string }) {
         </div>
         {renderTaskMeta(task)}
         {task.notes ? (
-          <p className="planner-task-notes">{task.notes}</p>
+          <PlannerNoteContent
+            notes={task.notes}
+            disabled={noteSavingId !== null}
+            onToggle={(index) =>
+              void handleToggleTaskNote(task, index)
+            }
+          />
         ) : null}
       </div>
       <div className="planner-task-actions">
@@ -1784,7 +1952,13 @@ export default function PlannerClient({ username }: { username: string }) {
                 : `비활성 ${formatDateTime(task.inactive_at)} · 마감 30일 뒤 휴지통`}
         </p>
         {task.notes ? (
-          <p className="planner-task-notes">{task.notes}</p>
+          <PlannerNoteContent
+            notes={task.notes}
+            disabled={trashed || noteSavingId !== null}
+            onToggle={(index) =>
+              void handleToggleTaskNote(task, index)
+            }
+          />
         ) : null}
       </div>
       <div className="planner-task-actions">
@@ -2540,6 +2714,9 @@ export default function PlannerClient({ username }: { username: string }) {
                   }
                 />
               </label>
+              <p className="planner-form-hint">
+                메모는 `- 목록`, `- [ ] 체크` 형식을 지원합니다.
+              </p>
               {recordCompleted ? null : (
                 <label className="planner-checkbox">
                   <input
