@@ -29,6 +29,8 @@ export interface BookmarkRoutine {
   frequency: BookmarkRoutineFrequency;
   category_id: number | null;
   category_name: string | null;
+  start_date: string;
+  end_date: string | null;
   tracking_mode: BookmarkTrackingMode;
   target_count: number;
   weekday: number | null;
@@ -115,6 +117,8 @@ export function routineScheduleLabel(routine: {
   frequency: BookmarkRoutineFrequency;
   category_id: number | null;
   category_name: string | null;
+  start_date: string;
+  end_date: string | null;
   tracking_mode: BookmarkTrackingMode;
   target_count: number;
   weekday: number | null;

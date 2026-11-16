@@ -508,6 +508,16 @@
   opacity: 0.5;
 }
 
+.bookmark-routine-status {
+  padding: 0.12rem 0.35rem;
+  border: 1px solid
+    color-mix(in srgb, var(--theme-main) 34%, transparent);
+  border-radius: 999px;
+  color: var(--title-color);
+  font-size: 0.56rem;
+  opacity: 0.6;
+}
+
 .bookmark-item-schedule {
   margin: 0;
   color: var(--title-color);

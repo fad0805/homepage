@@ -4,7 +4,7 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 from fastapi import HTTPException, status
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session, selectinload
 
 from models.bookmark import (
@@ -168,24 +168,36 @@ def _routine_weekdays(routine: BookmarkRoutine) -> list[int]:
     )
 
 
-def _routine_monthly_due(routine: BookmarkRoutine, month: date) -> bool:
+def _routine_monthly_due_date(
+    routine: BookmarkRoutine,
+    month: date,
+) -> date | None:
     if routine.day_of_month is not None:
-        return _month_has_day(
+        if _month_has_day(
             month.year,
             month.month,
             routine.day_of_month,
-        )
-    if routine.nth_week is not None and routine.weekday is not None:
-        return (
-            _nth_weekday_day(
+        ):
+            return date(
                 month.year,
                 month.month,
-                routine.nth_week,
-                routine.weekday,
+                routine.day_of_month,
             )
-            is not None
+        return None
+    if routine.nth_week is not None and routine.weekday is not None:
+        day = _nth_weekday_day(
+            month.year,
+            month.month,
+            routine.nth_week,
+            routine.weekday,
         )
-    return False
+        if day is not None:
+            return date(month.year, month.month, day)
+    return None
+
+
+def _routine_monthly_due(routine: BookmarkRoutine, month: date) -> bool:
+    return _routine_monthly_due_date(routine, month) is not None
 
 
 def _routine_due_on_day(routine: BookmarkRoutine, day: date) -> bool:
@@ -436,6 +448,8 @@ def _date_period_entry(
     require_month_due: bool = True,
 ) -> dict[str, Any] | None:
     if routine.frequency == "daily":
+        if not _in_routine_lifespan(routine, period_start):
+            return None
         done = _period_check_count(db, routine, "day", period_start) > 0
         return _routine_period_dict(
             routine,
@@ -456,7 +470,15 @@ def _date_period_entry(
                 in _routine_weekdays(routine)
             ]
         )
-        done_dates = _done_dates(db, routine, week_start, week_start + timedelta(days=6))
+        dates = [day for day in dates if _in_routine_lifespan(routine, day)]
+        if not dates:
+            return None
+        done_dates = _done_dates(
+            db,
+            routine,
+            week_start,
+            week_start + timedelta(days=6),
+        )
         occurrences = [
             {"date": day, "done": day in done_dates}
             for day in dates
@@ -466,6 +488,10 @@ def _date_period_entry(
             for offset in range(7)
             if (week_start + timedelta(days=offset)).weekday()
             in _routine_weekdays(routine)
+            and _in_routine_lifespan(
+                routine,
+                week_start + timedelta(days=offset),
+            )
         }
         completed = len(done_dates & selected_dates)
         return _routine_period_dict(
@@ -477,7 +503,13 @@ def _date_period_entry(
         )
     if routine.frequency == "monthly":
         month = _month_start(period_start)
-        if require_month_due and not _routine_monthly_due(routine, month):
+        due_date = _routine_monthly_due_date(routine, month)
+        if require_month_due and due_date is None:
+            return None
+        if due_date is not None and not _in_routine_lifespan(
+            routine,
+            due_date,
+        ):
             return None
         completed = _period_check_count(db, routine, "month", month)
         return _routine_period_dict(
@@ -498,6 +530,17 @@ def _date_period_entry(
             occurrences=[{"date": quarter, "done": completed > 0}],
         )
     year = _year_start(period_start)
+    if routine.month is None or routine.day_of_month is None:
+        return None
+    if not _month_has_day(
+        year.year,
+        routine.month,
+        routine.day_of_month,
+    ):
+        return None
+    due_date = date(year.year, routine.month, routine.day_of_month)
+    if not _in_routine_lifespan(routine, due_date):
+        return None
     completed = _period_check_count(db, routine, "year", year)
     return _routine_period_dict(
         routine,
@@ -539,6 +582,24 @@ def _check_period_type(routine: BookmarkRoutine) -> str:
     return CHECK_PERIOD_BY_FREQUENCY[routine.frequency]
 
 
+def _period_end(period_type: str, period_start: date) -> date:
+    if period_type == "day":
+        return period_start
+    if period_type == "week":
+        return period_start + timedelta(days=6)
+    if period_type == "month":
+        return _month_end(period_start)
+    if period_type == "quarter":
+        return _shift_months(period_start, 3) - timedelta(days=1)
+    return date(period_start.year, 12, 31)
+
+
+def _in_routine_lifespan(routine: BookmarkRoutine, day: date) -> bool:
+    return routine.start_date <= day and (
+        routine.end_date is None or day <= routine.end_date
+    )
+
+
 def _check_period_start(routine: BookmarkRoutine, day: date) -> date:
     if routine.frequency == "daily":
         return day
@@ -566,6 +627,17 @@ def _routine_month_values(
 ) -> tuple[int, int] | None:
     first = _month_start(month_start)
     last = _month_end(first)
+    if first < _month_start(routine.start_date):
+        return None
+    if (
+        routine.end_date is not None
+        and first > _month_start(routine.end_date)
+    ):
+        return None
+    active_start = max(first, routine.start_date)
+    active_end = min(last, routine.end_date or last)
+    if active_start > active_end:
+        return None
     target = max(1, int(routine.target_count or 1))
 
     if routine.frequency == "daily":
@@ -575,12 +647,12 @@ def _routine_month_values(
                 BookmarkRoutineCheck.user_id == routine.user_id,
                 BookmarkRoutineCheck.routine_id == routine.id,
                 BookmarkRoutineCheck.period_type == "day",
-                BookmarkRoutineCheck.period_start >= first,
-                BookmarkRoutineCheck.period_start <= last,
+                BookmarkRoutineCheck.period_start >= active_start,
+                BookmarkRoutineCheck.period_start <= active_end,
             )
             .scalar()
         )
-        return int(completed or 0), last.day
+        return int(completed or 0), (active_end - active_start).days + 1
 
     if routine.frequency == "weekly":
         if routine.tracking_mode == "count":
@@ -588,6 +660,9 @@ def _routine_month_values(
                 first + timedelta(days=offset)
                 for offset in range(last.day)
                 if (first + timedelta(days=offset)).weekday() == 0
+                and active_start
+                <= first + timedelta(days=offset)
+                <= active_end
             ]
             expected = target * len(expected_dates)
             completed = (
@@ -598,8 +673,8 @@ def _routine_month_values(
                     BookmarkRoutineCheck.user_id == routine.user_id,
                     BookmarkRoutineCheck.routine_id == routine.id,
                     BookmarkRoutineCheck.period_type == "week",
-                    BookmarkRoutineCheck.period_start >= first,
-                    BookmarkRoutineCheck.period_start <= last,
+                    BookmarkRoutineCheck.period_start >= active_start,
+                    BookmarkRoutineCheck.period_start <= active_end,
                 )
                 .scalar()
             )
@@ -613,11 +688,13 @@ def _routine_month_values(
             first + timedelta(days=offset)
             for offset in range(last.day)
             if (first + timedelta(days=offset)).weekday() in weekdays
+            and active_start <= first + timedelta(days=offset) <= active_end
         }
         if not expected_dates:
             return None
         completed = len(
-            _done_dates(db, routine, first, last) & expected_dates
+            _done_dates(db, routine, active_start, active_end)
+            & expected_dates
         )
         return completed, len(expected_dates)
 
@@ -691,7 +768,11 @@ def get_today(
         .options(selectinload(BookmarkRoutine.category))
         .filter(
             BookmarkRoutine.user_id == user_id,
-            BookmarkRoutine.active.is_(True),
+            BookmarkRoutine.start_date <= target,
+            or_(
+                BookmarkRoutine.end_date.is_(None),
+                BookmarkRoutine.end_date >= target,
+            ),
         )
         .all()
     )
@@ -784,13 +865,18 @@ def get_period(
 ) -> dict[str, Any]:
     _validate_period(period_type, period_start)
     frequency = PERIOD_FREQUENCY[period_type]
+    period_end = _period_end(period_type, period_start)
     routines = (
         db.query(BookmarkRoutine)
         .options(selectinload(BookmarkRoutine.category))
         .filter(
             BookmarkRoutine.user_id == user_id,
             BookmarkRoutine.frequency == frequency,
-            BookmarkRoutine.active.is_(True),
+            BookmarkRoutine.start_date <= period_end,
+            or_(
+                BookmarkRoutine.end_date.is_(None),
+                BookmarkRoutine.end_date >= period_start,
+            ),
         )
         .order_by(BookmarkRoutine.position, BookmarkRoutine.id)
         .all()
@@ -890,6 +976,8 @@ def create_routine(
         title=_clean_title(payload.title),
         notes=_clean_notes(payload.notes),
         frequency=payload.frequency,
+        start_date=_kst_today(),
+        end_date=None,
         tracking_mode=mode,
         target_count=target_count,
         active=True,
@@ -954,8 +1042,32 @@ def update_routine(
     return routine
 
 
+def stop_routine(
+    db: Session,
+    routine_id: int,
+    user_id: int,
+) -> BookmarkRoutine:
+    routine = _get_routine_or_404(db, routine_id, user_id)
+    if routine.end_date is not None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="이미 중단된 루틴입니다.",
+        )
+    routine.end_date = _kst_today() - timedelta(days=1)
+    routine.active = False
+    db.commit()
+    db.refresh(routine)
+    return routine
+
+
 def delete_routine(db: Session, routine_id: int, user_id: int) -> dict:
     routine = _get_routine_or_404(db, routine_id, user_id)
+    db.query(BookmarkRoutineMonthlyStat).filter(
+        BookmarkRoutineMonthlyStat.routine_id == routine.id
+    ).delete(synchronize_session=False)
+    db.query(BookmarkRoutineCheck).filter(
+        BookmarkRoutineCheck.routine_id == routine.id
+    ).delete(synchronize_session=False)
     db.delete(routine)
     db.commit()
     return {"success": True}
@@ -968,12 +1080,28 @@ def set_routine_check(
     user_id: int,
 ) -> dict[str, Any]:
     routine = _get_routine_or_404(db, routine_id, user_id)
+    if routine.end_date is not None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="중단된 루틴은 기록을 변경할 수 없습니다.",
+        )
     _validate_period(payload.period_type, payload.period_start)
     expected_period = _check_period_type(routine)
     if payload.period_type != expected_period:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="루틴 기록 방식과 기간 단위가 맞지 않습니다.",
+        )
+    period_end = _period_end(payload.period_type, payload.period_start)
+    if period_end < routine.start_date:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="루틴 시작일 이전 기간은 기록할 수 없습니다.",
+        )
+    if routine.end_date is not None and payload.period_start > routine.end_date:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="중단된 이후 기간은 기록할 수 없습니다.",
         )
     if routine.tracking_mode == "date":
         if payload.count > 1:
@@ -1045,10 +1173,16 @@ def get_routine_history(
     if routine.frequency == "daily" or (
         routine.frequency == "weekly" and routine.tracking_mode == "date"
     ):
-        start = _shift_months(current, -SHORT_RETENTION_MONTHS)
-        done_dates = _done_dates(db, routine, start, current)
+        start = max(
+            _shift_months(current, -SHORT_RETENTION_MONTHS),
+            routine.start_date,
+        )
+        end = current
+        if routine.end_date is not None:
+            end = min(end, routine.end_date)
+        done_dates = _done_dates(db, routine, start, end)
         day = start
-        while day <= current:
+        while day <= end:
             scheduled = (
                 routine.frequency == "daily"
                 or day.weekday() in _routine_weekdays(routine)
@@ -1068,7 +1202,9 @@ def get_routine_history(
             BookmarkRoutineMonthlyStat.user_id == user_id,
             BookmarkRoutineMonthlyStat.routine_id == routine.id,
             BookmarkRoutineMonthlyStat.month_start
-            <= _month_start(current),
+            >= _month_start(routine.start_date),
+            BookmarkRoutineMonthlyStat.month_start
+            <= _month_start(routine.end_date or current),
         )
         .order_by(BookmarkRoutineMonthlyStat.month_start)
         .all()

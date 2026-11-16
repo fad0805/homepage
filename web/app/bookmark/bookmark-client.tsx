@@ -674,9 +674,42 @@ export default function BookmarkClient({ username }: { username: string }) {
     );
   };
 
+  const handleStopRoutine = async () => {
+    if (!editingRoutine || itemSaving) return;
+    if (
+      !window.confirm(
+        `"${editingRoutine.title}" 루틴을 중단할까요? 기존 기록은 유지됩니다.`,
+      )
+    ) {
+      return;
+    }
+    setItemSaving(true);
+    setError(null);
+    try {
+      await apiFetch<BookmarkRoutine>(
+        `/api/bookmark/routines/${editingRoutine.id}/stop`,
+        { method: "POST" },
+      );
+      closeRoutineModal();
+      await loadPeriod();
+    } catch (reason) {
+      setError(
+        reason instanceof Error
+          ? reason.message
+          : "루틴을 중단하지 못했습니다.",
+      );
+    } finally {
+      setItemSaving(false);
+    }
+  };
+
   const handleDeleteRoutine = async () => {
     if (!editingRoutine) return;
-    if (!window.confirm(`"${editingRoutine.title}" 루틴을 삭제할까요?`)) {
+    if (
+      !window.confirm(
+        `"${editingRoutine.title}" 루틴과 모든 기록을 완전히 삭제할까요?`,
+      )
+    ) {
       return;
     }
     setItemSaving(true);
@@ -1010,6 +1043,7 @@ export default function BookmarkClient({ username }: { username: string }) {
       const isDaily = routine.frequency === "daily";
       const isCount =
         routine.tracking_mode === "count" && !isDaily;
+      const isStopped = Boolean(routine.end_date);
       const allDone = isRoutineDone(routine);
       return (
         <li
@@ -1021,6 +1055,9 @@ export default function BookmarkClient({ username }: { username: string }) {
               <span className="bookmark-routine-title">
                 {routine.title}
               </span>
+              {isStopped ? (
+                <span className="bookmark-routine-status">중단됨</span>
+              ) : null}
               <p className="bookmark-item-schedule">
                 {routineScheduleLabel(routine)}
               </p>
@@ -1028,40 +1065,44 @@ export default function BookmarkClient({ username }: { username: string }) {
 
             {isCount ? (
               <div className="bookmark-routine-counter">
-                <button
-                  type="button"
-                  className="bookmark-count-button"
-                  aria-label="1회 줄이기"
-                  disabled={routine.completed_count <= 0}
-                  onClick={() =>
-                    void setRoutineCount(
-                      routine,
-                      routine.completed_count - 1,
-                    )
-                  }
-                >
-                  −
-                </button>
+                {!isStopped ? (
+                  <button
+                    type="button"
+                    className="bookmark-count-button"
+                    aria-label="1회 줄이기"
+                    disabled={routine.completed_count <= 0}
+                    onClick={() =>
+                      void setRoutineCount(
+                        routine,
+                        routine.completed_count - 1,
+                      )
+                    }
+                  >
+                    −
+                  </button>
+                ) : null}
                 <span className="bookmark-routine-progress">
                   <strong>{routine.completed_count}</strong>
                   <span>/ {routine.target_count}회</span>
                 </span>
-                <button
-                  type="button"
-                  className="bookmark-count-button"
-                  aria-label="1회 추가"
-                  disabled={
-                    routine.completed_count >= routine.target_count
-                  }
-                  onClick={() =>
-                    void setRoutineCount(
-                      routine,
-                      routine.completed_count + 1,
-                    )
-                  }
-                >
-                  +
-                </button>
+                {!isStopped ? (
+                  <button
+                    type="button"
+                    className="bookmark-count-button"
+                    aria-label="1회 추가"
+                    disabled={
+                      routine.completed_count >= routine.target_count
+                    }
+                    onClick={() =>
+                      void setRoutineCount(
+                        routine,
+                        routine.completed_count + 1,
+                      )
+                    }
+                  >
+                    +
+                  </button>
+                ) : null}
               </div>
             ) : (
               <>
@@ -1677,6 +1718,13 @@ export default function BookmarkClient({ username }: { username: string }) {
                 </select>
               </label>
 
+              {editingRoutine ? (
+                <p className="bookmark-form-hint">
+                  시작일: {periodLabel(editingRoutine.start_date, "day")}
+                  {editingRoutine.end_date ? " · 중단됨" : ""}
+                </p>
+              ) : null}
+
               <div className="bookmark-schedule">
                 <span className="bookmark-field-label">기록 방식</span>
                 {modalFrequency === "daily" ? (
@@ -1890,6 +1938,16 @@ export default function BookmarkClient({ username }: { username: string }) {
               </div>
 
               <div className="bookmark-modal-actions">
+                {editingRoutine && !editingRoutine.end_date ? (
+                  <button
+                    type="button"
+                    className="bookmark-text-button"
+                    disabled={itemSaving}
+                    onClick={() => void handleStopRoutine()}
+                  >
+                    중단
+                  </button>
+                ) : null}
                 {editingRoutine ? (
                   <button
                     type="button"
@@ -1897,7 +1955,7 @@ export default function BookmarkClient({ username }: { username: string }) {
                     disabled={itemSaving}
                     onClick={() => void handleDeleteRoutine()}
                   >
-                    삭제
+                    완전 삭제
                   </button>
                 ) : null}
                 <button

@@ -1,3 +1,5 @@
+from datetime import date
+
 from sqlalchemy import (
     JSON,
     Boolean,
@@ -85,6 +87,13 @@ class BookmarkRoutine(Base):
         index=True,
     )
     frequency = Column(String(10), nullable=False)
+    start_date = Column(
+        Date,
+        nullable=False,
+        default=date.today,
+        server_default=func.current_date(),
+    )
+    end_date = Column(Date, nullable=True)
     tracking_mode = Column(
         String(10),
         nullable=False,

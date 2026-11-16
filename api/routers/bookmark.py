@@ -16,6 +16,7 @@ from crud.bookmark import (
     save_rating,
     save_review,
     set_routine_check,
+    stop_routine,
     update_routine,
     update_routine_category,
 )
@@ -149,6 +150,20 @@ def patch_routine(
 ):
     _no_store(response)
     return update_routine(db, routine_id, payload, user.id)
+
+
+@router.post(
+    "/routines/{routine_id}/stop",
+    response_model=BookmarkRoutineRead,
+)
+def stop_routine_route(
+    routine_id: int,
+    response: Response,
+    db: Session = Depends(get_db),
+    user=Depends(require_auth),
+):
+    _no_store(response)
+    return stop_routine(db, routine_id, user.id)
 
 
 @router.delete("/routines/{routine_id}")

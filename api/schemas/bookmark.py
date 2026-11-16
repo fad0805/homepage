@@ -67,6 +67,8 @@ class BookmarkRoutineRead(BaseModel):
     notes: str | None = None
     frequency: BookmarkRoutineFrequency
     category_id: int | None = None
+    start_date: date
+    end_date: date | None = None
     tracking_mode: BookmarkTrackingMode
     target_count: int
     weekday: int | None = None
