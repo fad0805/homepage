@@ -680,7 +680,7 @@ export default function PlannerClient({ username }: { username: string }) {
         tasks: PlannerTask[];
       }
     >();
-    for (const task of colorViewTasks) {
+    for (const task of activeTasks) {
       const key = task.color_id
         ? `chip:${task.color_id}`
         : "unassigned";
@@ -745,7 +745,7 @@ export default function PlannerClient({ username }: { username: string }) {
           a.key.localeCompare(b.key)
         );
       });
-  }, [colorViewTasks, savedColors]);
+  }, [activeTasks, savedColors]);
 
   useEffect(() => {
     const available = new Set(colorGroups.map((group) => group.key));
@@ -2245,7 +2245,7 @@ export default function PlannerClient({ username }: { username: string }) {
                       <p className="planner-eyebrow">색상별</p>
                       <h2>색상 칩</h2>
                       <p>
-                        활성·비활성 일정 {colorViewTasks.length}개 · 칩{" "}
+                        활성 일정 {activeTasks.length}개 · 칩{" "}
                         {savedColors.length}개
                         {selectedColorGroups.length > 0
                           ? ` · 선택 ${selectedColorGroups.length}개`
@@ -2291,16 +2291,12 @@ export default function PlannerClient({ username }: { username: string }) {
 
                   {colorGroups.length === 0 ? (
                     <p className="planner-empty">
-                      색상 칩에 지정된 활성·비활성 일정이 없습니다.
+                      색상 칩에 지정된 활성 일정이 없습니다.
                     </p>
                   ) : (
                     <div className="planner-color-group-list">
                       {colorGroups.map((group) => {
-                        const activeCount = group.tasks.filter(
-                          (task) => task.status === "active",
-                        ).length;
-                        const inactiveCount =
-                          group.tasks.length - activeCount;
+                        const activeCount = group.tasks.length;
                         return (
                           <section
                             className={[
@@ -2345,8 +2341,7 @@ export default function PlannerClient({ username }: { username: string }) {
                                       (group.color || "").toUpperCase()}
                                 </strong>
                                 <span className="planner-color-group-count">
-                                  활성 {activeCount} · 비활성{" "}
-                                  {inactiveCount}
+                                  {activeCount}개
                                 </span>
                                 <span
                                   className="planner-color-group-caret"
@@ -2361,24 +2356,12 @@ export default function PlannerClient({ username }: { username: string }) {
                             {selectedColorGroups.includes(group.key) ? (
                               group.tasks.length === 0 ? (
                                 <p className="planner-empty">
-                                  이 칩에 등록된 일정이 없습니다.
+                                  이 칩에 등록된 활성 일정이 없습니다.
                                 </p>
                               ) : (
-                                <>
-                                  {activeCount === 0 ? (
-                                    <p className="planner-empty">
-                                      활성 일정이 없어 캘린더에는
-                                      표시되지 않습니다.
-                                    </p>
-                                  ) : null}
-                                  <ul className="planner-task-list">
-                                    {group.tasks.map((task) =>
-                                      task.status === "active"
-                                        ? renderActiveTask(task)
-                                        : renderStoredTask(task, false),
-                                    )}
-                                  </ul>
-                                </>
+                                <ul className="planner-task-list">
+                                  {group.tasks.map(renderActiveTask)}
+                                </ul>
                               )
                             ) : null}
                           </section>
