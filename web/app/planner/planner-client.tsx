@@ -610,6 +610,10 @@ export default function PlannerClient({ username }: { username: string }) {
   const [selectedColorGroups, setSelectedColorGroups] = useState<
     string[]
   >([]);
+  const [inactiveFilterOpen, setInactiveFilterOpen] = useState(false);
+  const [inactiveColorFilter, setInactiveColorFilter] = useState<
+    string | null
+  >(null);
   const [error, setError] = useState<string | null>(null);
   const [recordCompleted, setRecordCompleted] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState<PlannerEvent | null>(null);
@@ -713,6 +717,12 @@ export default function PlannerClient({ username }: { username: string }) {
   }, [activeTab]);
 
   useEffect(() => {
+    if (activeTab !== "inactive") {
+      setInactiveFilterOpen(false);
+    }
+  }, [activeTab]);
+
+  useEffect(() => {
     if (!selectedEvent && !taskModalOpen && !chipManagerOpen) return;
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
@@ -781,6 +791,84 @@ export default function PlannerClient({ username }: { username: string }) {
     () => tasks.filter((task) => task.status === "trashed"),
     [tasks],
   );
+  const inactiveColorGroups = useMemo(() => {
+    const groups = new Map<
+      string,
+      {
+        key: string;
+        color: string;
+        name: string | null;
+        tasks: PlannerTask[];
+      }
+    >();
+    for (const task of inactiveTasks) {
+      const key = task.color_id
+        ? `chip:${task.color_id}`
+        : "unassigned";
+      const saved = savedColors.find(
+        (color) => color.id === task.color_id,
+      );
+      const group = groups.get(key);
+      if (group) {
+        group.tasks.push(task);
+      } else {
+        groups.set(key, {
+          key,
+          color:
+            task.color || saved?.color || UNASSIGNED_TASK_COLOR,
+          name: saved?.name || null,
+          tasks: [task],
+        });
+      }
+    }
+    const savedOrder = new Map(
+      savedColors.map((color, index) => [color.id, index]),
+    );
+    return Array.from(groups.values()).sort((a, b) => {
+      const aUnassigned = a.key === "unassigned";
+      const bUnassigned = b.key === "unassigned";
+      if (aUnassigned !== bUnassigned) {
+        return aUnassigned ? 1 : -1;
+      }
+      const aChip = a.key.startsWith("chip:")
+        ? Number(a.key.slice(5))
+        : null;
+      const bChip = b.key.startsWith("chip:")
+        ? Number(b.key.slice(5))
+        : null;
+      const aIndex =
+        aChip === null
+          ? Number.MAX_SAFE_INTEGER
+          : (savedOrder.get(aChip) ?? Number.MAX_SAFE_INTEGER);
+      const bIndex =
+        bChip === null
+          ? Number.MAX_SAFE_INTEGER
+          : (savedOrder.get(bChip) ?? Number.MAX_SAFE_INTEGER);
+      return (
+        aIndex - bIndex ||
+        a.color.localeCompare(b.color) ||
+        a.key.localeCompare(b.key)
+      );
+    });
+  }, [inactiveTasks, savedColors]);
+  const selectedInactiveGroup =
+    inactiveColorGroups.find(
+      (group) => group.key === inactiveColorFilter,
+    ) ?? null;
+  const visibleInactiveTasks = selectedInactiveGroup
+    ? selectedInactiveGroup.tasks
+    : inactiveTasks;
+
+  useEffect(() => {
+    if (!inactiveColorFilter) return;
+    if (
+      !inactiveColorGroups.some(
+        (group) => group.key === inactiveColorFilter,
+      )
+    ) {
+      setInactiveColorFilter(null);
+    }
+  }, [inactiveColorGroups, inactiveColorFilter]);
   const selectedTasks = useMemo(
     () =>
       sortTasks(
@@ -2611,15 +2699,109 @@ export default function PlannerClient({ username }: { username: string }) {
                     </div>
                   </div>
                   {activeTab === "inactive" ? (
-                    inactiveTasks.length === 0 ? (
-                      <p className="planner-empty">비활성 일정이 없습니다.</p>
-                    ) : (
-                      <ul className="planner-task-list">
-                        {inactiveTasks.map((task) =>
-                          renderStoredTask(task, false),
-                        )}
-                      </ul>
-                    )
+                    <>
+                      {inactiveTasks.length > 0 ? (
+                        <div className="planner-inactive-filter">
+                          <button
+                            type="button"
+                            className="planner-inactive-filter-toggle"
+                            aria-expanded={inactiveFilterOpen}
+                            onClick={() =>
+                              setInactiveFilterOpen(
+                                (previous) => !previous,
+                              )
+                            }
+                          >
+                            <span>칩별 보기</span>
+                            <span className="planner-inactive-filter-value">
+                              {selectedInactiveGroup
+                                ? colorGroupLabel(
+                                    selectedInactiveGroup,
+                                  )
+                                : "전체"}
+                            </span>
+                            <span
+                              className="planner-inactive-filter-caret"
+                              aria-hidden="true"
+                            >
+                              {inactiveFilterOpen ? "⌃" : "⌄"}
+                            </span>
+                          </button>
+                          {inactiveFilterOpen ? (
+                            <div className="planner-inactive-filter-panel">
+                              <button
+                                type="button"
+                                className={`planner-inactive-filter-all${
+                                  inactiveColorFilter === null
+                                    ? " is-active"
+                                    : ""
+                                }`}
+                                aria-pressed={
+                                  inactiveColorFilter === null
+                                }
+                                onClick={() =>
+                                  setInactiveColorFilter(null)
+                                }
+                              >
+                                전체
+                              </button>
+                              {inactiveColorGroups.map((group) => {
+                                const selected =
+                                  inactiveColorFilter === group.key;
+                                const label = colorGroupLabel(group);
+                                return (
+                                  <button
+                                    type="button"
+                                    key={group.key}
+                                    className={[
+                                      "planner-color-swatch-button",
+                                      "is-small",
+                                      selected ? "is-selected" : "",
+                                      group.key === "unassigned"
+                                        ? "is-unassigned"
+                                        : "",
+                                    ]
+                                      .filter(Boolean)
+                                      .join(" ")}
+                                    style={{
+                                      backgroundColor:
+                                        group.color ||
+                                        UNASSIGNED_TASK_COLOR,
+                                    }}
+                                    aria-label={label}
+                                    aria-pressed={selected}
+                                    title={label}
+                                    onClick={() =>
+                                      setInactiveColorFilter(
+                                        (previous) =>
+                                          previous === group.key
+                                            ? null
+                                            : group.key,
+                                      )
+                                    }
+                                  />
+                                );
+                              })}
+                            </div>
+                          ) : null}
+                        </div>
+                      ) : null}
+                      {inactiveTasks.length === 0 ? (
+                        <p className="planner-empty">
+                          비활성 일정이 없습니다.
+                        </p>
+                      ) : visibleInactiveTasks.length === 0 ? (
+                        <p className="planner-empty">
+                          선택한 칩에 비활성 일정이 없습니다.
+                        </p>
+                      ) : (
+                        <ul className="planner-task-list">
+                          {visibleInactiveTasks.map((task) =>
+                            renderStoredTask(task, false),
+                          )}
+                        </ul>
+                      )}
+                    </>
                   ) : trashedTasks.length === 0 ? (
                     <p className="planner-empty">휴지통이 비어 있습니다.</p>
                   ) : (
