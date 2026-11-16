@@ -151,6 +151,39 @@ class BookmarkMoodTagRead(BaseModel):
         from_attributes = True
 
 
+class BookmarkRoutineStatBucketRead(BaseModel):
+    period_start: date
+    completed_count: int
+    expected_count: int
+
+
+class BookmarkRoutineStatRead(BaseModel):
+    id: int
+    title: str
+    frequency: BookmarkRoutineFrequency
+    tracking_mode: BookmarkTrackingMode
+    category_id: int | None = None
+    category_name: str | None = None
+    start_date: date
+    end_date: date | None = None
+    target_count: int
+    active: bool
+    aggregation: Literal["week", "month", "quarter", "year"]
+    retention_label: str
+    buckets: list[BookmarkRoutineStatBucketRead] = Field(
+        default_factory=list
+    )
+
+
+class BookmarkStatisticsRead(BaseModel):
+    categories: list[BookmarkRoutineCategoryRead] = Field(
+        default_factory=list
+    )
+    routines: list[BookmarkRoutineStatRead] = Field(
+        default_factory=list
+    )
+
+
 class BookmarkGoalUpdate(BaseModel):
     period_type: BookmarkPeriodType
     period_start: date

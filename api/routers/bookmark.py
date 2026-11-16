@@ -12,6 +12,7 @@ from crud.bookmark import (
     delete_routine_category,
     get_period,
     get_routine_history,
+    get_statistics,
     get_today,
     list_mood_tags,
     list_routine_categories,
@@ -50,6 +51,7 @@ from schemas.bookmark import (
     BookmarkRoutinePeriodRead,
     BookmarkRoutineRead,
     BookmarkRoutineUpdate,
+    BookmarkStatisticsRead,
 )
 
 router = APIRouter()
@@ -74,6 +76,16 @@ def read_period(
         period_type=period_type,
         period_start=period_start,
     )
+
+
+@router.get("/statistics", response_model=BookmarkStatisticsRead)
+def read_statistics(
+    response: Response,
+    db: Session = Depends(get_db),
+    user=Depends(require_auth),
+):
+    _no_store(response)
+    return get_statistics(db, user.id)
 
 
 @router.get("/mood-tags", response_model=list[BookmarkMoodTagRead])

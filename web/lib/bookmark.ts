@@ -60,6 +60,33 @@ export interface BookmarkRoutineHistoryMonth {
   expected_count: number;
 }
 
+export interface BookmarkRoutineStatBucket {
+  period_start: string;
+  completed_count: number;
+  expected_count: number;
+}
+
+export interface BookmarkRoutineStat {
+  id: number;
+  title: string;
+  frequency: BookmarkRoutineFrequency;
+  tracking_mode: BookmarkTrackingMode;
+  category_id: number | null;
+  category_name: string | null;
+  start_date: string;
+  end_date: string | null;
+  target_count: number;
+  active: boolean;
+  aggregation: "week" | "month" | "quarter" | "year";
+  retention_label: string;
+  buckets: BookmarkRoutineStatBucket[];
+}
+
+export interface BookmarkStatistics {
+  categories: BookmarkRoutineCategory[];
+  routines: BookmarkRoutineStat[];
+}
+
 export interface BookmarkRoutineHistory {
   daily: BookmarkRoutineHistoryDay[];
   monthly: BookmarkRoutineHistoryMonth[];

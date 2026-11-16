@@ -32,6 +32,8 @@ import {
   type BookmarkRoutineCategory,
   type BookmarkRoutineFrequency,
   type BookmarkRoutineHistory,
+  type BookmarkStatistics,
+  type BookmarkRoutineStat,
   type BookmarkMoodTag,
   type BookmarkTrackingMode,
   routineScheduleLabel,
@@ -43,8 +45,13 @@ import { CloverRating } from "./clover-rating";
 
 import "@/public/styles/bookmark.scss";
 
-type BookmarkView = "today" | BookmarkPeriodType;
+type BookmarkView = "today" | BookmarkPeriodType | "stats";
 type MonthlyMode = "day" | "nth";
+type HistoryRoutine = Pick<
+  BookmarkRoutine,
+  "id" | "title" | "frequency"
+>;
+type StatsRange = "week" | "month" | "quarter" | "year" | "3years";
 
 const PERIOD_TYPES: BookmarkPeriodType[] = [
   "day",
@@ -60,10 +67,37 @@ const PERIOD_LABELS: Record<BookmarkPeriodType, string> = {
   week: "주",
   day: "일",
 };
-const VIEWS: BookmarkView[] = ["today", ...PERIOD_TYPES];
+const STATS_RANGES: StatsRange[] = [
+  "week",
+  "month",
+  "quarter",
+  "year",
+  "3years",
+];
+const STATS_RANGE_LABELS: Record<StatsRange, string> = {
+  week: "이번 주",
+  month: "이번 달",
+  quarter: "이번 분기",
+  year: "이번 해",
+  "3years": "최근 3년",
+};
+const STATS_COLORS = [
+  "#4f8f5b",
+  "#5b7fb3",
+  "#b07a4a",
+  "#9a5b8f",
+  "#a89a45",
+  "#4f9a9a",
+  "#8264b0",
+  "#b35b5b",
+  "#6f8f4f",
+  "#4f6b8f",
+];
+const VIEWS: BookmarkView[] = ["today", ...PERIOD_TYPES, "stats"];
 const VIEW_LABELS: Record<BookmarkView, string> = {
   today: "오늘",
   ...PERIOD_LABELS,
+  stats: "통계",
 };
 const PERIOD_FREQUENCY: Record<
   BookmarkPeriodType,
@@ -215,6 +249,80 @@ function historyDayTitle(
   }`;
 }
 
+function statBucketLabel(
+  value: string,
+  aggregation: "week" | "month" | "quarter" | "year",
+) {
+  const date = parseDateKey(value);
+  const year = date.getUTCFullYear();
+  const month = date.getUTCMonth() + 1;
+  if (aggregation === "year") return `${year}년`;
+  if (aggregation === "quarter") {
+    return `${year}년 ${Math.floor((month - 1) / 3) + 1}분기`;
+  }
+  if (aggregation === "month") {
+    return `${year}.${pad2(month)}`;
+  }
+  const end = parseDateKey(shiftPeriod(value, "day", 6));
+  return `${month}/${date.getUTCDate()} ~ ${
+    end.getUTCMonth() + 1
+  }/${end.getUTCDate()}`;
+}
+
+function statBucketEnd(
+  value: string,
+  aggregation: "week" | "month" | "quarter" | "year",
+) {
+  if (aggregation === "week") return shiftPeriod(value, "day", 6);
+  if (aggregation === "month") {
+    const date = parseDateKey(value);
+    return dateKey(
+      new Date(
+        Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + 1, 0),
+      ),
+    );
+  }
+  if (aggregation === "quarter") {
+    return shiftPeriod(
+      shiftPeriod(value, "month", 3),
+      "day",
+      -1,
+    );
+  }
+  return `${parseDateKey(value).getUTCFullYear()}-12-31`;
+}
+
+function statRangeBounds(range: StatsRange) {
+  const today = todayDateInputValue();
+  const date = parseDateKey(today);
+  const year = date.getUTCFullYear();
+  if (range === "week") {
+    const start = startOfPeriod(today, "week");
+    return { start, end: shiftPeriod(start, "day", 6) };
+  }
+  if (range === "month") {
+    const start = startOfPeriod(today, "month");
+    return {
+      start,
+      end: statBucketEnd(start, "month"),
+    };
+  }
+  if (range === "quarter") {
+    const start = startOfPeriod(today, "quarter");
+    return {
+      start,
+      end: statBucketEnd(start, "quarter"),
+    };
+  }
+  if (range === "year") {
+    return { start: `${year}-01-01`, end: `${year}-12-31` };
+  }
+  return {
+    start: `${year - 2}-01-01`,
+    end: `${year}-12-31`,
+  };
+}
+
 function historyMonthLabel(value: string) {
   const date = parseDateKey(value);
   return `${date.getUTCFullYear()}.${pad2(date.getUTCMonth() + 1)}`;
@@ -343,6 +451,11 @@ export default function BookmarkClient({ username }: { username: string }) {
   const [data, setData] = useState<BookmarkPeriod | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [statistics, setStatistics] =
+    useState<BookmarkStatistics | null>(null);
+  const [statsLoading, setStatsLoading] = useState(false);
+  const [statsError, setStatsError] = useState<string | null>(null);
+  const [statsRange, setStatsRange] = useState<StatsRange>("month");
 
   const [goalContent, setGoalContent] = useState("");
   const [goalWakeTime, setGoalWakeTime] = useState("");
@@ -382,7 +495,7 @@ export default function BookmarkClient({ username }: { username: string }) {
   const [editingRoutine, setEditingRoutine] =
     useState<BookmarkRoutine | null>(null);
   const [historyRoutine, setHistoryRoutine] =
-    useState<BookmarkRoutine | null>(null);
+    useState<HistoryRoutine | null>(null);
   const [historyData, setHistoryData] =
     useState<BookmarkRoutineHistory | null>(null);
   const [historyLoading, setHistoryLoading] = useState(false);
@@ -423,6 +536,10 @@ export default function BookmarkClient({ username }: { username: string }) {
   const [routineMonth, setRoutineMonth] = useState(1);
 
   const loadPeriod = useCallback(async () => {
+    if (view === "stats") {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
@@ -470,6 +587,32 @@ export default function BookmarkClient({ username }: { username: string }) {
     void loadPeriod();
   }, [loadPeriod]);
 
+  const loadStatistics = useCallback(async () => {
+    setStatsLoading(true);
+    setStatsError(null);
+    try {
+      const next = await apiFetch<BookmarkStatistics>(
+        "/api/bookmark/statistics",
+        { cache: "no-store" },
+      );
+      setStatistics(next);
+    } catch (reason) {
+      setStatsError(
+        reason instanceof Error
+          ? reason.message
+          : "통계를 불러오지 못했습니다.",
+      );
+    } finally {
+      setStatsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (view === "stats") {
+      void loadStatistics();
+    }
+  }, [loadStatistics, view]);
+
   useEffect(() => {
     void loadCategories();
   }, [loadCategories]);
@@ -494,7 +637,7 @@ export default function BookmarkClient({ username }: { username: string }) {
     setView(next);
     if (next === "today") {
       setPeriodStart(todayDateInputValue());
-    } else {
+    } else if (next !== "stats") {
       setPeriodStart((previous) => startOfPeriod(previous, next));
     }
     setCalendarOpen(false);
@@ -509,26 +652,31 @@ export default function BookmarkClient({ username }: { username: string }) {
 
   const selectCalendarDate = (value: string) => {
     const nextType: BookmarkPeriodType =
-      view === "today" ? "day" : view;
+      view === "today" || view === "stats" ? "day" : view;
     setPeriodStart(startOfPeriod(value, nextType));
     setCalendarOpen(false);
   };
 
   const goToday = () => {
+    if (view === "stats") {
+      setView("today");
+      setPeriodStart(todayDateInputValue());
+      return;
+    }
     const type = view === "today" ? "day" : view;
     setPeriodStart(startOfPeriod(todayDateInputValue(), type));
   };
 
   const movePeriod = (delta: number) => {
-    if (view === "today") return;
+    if (view === "today" || view === "stats") return;
     setPeriodStart((previous) => shiftPeriod(previous, view, delta));
   };
 
   const routines = data?.routines ?? [];
   const recordPeriodType: BookmarkPeriodType =
-    view === "today" ? "day" : view;
+    view === "today" || view === "stats" ? "day" : view;
   const unitView: BookmarkPeriodType =
-    view === "today" ? "day" : view;
+    view === "today" || view === "stats" ? "day" : view;
   const isTodaySelected = periodStart === todayDateInputValue();
 
   const openCreateRoutine = () => {
@@ -573,7 +721,7 @@ export default function BookmarkClient({ username }: { username: string }) {
     setError(null);
   };
 
-  const openHistory = async (routine: BookmarkRoutine) => {
+  const openHistory = async (routine: HistoryRoutine) => {
     setHistoryRoutine(routine);
     setHistoryData(null);
     setHistoryLoading(true);
@@ -677,8 +825,7 @@ export default function BookmarkClient({ username }: { username: string }) {
   };
 
   const modalFrequency =
-    editingRoutine?.frequency ??
-    (view === "today" ? "daily" : PERIOD_FREQUENCY[view]);
+    editingRoutine?.frequency ?? PERIOD_FREQUENCY[unitView];
 
   const handleSaveRoutine = async (
     event: FormEvent<HTMLFormElement>,
@@ -1340,8 +1487,23 @@ export default function BookmarkClient({ username }: { username: string }) {
       const allDone = isRoutineDone(routine);
       return (
         <li
-          className={`bookmark-item${allDone ? " is-done" : ""}`}
+          className={`bookmark-item is-clickable${
+            allDone ? " is-done" : ""
+          }`}
           key={routine.id}
+          role="button"
+          tabIndex={0}
+          aria-label={`${routine.title} 수정`}
+          onClick={() => openEditRoutine(routine)}
+          onKeyDown={(event) => {
+            if (
+              event.target === event.currentTarget &&
+              (event.key === "Enter" || event.key === " ")
+            ) {
+              event.preventDefault();
+              openEditRoutine(routine);
+            }
+          }}
         >
           <div className="bookmark-item-main">
             <div className="bookmark-routine-heading">
@@ -1364,12 +1526,13 @@ export default function BookmarkClient({ username }: { username: string }) {
                     className="bookmark-count-button"
                     aria-label="1회 줄이기"
                     disabled={routine.completed_count <= 0}
-                    onClick={() =>
+                    onClick={(event) => {
+                      event.stopPropagation();
                       void setRoutineCount(
                         routine,
                         routine.completed_count - 1,
-                      )
-                    }
+                      );
+                    }}
                   >
                     −
                   </button>
@@ -1386,12 +1549,13 @@ export default function BookmarkClient({ username }: { username: string }) {
                     disabled={
                       routine.completed_count >= routine.target_count
                     }
-                    onClick={() =>
+                    onClick={(event) => {
+                      event.stopPropagation();
                       void setRoutineCount(
                         routine,
                         routine.completed_count + 1,
-                      )
-                    }
+                      );
+                    }}
                   >
                     +
                   </button>
@@ -1406,6 +1570,7 @@ export default function BookmarkClient({ username }: { username: string }) {
                         occurrence.done ? " is-done" : ""
                       }`}
                       key={occurrence.date}
+                      onClick={(event) => event.stopPropagation()}
                     >
                       <input
                         type="checkbox"
@@ -1441,22 +1606,6 @@ export default function BookmarkClient({ username }: { username: string }) {
             {routine.notes ? (
               <p className="bookmark-item-notes">{routine.notes}</p>
             ) : null}
-          </div>
-          <div className="bookmark-item-actions">
-            <button
-              type="button"
-              className="bookmark-text-button"
-              onClick={() => void openHistory(routine)}
-            >
-              기록
-            </button>
-            <button
-              type="button"
-              className="bookmark-text-button"
-              onClick={() => openEditRoutine(routine)}
-            >
-              수정
-            </button>
           </div>
         </li>
       );
@@ -1632,6 +1781,271 @@ export default function BookmarkClient({ username }: { username: string }) {
     );
   };
 
+  const renderStatistics = () => {
+    if (statsLoading) {
+      return <p className="bookmark-status">통계를 불러오는 중...</p>;
+    }
+    if (statsError) {
+      return <p className="bookmark-error">{statsError}</p>;
+    }
+    const statsRoutines = statistics?.routines ?? [];
+    const categories = statistics?.categories ?? [];
+    const categoryIndex = new Map(
+      categories.map((category, index) => [category.id, index]),
+    );
+    const orderedRoutines = [...statsRoutines].sort((a, b) => {
+      const aIndex = a.category_id
+        ? (categoryIndex.get(a.category_id) ?? 999)
+        : 999;
+      const bIndex = b.category_id
+        ? (categoryIndex.get(b.category_id) ?? 999)
+        : 999;
+      if (aIndex !== bIndex) return aIndex - bIndex;
+      return a.title.localeCompare(b.title);
+    });
+    const range = statRangeBounds(statsRange);
+    const aggregationLabels = {
+      week: "주간 집계",
+      month: "월간 집계",
+      quarter: "분기 집계",
+      year: "연간 집계",
+    } as const;
+    const width = 760;
+    const height = 250;
+    const left = 42;
+    const right = 14;
+    const top = 14;
+    const bottom = 30;
+    const plotWidth = width - left - right;
+    const plotHeight = height - top - bottom;
+    const rangeStart = parseDateKey(range.start).getTime();
+    const rangeEnd = parseDateKey(range.end).getTime();
+    const rangeSpan = Math.max(1, rangeEnd - rangeStart);
+    const xForTime = (time: number) =>
+      left + ((time - rangeStart) / rangeSpan) * plotWidth;
+    const yForRate = (rate: number) =>
+      top + (1 - Math.max(0, Math.min(100, rate)) / 100) * plotHeight;
+
+    const series = orderedRoutines.map((routine, index) => {
+      const points = routine.buckets
+        .flatMap((bucket) => {
+          const bucketStart = parseDateKey(
+            bucket.period_start,
+          ).getTime();
+          const bucketEnd = parseDateKey(
+            statBucketEnd(bucket.period_start, routine.aggregation),
+          ).getTime();
+          if (
+            bucket.expected_count <= 0 ||
+            bucketStart > rangeEnd ||
+            bucketEnd < rangeStart
+          ) {
+            return [];
+          }
+          const middle =
+            (Math.max(bucketStart, rangeStart) +
+              Math.min(bucketEnd, rangeEnd)) /
+            2;
+          const rate =
+            (bucket.completed_count / bucket.expected_count) * 100;
+          return [
+            {
+              x: xForTime(middle),
+              y: yForRate(rate),
+              bucket,
+            },
+          ];
+        })
+        .sort((a, b) => a.x - b.x);
+      return {
+        routine,
+        color: STATS_COLORS[index % STATS_COLORS.length],
+        points,
+      };
+    });
+    const hasData = series.some((item) => item.points.length > 0);
+    const ticks = Array.from({ length: 5 }, (_, index) => {
+      const time = rangeStart + (rangeSpan * index) / 4;
+      const date = new Date(time);
+      const label =
+        statsRange === "year" || statsRange === "3years"
+          ? `${date.getUTCFullYear()}.${pad2(date.getUTCMonth() + 1)}`
+          : `${date.getUTCMonth() + 1}/${date.getUTCDate()}`;
+      return { x: xForTime(time), label };
+    });
+
+    return (
+      <section className="bookmark-panel bookmark-stats-panel">
+        <header className="bookmark-panel-header bookmark-stats-header">
+          <div>
+            <p className="bookmark-panel-eyebrow">ROUTINE STATS</p>
+            <h2>루틴 통계</h2>
+          </div>
+          <div className="bookmark-stats-ranges" role="tablist">
+            {STATS_RANGES.map((item) => (
+              <button
+                type="button"
+                role="tab"
+                key={item}
+                aria-selected={statsRange === item}
+                className={statsRange === item ? "is-active" : ""}
+                onClick={() => setStatsRange(item)}
+              >
+                {STATS_RANGE_LABELS[item]}
+              </button>
+            ))}
+          </div>
+        </header>
+        <p className="bookmark-stats-hint">
+          루틴을 누르면 상세 기록을 볼 수 있습니다.
+        </p>
+        {orderedRoutines.length === 0 ? (
+          <p className="bookmark-empty-row">
+            아직 통계로 볼 루틴이 없습니다.
+          </p>
+        ) : (
+          <>
+            <div className="bookmark-stats-chart-wrap">
+              <svg
+                className="bookmark-stats-line-chart"
+                viewBox={`0 0 ${width} ${height}`}
+                role="img"
+                aria-label={`${STATS_RANGE_LABELS[statsRange]} 루틴 달성률`}
+              >
+                {[0, 25, 50, 75, 100].map((value) => {
+                  const y = yForRate(value);
+                  return (
+                    <g key={value}>
+                      <line
+                        className="bookmark-stats-grid-line"
+                        x1={left}
+                        x2={width - right}
+                        y1={y}
+                        y2={y}
+                      />
+                      <text
+                        className="bookmark-stats-axis-label"
+                        x={left - 8}
+                        y={y + 3}
+                        textAnchor="end"
+                      >
+                        {value}%
+                      </text>
+                    </g>
+                  );
+                })}
+                {ticks.map((tick) => (
+                  <text
+                    className="bookmark-stats-axis-label"
+                    key={tick.x}
+                    x={tick.x}
+                    y={height - 8}
+                    textAnchor="middle"
+                  >
+                    {tick.label}
+                  </text>
+                ))}
+                {series.map((item) => {
+                  if (item.points.length === 0) return null;
+                  const path = item.points
+                    .map(
+                      (point, index) =>
+                        `${index === 0 ? "M" : "L"}${point.x} ${
+                          point.y
+                        }`,
+                    )
+                    .join(" ");
+                  return (
+                    <g key={item.routine.id}>
+                      <path
+                        className="bookmark-stats-line"
+                        d={path}
+                        fill="none"
+                        stroke={item.color}
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        vectorEffect="non-scaling-stroke"
+                      >
+                        <title>{item.routine.title}</title>
+                      </path>
+                      <path
+                        d={path}
+                        fill="none"
+                        stroke="transparent"
+                        strokeWidth={12}
+                        pointerEvents="stroke"
+                        style={{ cursor: "pointer" }}
+                        onClick={() =>
+                          void openHistory(item.routine)
+                        }
+                      />
+                      {item.points.map((point) => (
+                        <circle
+                          className="bookmark-stats-point"
+                          key={`${item.routine.id}-${point.bucket.period_start}`}
+                          cx={point.x}
+                          cy={point.y}
+                          r={2.6}
+                          fill={item.color}
+                          onClick={() =>
+                            void openHistory(item.routine)
+                          }
+                        >
+                          <title>
+                            {item.routine.title} ·{" "}
+                            {statBucketLabel(
+                              point.bucket.period_start,
+                              item.routine.aggregation,
+                            )}{" "}
+                            · {point.bucket.completed_count}/
+                            {point.bucket.expected_count}
+                          </title>
+                        </circle>
+                      ))}
+                    </g>
+                  );
+                })}
+              </svg>
+              {!hasData ? (
+                <p className="bookmark-empty-row">
+                  이 기간에는 기록이 없습니다.
+                </p>
+              ) : null}
+            </div>
+            <div className="bookmark-stats-legend">
+              {series.map((item) => (
+                <button
+                  type="button"
+                  className={`bookmark-stats-legend-item${
+                    item.points.length === 0 ? " is-empty" : ""
+                  }`}
+                  key={item.routine.id}
+                  onClick={() => void openHistory(item.routine)}
+                >
+                  <i style={{ background: item.color }} />
+                  <span>
+                    {item.routine.title}
+                    {item.routine.end_date ? (
+                      <span className="bookmark-routine-status">
+                        중단됨
+                      </span>
+                    ) : null}
+                  </span>
+                  <small>
+                    {item.routine.category_name ?? "미분류"} ·{" "}
+                    {aggregationLabels[item.routine.aggregation]} ·{" "}
+                    {item.routine.retention_label}
+                  </small>
+                </button>
+              ))}
+            </div>
+          </>
+        )}
+      </section>
+    );
+  };
+
   return (
     <div id="bookmark-page">
       <main>
@@ -1671,6 +2085,8 @@ export default function BookmarkClient({ username }: { username: string }) {
             >
               {periodLabel(periodStart, "day")}
             </button>
+          ) : view === "stats" ? (
+            <span className="bookmark-today-date">루틴 통계</span>
           ) : (
             <div className="bookmark-period-nav">
               <button
@@ -1705,6 +2121,8 @@ export default function BookmarkClient({ username }: { username: string }) {
 
         {loading ? (
           <p className="bookmark-status">불러오는 중...</p>
+        ) : view === "stats" ? (
+          renderStatistics()
         ) : (
           <div className="bookmark-layout">
             <div className="bookmark-main-column">
