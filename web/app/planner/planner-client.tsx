@@ -73,6 +73,28 @@ interface PlannerEventPreview {
   fields: Record<string, string | null>;
 }
 
+interface CalendarCell {
+  date: string;
+  inMonth: boolean;
+  day: number;
+}
+
+interface RangeSegment {
+  task: PlannerTask;
+  startIndex: number;
+  endIndex: number;
+  lane: number;
+  isStart: boolean;
+  isEnd: boolean;
+  key: string;
+}
+
+interface CalendarWeek {
+  cells: CalendarCell[];
+  segments: RangeSegment[];
+  outside: boolean;
+}
+
 interface TaskFormState {
   title: string;
   notes: string;
@@ -182,7 +204,7 @@ function monthLabel(monthKey: string) {
   });
 }
 
-function monthCells(monthKey: string) {
+function monthCells(monthKey: string): CalendarCell[] {
   const [year, month] = monthKey.split("-").map(Number);
   const first = new Date(Date.UTC(year, month - 1, 1));
   const offset = first.getUTCDay();
@@ -196,6 +218,81 @@ function monthCells(monthKey: string) {
       day: date.getUTCDate(),
     };
   });
+}
+
+function buildCalendarWeeks(
+  cells: CalendarCell[],
+  tasks: PlannerTask[],
+): CalendarWeek[] {
+  const rangeTasks = tasks.filter(
+    (task) => task.status === "active" && task.schedule_type === "range",
+  );
+  const weeks: CalendarWeek[] = [];
+
+  for (let offset = 0; offset < cells.length; offset += 7) {
+    const weekCells = cells.slice(offset, offset + 7);
+    const weekStart = weekCells[0].date;
+    const weekEnd = weekCells[weekCells.length - 1].date;
+    const segments: RangeSegment[] = [];
+
+    for (const task of rangeTasks) {
+      if (task.end_date < weekStart || task.start_date > weekEnd) {
+        continue;
+      }
+
+      const segmentStart =
+        task.start_date > weekStart ? task.start_date : weekStart;
+      const segmentEnd = task.end_date < weekEnd ? task.end_date : weekEnd;
+      const startIndex = weekCells.findIndex(
+        (cell) => cell.date === segmentStart,
+      );
+      const endIndex = weekCells.findIndex(
+        (cell) => cell.date === segmentEnd,
+      );
+      if (startIndex < 0 || endIndex < startIndex) {
+        continue;
+      }
+
+      segments.push({
+        task,
+        startIndex,
+        endIndex,
+        lane: 0,
+        isStart: task.start_date >= weekStart,
+        isEnd: task.end_date <= weekEnd,
+        key: `${task.id}-${offset}`,
+      });
+    }
+
+    segments.sort(
+      (a, b) =>
+        a.startIndex - b.startIndex ||
+        a.endIndex - b.endIndex ||
+        a.task.id - b.task.id,
+    );
+
+    const laneEnds: number[] = [];
+    for (const segment of segments) {
+      let lane = laneEnds.findIndex(
+        (end) => end < segment.startIndex,
+      );
+      if (lane === -1) {
+        lane = laneEnds.length;
+        laneEnds.push(segment.endIndex);
+      } else {
+        laneEnds[lane] = segment.endIndex;
+      }
+      segment.lane = lane;
+    }
+
+    weeks.push({
+      cells: weekCells,
+      segments,
+      outside: weekCells.every((cell) => !cell.inMonth),
+    });
+  }
+
+  return weeks;
 }
 
 function formatDateOnly(value: string | null) {
@@ -353,6 +450,10 @@ export default function PlannerClient({ username }: { username: string }) {
   const activeTasks = useMemo(
     () => tasks.filter((task) => task.status === "active"),
     [tasks],
+  );
+  const weeks = useMemo(
+    () => buildCalendarWeeks(cells, activeTasks),
+    [cells, activeTasks],
   );
   const inactiveTasks = useMemo(
     () => tasks.filter((task) => task.status === "inactive"),
@@ -836,48 +937,94 @@ export default function PlannerClient({ username }: { username: string }) {
                 ))}
               </div>
               <div className="planner-calendar-grid">
-                {cells.map((cell) => {
-                  const dayTasks = activeTasks.filter((task) =>
-                    taskAppearsOn(task, cell.date, today),
-                  );
-                  const dayEvents = events.filter(
-                    (event) => eventDate(event) === cell.date,
-                  );
-                  const total = dayTasks.length + dayEvents.length;
-                  return (
-                    <button
-                      type="button"
-                      key={cell.date}
-                      className={[
-                        "planner-calendar-day",
-                        cell.inMonth ? "" : "is-outside",
-                        cell.date === today ? "is-today" : "",
-                        cell.date === selectedDate ? "is-selected" : "",
-                        total > 0 ? "has-items" : "",
-                      ]
-                        .filter(Boolean)
-                        .join(" ")}
-                      onClick={() => selectDate(cell.date)}
-                      aria-label={`${formatDayLabel(cell.date)}${total > 0 ? `, 항목 ${total}개` : ""}`}
-                    >
-                      <span className="planner-day-number">{cell.day}</span>
-                      {total > 0 ? (
-                        <span className="planner-day-marks">
-                          {dayTasks.length > 0 ? (
-                            <span className="planner-day-mark is-task">
-                              {dayTasks.length}
+                {weeks.map((week) => (
+                  <div className="planner-week" key={week.cells[0].date}>
+                    <div className="planner-week-days">
+                      {week.cells.map((cell) => {
+                        const dayTasks = activeTasks.filter((task) =>
+                          taskAppearsOn(task, cell.date, today),
+                        );
+                        const daySingleTasks = dayTasks.filter(
+                          (task) => task.schedule_type === "single",
+                        );
+                        const dayEvents = events.filter(
+                          (event) => eventDate(event) === cell.date,
+                        );
+                        const total = dayTasks.length + dayEvents.length;
+                        return (
+                          <button
+                            type="button"
+                            key={cell.date}
+                            className={[
+                              "planner-calendar-day",
+                              cell.inMonth ? "" : "is-outside",
+                              cell.date === today ? "is-today" : "",
+                              cell.date === selectedDate ? "is-selected" : "",
+                              total > 0 ? "has-items" : "",
+                            ]
+                              .filter(Boolean)
+                              .join(" ")}
+                            onClick={() => selectDate(cell.date)}
+                            aria-label={`${formatDayLabel(cell.date)}${total > 0 ? `, 항목 ${total}개` : ""}`}
+                          >
+                            <span className="planner-day-number">
+                              {cell.day}
                             </span>
-                          ) : null}
-                          {dayEvents.length > 0 ? (
-                            <span className="planner-day-mark is-history">
-                              {dayEvents.length}
+                            {daySingleTasks.length + dayEvents.length > 0 ? (
+                              <span className="planner-day-marks">
+                                {daySingleTasks.length > 0 ? (
+                                  <span className="planner-day-mark is-task">
+                                    {daySingleTasks.length}
+                                  </span>
+                                ) : null}
+                                {dayEvents.length > 0 ? (
+                                  <span className="planner-day-mark is-history">
+                                    {dayEvents.length}
+                                  </span>
+                                ) : null}
+                              </span>
+                            ) : null}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    {week.segments.length > 0 ? (
+                      <div
+                        className={[
+                          "planner-week-ranges",
+                          week.outside ? "is-outside" : "",
+                        ]
+                          .filter(Boolean)
+                          .join(" ")}
+                      >
+                        {week.segments.map((segment) => (
+                          <div
+                            key={segment.key}
+                            className={[
+                              "planner-range-bar",
+                              segment.isStart ? "is-start" : "",
+                              segment.isEnd ? "is-end" : "",
+                            ]
+                              .filter(Boolean)
+                              .join(" ")}
+                            style={{
+                              gridColumn: `${segment.startIndex + 1} / ${
+                                segment.endIndex + 2
+                              }`,
+                              gridRow: segment.lane + 1,
+                            }}
+                            title={segment.task.title}
+                          >
+                            <span className="planner-range-title">
+                              {segment.task.title}
                             </span>
-                          ) : null}
-                        </span>
-                      ) : null}
-                    </button>
-                  );
-                })}
+                            <span className="planner-range-line" />
+                          </div>
+                        ))}
+                      </div>
+                    ) : null}
+                  </div>
+                ))}
               </div>
             </section>
 

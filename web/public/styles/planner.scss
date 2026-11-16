@@ -173,19 +173,81 @@
   }
 }
 
-.planner-weekdays,
-.planner-calendar-grid {
+.planner-weekdays {
   display: grid;
   grid-template-columns: repeat(7, minmax(0, 1fr));
   gap: 0.28rem;
-}
-
-.planner-weekdays {
   padding: 0 0.1rem 0.35rem;
   color: var(--title-color);
   font-size: 0.68rem;
   text-align: center;
   opacity: 0.62;
+}
+
+.planner-calendar-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 0.28rem;
+}
+
+.planner-week {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.planner-week-days {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 0.28rem;
+}
+
+.planner-week-ranges {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  column-gap: 0.28rem;
+  row-gap: 0.16rem;
+  padding: 0.12rem 0.1rem 0;
+
+  &.is-outside {
+    opacity: 0.45;
+  }
+}
+
+.planner-range-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 0.08rem;
+  min-width: 0;
+  padding: 0;
+  color: var(--foreground);
+}
+
+.planner-range-title {
+  padding: 0 0.22rem;
+  overflow: hidden;
+  font-size: 0.6rem;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  opacity: 0.82;
+}
+
+.planner-range-line {
+  display: block;
+  height: 0.28rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--theme-main) 72%, transparent);
+}
+
+.planner-range-bar:not(.is-start) .planner-range-line {
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+}
+
+.planner-range-bar:not(.is-end) .planner-range-line {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
 }
 
 .planner-calendar-day {
@@ -818,6 +880,14 @@
     min-width: 0.9rem;
     height: 0.9rem;
     font-size: 0.52rem;
+  }
+
+  .planner-range-title {
+    font-size: 0.54rem;
+  }
+
+  .planner-range-line {
+    height: 0.22rem;
   }
 
   .planner-form-row {
