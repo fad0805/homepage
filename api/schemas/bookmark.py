@@ -18,6 +18,7 @@ class BookmarkRoutineCreate(BaseModel):
     title: str = Field(min_length=1, max_length=255)
     notes: str | None = Field(default=None, max_length=4000)
     weekday: int | None = Field(default=None, ge=0, le=6)
+    weekdays: list[int] | None = None
     day_of_month: int | None = Field(default=None, ge=1, le=31)
     nth_week: int | None = Field(default=None, ge=1, le=5)
     month: int | None = Field(default=None, ge=1, le=12)
@@ -27,6 +28,7 @@ class BookmarkRoutineUpdate(BaseModel):
     title: str | None = Field(default=None, min_length=1, max_length=255)
     notes: str | None = Field(default=None, max_length=4000)
     weekday: int | None = Field(default=None, ge=0, le=6)
+    weekdays: list[int] | None = None
     day_of_month: int | None = Field(default=None, ge=1, le=31)
     nth_week: int | None = Field(default=None, ge=1, le=5)
     month: int | None = Field(default=None, ge=1, le=12)
@@ -39,6 +41,7 @@ class BookmarkRoutineRead(BaseModel):
     notes: str | None = None
     frequency: BookmarkRoutineFrequency
     weekday: int | None = None
+    weekdays: list[int] | None = None
     day_of_month: int | None = None
     nth_week: int | None = None
     month: int | None = None
@@ -51,10 +54,17 @@ class BookmarkRoutineRead(BaseModel):
         from_attributes = True
 
 
-class BookmarkRoutinePeriodRead(BookmarkRoutineRead):
+class BookmarkRoutineOccurrenceRead(BaseModel):
+    date: date
     done: bool
+
+
+class BookmarkRoutinePeriodRead(BookmarkRoutineRead):
     period_type: BookmarkPeriodType
     period_start: date
+    occurrences: list[BookmarkRoutineOccurrenceRead] = Field(
+        default_factory=list
+    )
 
 
 class BookmarkRoutineCheckUpdate(BaseModel):

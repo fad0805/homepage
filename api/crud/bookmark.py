@@ -1,5 +1,6 @@
 import calendar
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
+from typing import Any
 
 from fastapi import HTTPException, status
 from sqlalchemy import func
@@ -21,14 +22,21 @@ from schemas.bookmark import (
 )
 
 PERIOD_TYPES = {"year", "quarter", "month", "week", "day"}
-PERIOD_FREQUENCY = {
-    "day": "daily",
-    "week": "weekly",
-    "month": "monthly",
-    "quarter": "quarterly",
-    "year": "yearly",
+PERIOD_FREQUENCIES = {
+    "day": {"daily", "weekly"},
+    "week": {"weekly"},
+    "month": {"monthly"},
+    "quarter": {"quarterly"},
+    "year": {"yearly"},
 }
-FREQUENCIES = set(PERIOD_FREQUENCY.values())
+FREQUENCY_CHECK_PERIOD = {
+    "daily": "day",
+    "weekly": "day",
+    "monthly": "month",
+    "quarterly": "quarter",
+    "yearly": "year",
+}
+FREQUENCIES = set(FREQUENCY_CHECK_PERIOD)
 
 
 def _utc_naive_now() -> datetime:
@@ -102,10 +110,11 @@ def _validate_schedule(
     frequency: str,
     *,
     weekday: int | None,
+    weekdays: list[int] | None,
     day_of_month: int | None,
     nth_week: int | None,
     month: int | None,
-) -> dict[str, int | None]:
+) -> dict[str, Any]:
     if frequency not in FREQUENCIES:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -114,18 +123,21 @@ def _validate_schedule(
     if frequency == "daily":
         return {
             "weekday": None,
+            "weekdays": None,
             "day_of_month": None,
             "nth_week": None,
             "month": None,
         }
     if frequency == "weekly":
-        if weekday is None:
+        cleaned = sorted({value for value in (weekdays or [])})
+        if not cleaned or any(value < 0 or value > 6 for value in cleaned):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="매주 반복할 요일을 선택해주세요.",
+                detail="매주 반복할 요일을 하나 이상 선택해주세요.",
             )
         return {
-            "weekday": weekday,
+            "weekday": None,
+            "weekdays": cleaned,
             "day_of_month": None,
             "nth_week": None,
             "month": None,
@@ -134,6 +146,7 @@ def _validate_schedule(
         if day_of_month is not None:
             return {
                 "weekday": None,
+                "weekdays": None,
                 "day_of_month": day_of_month,
                 "nth_week": None,
                 "month": None,
@@ -145,6 +158,7 @@ def _validate_schedule(
             )
         return {
             "weekday": weekday,
+            "weekdays": None,
             "day_of_month": None,
             "nth_week": nth_week,
             "month": None,
@@ -152,6 +166,7 @@ def _validate_schedule(
     if frequency == "quarterly":
         return {
             "weekday": None,
+            "weekdays": None,
             "day_of_month": None,
             "nth_week": None,
             "month": None,
@@ -168,6 +183,7 @@ def _validate_schedule(
         )
     return {
         "weekday": None,
+        "weekdays": None,
         "day_of_month": day_of_month,
         "nth_week": None,
         "month": month,
@@ -175,16 +191,18 @@ def _validate_schedule(
 
 
 def _routine_due(routine: BookmarkRoutine, period_start: date) -> bool:
-    year = period_start.year
-    month = period_start.month
     if routine.frequency == "monthly":
         if routine.day_of_month is not None:
-            return _month_has_day(year, month, routine.day_of_month)
+            return _month_has_day(
+                period_start.year,
+                period_start.month,
+                routine.day_of_month,
+            )
         if routine.nth_week is not None and routine.weekday is not None:
             return (
                 _nth_weekday_day(
-                    year,
-                    month,
+                    period_start.year,
+                    period_start.month,
                     routine.nth_week,
                     routine.weekday,
                 )
@@ -194,23 +212,80 @@ def _routine_due(routine: BookmarkRoutine, period_start: date) -> bool:
     if routine.frequency == "yearly":
         if routine.month is None or routine.day_of_month is None:
             return False
-        return _month_has_day(year, routine.month, routine.day_of_month)
+        return _month_has_day(
+            period_start.year,
+            routine.month,
+            routine.day_of_month,
+        )
     return True
+
+
+def _routine_weekdays(routine: BookmarkRoutine) -> list[int]:
+    values = routine.weekdays
+    if not values and routine.weekday is not None:
+        values = [routine.weekday]
+    return sorted(
+        {int(value) for value in (values or []) if 0 <= int(value) <= 6}
+    )
+
+
+def _routine_occurrences(
+    routine: BookmarkRoutine,
+    period_type: str,
+    period_start: date,
+) -> list[date]:
+    if period_type == "day":
+        if routine.frequency == "daily":
+            return [period_start]
+        if routine.frequency == "weekly":
+            return (
+                [period_start]
+                if period_start.weekday() in _routine_weekdays(routine)
+                else []
+            )
+        return []
+    if period_type == "week":
+        if routine.frequency != "weekly":
+            return []
+        return [
+            period_start + timedelta(days=offset)
+            for offset in range(7)
+            if (period_start + timedelta(days=offset)).weekday()
+            in _routine_weekdays(routine)
+        ]
+    if period_type == "month":
+        return (
+            [period_start]
+            if routine.frequency == "monthly"
+            and _routine_due(routine, period_start)
+            else []
+        )
+    if period_type == "quarter":
+        return [period_start] if routine.frequency == "quarterly" else []
+    if period_type == "year":
+        return (
+            [period_start]
+            if routine.frequency == "yearly"
+            and _routine_due(routine, period_start)
+            else []
+        )
+    return []
 
 
 def _routine_period_dict(
     routine: BookmarkRoutine,
     *,
-    done: bool,
     period_type: str,
     period_start: date,
-) -> dict:
+    occurrences: list[dict[str, Any]],
+) -> dict[str, Any]:
     return {
         "id": routine.id,
         "title": routine.title,
         "notes": routine.notes,
         "frequency": routine.frequency,
         "weekday": routine.weekday,
+        "weekdays": _routine_weekdays(routine) or None,
         "day_of_month": routine.day_of_month,
         "nth_week": routine.nth_week,
         "month": routine.month,
@@ -218,9 +293,9 @@ def _routine_period_dict(
         "position": routine.position,
         "created_at": routine.created_at,
         "updated_at": routine.updated_at,
-        "done": done,
         "period_type": period_type,
         "period_start": period_start,
+        "occurrences": occurrences,
     }
 
 
@@ -272,38 +347,65 @@ def get_period(
     *,
     period_type: str,
     period_start: date,
-) -> dict:
+) -> dict[str, Any]:
     _validate_period(period_type, period_start)
-    frequency = PERIOD_FREQUENCY[period_type]
     routines = (
         db.query(BookmarkRoutine)
         .filter(
             BookmarkRoutine.user_id == user_id,
-            BookmarkRoutine.frequency == frequency,
+            BookmarkRoutine.frequency.in_(PERIOD_FREQUENCIES[period_type]),
             BookmarkRoutine.active.is_(True),
         )
         .order_by(BookmarkRoutine.position, BookmarkRoutine.id)
         .all()
     )
-    routines = [
-        routine
-        for routine in routines
-        if _routine_due(routine, period_start)
-    ]
+
+    occurrence_dates: dict[int, list[date]] = {}
+    for routine in routines:
+        dates = _routine_occurrences(routine, period_type, period_start)
+        if dates:
+            occurrence_dates[routine.id] = dates
+    routines = [routine for routine in routines if routine.id in occurrence_dates]
     routine_ids = [routine.id for routine in routines]
-    checks = {}
+
+    checks: dict[tuple[int, date], bool] = {}
     if routine_ids:
-        checks = {
-            check.routine_id: bool(check.done)
-            for check in db.query(BookmarkRoutineCheck)
-            .filter(
-                BookmarkRoutineCheck.user_id == user_id,
-                BookmarkRoutineCheck.routine_id.in_(routine_ids),
-                BookmarkRoutineCheck.period_type == period_type,
-                BookmarkRoutineCheck.period_start == period_start,
+        if period_type in {"day", "week"}:
+            check_period_type = "day"
+            start = period_start
+            end = (
+                period_start
+                if period_type == "day"
+                else period_start + timedelta(days=6)
             )
-            .all()
+            check_rows = (
+                db.query(BookmarkRoutineCheck)
+                .filter(
+                    BookmarkRoutineCheck.user_id == user_id,
+                    BookmarkRoutineCheck.routine_id.in_(routine_ids),
+                    BookmarkRoutineCheck.period_type == check_period_type,
+                    BookmarkRoutineCheck.period_start >= start,
+                    BookmarkRoutineCheck.period_start <= end,
+                )
+                .all()
+            )
+        else:
+            check_period_type = period_type
+            check_rows = (
+                db.query(BookmarkRoutineCheck)
+                .filter(
+                    BookmarkRoutineCheck.user_id == user_id,
+                    BookmarkRoutineCheck.routine_id.in_(routine_ids),
+                    BookmarkRoutineCheck.period_type == check_period_type,
+                    BookmarkRoutineCheck.period_start == period_start,
+                )
+                .all()
+            )
+        checks = {
+            (row.routine_id, row.period_start): bool(row.done)
+            for row in check_rows
         }
+
     goals = (
         db.query(BookmarkGoal)
         .filter(
@@ -323,15 +425,22 @@ def get_period(
         )
         .first()
     )
+
     return {
         "period_type": period_type,
         "period_start": period_start,
         "routines": [
             _routine_period_dict(
                 routine,
-                done=checks.get(routine.id, False),
                 period_type=period_type,
                 period_start=period_start,
+                occurrences=[
+                    {
+                        "date": occurrence_date,
+                        "done": checks.get((routine.id, occurrence_date), False),
+                    }
+                    for occurrence_date in occurrence_dates[routine.id]
+                ],
             )
             for routine in routines
         ],
@@ -348,6 +457,7 @@ def create_routine(
     schedule = _validate_schedule(
         payload.frequency,
         weekday=payload.weekday,
+        weekdays=payload.weekdays,
         day_of_month=payload.day_of_month,
         nth_week=payload.nth_week,
         month=payload.month,
@@ -391,11 +501,18 @@ def update_routine(
     if "active" in data:
         routine.active = bool(data["active"])
 
-    schedule_fields = {"weekday", "day_of_month", "nth_week", "month"}
+    schedule_fields = {
+        "weekday",
+        "weekdays",
+        "day_of_month",
+        "nth_week",
+        "month",
+    }
     if schedule_fields.intersection(data):
         schedule = _validate_schedule(
             routine.frequency,
             weekday=data.get("weekday", routine.weekday),
+            weekdays=data.get("weekdays", routine.weekdays),
             day_of_month=data.get(
                 "day_of_month",
                 routine.day_of_month,
@@ -404,6 +521,7 @@ def update_routine(
             month=data.get("month", routine.month),
         )
         routine.weekday = schedule["weekday"]
+        routine.weekdays = schedule["weekdays"]
         routine.day_of_month = schedule["day_of_month"]
         routine.nth_week = schedule["nth_week"]
         routine.month = schedule["month"]
@@ -425,15 +543,24 @@ def set_routine_check(
     routine_id: int,
     payload: BookmarkRoutineCheckUpdate,
     user_id: int,
-) -> dict:
+) -> dict[str, Any]:
     routine = _get_routine_or_404(db, routine_id, user_id)
     _validate_period(payload.period_type, payload.period_start)
-    if PERIOD_FREQUENCY[payload.period_type] != routine.frequency:
+
+    expected_period = FREQUENCY_CHECK_PERIOD[routine.frequency]
+    if payload.period_type != expected_period:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="루틴 주기와 기간 단위가 맞지 않습니다.",
         )
-    if not _routine_due(routine, payload.period_start):
+
+    if routine.frequency == "weekly":
+        if payload.period_start.weekday() not in _routine_weekdays(routine):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="이 요일에는 해당 루틴이 예정되어 있지 않습니다.",
+            )
+    elif not _routine_due(routine, payload.period_start):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="이 기간에는 해당 루틴이 예정되어 있지 않습니다.",
@@ -463,9 +590,14 @@ def set_routine_check(
     db.refresh(check)
     return _routine_period_dict(
         routine,
-        done=check.done,
         period_type=payload.period_type,
         period_start=payload.period_start,
+        occurrences=[
+            {
+                "date": payload.period_start,
+                "done": bool(check.done),
+            }
+        ],
     )
 
 

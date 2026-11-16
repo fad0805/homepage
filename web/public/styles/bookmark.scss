@@ -328,11 +328,115 @@
   }
 }
 
+.bookmark-routine-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.2rem 0.5rem;
+}
+
+.bookmark-routine-title {
+  color: var(--foreground);
+  font-size: 0.78rem;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.bookmark-item.is-done .bookmark-routine-title {
+  text-decoration: line-through;
+  opacity: 0.5;
+}
+
 .bookmark-item-schedule {
-  margin: 0.25rem 0 0 1.35rem;
+  margin: 0;
   color: var(--title-color);
   font-size: 0.6rem;
   opacity: 0.6;
+}
+
+.bookmark-occurrence-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin-top: 0.4rem;
+}
+
+.bookmark-occurrence {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.22rem 0.42rem;
+  border: 1px solid
+    color-mix(in srgb, var(--theme-main) 30%, transparent);
+  border-radius: 999px;
+  background: var(--bookmark-soft-bg);
+  cursor: pointer;
+
+  input {
+    flex-shrink: 0;
+    margin: 0;
+    accent-color: var(--theme-main);
+  }
+
+  span {
+    color: var(--foreground);
+    font-size: 0.64rem;
+    line-height: 1.3;
+  }
+
+  &.is-done span {
+    text-decoration: line-through;
+    opacity: 0.5;
+  }
+}
+
+.bookmark-weekday-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+
+  > span {
+    color: var(--title-color);
+    font-size: 0.64rem;
+    opacity: 0.7;
+  }
+}
+
+.bookmark-weekday-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+
+  label {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.26rem 0.46rem;
+    border: 1px solid
+      color-mix(in srgb, var(--theme-main) 32%, transparent);
+    border-radius: 999px;
+    background: transparent;
+    cursor: pointer;
+
+    input {
+      margin: 0;
+      accent-color: var(--theme-main);
+    }
+
+    span {
+      color: var(--foreground);
+      font-size: 0.68rem;
+    }
+
+    &.is-selected {
+      border-color: color-mix(
+        in srgb,
+        var(--theme-main) 60%,
+        transparent
+      );
+      background: var(--bookmark-selected-bg);
+    }
+  }
 }
 
 .bookmark-item-notes {
@@ -492,6 +596,12 @@
       opacity: 0.7;
     }
   }
+}
+
+.bookmark-schedule .bookmark-weekday-picker label {
+  display: inline-flex;
+  flex-direction: row;
+  align-items: center;
 }
 
 .bookmark-schedule-row {

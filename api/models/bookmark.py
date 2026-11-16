@@ -1,4 +1,5 @@
 from sqlalchemy import (
+    JSON,
     Boolean,
     Column,
     Date,
@@ -33,6 +34,7 @@ class BookmarkRoutine(Base):
     frequency = Column(String(10), nullable=False)
     # 0 = Monday ... 6 = Sunday.
     weekday = Column(Integer, nullable=True)
+    weekdays = Column(JSON, nullable=True, default=list)
     day_of_month = Column(Integer, nullable=True)
     nth_week = Column(Integer, nullable=True)
     month = Column(Integer, nullable=True)

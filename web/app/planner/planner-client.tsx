@@ -13,7 +13,11 @@ import {
 } from "react";
 
 import { apiFetch } from "@/lib/api";
-import type { BookmarkPeriod, BookmarkRoutine } from "@/lib/bookmark";
+import {
+  routineScheduleLabel,
+  type BookmarkPeriod,
+  type BookmarkRoutine,
+} from "@/lib/bookmark";
 import {
   dateInputValue,
   formatDateTime,
@@ -1689,13 +1693,22 @@ export default function PlannerClient({ username }: { username: string }) {
 
   const handleToggleDayRoutine = async (routine: BookmarkRoutine) => {
     if (routineSavingId !== null) return;
-    const nextDone = !routine.done;
+    const occurrence = routine.occurrences[0];
+    const occurrenceDate = occurrence?.date ?? selectedDate;
+    const nextDone = !(occurrence?.done ?? false);
     setRoutineSavingId(routine.id);
     setError(null);
     setDayRoutines((previous) =>
       previous.map((current) =>
         current.id === routine.id
-          ? { ...current, done: nextDone }
+          ? {
+              ...current,
+              occurrences: current.occurrences.map((item) =>
+                item.date === occurrenceDate
+                  ? { ...item, done: nextDone }
+                  : item,
+              ),
+            }
           : current,
       ),
     );
@@ -1706,7 +1719,7 @@ export default function PlannerClient({ username }: { username: string }) {
           method: "PUT",
           body: JSON.stringify({
             period_type: "day",
-            period_start: selectedDate,
+            period_start: occurrenceDate,
             done: nextDone,
           }),
         },
@@ -2125,27 +2138,38 @@ export default function PlannerClient({ username }: { username: string }) {
       <div className="planner-routine-section">
         <h3>루틴</h3>
         <ul className="planner-routine-list">
-          {dayRoutines.map((routine) => (
-            <li
-              className={`planner-routine-item${
-                routine.done ? " is-done" : ""
-              }`}
-              key={routine.id}
-            >
-              <label className="planner-routine-check">
-                <input
-                  type="checkbox"
-                  checked={routine.done}
-                  disabled={routineSavingId !== null}
-                  onChange={() => void handleToggleDayRoutine(routine)}
-                />
-                <span>{routine.title}</span>
-              </label>
-              {routine.notes ? (
-                <p className="planner-routine-notes">{routine.notes}</p>
-              ) : null}
-            </li>
-          ))}
+          {dayRoutines.map((routine) => {
+            const occurrence = routine.occurrences[0];
+            const done = occurrence?.done ?? false;
+            return (
+              <li
+                className={`planner-routine-item${
+                  done ? " is-done" : ""
+                }`}
+                key={routine.id}
+              >
+                <label className="planner-routine-check">
+                  <input
+                    type="checkbox"
+                    checked={done}
+                    disabled={routineSavingId !== null}
+                    onChange={() =>
+                      void handleToggleDayRoutine(routine)
+                    }
+                  />
+                  <span>{routine.title}</span>
+                </label>
+                <p className="planner-routine-schedule">
+                  {routineScheduleLabel(routine)}
+                </p>
+                {routine.notes ? (
+                  <p className="planner-routine-notes">
+                    {routine.notes}
+                  </p>
+                ) : null}
+              </li>
+            );
+          })}
         </ul>
       </div>
     );
