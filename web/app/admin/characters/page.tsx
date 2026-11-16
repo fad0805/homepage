@@ -1844,6 +1844,7 @@ export default function AdminCharacters() {
                 uploadUrl="/api/characters/upload"
                 onNotice={(notice) => notify(notice.type, notice.text)}
                 compact
+                enableFontSize
                 enableHighlight
               />
             </div>
