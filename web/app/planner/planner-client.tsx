@@ -407,8 +407,9 @@ export default function PlannerClient({ username }: { username: string }) {
   const [colorSaving, setColorSaving] = useState(false);
   const [newChipColor, setNewChipColor] = useState(DEFAULT_TASK_COLOR);
   const [showChipCreator, setShowChipCreator] = useState(false);
-  const [calendarColorFilter, setCalendarColorFilter] =
-    useState("all");
+  const [selectedColorGroups, setSelectedColorGroups] = useState<
+    string[]
+  >([]);
   const [error, setError] = useState<string | null>(null);
   const [selectedEvent, setSelectedEvent] = useState<PlannerEvent | null>(null);
   const [preview, setPreview] = useState<PlannerEventPreview | null>(null);
@@ -501,7 +502,7 @@ export default function PlannerClient({ username }: { username: string }) {
 
   useEffect(() => {
     if (activeTab === "colors") return;
-    setCalendarColorFilter("all");
+    setSelectedColorGroups([]);
     setShowChipCreator(false);
   }, [activeTab]);
 
@@ -539,15 +540,19 @@ export default function PlannerClient({ username }: { username: string }) {
     [tasks],
   );
   const calendarTasks = useMemo(() => {
-    if (activeTab !== "colors" || calendarColorFilter === "all") {
+    if (
+      activeTab !== "colors" ||
+      selectedColorGroups.length === 0
+    ) {
       return activeTasks;
     }
-    if (calendarColorFilter === "unassigned") {
-      return activeTasks.filter((task) => task.color_id === null);
-    }
-    const chipId = Number(calendarColorFilter.slice(5));
-    return activeTasks.filter((task) => task.color_id === chipId);
-  }, [activeTab, activeTasks, calendarColorFilter]);
+    const selected = new Set(selectedColorGroups);
+    return activeTasks.filter((task) =>
+      selected.has(
+        task.color_id ? `chip:${task.color_id}` : "unassigned",
+      ),
+    );
+  }, [activeTab, activeTasks, selectedColorGroups]);
   const weeks = useMemo(
     () => buildCalendarWeeks(cells, calendarTasks),
     [cells, calendarTasks],
@@ -619,15 +624,12 @@ export default function PlannerClient({ username }: { username: string }) {
   }, [colorViewTasks, savedColors]);
 
   useEffect(() => {
-    if (calendarColorFilter === "all") return;
-    if (
-      !colorGroups.some(
-        (group) => group.key === calendarColorFilter,
-      )
-    ) {
-      setCalendarColorFilter("all");
-    }
-  }, [calendarColorFilter, colorGroups]);
+    const available = new Set(colorGroups.map((group) => group.key));
+    setSelectedColorGroups((previous) => {
+      const next = previous.filter((key) => available.has(key));
+      return next.length === previous.length ? previous : next;
+    });
+  }, [colorGroups]);
 
   const resetForm = () => {
     setEditingId(null);
@@ -1436,9 +1438,21 @@ export default function PlannerClient({ username }: { username: string }) {
                       <p>
                         활성·비활성 일정 {colorViewTasks.length}개 · 칩{" "}
                         {savedColors.length}개
+                        {selectedColorGroups.length > 0
+                          ? ` · 선택 ${selectedColorGroups.length}개`
+                          : ""}
                       </p>
                     </div>
                     <div className="planner-day-panel-actions">
+                      {selectedColorGroups.length > 0 ? (
+                        <button
+                          type="button"
+                          className="planner-text-button"
+                          onClick={() => setSelectedColorGroups([])}
+                        >
+                          선택 해제
+                        </button>
+                      ) : null}
                       <button
                         type="button"
                         className="planner-primary"
@@ -1468,7 +1482,7 @@ export default function PlannerClient({ username }: { username: string }) {
                           <section
                             className={[
                               "planner-color-group",
-                              calendarColorFilter === group.key
+                              selectedColorGroups.includes(group.key)
                                 ? "is-open"
                                 : "",
                             ]
@@ -1479,14 +1493,16 @@ export default function PlannerClient({ username }: { username: string }) {
                             <button
                               type="button"
                               className="planner-color-group-header"
-                              aria-expanded={
-                                calendarColorFilter === group.key
-                              }
+                              aria-expanded={selectedColorGroups.includes(
+                                group.key,
+                              )}
                               onClick={() =>
-                                setCalendarColorFilter((previous) =>
-                                  previous === group.key
-                                    ? "all"
-                                    : group.key,
+                                setSelectedColorGroups((previous) =>
+                                  previous.includes(group.key)
+                                    ? previous.filter(
+                                        (key) => key !== group.key,
+                                      )
+                                    : [...previous, group.key],
                                 )
                               }
                             >
@@ -1511,12 +1527,12 @@ export default function PlannerClient({ username }: { username: string }) {
                                 className="planner-color-group-caret"
                                 aria-hidden="true"
                               >
-                                {calendarColorFilter === group.key
+                                {selectedColorGroups.includes(group.key)
                                   ? "⌃"
                                   : "⌄"}
                               </span>
                             </button>
-                            {calendarColorFilter === group.key ? (
+                            {selectedColorGroups.includes(group.key) ? (
                               group.tasks.length === 0 ? (
                                 <p className="planner-empty">
                                   이 칩에 등록된 일정이 없습니다.
