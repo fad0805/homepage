@@ -417,6 +417,8 @@ def _routine_period_dict(
         "notes": routine.notes,
         "category_id": routine.category_id,
         "category_name": routine.category.name if routine.category else None,
+        "start_date": routine.start_date,
+        "end_date": routine.end_date,
         "frequency": routine.frequency,
         "tracking_mode": routine.tracking_mode,
         "target_count": routine.target_count,
