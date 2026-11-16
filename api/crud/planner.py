@@ -3,7 +3,7 @@ from datetime import date, datetime, time, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 from fastapi import HTTPException, status
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from core.audit import get_audit_actor
 from core.html_sanitizer import sanitize_index_html
@@ -13,7 +13,7 @@ from models.index_page import IndexPage
 from models.illustrations import Illustration
 from models.links import Category as LinkCategory
 from models.links import Link
-from models.planner import PlannerEvent, PlannerTask
+from models.planner import PlannerColor, PlannerEvent, PlannerTask
 from models.profiles import Profile
 from models.users import AuthorSettings
 from schemas.planner import (
@@ -67,6 +67,29 @@ def _clean_color(value: str | None) -> str | None:
             detail="색상은 #RRGGBB 형식으로 입력해주세요.",
         )
     return color.lower()
+
+
+def _validate_color_id(
+    db: Session,
+    user_id: int,
+    color_id: int | None,
+) -> int | None:
+    if color_id is None:
+        return None
+    saved = (
+        db.query(PlannerColor)
+        .filter(
+            PlannerColor.id == color_id,
+            PlannerColor.user_id == user_id,
+        )
+        .first()
+    )
+    if saved is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="색상 칩을 찾을 수 없습니다.",
+        )
+    return saved.id
 
 
 def _validate_deadline_days(value: int | None) -> int:
@@ -150,7 +173,12 @@ def _serialize_task(task: PlannerTask) -> dict:
         "id": task.id,
         "title": task.title,
         "notes": task.notes,
-        "color": task.color,
+        "color_id": task.color_id,
+        "color": (
+            task.color_relation.color
+            if task.color_relation
+            else None
+        ),
         "schedule_type": task.schedule_type,
         "start_date": task.start_date,
         "end_date": task.end_date,
@@ -174,6 +202,49 @@ def _serialize_event(event: PlannerEvent) -> dict:
         "changes": event.changes,
         "occurred_at": event.occurred_at,
     }
+
+
+def _serialize_color(saved: PlannerColor) -> dict:
+    return {
+        "id": saved.id,
+        "color": saved.color,
+        "created_at": saved.created_at,
+    }
+
+
+def get_colors(db: Session, user_id: int) -> dict:
+    colors = (
+        db.query(PlannerColor)
+        .filter(PlannerColor.user_id == user_id)
+        .order_by(PlannerColor.created_at.asc(), PlannerColor.id.asc())
+        .all()
+    )
+    return {"colors": [_serialize_color(color) for color in colors]}
+
+
+def save_color(db: Session, color: str, user_id: int) -> dict:
+    normalized = _clean_color(color)
+    if normalized is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="색상을 입력해주세요.",
+        )
+    existing = (
+        db.query(PlannerColor)
+        .filter(
+            PlannerColor.user_id == user_id,
+            PlannerColor.color == normalized,
+        )
+        .first()
+    )
+    if existing is not None:
+        return _serialize_color(existing)
+
+    saved = PlannerColor(user_id=user_id, color=normalized)
+    db.add(saved)
+    db.commit()
+    db.refresh(saved)
+    return _serialize_color(saved)
 
 
 def maintain_tasks(db: Session, user_id: int) -> None:
@@ -227,6 +298,7 @@ def get_tasks(db: Session, user_id: int) -> dict:
     maintain_tasks(db, user_id)
     tasks = (
         db.query(PlannerTask)
+        .options(selectinload(PlannerTask.color_relation))
         .filter(PlannerTask.user_id == user_id)
         .order_by(
             PlannerTask.status.asc(),
@@ -248,7 +320,7 @@ def create_task(
 ) -> dict:
     title = _clean_title(payload.title)
     notes = _clean_notes(payload.notes)
-    color = _clean_color(payload.color)
+    color_id = _validate_color_id(db, user_id, payload.color_id)
     pinned = bool(payload.pinned)
 
     if payload.schedule_type == "single":
@@ -259,7 +331,7 @@ def create_task(
             user_id=user_id,
             title=title,
             notes=notes,
-            color=color,
+            color_id=color_id,
             schedule_type="single",
             start_date=start,
             deadline_base_date=base,
@@ -274,7 +346,7 @@ def create_task(
             user_id=user_id,
             title=title,
             notes=notes,
-            color=color,
+            color_id=color_id,
             schedule_type="range",
             start_date=start,
             deadline_base_date=None,
@@ -324,8 +396,12 @@ def update_task(
         task.title = _clean_title(data["title"])
     if "notes" in data:
         task.notes = _clean_notes(data["notes"])
-    if "color" in data:
-        task.color = _clean_color(data["color"])
+    if "color_id" in data:
+        task.color_id = _validate_color_id(
+            db,
+            user_id,
+            data["color_id"],
+        )
     if "pinned" in data:
         task.pinned = bool(data["pinned"])
 

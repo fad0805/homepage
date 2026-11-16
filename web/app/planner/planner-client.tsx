@@ -20,12 +20,13 @@ import "@/public/styles/planner.scss";
 
 type ScheduleType = "single" | "range";
 type TaskStatus = "active" | "inactive" | "trashed";
-type PlannerTab = "active" | "inactive" | "trashed";
+type PlannerTab = "active" | "colors" | "inactive" | "trashed";
 
 interface PlannerTask {
   id: number;
   title: string;
   notes: string | null;
+  color_id: number | null;
   color: string | null;
   schedule_type: ScheduleType;
   start_date: string;
@@ -65,6 +66,16 @@ interface PlannerEventsResponse {
   events: PlannerEvent[];
 }
 
+interface PlannerColor {
+  id: number;
+  color: string;
+  created_at: string;
+}
+
+interface PlannerColorsResponse {
+  colors: PlannerColor[];
+}
+
 interface PlannerEventPreview {
   available: boolean;
   entity_type: string;
@@ -99,7 +110,7 @@ interface CalendarWeek {
 interface TaskFormState {
   title: string;
   notes: string;
-  color: string;
+  colorId: number | null;
   scheduleType: ScheduleType;
   startDate: string;
   endDate: string;
@@ -108,6 +119,7 @@ interface TaskFormState {
 }
 
 const DEFAULT_TASK_COLOR = "#b07a52";
+const UNASSIGNED_TASK_COLOR = "#8a8a8a";
 
 const ENTITY_LABELS: Record<string, string> = {
   book: "목차",
@@ -331,7 +343,7 @@ function taskAppearsOn(task: PlannerTask, date: string, today: string) {
 }
 
 function taskColor(task: PlannerTask) {
-  return task.color || DEFAULT_TASK_COLOR;
+  return task.color || UNASSIGNED_TASK_COLOR;
 }
 
 function sortTasks(tasks: PlannerTask[]) {
@@ -357,7 +369,7 @@ function emptyForm(today: string): TaskFormState {
   return {
     title: "",
     notes: "",
-    color: DEFAULT_TASK_COLOR,
+    colorId: null,
     scheduleType: "single",
     startDate: today,
     endDate: addDays(today, 7),
@@ -371,6 +383,7 @@ export default function PlannerClient({ username }: { username: string }) {
   const [today, setToday] = useState(initialToday);
   const [tasks, setTasks] = useState<PlannerTask[]>([]);
   const [events, setEvents] = useState<PlannerEvent[]>([]);
+  const [savedColors, setSavedColors] = useState<PlannerColor[]>([]);
   const [selectedDate, setSelectedDate] = useState(initialToday);
   const [viewMonth, setViewMonth] = useState(initialToday.slice(0, 7));
   const [activeTab, setActiveTab] = useState<PlannerTab>("active");
@@ -379,6 +392,9 @@ export default function PlannerClient({ username }: { username: string }) {
   const [loading, setLoading] = useState(true);
   const [eventsLoading, setEventsLoading] = useState(false);
   const [busyKey, setBusyKey] = useState<string | null>(null);
+  const [colorSaving, setColorSaving] = useState(false);
+  const [newChipColor, setNewChipColor] = useState(DEFAULT_TASK_COLOR);
+  const [showChipCreator, setShowChipCreator] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedEvent, setSelectedEvent] = useState<PlannerEvent | null>(null);
   const [preview, setPreview] = useState<PlannerEventPreview | null>(null);
@@ -416,6 +432,22 @@ export default function PlannerClient({ username }: { username: string }) {
     }
   }, []);
 
+  const loadColors = useCallback(async () => {
+    try {
+      const data = await apiFetch<PlannerColorsResponse>(
+        "/api/planner/colors",
+        { cache: "no-store" },
+      );
+      setSavedColors(data.colors);
+    } catch (reason) {
+      setError(
+        reason instanceof Error
+          ? reason.message
+          : "저장된 색상을 불러오지 못했습니다.",
+      );
+    }
+  }, []);
+
   const loadEvents = useCallback(async (monthKey: string) => {
     const requestId = ++eventsRequestRef.current;
     const bounds = monthBounds(monthKey);
@@ -444,6 +476,10 @@ export default function PlannerClient({ username }: { username: string }) {
   useEffect(() => {
     void loadTasks();
   }, [loadTasks]);
+
+  useEffect(() => {
+    void loadColors();
+  }, [loadColors]);
 
   useEffect(() => {
     void loadEvents(viewMonth);
@@ -502,10 +538,52 @@ export default function PlannerClient({ username }: { username: string }) {
         .sort((a, b) => b.occurred_at.localeCompare(a.occurred_at)),
     [events, selectedDate],
   );
+  const colorGroups = useMemo(() => {
+    const groups = new Map<
+      string,
+      { color: string | null; tasks: PlannerTask[] }
+    >();
+    for (const task of activeTasks) {
+      const key = task.color_id
+        ? `chip:${task.color_id}`
+        : "unassigned";
+      const color =
+        task.color ||
+        savedColors.find((saved) => saved.id === task.color_id)?.color ||
+        UNASSIGNED_TASK_COLOR;
+      const group = groups.get(key) ?? { color, tasks: [] };
+      group.tasks.push(task);
+      groups.set(key, group);
+    }
+    for (const saved of savedColors) {
+      const key = `chip:${saved.id}`;
+      if (!groups.has(key)) {
+        groups.set(key, { color: saved.color, tasks: [] });
+      }
+    }
+    return Array.from(groups.entries())
+      .map(([key, group]) => ({
+        key,
+        color: group.color,
+        tasks: sortTasks(group.tasks),
+      }))
+      .sort((a, b) => {
+        const aUnassigned = a.key === "unassigned";
+        const bUnassigned = b.key === "unassigned";
+        if (aUnassigned !== bUnassigned) {
+          return aUnassigned ? 1 : -1;
+        }
+        return (
+          b.tasks.length - a.tasks.length ||
+          (a.color || "").localeCompare(b.color || "")
+        );
+      });
+  }, [activeTasks, savedColors]);
 
   const resetForm = () => {
     setEditingId(null);
     setForm(emptyForm(today));
+    setShowChipCreator(false);
   };
 
   const closeTaskModal = () => {
@@ -543,15 +621,15 @@ export default function PlannerClient({ username }: { username: string }) {
     setForm({
       title: task.title,
       notes: task.notes || "",
-      color: task.color || DEFAULT_TASK_COLOR,
+      colorId: task.color_id,
       scheduleType: task.schedule_type,
       startDate: task.start_date,
       endDate: task.end_date,
       deadlineDays: task.deadline_days || 7,
       pinned: task.pinned,
     });
-    setActiveTab("active");
     setError(null);
+    setShowChipCreator(false);
     setTaskModalOpen(true);
   };
 
@@ -566,7 +644,7 @@ export default function PlannerClient({ username }: { username: string }) {
       const payload = {
         title: form.title,
         notes: form.notes || null,
-        color: form.color || null,
+        color_id: form.colorId,
         schedule_type: form.scheduleType,
         start_date: form.startDate || null,
         end_date: form.scheduleType === "range" ? form.endDate : null,
@@ -757,6 +835,38 @@ export default function PlannerClient({ username }: { username: string }) {
       );
     } finally {
       setBusyKey(null);
+    }
+  };
+
+  const handleCreateColor = async (selectForForm: boolean) => {
+    if (colorSaving) return;
+    setColorSaving(true);
+    setError(null);
+    try {
+      const saved = await apiFetch<PlannerColor>("/api/planner/colors", {
+        method: "POST",
+        body: JSON.stringify({ color: newChipColor }),
+      });
+      setSavedColors((previous) =>
+        previous.some((color) => color.id === saved.id)
+          ? previous
+          : [...previous, saved],
+      );
+      if (selectForForm) {
+        setForm((previous) => ({
+          ...previous,
+          colorId: saved.id,
+        }));
+      }
+      setShowChipCreator(false);
+    } catch (reason) {
+      setError(
+        reason instanceof Error
+          ? reason.message
+          : "색상 칩을 만들지 못했습니다.",
+      );
+    } finally {
+      setColorSaving(false);
     }
   };
 
@@ -1008,6 +1118,35 @@ export default function PlannerClient({ username }: { username: string }) {
     </>
   );
 
+  const renderChipCreator = (selectForForm: boolean) => (
+    <div className="planner-color-creator">
+      <input
+        type="color"
+        value={newChipColor}
+        aria-label="새 색상 칩 색상"
+        onChange={(event) => setNewChipColor(event.target.value)}
+      />
+      <span className="planner-color-value">
+        {newChipColor.toUpperCase()}
+      </span>
+      <button
+        type="button"
+        className="planner-text-button"
+        disabled={colorSaving}
+        onClick={() => void handleCreateColor(selectForForm)}
+      >
+        {colorSaving ? "추가 중" : "칩 추가"}
+      </button>
+      <button
+        type="button"
+        className="planner-text-button"
+        onClick={() => setShowChipCreator(false)}
+      >
+        취소
+      </button>
+    </div>
+  );
+
   return (
     <div id="planner-page">
       <main>
@@ -1025,6 +1164,15 @@ export default function PlannerClient({ username }: { username: string }) {
               onClick={() => setActiveTab("active")}
             >
               진행 중
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={activeTab === "colors"}
+              className={activeTab === "colors" ? "is-active" : ""}
+              onClick={() => setActiveTab("colors")}
+            >
+              색상별
             </button>
             <button
               type="button"
@@ -1226,6 +1374,72 @@ export default function PlannerClient({ username }: { username: string }) {
                   </div>
                   {renderDayDetail(selectedTasks, selectedEvents)}
                 </section>
+              ) : activeTab === "colors" ? (
+                <section className="planner-day-panel planner-color-panel">
+                  <div className="planner-day-panel-header">
+                    <div>
+                      <p className="planner-eyebrow">색상별</p>
+                      <h2>색상 칩</h2>
+                      <p>
+                        진행 중 일정 {activeTasks.length}개 · 칩{" "}
+                        {savedColors.length}개
+                      </p>
+                    </div>
+                    <div className="planner-day-panel-actions">
+                      <button
+                        type="button"
+                        className="planner-primary"
+                        onClick={() =>
+                          setShowChipCreator((previous) => !previous)
+                        }
+                      >
+                        {showChipCreator ? "닫기" : "칩 추가"}
+                      </button>
+                    </div>
+                  </div>
+                  {showChipCreator ? renderChipCreator(false) : null}
+                  {colorGroups.length === 0 ? (
+                    <p className="planner-empty">
+                      색상 칩을 만들고 일정에 지정해보세요.
+                    </p>
+                  ) : (
+                    <div className="planner-color-group-list">
+                      {colorGroups.map((group) => (
+                        <section
+                          className="planner-color-group"
+                          key={group.key}
+                        >
+                          <div className="planner-color-group-header">
+                            <span
+                              className="planner-color-group-swatch"
+                              style={{
+                                backgroundColor:
+                                  group.color || UNASSIGNED_TASK_COLOR,
+                              }}
+                            />
+                            <strong>
+                              {group.key === "unassigned"
+                                ? "미지정"
+                                : (group.color || "").toUpperCase()}
+                            </strong>
+                            <span className="planner-color-group-count">
+                              {group.tasks.length}
+                            </span>
+                          </div>
+                          {group.tasks.length === 0 ? (
+                            <p className="planner-empty">
+                              이 색의 진행 중 일정이 없습니다.
+                            </p>
+                          ) : (
+                            <ul className="planner-task-list">
+                              {group.tasks.map(renderActiveTask)}
+                            </ul>
+                          )}
+                        </section>
+                      ))}
+                    </div>
+                  )}
+                </section>
               ) : (
                 <section className="planner-day-panel">
                   <div className="planner-day-panel-header">
@@ -1405,25 +1619,61 @@ export default function PlannerClient({ username }: { username: string }) {
                   </label>
                 )}
               </div>
-              <label className="planner-color-field">
-                <span>색상</span>
-                <div className="planner-color-row">
-                  <input
-                    type="color"
-                    value={form.color}
-                    aria-label="일정 색상"
-                    onChange={(event) =>
+              <div className="planner-color-field">
+                <span className="planner-field-label">색상 칩</span>
+                <div className="planner-color-chips">
+                  <button
+                    type="button"
+                    className={`planner-color-chip is-none${
+                      form.colorId === null ? " is-active" : ""
+                    }`}
+                    aria-pressed={form.colorId === null}
+                    onClick={() =>
                       setForm((previous) => ({
                         ...previous,
-                        color: event.target.value,
+                        colorId: null,
                       }))
                     }
-                  />
-                  <span className="planner-color-value">
-                    {form.color.toUpperCase()}
-                  </span>
+                  >
+                    미지정
+                  </button>
+                  {savedColors.map((saved) => (
+                    <button
+                      key={saved.id}
+                      type="button"
+                      className={`planner-color-chip${
+                        form.colorId === saved.id ? " is-active" : ""
+                      }`}
+                      style={{ backgroundColor: saved.color }}
+                      aria-label={`색상 칩 ${saved.color}`}
+                      aria-pressed={form.colorId === saved.id}
+                      title={saved.color}
+                      onClick={() =>
+                        setForm((previous) => ({
+                          ...previous,
+                          colorId: saved.id,
+                        }))
+                      }
+                    />
+                  ))}
+                  <button
+                    type="button"
+                    className="planner-color-chip-add"
+                    aria-label="새 색상 칩"
+                    onClick={() =>
+                      setShowChipCreator((previous) => !previous)
+                    }
+                  >
+                    +
+                  </button>
                 </div>
-              </label>
+                {showChipCreator ? renderChipCreator(true) : null}
+                {savedColors.length === 0 ? (
+                  <p className="planner-form-hint">
+                    색상 칩을 만들면 일정을 색상별로 모아볼 수 있습니다.
+                  </p>
+                ) : null}
+              </div>
               {form.scheduleType === "single" ? (
                 <p className="planner-form-hint">
                   오늘 정오 이전 등록은 오늘부터, 정오 이후 등록은

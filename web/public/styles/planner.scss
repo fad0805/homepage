@@ -413,16 +413,71 @@
 }
 
 .planner-form .planner-color-field {
-  flex-direction: row;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-width: 0;
 }
 
-.planner-color-row {
+.planner-field-label {
+  color: var(--title-color);
+  font-size: 0.68rem;
+  opacity: 0.72;
+}
+
+.planner-color-chips {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 0.45rem;
+  gap: 0.35rem;
+}
+
+.planner-color-chip {
+  width: 1.55rem;
+  height: 1.55rem;
+  padding: 0;
+  border: 2px solid transparent;
+  border-radius: 999px;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.16);
+  cursor: pointer;
+
+  &.is-active {
+    border-color: var(--title-color);
+  }
+
+  &.is-none {
+    width: auto;
+    height: auto;
+    padding: 0.3rem 0.55rem;
+    border: 1px solid color-mix(in srgb, var(--theme-main) 46%, transparent);
+    border-radius: 999px;
+    background: transparent;
+    color: var(--foreground);
+    font-size: 0.62rem;
+  }
+}
+
+.planner-color-chip-add {
+  width: 1.55rem;
+  height: 1.55rem;
+  padding: 0;
+  border: 1px dashed color-mix(in srgb, var(--theme-main) 52%, transparent);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--foreground);
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.planner-color-creator {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.4rem;
+  border-radius: 0.55rem;
+  background: var(--planner-soft-bg);
 }
 
 .planner-form input[type='color'] {
@@ -518,6 +573,57 @@
   margin: 0.75rem 0 0;
   padding: 0;
   list-style: none;
+}
+
+.planner-color-group-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+  margin-top: 0.8rem;
+}
+
+.planner-color-panel .planner-color-creator {
+  margin-top: 0.75rem;
+}
+
+.planner-color-group {
+  padding: 0.7rem;
+  border: 1px solid color-mix(in srgb, var(--theme-main) 32%, transparent);
+  border-radius: 0.8rem;
+  background: color-mix(in srgb, var(--input-background) 42%, transparent);
+
+  .planner-task-list {
+    margin-top: 0.55rem;
+  }
+}
+
+.planner-color-group-header {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-width: 0;
+
+  strong {
+    overflow: hidden;
+    font-size: 0.72rem;
+    font-weight: normal;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+.planner-color-group-swatch {
+  width: 0.8rem;
+  height: 0.8rem;
+  flex-shrink: 0;
+  border: 1px solid color-mix(in srgb, var(--foreground) 18%, transparent);
+  border-radius: 999px;
+}
+
+.planner-color-group-count {
+  margin-left: auto;
+  font-size: 0.6rem;
+  opacity: 0.55;
 }
 
 .planner-task-item {
@@ -944,7 +1050,14 @@
 
   .planner-tabs {
     width: 100%;
-    justify-content: space-between;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+  }
+
+  .planner-tabs button {
+    flex: 1 1 auto;
+    padding: 0.38rem 0.55rem;
+    font-size: 0.72rem;
   }
 
   .planner-side {

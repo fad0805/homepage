@@ -8,16 +8,21 @@ from crud.planner import (
     create_task,
     deactivate_task,
     delete_task_permanently,
+    get_colors,
     get_event_preview,
     get_events,
     get_tasks,
     restore_task,
+    save_color,
     trash_task,
     update_task,
 )
 from db.session import get_db
 from routers.utils import require_auth
 from schemas.planner import (
+    PlannerColorCreate,
+    PlannerColorRead,
+    PlannerColorsResponse,
     PlannerEventPreview,
     PlannerEventsResponse,
     PlannerTaskCreate,
@@ -31,6 +36,27 @@ router = APIRouter()
 
 def _no_store(response: Response) -> None:
     response.headers["Cache-Control"] = "no-store"
+
+
+@router.get("/colors", response_model=PlannerColorsResponse)
+def read_colors(
+    response: Response,
+    db: Session = Depends(get_db),
+    user=Depends(require_auth),
+):
+    _no_store(response)
+    return get_colors(db, user.id)
+
+
+@router.post("/colors", response_model=PlannerColorRead)
+def post_color(
+    payload: PlannerColorCreate,
+    response: Response,
+    db: Session = Depends(get_db),
+    user=Depends(require_auth),
+):
+    _no_store(response)
+    return save_color(db, payload.color, user.id)
 
 
 @router.get("/tasks", response_model=PlannerTasksResponse)

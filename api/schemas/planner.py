@@ -10,10 +10,7 @@ TaskStatus = Literal["active", "inactive", "trashed"]
 class PlannerTaskCreate(BaseModel):
     title: str = Field(min_length=1, max_length=255)
     notes: str | None = Field(default=None, max_length=4000)
-    color: str | None = Field(
-        default=None,
-        pattern=r"^#[0-9a-fA-F]{6}$",
-    )
+    color_id: int | None = None
     schedule_type: ScheduleType = "single"
     start_date: date | None = None
     end_date: date | None = None
@@ -24,10 +21,7 @@ class PlannerTaskCreate(BaseModel):
 class PlannerTaskUpdate(BaseModel):
     title: str | None = Field(default=None, min_length=1, max_length=255)
     notes: str | None = Field(default=None, max_length=4000)
-    color: str | None = Field(
-        default=None,
-        pattern=r"^#[0-9a-fA-F]{6}$",
-    )
+    color_id: int | None = None
     schedule_type: ScheduleType | None = None
     start_date: date | None = None
     end_date: date | None = None
@@ -39,6 +33,7 @@ class PlannerTaskRead(BaseModel):
     id: int
     title: str
     notes: str | None = None
+    color_id: int | None = None
     color: str | None = None
     schedule_type: ScheduleType
     start_date: date
@@ -58,6 +53,23 @@ class PlannerTaskRead(BaseModel):
 class PlannerTasksResponse(BaseModel):
     today: date
     tasks: list[PlannerTaskRead] = Field(default_factory=list)
+
+
+class PlannerColorCreate(BaseModel):
+    color: str = Field(pattern=r"^#[0-9a-fA-F]{6}$")
+
+
+class PlannerColorRead(BaseModel):
+    id: int
+    color: str
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class PlannerColorsResponse(BaseModel):
+    colors: list[PlannerColorRead] = Field(default_factory=list)
 
 
 class PlannerEventRead(BaseModel):

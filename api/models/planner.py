@@ -9,6 +9,7 @@ from sqlalchemy import (
     Integer,
     String,
     Text,
+    UniqueConstraint,
     func,
 )
 from sqlalchemy.orm import relationship
@@ -30,7 +31,12 @@ class PlannerTask(Base):
     )
     title = Column(String(255), nullable=False)
     notes = Column(Text, nullable=True)
-    color = Column(String(7), nullable=True)
+    color_id = Column(
+        Integer,
+        ForeignKey("planner_colors.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     schedule_type = Column(
         String(16),
         nullable=False,
@@ -69,6 +75,7 @@ class PlannerTask(Base):
     trashed_at = Column(DateTime, nullable=True)
 
     user = relationship("User")
+    color_relation = relationship("PlannerColor")
 
     __table_args__ = (
         Index(
@@ -77,6 +84,32 @@ class PlannerTask(Base):
             "status",
             "start_date",
             "end_date",
+        ),
+    )
+
+
+class PlannerColor(Base):
+    """A saved task color used as one private color category."""
+
+    __tablename__ = "planner_colors"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(
+        Integer,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    color = Column(String(7), nullable=False)
+    created_at = Column(DateTime, default=func.now(), nullable=False)
+
+    user = relationship("User")
+
+    __table_args__ = (
+        UniqueConstraint(
+            "user_id",
+            "color",
+            name="uq_planner_colors_user_color",
         ),
     )
 
