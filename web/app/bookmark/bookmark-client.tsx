@@ -167,7 +167,8 @@ function occurrenceLabel(
 ) {
   const date = parseDateKey(value);
   if (view === "week") {
-    return `${WEEKDAY_SHORT[date.getUTCDay()]} ${date.getUTCDate()}`;
+    const weekday = (date.getUTCDay() + 6) % 7;
+    return `${WEEKDAY_SHORT[weekday]} ${date.getUTCDate()}`;
   }
   if (view === "today") {
     if (frequency === "monthly") return "이번 달";
