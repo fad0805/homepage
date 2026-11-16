@@ -69,6 +69,7 @@ interface PlannerEventsResponse {
 interface PlannerColor {
   id: number;
   color: string;
+  name: string | null;
   created_at: string;
 }
 
@@ -407,6 +408,17 @@ export default function PlannerClient({ username }: { username: string }) {
   const [colorSaving, setColorSaving] = useState(false);
   const [newChipColor, setNewChipColor] = useState(DEFAULT_TASK_COLOR);
   const [showChipCreator, setShowChipCreator] = useState(false);
+  const [newChipName, setNewChipName] = useState("");
+  const [editingColorId, setEditingColorId] = useState<
+    number | null
+  >(null);
+  const [editChipColor, setEditChipColor] =
+    useState(DEFAULT_TASK_COLOR);
+  const [editChipName, setEditChipName] = useState("");
+  const [chipSaving, setChipSaving] = useState(false);
+  const [deletingColorId, setDeletingColorId] = useState<
+    number | null
+  >(null);
   const [selectedColorGroups, setSelectedColorGroups] = useState<
     string[]
   >([]);
@@ -584,30 +596,46 @@ export default function PlannerClient({ username }: { username: string }) {
   const colorGroups = useMemo(() => {
     const groups = new Map<
       string,
-      { color: string | null; tasks: PlannerTask[] }
+      {
+        color: string | null;
+        name: string | null;
+        tasks: PlannerTask[];
+      }
     >();
     for (const task of colorViewTasks) {
       const key = task.color_id
         ? `chip:${task.color_id}`
         : "unassigned";
-      const color =
-        task.color ||
-        savedColors.find((saved) => saved.id === task.color_id)?.color ||
-        UNASSIGNED_TASK_COLOR;
-      const group = groups.get(key) ?? { color, tasks: [] };
+      const saved = savedColors.find(
+        (color) => color.id === task.color_id,
+      );
+      const color = task.color || saved?.color || UNASSIGNED_TASK_COLOR;
+      const group = groups.get(key) ?? {
+        color,
+        name: saved?.name || null,
+        tasks: [],
+      };
+      if (!group.name && saved?.name) {
+        group.name = saved.name;
+      }
       group.tasks.push(task);
       groups.set(key, group);
     }
     for (const saved of savedColors) {
       const key = `chip:${saved.id}`;
       if (!groups.has(key)) {
-        groups.set(key, { color: saved.color, tasks: [] });
+        groups.set(key, {
+          color: saved.color,
+          name: saved.name,
+          tasks: [],
+        });
       }
     }
     return Array.from(groups.entries())
       .map(([key, group]) => ({
         key,
         color: group.color,
+        name: group.name,
         tasks: sortColorGroupTasks(group.tasks),
       }))
       .sort((a, b) => {
@@ -630,6 +658,8 @@ export default function PlannerClient({ username }: { username: string }) {
       return next.length === previous.length ? previous : next;
     });
   }, [colorGroups]);
+  const selectedFormColor =
+    savedColors.find((color) => color.id === form.colorId) ?? null;
 
   const resetForm = () => {
     setEditingId(null);
@@ -654,7 +684,11 @@ export default function PlannerClient({ username }: { username: string }) {
   };
 
   const refresh = async () => {
-    await Promise.all([loadTasks(), loadEvents(viewMonth)]);
+    await Promise.all([
+      loadTasks(),
+      loadEvents(viewMonth),
+      loadColors(),
+    ]);
   };
 
   const changeMonth = (delta: number) => {
@@ -900,11 +934,16 @@ export default function PlannerClient({ username }: { username: string }) {
     try {
       const saved = await apiFetch<PlannerColor>("/api/planner/colors", {
         method: "POST",
-        body: JSON.stringify({ color: newChipColor }),
+        body: JSON.stringify({
+          color: newChipColor,
+          name: newChipName.trim() || null,
+        }),
       });
       setSavedColors((previous) =>
         previous.some((color) => color.id === saved.id)
-          ? previous
+          ? previous.map((color) =>
+              color.id === saved.id ? saved : color,
+            )
           : [...previous, saved],
       );
       if (selectForForm) {
@@ -913,6 +952,7 @@ export default function PlannerClient({ username }: { username: string }) {
           colorId: saved.id,
         }));
       }
+      setNewChipName("");
       setShowChipCreator(false);
     } catch (reason) {
       setError(
@@ -922,6 +962,110 @@ export default function PlannerClient({ username }: { username: string }) {
       );
     } finally {
       setColorSaving(false);
+    }
+  };
+
+  const startEditingColor = (saved: PlannerColor) => {
+    setEditingColorId(saved.id);
+    setEditChipColor(saved.color);
+    setEditChipName(saved.name || "");
+    setShowChipCreator(false);
+    setError(null);
+  };
+
+  const cancelEditingColor = () => {
+    setEditingColorId(null);
+    setEditChipName("");
+  };
+
+  const handleEditColor = async (
+    event: FormEvent<HTMLFormElement>,
+  ) => {
+    event.preventDefault();
+    if (editingColorId === null || chipSaving) return;
+    setChipSaving(true);
+    setError(null);
+    try {
+      const saved = await apiFetch<PlannerColor>(
+        `/api/planner/colors/${editingColorId}`,
+        {
+          method: "PATCH",
+          body: JSON.stringify({
+            color: editChipColor,
+            name: editChipName.trim() || null,
+          }),
+        },
+      );
+      setSavedColors((previous) =>
+        previous.map((color) =>
+          color.id === saved.id ? saved : color,
+        ),
+      );
+      setEditingColorId(null);
+      setEditChipName("");
+    } catch (reason) {
+      setError(
+        reason instanceof Error
+          ? reason.message
+          : "색상 칩을 수정하지 못했습니다.",
+      );
+    } finally {
+      setChipSaving(false);
+    }
+  };
+
+  const handleDeleteColor = async (saved: PlannerColor) => {
+    if (deletingColorId !== null) return;
+    const chipTasks = tasks.filter(
+      (task) => task.color_id === saved.id,
+    );
+    const activeInactiveCount = chipTasks.filter(
+      (task) =>
+        task.status === "active" || task.status === "inactive",
+    ).length;
+    const trashedCount = chipTasks.filter(
+      (task) => task.status === "trashed",
+    ).length;
+    const message = [
+      `"${saved.name || saved.color}" 색상 칩을 삭제할까요?`,
+    ];
+    if (activeInactiveCount > 0) {
+      message.push(
+        `활성/비활성 일정 ${activeInactiveCount}개가 전부 미지정으로 바뀝니다.`,
+      );
+    }
+    if (trashedCount > 0) {
+      message.push(
+        `휴지통 일정 ${trashedCount}개는 함께 영구 삭제됩니다.`,
+      );
+    }
+    if (!window.confirm(message.join("\n"))) return;
+
+    setDeletingColorId(saved.id);
+    setError(null);
+    try {
+      await apiFetch(`/api/planner/colors/${saved.id}`, {
+        method: "DELETE",
+      });
+      setSavedColors((previous) =>
+        previous.filter((color) => color.id !== saved.id),
+      );
+      setSelectedColorGroups((previous) =>
+        previous.filter((key) => key !== `chip:${saved.id}`),
+      );
+      if (editingColorId === saved.id) {
+        setEditingColorId(null);
+        setEditChipName("");
+      }
+      await refresh();
+    } catch (reason) {
+      setError(
+        reason instanceof Error
+          ? reason.message
+          : "색상 칩을 삭제하지 못했습니다.",
+      );
+    } finally {
+      setDeletingColorId(null);
     }
   };
 
@@ -1184,6 +1328,15 @@ export default function PlannerClient({ username }: { username: string }) {
       <span className="planner-color-value">
         {newChipColor.toUpperCase()}
       </span>
+      <input
+        type="text"
+        className="planner-color-name-input"
+        value={newChipName}
+        maxLength={80}
+        placeholder="칩 이름 (선택)"
+        aria-label="새 색상 칩 이름"
+        onChange={(event) => setNewChipName(event.target.value)}
+      />
       <button
         type="button"
         className="planner-text-button"
@@ -1467,6 +1620,13 @@ export default function PlannerClient({ username }: { username: string }) {
                         ).length;
                         const inactiveCount =
                           group.tasks.length - activeCount;
+                        const savedColor = group.key.startsWith("chip:")
+                          ? savedColors.find(
+                              (color) =>
+                                color.id ===
+                                Number(group.key.slice(5)),
+                            ) ?? null
+                          : null;
                         return (
                           <section
                             className={[
@@ -1479,48 +1639,127 @@ export default function PlannerClient({ username }: { username: string }) {
                               .join(" ")}
                             key={group.key}
                           >
-                            <button
-                              type="button"
-                              className="planner-color-group-header"
-                              aria-expanded={selectedColorGroups.includes(
-                                group.key,
-                              )}
-                              onClick={() =>
-                                setSelectedColorGroups((previous) =>
-                                  previous.includes(group.key)
-                                    ? previous.filter(
-                                        (key) => key !== group.key,
-                                      )
-                                    : [...previous, group.key],
-                                )
-                              }
-                            >
-                              <span
-                                className="planner-color-group-swatch"
-                                style={{
-                                  backgroundColor:
-                                    group.color ||
-                                    UNASSIGNED_TASK_COLOR,
-                                }}
-                              />
-                              <strong>
-                                {group.key === "unassigned"
-                                  ? "미지정"
-                                  : (group.color || "").toUpperCase()}
-                              </strong>
-                              <span className="planner-color-group-count">
-                                활성 {activeCount} · 비활성{" "}
-                                {inactiveCount}
-                              </span>
-                              <span
-                                className="planner-color-group-caret"
-                                aria-hidden="true"
+                            <div className="planner-color-group-heading">
+                              <button
+                                type="button"
+                                className="planner-color-group-header"
+                                aria-expanded={selectedColorGroups.includes(
+                                  group.key,
+                                )}
+                                onClick={() =>
+                                  setSelectedColorGroups((previous) =>
+                                    previous.includes(group.key)
+                                      ? previous.filter(
+                                          (key) => key !== group.key,
+                                        )
+                                      : [...previous, group.key],
+                                  )
+                                }
                               >
-                                {selectedColorGroups.includes(group.key)
-                                  ? "⌃"
-                                  : "⌄"}
-                              </span>
-                            </button>
+                                <span
+                                  className="planner-color-group-swatch"
+                                  style={{
+                                    backgroundColor:
+                                      group.color ||
+                                      UNASSIGNED_TASK_COLOR,
+                                  }}
+                                />
+                                <strong>
+                                  {group.key === "unassigned"
+                                    ? "미지정"
+                                    : group.name ||
+                                      (group.color || "").toUpperCase()}
+                                </strong>
+                                <span className="planner-color-group-count">
+                                  활성 {activeCount} · 비활성{" "}
+                                  {inactiveCount}
+                                </span>
+                                <span
+                                  className="planner-color-group-caret"
+                                  aria-hidden="true"
+                                >
+                                  {selectedColorGroups.includes(group.key)
+                                    ? "⌃"
+                                    : "⌄"}
+                                </span>
+                              </button>
+                              {savedColor ? (
+                                <div className="planner-color-group-actions">
+                                  <button
+                                    type="button"
+                                    className="planner-text-button"
+                                    onClick={() =>
+                                      startEditingColor(savedColor)
+                                    }
+                                  >
+                                    수정
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="planner-text-button is-danger"
+                                    disabled={
+                                      deletingColorId !== null
+                                    }
+                                    onClick={() =>
+                                      void handleDeleteColor(
+                                        savedColor,
+                                      )
+                                    }
+                                  >
+                                    {deletingColorId === savedColor.id
+                                      ? "삭제 중"
+                                      : "삭제"}
+                                  </button>
+                                </div>
+                              ) : null}
+                            </div>
+                            {editingColorId === savedColor?.id ? (
+                              <form
+                                className="planner-color-creator planner-color-edit"
+                                onSubmit={handleEditColor}
+                              >
+                                <input
+                                  type="color"
+                                  value={editChipColor}
+                                  aria-label="색상 칩 색상"
+                                  onChange={(event) =>
+                                    setEditChipColor(
+                                      event.target.value,
+                                    )
+                                  }
+                                />
+                                <span className="planner-color-value">
+                                  {editChipColor.toUpperCase()}
+                                </span>
+                                <input
+                                  type="text"
+                                  className="planner-color-name-input"
+                                  value={editChipName}
+                                  maxLength={80}
+                                  placeholder="칩 이름 (선택)"
+                                  aria-label="색상 칩 이름"
+                                  onChange={(event) =>
+                                    setEditChipName(
+                                      event.target.value,
+                                    )
+                                  }
+                                />
+                                <button
+                                  type="submit"
+                                  className="planner-text-button"
+                                  disabled={chipSaving}
+                                >
+                                  {chipSaving ? "저장 중" : "저장"}
+                                </button>
+                                <button
+                                  type="button"
+                                  className="planner-text-button"
+                                  onClick={cancelEditingColor}
+                                >
+                                  취소
+                                </button>
+                              </form>
+                            ) : null}
                             {selectedColorGroups.includes(group.key) ? (
                               group.tasks.length === 0 ? (
                                 <p className="planner-empty">
@@ -1755,9 +1994,13 @@ export default function PlannerClient({ username }: { username: string }) {
                         form.colorId === saved.id ? " is-active" : ""
                       }`}
                       style={{ backgroundColor: saved.color }}
-                      aria-label={`색상 칩 ${saved.color}`}
+                      aria-label={`색상 칩 ${saved.name || saved.color}`}
                       aria-pressed={form.colorId === saved.id}
-                      title={saved.color}
+                      title={
+                        saved.name
+                          ? `${saved.name} (${saved.color})`
+                          : saved.color
+                      }
                       onClick={() =>
                         setForm((previous) => ({
                           ...previous,
@@ -1777,6 +2020,12 @@ export default function PlannerClient({ username }: { username: string }) {
                     +
                   </button>
                 </div>
+                {selectedFormColor ? (
+                  <span className="planner-color-selected-name">
+                    {selectedFormColor.name ||
+                      selectedFormColor.color.toUpperCase()}
+                  </span>
+                ) : null}
                 {showChipCreator ? renderChipCreator(true) : null}
                 {savedColors.length === 0 ? (
                   <p className="planner-form-hint">

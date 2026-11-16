@@ -7,6 +7,7 @@ from crud.planner import (
     complete_task,
     create_task,
     deactivate_task,
+    delete_color,
     delete_task_permanently,
     get_colors,
     get_event_preview,
@@ -15,6 +16,7 @@ from crud.planner import (
     restore_task,
     save_color,
     trash_task,
+    update_color,
     update_task,
 )
 from db.session import get_db
@@ -23,6 +25,7 @@ from schemas.planner import (
     PlannerColorCreate,
     PlannerColorRead,
     PlannerColorsResponse,
+    PlannerColorUpdate,
     PlannerEventPreview,
     PlannerEventsResponse,
     PlannerTaskCreate,
@@ -56,7 +59,30 @@ def post_color(
     user=Depends(require_auth),
 ):
     _no_store(response)
-    return save_color(db, payload.color, user.id)
+    return save_color(db, payload.color, user.id, payload.name)
+
+
+@router.patch("/colors/{color_id}", response_model=PlannerColorRead)
+def patch_color(
+    color_id: int,
+    payload: PlannerColorUpdate,
+    response: Response,
+    db: Session = Depends(get_db),
+    user=Depends(require_auth),
+):
+    _no_store(response)
+    return update_color(db, color_id, payload, user.id)
+
+
+@router.delete("/colors/{color_id}")
+def remove_color(
+    color_id: int,
+    response: Response,
+    db: Session = Depends(get_db),
+    user=Depends(require_auth),
+):
+    _no_store(response)
+    return delete_color(db, color_id, user.id)
 
 
 @router.get("/tasks", response_model=PlannerTasksResponse)

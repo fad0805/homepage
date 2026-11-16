@@ -57,11 +57,21 @@ class PlannerTasksResponse(BaseModel):
 
 class PlannerColorCreate(BaseModel):
     color: str = Field(pattern=r"^#[0-9a-fA-F]{6}$")
+    name: str | None = Field(default=None, max_length=80)
+
+
+class PlannerColorUpdate(BaseModel):
+    color: str | None = Field(
+        default=None,
+        pattern=r"^#[0-9a-fA-F]{6}$",
+    )
+    name: str | None = Field(default=None, max_length=80)
 
 
 class PlannerColorRead(BaseModel):
     id: int
     color: str
+    name: str | None = None
     created_at: datetime
 
     class Config:

@@ -101,6 +101,7 @@ class PlannerColor(Base):
         index=True,
     )
     color = Column(String(7), nullable=False)
+    name = Column(String(80), nullable=True)
     created_at = Column(DateTime, default=func.now(), nullable=False)
 
     user = relationship("User")

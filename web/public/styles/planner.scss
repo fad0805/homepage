@@ -463,6 +463,26 @@
   background: var(--planner-soft-bg);
 }
 
+.planner-color-name-input {
+  flex: 1 1 8rem;
+  min-width: 7rem;
+  padding: 0.45rem 0.55rem;
+  border: 1px solid color-mix(in srgb, var(--theme-main) 46%, transparent);
+  border-radius: 0.55rem;
+  background: var(--input-background);
+  color: var(--input-text);
+  font-family: inherit;
+  font-size: 0.72rem;
+  box-sizing: border-box;
+}
+
+.planner-color-selected-name {
+  display: inline-flex;
+  margin-top: 0.1rem;
+  font-size: 0.64rem;
+  opacity: 0.62;
+}
+
 .planner-form input[type='color'] {
   width: 2.6rem;
   height: 2.1rem;
@@ -585,6 +605,25 @@
   }
 }
 
+.planner-color-group-heading {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.planner-color-group-heading .planner-color-group-header {
+  flex: 1 1 10rem;
+  width: auto;
+}
+
+.planner-color-group-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.15rem;
+  margin-left: auto;
+}
+
 .planner-color-group-header {
   display: flex;
   align-items: center;
@@ -606,6 +645,10 @@
     text-overflow: ellipsis;
     white-space: nowrap;
   }
+}
+
+.planner-color-group .planner-color-edit {
+  margin-top: 0.55rem;
 }
 
 .planner-color-group-caret {

@@ -17,6 +17,7 @@ from models.planner import PlannerColor, PlannerEvent, PlannerTask
 from models.profiles import Profile
 from models.users import AuthorSettings
 from schemas.planner import (
+    PlannerColorUpdate,
     PlannerEventPreview,
     PlannerTaskCreate,
     PlannerTaskUpdate,
@@ -208,8 +209,14 @@ def _serialize_color(saved: PlannerColor) -> dict:
     return {
         "id": saved.id,
         "color": saved.color,
+        "name": saved.name,
         "created_at": saved.created_at,
     }
+
+
+def _clean_color_name(value: str | None) -> str | None:
+    name = (value or "").strip()
+    return name or None
 
 
 def get_colors(db: Session, user_id: int) -> dict:
@@ -222,13 +229,19 @@ def get_colors(db: Session, user_id: int) -> dict:
     return {"colors": [_serialize_color(color) for color in colors]}
 
 
-def save_color(db: Session, color: str, user_id: int) -> dict:
+def save_color(
+    db: Session,
+    color: str,
+    user_id: int,
+    name: str | None = None,
+) -> dict:
     normalized = _clean_color(color)
     if normalized is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="색상을 입력해주세요.",
         )
+    clean_name = _clean_color_name(name)
     existing = (
         db.query(PlannerColor)
         .filter(
@@ -238,13 +251,128 @@ def save_color(db: Session, color: str, user_id: int) -> dict:
         .first()
     )
     if existing is not None:
+        if clean_name is not None and existing.name != clean_name:
+            existing.name = clean_name
+            db.commit()
+            db.refresh(existing)
         return _serialize_color(existing)
 
-    saved = PlannerColor(user_id=user_id, color=normalized)
+    saved = PlannerColor(
+        user_id=user_id,
+        color=normalized,
+        name=clean_name,
+    )
     db.add(saved)
     db.commit()
     db.refresh(saved)
     return _serialize_color(saved)
+
+
+def update_color(
+    db: Session,
+    color_id: int,
+    payload: PlannerColorUpdate,
+    user_id: int,
+) -> dict:
+    data = payload.model_dump(exclude_unset=True)
+    if not data:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="수정할 내용이 없습니다.",
+        )
+
+    saved = (
+        db.query(PlannerColor)
+        .filter(
+            PlannerColor.id == color_id,
+            PlannerColor.user_id == user_id,
+        )
+        .first()
+    )
+    if saved is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="색상 칩을 찾을 수 없습니다.",
+        )
+
+    if "color" in data:
+        normalized = _clean_color(data["color"])
+        if normalized is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="색상을 입력해주세요.",
+            )
+        if normalized != saved.color:
+            duplicate = (
+                db.query(PlannerColor)
+                .filter(
+                    PlannerColor.user_id == user_id,
+                    PlannerColor.color == normalized,
+                    PlannerColor.id != saved.id,
+                )
+                .first()
+            )
+            if duplicate is not None:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="이미 사용 중인 색상입니다.",
+                )
+            saved.color = normalized
+
+    if "name" in data:
+        saved.name = _clean_color_name(data["name"])
+
+    db.commit()
+    db.refresh(saved)
+    return _serialize_color(saved)
+
+
+def delete_color(
+    db: Session,
+    color_id: int,
+    user_id: int,
+) -> dict:
+    saved = (
+        db.query(PlannerColor)
+        .filter(
+            PlannerColor.id == color_id,
+            PlannerColor.user_id == user_id,
+        )
+        .first()
+    )
+    if saved is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="색상 칩을 찾을 수 없습니다.",
+        )
+
+    deleted_tasks = (
+        db.query(PlannerTask)
+        .filter(
+            PlannerTask.user_id == user_id,
+            PlannerTask.color_id == color_id,
+            PlannerTask.status == "trashed",
+        )
+        .delete(synchronize_session=False)
+    )
+    unassigned_tasks = (
+        db.query(PlannerTask)
+        .filter(
+            PlannerTask.user_id == user_id,
+            PlannerTask.color_id == color_id,
+        )
+        .update(
+            {PlannerTask.color_id: None},
+            synchronize_session=False,
+        )
+    )
+    db.delete(saved)
+    db.commit()
+    return {
+        "success": True,
+        "unassigned_tasks": unassigned_tasks,
+        "deleted_tasks": deleted_tasks,
+    }
 
 
 def maintain_tasks(db: Session, user_id: int) -> None:
