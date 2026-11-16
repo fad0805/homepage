@@ -257,7 +257,7 @@ function monthLabel(monthKey: string) {
 function monthCells(monthKey: string): CalendarCell[] {
   const [year, month] = monthKey.split("-").map(Number);
   const first = new Date(Date.UTC(year, month - 1, 1));
-  const offset = first.getUTCDay();
+  const offset = (first.getUTCDay() + 6) % 7;
   return Array.from({ length: 42 }, (_, index) => {
     const date = new Date(Date.UTC(year, month - 1, 1 - offset + index));
     return {
@@ -2251,7 +2251,7 @@ export default function PlannerClient({ username }: { username: string }) {
                 날짜를 드래그하면 범위 일정을 만들 수 있습니다.
               </p>
               <div className="planner-weekdays" aria-hidden="true">
-                {["일", "월", "화", "수", "목", "금", "토"].map((day) => (
+                {["월", "화", "수", "목", "금", "토", "일"].map((day) => (
                   <span key={day}>{day}</span>
                 ))}
               </div>
