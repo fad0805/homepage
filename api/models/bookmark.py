@@ -33,6 +33,12 @@ class BookmarkRoutine(Base):
     title = Column(String(255), nullable=False)
     notes = Column(Text, nullable=True)
     frequency = Column(String(10), nullable=False)
+    tracking_mode = Column(
+        String(10),
+        nullable=False,
+        default="count",
+        server_default="count",
+    )
     target_count = Column(
         Integer,
         nullable=False,

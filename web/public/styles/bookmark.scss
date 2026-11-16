@@ -398,6 +398,38 @@
   }
 }
 
+.bookmark-mode-toggle {
+  display: inline-flex;
+  width: fit-content;
+  gap: 0.2rem;
+  padding: 0.18rem;
+  border: 1px solid
+    color-mix(in srgb, var(--theme-main) 28%, transparent);
+  border-radius: 999px;
+
+  button {
+    padding: 0.25rem 0.55rem;
+    border: 0;
+    border-radius: 999px;
+    background: transparent;
+    color: var(--foreground);
+    font-family: inherit;
+    font-size: 0.66rem;
+    cursor: pointer;
+
+    &.is-active {
+      background: var(--bookmark-selected-bg);
+    }
+  }
+}
+
+.bookmark-routine-week-progress {
+  margin: 0.32rem 0 0;
+  color: var(--title-color);
+  font-size: 0.6rem;
+  opacity: 0.58;
+}
+
 .bookmark-routine-counter {
   display: flex;
   align-items: center;

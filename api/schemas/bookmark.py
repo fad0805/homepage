@@ -11,19 +11,32 @@ BookmarkRoutineFrequency = Literal[
     "quarterly",
     "yearly",
 ]
+BookmarkTrackingMode = Literal["count", "date"]
 
 
 class BookmarkRoutineCreate(BaseModel):
     frequency: BookmarkRoutineFrequency
     title: str = Field(min_length=1, max_length=255)
     notes: str | None = Field(default=None, max_length=4000)
+    tracking_mode: BookmarkTrackingMode = "count"
     target_count: int = Field(default=1, ge=1, le=1000)
+    weekday: int | None = Field(default=None, ge=0, le=6)
+    weekdays: list[int] | None = None
+    day_of_month: int | None = Field(default=None, ge=1, le=31)
+    nth_week: int | None = Field(default=None, ge=1, le=5)
+    month: int | None = Field(default=None, ge=1, le=12)
 
 
 class BookmarkRoutineUpdate(BaseModel):
     title: str | None = Field(default=None, min_length=1, max_length=255)
     notes: str | None = Field(default=None, max_length=4000)
+    tracking_mode: BookmarkTrackingMode | None = None
     target_count: int | None = Field(default=None, ge=1, le=1000)
+    weekday: int | None = Field(default=None, ge=0, le=6)
+    weekdays: list[int] | None = None
+    day_of_month: int | None = Field(default=None, ge=1, le=31)
+    nth_week: int | None = Field(default=None, ge=1, le=5)
+    month: int | None = Field(default=None, ge=1, le=12)
     active: bool | None = None
 
 
@@ -32,7 +45,13 @@ class BookmarkRoutineRead(BaseModel):
     title: str
     notes: str | None = None
     frequency: BookmarkRoutineFrequency
+    tracking_mode: BookmarkTrackingMode
     target_count: int
+    weekday: int | None = None
+    weekdays: list[int] | None = None
+    day_of_month: int | None = None
+    nth_week: int | None = None
+    month: int | None = None
     active: bool
     position: int
     created_at: datetime

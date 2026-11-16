@@ -4,6 +4,7 @@ import { FormEvent, useCallback, useEffect, useState } from "react";
 
 import {
   WEEKDAY_SHORT,
+  routineWeekdays,
   type BookmarkGoal,
   type BookmarkPeriod,
   type BookmarkPeriodType,
@@ -12,6 +13,7 @@ import {
   type BookmarkRoutine,
   type BookmarkRoutineFrequency,
   type BookmarkRoutineHistory,
+  type BookmarkTrackingMode,
   routineScheduleLabel,
 } from "@/lib/bookmark";
 import { apiFetch } from "@/lib/api";
@@ -22,6 +24,7 @@ import { CloverRating } from "./clover-rating";
 import "@/public/styles/bookmark.scss";
 
 type BookmarkView = "today" | BookmarkPeriodType;
+type MonthlyMode = "day" | "nth";
 
 const PERIOD_TYPES: BookmarkPeriodType[] = [
   "year",
@@ -72,6 +75,10 @@ const TARGET_LABELS: Record<BookmarkRoutineFrequency, string> = {
   monthly: "월간 목표 횟수",
   quarterly: "분기 목표 횟수",
   yearly: "연간 목표 횟수",
+};
+const MODE_LABELS: Record<BookmarkTrackingMode, string> = {
+  count: "횟수",
+  date: "일자",
 };
 
 function pad2(value: number) {
@@ -247,7 +254,17 @@ export default function BookmarkClient({ username }: { username: string }) {
   const [itemNotes, setItemNotes] = useState("");
   const [itemSaving, setItemSaving] = useState(false);
 
+  const [routineMode, setRoutineMode] =
+    useState<BookmarkTrackingMode>("count");
   const [routineTarget, setRoutineTarget] = useState("1");
+  const [routineWeekday, setRoutineWeekday] = useState(0);
+  const [routineWeekdaySelection, setRoutineWeekdaySelection] = useState<
+    number[]
+  >([0]);
+  const [monthlyMode, setMonthlyMode] = useState<MonthlyMode>("day");
+  const [routineDayOfMonth, setRoutineDayOfMonth] = useState("1");
+  const [routineNthWeek, setRoutineNthWeek] = useState(1);
+  const [routineMonth, setRoutineMonth] = useState(1);
 
   const loadPeriod = useCallback(async () => {
     setLoading(true);
@@ -312,7 +329,14 @@ export default function BookmarkClient({ username }: { username: string }) {
     setEditingRoutine(null);
     setItemTitle("");
     setItemNotes("");
+    setRoutineMode("count");
     setRoutineTarget("1");
+    setRoutineWeekday(0);
+    setRoutineWeekdaySelection([0]);
+    setMonthlyMode("day");
+    setRoutineDayOfMonth("1");
+    setRoutineNthWeek(1);
+    setRoutineMonth(1);
     setError(null);
   };
 
@@ -321,7 +345,22 @@ export default function BookmarkClient({ username }: { username: string }) {
     setEditingRoutine(routine);
     setItemTitle(routine.title);
     setItemNotes(routine.notes ?? "");
+    setRoutineMode(routine.tracking_mode);
     setRoutineTarget(String(routine.target_count));
+    setRoutineWeekday(routine.weekday ?? 0);
+    setRoutineWeekdaySelection(
+      routineWeekdays(routine).length > 0
+        ? routineWeekdays(routine)
+        : [0],
+    );
+    setMonthlyMode(routine.day_of_month !== null ? "day" : "nth");
+    setRoutineDayOfMonth(
+      routine.day_of_month !== null
+        ? String(routine.day_of_month)
+        : "1",
+    );
+    setRoutineNthWeek(routine.nth_week ?? 1);
+    setRoutineMonth(routine.month ?? 1);
     setError(null);
   };
 
@@ -370,10 +409,70 @@ export default function BookmarkClient({ username }: { username: string }) {
   ) => {
     event.preventDefault();
     if (!itemTitle.trim() || itemSaving) return;
+    const mode: BookmarkTrackingMode =
+      modalFrequency === "daily" ? "date" : routineMode;
+    if (
+      mode === "date" &&
+      modalFrequency === "weekly" &&
+      routineWeekdaySelection.length === 0
+    ) {
+      setError("매주 반복할 요일을 하나 이상 선택해주세요.");
+      return;
+    }
     const targetCount =
-      modalFrequency === "daily"
-        ? 1
-        : Math.max(1, Number(routineTarget) || 1);
+      mode === "count"
+        ? Math.max(1, Number(routineTarget) || 1)
+        : modalFrequency === "weekly"
+          ? routineWeekdaySelection.length
+          : 1;
+    const schedule =
+      mode === "date"
+        ? modalFrequency === "weekly"
+          ? {
+              weekday: null,
+              weekdays: routineWeekdaySelection,
+              day_of_month: null,
+              nth_week: null,
+              month: null,
+            }
+          : modalFrequency === "monthly"
+            ? monthlyMode === "day"
+              ? {
+                  weekday: null,
+                  weekdays: null,
+                  day_of_month: Number(routineDayOfMonth),
+                  nth_week: null,
+                  month: null,
+                }
+              : {
+                  weekday: routineWeekday,
+                  weekdays: null,
+                  day_of_month: null,
+                  nth_week: routineNthWeek,
+                  month: null,
+                }
+            : modalFrequency === "yearly"
+              ? {
+                  weekday: null,
+                  weekdays: null,
+                  day_of_month: Number(routineDayOfMonth),
+                  nth_week: null,
+                  month: routineMonth,
+                }
+              : {
+                  weekday: null,
+                  weekdays: null,
+                  day_of_month: null,
+                  nth_week: null,
+                  month: null,
+                }
+        : {
+            weekday: null,
+            weekdays: null,
+            day_of_month: null,
+            nth_week: null,
+            month: null,
+          };
 
     setItemSaving(true);
     setError(null);
@@ -386,7 +485,9 @@ export default function BookmarkClient({ username }: { username: string }) {
             body: JSON.stringify({
               title: itemTitle,
               notes: itemNotes || null,
+              tracking_mode: mode,
               target_count: targetCount,
+              ...schedule,
             }),
           },
         );
@@ -397,7 +498,9 @@ export default function BookmarkClient({ username }: { username: string }) {
             frequency: modalFrequency,
             title: itemTitle,
             notes: itemNotes || null,
+            tracking_mode: mode,
             target_count: targetCount,
+            ...schedule,
           }),
         });
       }
@@ -412,6 +515,14 @@ export default function BookmarkClient({ username }: { username: string }) {
     } finally {
       setItemSaving(false);
     }
+  };
+
+  const toggleRoutineWeekday = (weekday: number) => {
+    setRoutineWeekdaySelection((previous) =>
+      previous.includes(weekday)
+        ? previous.filter((value) => value !== weekday)
+        : [...previous, weekday].sort((a, b) => a - b),
+    );
   };
 
   const handleDeleteRoutine = async () => {
@@ -486,6 +597,70 @@ export default function BookmarkClient({ username }: { username: string }) {
         reason instanceof Error
           ? reason.message
           : "루틴 달성 횟수를 변경하지 못했습니다.",
+      );
+      await loadPeriod();
+    }
+  };
+
+  const toggleOccurrence = async (
+    routine: BookmarkRoutine,
+    occurrenceDate: string,
+    done: boolean,
+  ) => {
+    const nextDone = !done;
+    const nextCompleted = Math.max(
+      0,
+      Math.min(
+        routine.target_count,
+        routine.completed_count + (nextDone ? 1 : -1),
+      ),
+    );
+    const periodType =
+      routine.frequency === "daily" || routine.frequency === "weekly"
+        ? "day"
+        : routine.period_type;
+    const periodStart =
+      routine.frequency === "daily" || routine.frequency === "weekly"
+        ? occurrenceDate
+        : routine.period_start;
+    setError(null);
+    setData((previous) =>
+      previous
+        ? {
+            ...previous,
+            routines: previous.routines.map((current) =>
+              current.id === routine.id
+                ? {
+                    ...current,
+                    completed_count: nextCompleted,
+                    occurrences: current.occurrences.map((occurrence) =>
+                      occurrence.date === occurrenceDate
+                        ? { ...occurrence, done: nextDone }
+                        : occurrence,
+                    ),
+                  }
+                : current,
+            ),
+          }
+        : previous,
+    );
+    try {
+      await apiFetch<BookmarkRoutine>(
+        `/api/bookmark/routines/${routine.id}/check`,
+        {
+          method: "PUT",
+          body: JSON.stringify({
+            period_type: periodType,
+            period_start: periodStart,
+            count: nextDone ? 1 : 0,
+          }),
+        },
+      );
+    } catch (reason) {
+      setError(
+        reason instanceof Error
+          ? reason.message
+          : "루틴 체크 상태를 변경하지 못했습니다.",
       );
       await loadPeriod();
     }
@@ -600,9 +775,15 @@ export default function BookmarkClient({ username }: { username: string }) {
       <ul className="bookmark-item-list">
         {routines.map((routine) => {
           const isDaily = routine.frequency === "daily";
-          const occurrence = routine.occurrences[0];
+          const isCount =
+            routine.tracking_mode === "count" && !isDaily;
           const allDone =
-            routine.completed_count >= routine.target_count;
+            isCount || routine.frequency === "weekly"
+              ? routine.completed_count >= routine.target_count
+              : routine.occurrences.length > 0 &&
+                routine.occurrences.every(
+                  (occurrence) => occurrence.done,
+                );
           return (
             <li
               className={`bookmark-item${allDone ? " is-done" : ""}`}
@@ -618,35 +799,7 @@ export default function BookmarkClient({ username }: { username: string }) {
                   </p>
                 </div>
 
-                {isDaily ? (
-                  <div className="bookmark-occurrence-list">
-                    <label
-                      className={`bookmark-occurrence${
-                        occurrence?.done ? " is-done" : ""
-                      }`}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={occurrence?.done ?? false}
-                        onChange={() =>
-                          void setRoutineCount(
-                            routine,
-                            occurrence?.done ? 0 : 1,
-                          )
-                        }
-                      />
-                      <span>
-                        {occurrence
-                          ? occurrenceLabel(
-                              occurrence.date,
-                              view,
-                              routine.frequency,
-                            )
-                          : "오늘"}
-                      </span>
-                    </label>
-                  </div>
-                ) : (
+                {isCount ? (
                   <div className="bookmark-routine-counter">
                     <button
                       type="button"
@@ -683,6 +836,45 @@ export default function BookmarkClient({ username }: { username: string }) {
                       +
                     </button>
                   </div>
+                ) : (
+                  <>
+                    <div className="bookmark-occurrence-list">
+                      {routine.occurrences.map((occurrence) => (
+                        <label
+                          className={`bookmark-occurrence${
+                            occurrence.done ? " is-done" : ""
+                          }`}
+                          key={occurrence.date}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={occurrence.done}
+                            onChange={() =>
+                              void toggleOccurrence(
+                                routine,
+                                occurrence.date,
+                                occurrence.done,
+                              )
+                            }
+                          />
+                          <span>
+                            {occurrenceLabel(
+                              occurrence.date,
+                              view,
+                              routine.frequency,
+                            )}
+                          </span>
+                        </label>
+                      ))}
+                    </div>
+                    {routine.frequency === "weekly" &&
+                    routine.target_count > 1 ? (
+                      <p className="bookmark-routine-week-progress">
+                        이번 주 {routine.completed_count}/
+                        {routine.target_count}회
+                      </p>
+                    ) : null}
+                  </>
                 )}
 
                 {routine.notes ? (
@@ -950,34 +1142,213 @@ export default function BookmarkClient({ username }: { username: string }) {
               </label>
 
               <div className="bookmark-schedule">
-                <span className="bookmark-field-label">목표</span>
+                <span className="bookmark-field-label">기록 방식</span>
                 {modalFrequency === "daily" ? (
                   <p className="bookmark-form-hint">
                     매일 1회 체크하는 루틴입니다.
                   </p>
                 ) : (
                   <>
-                    <label>
-                      <span>{TARGET_LABELS[modalFrequency]}</span>
-                      <input
-                        type="number"
-                        min={1}
-                        max={1000}
-                        value={routineTarget}
-                        onChange={(event) =>
-                          setRoutineTarget(event.target.value)
-                        }
-                      />
-                    </label>
-                    <p className="bookmark-form-hint">
-                      {modalFrequency === "weekly"
-                        ? "이번 주에 몇 회 수행할지 정합니다."
-                        : modalFrequency === "monthly"
-                          ? "이번 달에 몇 회 수행할지 정합니다."
-                          : modalFrequency === "quarterly"
-                            ? "이번 분기에 몇 회 수행할지 정합니다."
-                            : "올해 몇 회 수행할지 정합니다."}
-                    </p>
+                    <div className="bookmark-mode-toggle">
+                      {(["count", "date"] as BookmarkTrackingMode[]).map(
+                        (mode) => (
+                          <button
+                            type="button"
+                            key={mode}
+                            className={
+                              routineMode === mode ? "is-active" : ""
+                            }
+                            onClick={() => setRoutineMode(mode)}
+                          >
+                            {MODE_LABELS[mode]}
+                          </button>
+                        ),
+                      )}
+                    </div>
+
+                    {routineMode === "count" ? (
+                      <>
+                        <label>
+                          <span>{TARGET_LABELS[modalFrequency]}</span>
+                          <input
+                            type="number"
+                            min={1}
+                            max={1000}
+                            value={routineTarget}
+                            onChange={(event) =>
+                              setRoutineTarget(event.target.value)
+                            }
+                          />
+                        </label>
+                        <p className="bookmark-form-hint">
+                          {modalFrequency === "weekly"
+                            ? "이번 주에 몇 회 수행할지 정합니다."
+                            : modalFrequency === "monthly"
+                              ? "이번 달에 몇 회 수행할지 정합니다."
+                              : modalFrequency === "quarterly"
+                                ? "이번 분기에 몇 회 수행할지 정합니다."
+                                : "올해 몇 회 수행할지 정합니다."}
+                        </p>
+                      </>
+                    ) : (
+                      <>
+                        {modalFrequency === "weekly" ? (
+                          <div className="bookmark-weekday-field">
+                            <span>요일</span>
+                            <div className="bookmark-weekday-picker">
+                              {WEEKDAY_SHORT.map((label, index) => {
+                                const selected =
+                                  routineWeekdaySelection.includes(index);
+                                return (
+                                  <label
+                                    className={
+                                      selected ? "is-selected" : ""
+                                    }
+                                    key={label}
+                                  >
+                                    <input
+                                      type="checkbox"
+                                      checked={selected}
+                                      onChange={() =>
+                                        toggleRoutineWeekday(index)
+                                      }
+                                    />
+                                    <span>{label}</span>
+                                  </label>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        ) : null}
+
+                        {modalFrequency === "monthly" ? (
+                          <>
+                            <label>
+                              <span>방식</span>
+                              <select
+                                value={monthlyMode}
+                                onChange={(event) =>
+                                  setMonthlyMode(
+                                    event.target.value as MonthlyMode,
+                                  )
+                                }
+                              >
+                                <option value="day">날짜</option>
+                                <option value="nth">
+                                  몇 번째 요일
+                                </option>
+                              </select>
+                            </label>
+                            {monthlyMode === "day" ? (
+                              <label>
+                                <span>일</span>
+                                <input
+                                  type="number"
+                                  min={1}
+                                  max={31}
+                                  value={routineDayOfMonth}
+                                  onChange={(event) =>
+                                    setRoutineDayOfMonth(
+                                      event.target.value,
+                                    )
+                                  }
+                                />
+                              </label>
+                            ) : (
+                              <div className="bookmark-schedule-row">
+                                <label>
+                                  <span>번째</span>
+                                  <select
+                                    value={routineNthWeek}
+                                    onChange={(event) =>
+                                      setRoutineNthWeek(
+                                        Number(event.target.value),
+                                      )
+                                    }
+                                  >
+                                    {[1, 2, 3, 4, 5].map((value) => (
+                                      <option value={value} key={value}>
+                                        {value}번째
+                                      </option>
+                                    ))}
+                                  </select>
+                                </label>
+                                <label>
+                                  <span>요일</span>
+                                  <select
+                                    value={routineWeekday}
+                                    onChange={(event) =>
+                                      setRoutineWeekday(
+                                        Number(event.target.value),
+                                      )
+                                    }
+                                  >
+                                    {WEEKDAY_SHORT.map(
+                                      (label, index) => (
+                                        <option
+                                          value={index}
+                                          key={label}
+                                        >
+                                          {label}요일
+                                        </option>
+                                      ),
+                                    )}
+                                  </select>
+                                </label>
+                              </div>
+                            )}
+                          </>
+                        ) : null}
+
+                        {modalFrequency === "yearly" ? (
+                          <div className="bookmark-schedule-row">
+                            <label>
+                              <span>월</span>
+                              <select
+                                value={routineMonth}
+                                onChange={(event) =>
+                                  setRoutineMonth(
+                                    Number(event.target.value),
+                                  )
+                                }
+                              >
+                                {Array.from(
+                                  { length: 12 },
+                                  (_, index) => (
+                                    <option
+                                      value={index + 1}
+                                      key={index + 1}
+                                    >
+                                      {index + 1}월
+                                    </option>
+                                  ),
+                                )}
+                              </select>
+                            </label>
+                            <label>
+                              <span>일</span>
+                              <input
+                                type="number"
+                                min={1}
+                                max={31}
+                                value={routineDayOfMonth}
+                                onChange={(event) =>
+                                  setRoutineDayOfMonth(
+                                    event.target.value,
+                                  )
+                                }
+                              />
+                            </label>
+                          </div>
+                        ) : null}
+
+                        {modalFrequency === "quarterly" ? (
+                          <p className="bookmark-form-hint">
+                            분기마다 1회 체크하는 루틴입니다.
+                          </p>
+                        ) : null}
+                      </>
+                    )}
                   </>
                 )}
               </div>
@@ -1109,7 +1480,7 @@ export default function BookmarkClient({ username }: { username: string }) {
                   </section>
                 ) : (
                   <p className="bookmark-history-note">
-                    일간 상세 그래프는 매일 루틴에서 제공됩니다.
+                    일간 상세 그래프는 매일 또는 일자형 주간 루틴에서 제공됩니다.
                   </p>
                 )}
 
