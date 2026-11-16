@@ -387,6 +387,16 @@ function specialDdayLabel(value: string) {
   return diff > 0 ? `D-${diff}` : `D+${Math.abs(diff)}`;
 }
 
+function specialDateAppearsOn(item: PlannerSpecialDate, date: string) {
+  if (item.kind === "yearly") {
+    return (
+      item.month === Number(date.slice(5, 7)) &&
+      item.day === Number(date.slice(8, 10))
+    );
+  }
+  return item.event_date === date;
+}
+
 function formatDayLabel(value: string) {
   const [year, month, day] = value.split("-").map(Number);
   return new Date(Date.UTC(year, month - 1, day)).toLocaleDateString("ko-KR", {
@@ -1001,6 +1011,13 @@ export default function PlannerClient({ username }: { username: string }) {
         .filter((event) => eventDate(event) === selectedDate)
         .sort((a, b) => b.occurred_at.localeCompare(a.occurred_at)),
     [events, selectedDate],
+  );
+  const selectedSpecialDates = useMemo(
+    () =>
+      specialDates.filter((item) =>
+        specialDateAppearsOn(item, selectedDate),
+      ),
+    [specialDates, selectedDate],
   );
   const eventDates = useMemo(
     () => new Set(events.map(eventDate)),
@@ -2333,11 +2350,45 @@ export default function PlannerClient({ username }: { username: string }) {
     );
   };
 
+  const renderDaySpecialDates = (items: PlannerSpecialDate[]) => {
+    if (items.length === 0) return null;
+    return (
+      <div className="planner-special-day-section">
+        <div className="planner-special-day-heading">
+          <span>기념일</span>
+          <span>{items.length}</span>
+        </div>
+        <ul className="planner-special-day-list">
+          {items.map((item) => (
+            <li
+              className={`planner-special-day-item is-${item.kind}`}
+              key={item.id}
+            >
+              <span className="planner-special-day-mark" aria-hidden="true">
+                {item.kind === "dday" ? "D" : "✦"}
+              </span>
+              <strong className="planner-special-day-title">
+                {item.title}
+              </strong>
+              <span className="planner-special-day-meta">
+                {item.kind === "dday"
+                  ? specialDdayLabel(item.event_date ?? selectedDate)
+                  : "매년"}
+              </span>
+            </li>
+          ))}
+        </ul>
+      </div>
+    );
+  };
+
   const renderDayDetail = (
     dateTasks: PlannerTask[],
     dateEvents: PlannerEvent[],
+    dateSpecialDates: PlannerSpecialDate[],
   ) => (
     <>
+      {renderDaySpecialDates(dateSpecialDates)}
       {renderDayBookmark()}
       {renderDayTasks(dateTasks)}
       {renderHistory(dateEvents)}
@@ -2549,12 +2600,7 @@ export default function PlannerClient({ username }: { username: string }) {
                         const dayTaskCount = dayTasks.length;
                         const daySpecialDates = specialDates.filter(
                           (item) =>
-                            item.kind === "yearly"
-                              ? item.month ===
-                                  Number(cell.date.slice(5, 7)) &&
-                                item.day ===
-                                  Number(cell.date.slice(8, 10))
-                              : item.event_date === cell.date,
+                            specialDateAppearsOn(item, cell.date),
                         );
                         const hasTaskRecord = colorViewTasks.some(
                           (task) =>
@@ -2768,7 +2814,8 @@ export default function PlannerClient({ username }: { username: string }) {
                       </p>
                       <h2>{formatDayLabel(selectedDate)}</h2>
                       <p>
-                        일정 {selectedTasks.length}개 · 이력{" "}
+                        일정 {selectedTasks.length}개 · 기념일{" "}
+                        {selectedSpecialDates.length}개 · 이력{" "}
                         {selectedEvents.length}개
                       </p>
                     </div>
@@ -2793,7 +2840,11 @@ export default function PlannerClient({ username }: { username: string }) {
                       </button>
                     </div>
                   </div>
-                  {renderDayDetail(selectedTasks, selectedEvents)}
+                  {renderDayDetail(
+                    selectedTasks,
+                    selectedEvents,
+                    selectedSpecialDates,
+                  )}
                 </section>
               ) : activeTab === "colors" ? (
                 <section className="planner-day-panel planner-color-panel">
