@@ -14,6 +14,8 @@ from core.security import (
 )
 from schemas.users import UserCreate, UserUpdate
 
+SIGNIN_HISTORY_RETENTION_DAYS = 30
+
 
 def get_user(db: Session, username: str):
     """
@@ -301,7 +303,13 @@ def record_signin_history(
     device_info: str | None,
     success: bool,
 ) -> None:
-    """Record a sign-in attempt for later auditing."""
+    """Record a sign-in attempt and keep only the last 30 days."""
+    cutoff = datetime.utcnow() - timedelta(
+        days=SIGNIN_HISTORY_RETENTION_DAYS
+    )
+    db.query(UserSigninHistory).filter(
+        UserSigninHistory.signin_time < cutoff
+    ).delete(synchronize_session=False)
     db.add(
         UserSigninHistory(
             user_id=user_id,
