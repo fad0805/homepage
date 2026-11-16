@@ -55,6 +55,8 @@ export function middleware(request: NextRequest) {
   const requiresAuth =
     pathname === "/memo" ||
     pathname.startsWith("/memo/") ||
+    pathname === "/planner" ||
+    pathname.startsWith("/planner/") ||
     pathname === "/admin" ||
     pathname.startsWith("/admin/") ||
     authorAdmin ||

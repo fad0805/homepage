@@ -2,6 +2,7 @@ from fastapi import HTTPException, status
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session, selectinload
 
+from core.audit import queue_change
 from core.uploads import delete_replaced_upload, delete_uploaded_file
 from models.characters import Character, CharacterRelationship, Doll, Location
 from schemas.characters import (
@@ -107,13 +108,42 @@ def _doll_is_referenced(
     return query.first() is not None
 
 
+def _doll_values(doll: Doll | None) -> tuple[str, str, str | None] | None:
+    if doll is None:
+        return None
+    return (
+        (doll.company or "").strip(),
+        (doll.name or "").strip(),
+        (doll.skin_tone or "").strip() or None,
+    )
+
+
+def _doll_input_values(
+    doll_input: DollInput | None,
+) -> tuple[str, str, str | None] | None:
+    if doll_input is None:
+        return None
+    name = (doll_input.name or "").strip()
+    if not name:
+        return None
+    return (
+        (doll_input.company or "").strip(),
+        name,
+        (doll_input.skin_tone or "").strip() or None,
+    )
+
+
 def _sync_doll(
     db: Session,
     character: Character,
     part: str,
     doll_input: DollInput | None,
-):
-    """Create or update the doll record linked to a head or body field."""
+) -> bool:
+    """Create or update the doll record linked to a head or body field.
+
+    Returns whether the visible doll data changed, so the planner history does
+    not record a no-op save or an internal doll-record replacement.
+    """
     other_part = "body" if part == "head" else "head"
     current_id = getattr(character, part)
     current = (
@@ -121,31 +151,37 @@ def _sync_doll(
         if current_id
         else None
     )
-    name = (doll_input.name or "").strip() if doll_input else ""
-    company = (doll_input.company or "").strip() if doll_input else ""
-    skin_tone = (doll_input.skin_tone or "").strip() or None if doll_input else None
+    old_values = _doll_values(current)
+    new_values = _doll_input_values(doll_input)
     other_part_id = getattr(character, other_part)
 
-    if not name:
+    if new_values is None:
         setattr(character, part, None)
         if current and not _doll_is_referenced(
             db, current.id, character.id, other_part_id
         ):
             db.delete(current)
-        return
+        return old_values is not None
 
-    if current and not _doll_is_referenced(
+    company, name, skin_tone = new_values
+    referenced = current is not None and _doll_is_referenced(
         db, current.id, character.id, other_part_id
-    ):
+    )
+
+    if current and not referenced:
         current.company = company
         current.name = name
         current.skin_tone = skin_tone
-        return
+        return old_values != new_values
+
+    if referenced and old_values == new_values:
+        return False
 
     doll = Doll(company=company, name=name, skin_tone=skin_tone)
     db.add(doll)
     db.flush()
     setattr(character, part, doll.id)
+    return True
 
 
 def _sync_relationships(
@@ -155,16 +191,36 @@ def _sync_relationships(
     user_id: int,
 ) -> None:
     """Replace the character's outgoing relationship links."""
-    db.query(CharacterRelationship).filter(
-        CharacterRelationship.character_id == character.id
-    ).delete(synchronize_session=False)
+    previous = sorted(
+        (
+            relationship.related_character_id,
+            relationship.relationship_type or "",
+        )
+        for relationship in db.query(CharacterRelationship)
+        .filter(CharacterRelationship.character_id == character.id)
+        .all()
+    )
 
+    next_values: list[tuple[int, str]] = []
     seen: set[int] = set()
     for item in items:
         related_id = item.related_character_id
         if related_id == character.id or related_id in seen:
             continue
+        seen.add(related_id)
+        next_values.append(
+            (related_id, (item.relationship_type or "").strip())
+        )
+    next_values.sort()
 
+    if previous == next_values:
+        return
+
+    db.query(CharacterRelationship).filter(
+        CharacterRelationship.character_id == character.id
+    ).delete(synchronize_session=False)
+
+    for related_id, relationship_type in next_values:
         related = (
             db.query(Character)
             .filter(
@@ -179,14 +235,19 @@ def _sync_relationships(
                 detail="존재하지 않는 등장인물입니다.",
             )
 
-        seen.add(related_id)
         db.add(
             CharacterRelationship(
                 character_id=character.id,
                 related_character_id=related_id,
-                relationship_type=(item.relationship_type or "").strip(),
+                relationship_type=relationship_type,
             )
         )
+
+    queue_change(
+        db,
+        character,
+        {"field": "relationships", "kind": "changed"},
+    )
 
 
 def _get_location_or_404(
@@ -388,9 +449,19 @@ def update_character(
         setattr(character, key, value)
 
     if "head_doll" in updated.model_fields_set:
-        _sync_doll(db, character, "head", updated.head_doll)
+        if _sync_doll(db, character, "head", updated.head_doll):
+            queue_change(
+                db,
+                character,
+                {"field": "head_doll", "kind": "changed"},
+            )
     if "body_doll" in updated.model_fields_set:
-        _sync_doll(db, character, "body", updated.body_doll)
+        if _sync_doll(db, character, "body", updated.body_doll):
+            queue_change(
+                db,
+                character,
+                {"field": "body_doll", "kind": "changed"},
+            )
     if "relationships" in updated.model_fields_set:
         _sync_relationships(
             db,

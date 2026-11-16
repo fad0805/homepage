@@ -8,6 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
+from core import audit as _planner_audit  # noqa: F401 - registers history hooks
 from core.config import API_DOCS_ENABLED, ENVIRONMENT
 from core.mastodon import mastodon_publish_loop
 from core.uploads import UPLOAD_DIR, ensure_upload_dir
@@ -26,6 +27,7 @@ from routers import (
     index_page,
     links,
     memos,
+    planner,
     profiles,
     settings,
     users,
@@ -111,6 +113,7 @@ app.include_router(
 )
 app.include_router(links.router, prefix="/links", tags=["links"])
 app.include_router(memos.router, prefix="/memos", tags=["memos"])
+app.include_router(planner.router, prefix="/planner", tags=["planner"])
 app.include_router(profiles.router, prefix="/profiles", tags=["profiles"])
 app.include_router(books.router, prefix="/books", tags=["books"])
 app.include_router(chapters.router, prefix="/chapters", tags=["chapters"])

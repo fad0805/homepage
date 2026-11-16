@@ -60,6 +60,8 @@ const nextConfig: NextConfig = {
       },
       { source: "/illustrations", headers: noIndex },
       { source: "/illustrations/:path*", headers: noIndex },
+      { source: "/planner", headers: noIndex },
+      { source: "/planner/:path*", headers: noIndex },
       { source: "/search", headers: noIndex },
       { source: "/gallery", headers: noIndex },
       { source: "/gallery/:path*", headers: noIndex },

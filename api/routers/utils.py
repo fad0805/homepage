@@ -492,7 +492,12 @@ async def require_auth(
 ):
     """
     Dependency to require authentication for a route.
+
+    The signed-in user is also exposed through a context variable so the
+    planner audit listener can record who changed another author's content.
     """
+    from core.audit import reset_audit_actor, set_audit_actor
+
     user = get_current_user_from_token(db, request, response, token)
     if not user:
         raise HTTPException(
@@ -500,7 +505,11 @@ async def require_auth(
             detail="Not authenticated",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    return user
+    token_handle = set_audit_actor(user.id)
+    try:
+        yield user
+    finally:
+        reset_audit_actor(token_handle)
 
 
 def is_admin(user) -> bool:

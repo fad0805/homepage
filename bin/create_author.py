@@ -14,6 +14,7 @@ import sys
 
 from sqlalchemy.exc import IntegrityError
 
+from core import audit as _planner_audit  # noqa: F401 - registers history hooks
 from core.security import hash_password
 from db.session import SessionLocal
 from models.users import User

@@ -180,7 +180,6 @@ export default async function RootLayout({
             <VisitTracker />
             <Shortcuts>
               <SiteShell
-                authorSlug={authorSlug}
                 layoutKey={layoutKey}
                 sidePosition={sidePosition}
                 colorTheme={colorTheme}
