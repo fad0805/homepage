@@ -12,6 +12,43 @@ BookmarkRoutineFrequency = Literal[
     "yearly",
 ]
 BookmarkTrackingMode = Literal["count", "date"]
+BookmarkSpecialDateKind = Literal["yearly", "dday"]
+
+
+class BookmarkSpecialDateCreate(BaseModel):
+    title: str = Field(min_length=1, max_length=255)
+    kind: BookmarkSpecialDateKind = "yearly"
+    event_date: date | None = None
+    month: int | None = Field(default=None, ge=1, le=12)
+    day: int | None = Field(default=None, ge=1, le=31)
+
+
+class BookmarkSpecialDateUpdate(BaseModel):
+    title: str | None = Field(default=None, min_length=1, max_length=255)
+    kind: BookmarkSpecialDateKind | None = None
+    event_date: date | None = None
+    month: int | None = Field(default=None, ge=1, le=12)
+    day: int | None = Field(default=None, ge=1, le=31)
+
+
+class BookmarkSpecialDateRead(BaseModel):
+    id: int
+    title: str
+    kind: BookmarkSpecialDateKind
+    event_date: date | None = None
+    month: int | None = None
+    day: int | None = None
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class BookmarkSpecialDatesResponse(BaseModel):
+    special_dates: list[BookmarkSpecialDateRead] = Field(
+        default_factory=list
+    )
 
 
 class BookmarkRoutineCategoryCreate(BaseModel):

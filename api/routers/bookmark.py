@@ -7,15 +7,18 @@ from crud.bookmark import (
     create_mood_tag,
     create_routine,
     create_routine_category,
+    create_special_date,
     delete_mood_tag,
     delete_routine,
     delete_routine_category,
+    delete_special_date,
     get_period,
     get_routine_history,
     get_statistics,
     get_today,
     list_mood_tags,
     list_routine_categories,
+    list_special_dates,
     reorder_mood_tags,
     save_day_meta,
     save_goal,
@@ -26,6 +29,7 @@ from crud.bookmark import (
     update_mood_tag,
     update_routine,
     update_routine_category,
+    update_special_date,
 )
 from db.session import get_db
 from routers.utils import require_auth
@@ -51,6 +55,10 @@ from schemas.bookmark import (
     BookmarkRoutinePeriodRead,
     BookmarkRoutineRead,
     BookmarkRoutineUpdate,
+    BookmarkSpecialDateCreate,
+    BookmarkSpecialDateRead,
+    BookmarkSpecialDatesResponse,
+    BookmarkSpecialDateUpdate,
     BookmarkStatisticsRead,
 )
 
@@ -211,6 +219,56 @@ def read_today(
 ):
     _no_store(response)
     return get_today(db, user.id, day=period_start)
+
+
+@router.get(
+    "/special-dates",
+    response_model=BookmarkSpecialDatesResponse,
+)
+def read_special_dates(
+    response: Response,
+    db: Session = Depends(get_db),
+    user=Depends(require_auth),
+):
+    _no_store(response)
+    return list_special_dates(db, user.id)
+
+
+@router.post("/special-dates", response_model=BookmarkSpecialDateRead)
+def post_special_date(
+    payload: BookmarkSpecialDateCreate,
+    response: Response,
+    db: Session = Depends(get_db),
+    user=Depends(require_auth),
+):
+    _no_store(response)
+    return create_special_date(db, payload, user.id)
+
+
+@router.patch(
+    "/special-dates/{routine_id}",
+    response_model=BookmarkSpecialDateRead,
+)
+def patch_special_date(
+    routine_id: int,
+    payload: BookmarkSpecialDateUpdate,
+    response: Response,
+    db: Session = Depends(get_db),
+    user=Depends(require_auth),
+):
+    _no_store(response)
+    return update_special_date(db, routine_id, payload, user.id)
+
+
+@router.delete("/special-dates/{routine_id}")
+def remove_special_date(
+    routine_id: int,
+    response: Response,
+    db: Session = Depends(get_db),
+    user=Depends(require_auth),
+):
+    _no_store(response)
+    return delete_special_date(db, routine_id, user.id)
 
 
 @router.post("/routines", response_model=BookmarkRoutineRead)

@@ -479,6 +479,53 @@
   border-radius: 999px;
 }
 
+.planner-day-specials {
+  display: flex;
+  flex-direction: column;
+  gap: 0.08rem;
+  width: 100%;
+  min-width: 0;
+}
+
+.planner-day-special {
+  display: flex;
+  align-items: center;
+  gap: 0.15rem;
+  max-width: 100%;
+  color: var(--title-color);
+  font-size: 0.52rem;
+  line-height: 1.15;
+  overflow: hidden;
+  opacity: 0.82;
+  white-space: nowrap;
+
+  > span:last-child {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  &.is-dday {
+    color: #b07a4a;
+  }
+}
+
+.planner-day-special-mark {
+  flex-shrink: 0;
+  font-size: 0.5rem;
+  font-weight: 600;
+}
+
+.planner-day-special-more {
+  color: var(--title-color);
+  font-size: 0.5rem;
+  opacity: 0.45;
+}
+
+.planner-special-open {
+  margin-left: auto;
+  white-space: nowrap;
+}
+
 .planner-side {
   display: flex;
   flex-direction: column;
@@ -1294,6 +1341,84 @@
 
 .planner-task-modal {
   width: min(32rem, 100%);
+}
+
+.planner-special-modal {
+  width: min(30rem, 100%);
+  max-height: min(88vh, 48rem);
+  overflow-y: auto;
+}
+
+.planner-special-list {
+  margin-top: 0.9rem;
+  padding-top: 0.8rem;
+  border-top: 1px solid
+    color-mix(in srgb, var(--theme-main) 24%, transparent);
+
+  h3 {
+    margin: 0 0 0.5rem;
+    color: var(--title-color);
+    font-size: 0.72rem;
+    font-weight: normal;
+  }
+}
+
+.planner-special-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.42rem 0.5rem;
+  border: 1px solid
+    color-mix(in srgb, var(--theme-main) 24%, transparent);
+  border-radius: 0.6rem;
+
+  & + & {
+    margin-top: 0.35rem;
+  }
+}
+
+.planner-special-main {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 0.12rem;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--foreground);
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+
+  strong {
+    font-size: 0.72rem;
+    font-weight: normal;
+    overflow-wrap: anywhere;
+  }
+
+  span {
+    color: var(--title-color);
+    font-size: 0.6rem;
+    opacity: 0.58;
+  }
+}
+
+.planner-date-row {
+  display: flex;
+  gap: 0.5rem;
+
+  label {
+    flex: 1;
+  }
+}
+
+.planner-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.4rem;
+  margin-top: 0.2rem;
 }
 
 .planner-task-detail-modal {

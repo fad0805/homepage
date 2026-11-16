@@ -120,6 +120,15 @@ class BookmarkRoutine(Base):
         default=True,
         server_default="true",
     )
+    # Calendar-only entries (birthdays, anniversaries, D-days) reuse the
+    # routine table but stay out of the bookmark lists and statistics.
+    calendar_only = Column(
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default="false",
+        index=True,
+    )
     position = Column(
         Integer,
         nullable=False,
