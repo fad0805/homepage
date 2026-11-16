@@ -407,6 +407,12 @@
   }
 }
 
+.bookmark-category-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.05rem;
+}
+
 .bookmark-category-list {
   display: flex;
   flex-direction: column;

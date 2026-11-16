@@ -21,6 +21,7 @@ from schemas.bookmark import (
     BookmarkDayMetaUpdate,
     BookmarkGoalUpdate,
     BookmarkMoodTagCreate,
+    BookmarkMoodTagReorder,
     BookmarkMoodTagUpdate,
     BookmarkRoutineCategoryCreate,
     BookmarkRoutineCategoryUpdate,
@@ -1515,6 +1516,37 @@ def update_mood_tag(
     db.commit()
     db.refresh(tag)
     return tag
+
+
+def reorder_mood_tags(
+    db: Session,
+    payload: BookmarkMoodTagReorder,
+    user_id: int,
+) -> list[BookmarkMoodTag]:
+    ids = list(dict.fromkeys(payload.ids))
+    if len(ids) != len(payload.ids):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="기분 태그 순서가 올바르지 않습니다.",
+        )
+    tags = (
+        db.query(BookmarkMoodTag)
+        .filter(
+            BookmarkMoodTag.user_id == user_id,
+            BookmarkMoodTag.id.in_(ids),
+        )
+        .all()
+    )
+    if len(tags) != len(ids):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="기분 태그를 찾을 수 없습니다.",
+        )
+    positions = {tag_id: index for index, tag_id in enumerate(ids)}
+    for tag in tags:
+        tag.position = positions[tag.id]
+    db.commit()
+    return list_mood_tags(db, user_id)
 
 
 def delete_mood_tag(

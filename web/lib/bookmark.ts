@@ -114,6 +114,24 @@ export interface BookmarkPeriod {
 
 export const WEEKDAY_SHORT = ["월", "화", "수", "목", "금", "토", "일"];
 
+export function formatTime24h(value: string | null | undefined) {
+  if (!value) return "";
+  const raw = value.trim();
+  const meridiem = /(am|pm|오전|오후)/i.exec(raw);
+  const match = raw.match(/(\d{1,2}):(\d{2})/);
+  if (!match) return raw;
+  let hour = Number(match[1]);
+  const minute = match[2];
+  if (meridiem) {
+    const marker = meridiem[1].toLowerCase();
+    const isPm = marker === "pm" || marker === "오후";
+    const isAm = marker === "am" || marker === "오전";
+    if (isPm && hour < 12) hour += 12;
+    if (isAm && hour === 12) hour = 0;
+  }
+  return `${String(hour % 24).padStart(2, "0")}:${minute}`;
+}
+
 export function routineWeekdays(routine: {
   weekdays: number[] | null;
   weekday: number | null;

@@ -14,7 +14,10 @@ import {
 
 import { CloverIcon } from "@/app/bookmark/clover-rating";
 import { apiFetch } from "@/lib/api";
-import type { BookmarkPeriod } from "@/lib/bookmark";
+import {
+  formatTime24h,
+  type BookmarkPeriod,
+} from "@/lib/bookmark";
 import {
   dateInputValue,
   formatDateTime,
@@ -2105,7 +2108,7 @@ export default function PlannerClient({ username }: { username: string }) {
               {goal?.wake_time || goal?.mood_tag_name ? (
                 <span className="planner-bookmark-meta">
                   {goal?.wake_time
-                    ? goal.wake_time.slice(0, 5)
+                    ? formatTime24h(goal.wake_time)
                     : null}
                   {goal?.wake_time && goal?.mood_tag_name
                     ? " · "

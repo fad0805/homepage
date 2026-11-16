@@ -136,6 +136,10 @@ class BookmarkMoodTagUpdate(BaseModel):
     name: str = Field(min_length=1, max_length=40)
 
 
+class BookmarkMoodTagReorder(BaseModel):
+    ids: list[int] = Field(min_length=1)
+
+
 class BookmarkMoodTagRead(BaseModel):
     id: int
     name: str

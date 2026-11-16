@@ -15,6 +15,7 @@ from crud.bookmark import (
     get_today,
     list_mood_tags,
     list_routine_categories,
+    reorder_mood_tags,
     save_day_meta,
     save_goal,
     save_rating,
@@ -33,6 +34,7 @@ from schemas.bookmark import (
     BookmarkGoalUpdate,
     BookmarkMoodTagCreate,
     BookmarkMoodTagRead,
+    BookmarkMoodTagReorder,
     BookmarkMoodTagUpdate,
     BookmarkRoutineCategoryCreate,
     BookmarkRoutineCategoryRead,
@@ -93,6 +95,20 @@ def post_mood_tag(
 ):
     _no_store(response)
     return create_mood_tag(db, payload, user.id)
+
+
+@router.put(
+    "/mood-tags/order",
+    response_model=list[BookmarkMoodTagRead],
+)
+def put_mood_tag_order(
+    payload: BookmarkMoodTagReorder,
+    response: Response,
+    db: Session = Depends(get_db),
+    user=Depends(require_auth),
+):
+    _no_store(response)
+    return reorder_mood_tags(db, payload, user.id)
 
 
 @router.patch(

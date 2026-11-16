@@ -4,6 +4,7 @@ import { FormEvent, useCallback, useEffect, useState } from "react";
 
 import {
   WEEKDAY_SHORT,
+  formatTime24h,
   routineWeekdays,
   type BookmarkGoal,
   type BookmarkPeriod,
@@ -339,7 +340,7 @@ export default function BookmarkClient({ username }: { username: string }) {
       });
       setData(next);
       setGoalContent(next.goal?.content ?? "");
-      setGoalWakeTime(next.goal?.wake_time?.slice(0, 5) ?? "");
+      setGoalWakeTime(formatTime24h(next.goal?.wake_time));
       setGoalMoodTagId(next.goal?.mood_tag_id ?? null);
       setRating(next.rating?.rating ?? 0);
       setRatingDraft(next.rating?.rating ?? 0);
@@ -915,6 +916,42 @@ export default function BookmarkClient({ username }: { username: string }) {
     }
   };
 
+  const handleMoveMoodTag = async (
+    tagId: number,
+    direction: -1 | 1,
+  ) => {
+    if (moodTagSaving) return;
+    const index = moodTags.findIndex((tag) => tag.id === tagId);
+    const target = index + direction;
+    if (index < 0 || target < 0 || target >= moodTags.length) return;
+    const next = [...moodTags];
+    [next[index], next[target]] = [next[target], next[index]];
+    setMoodTags(next);
+    setMoodTagSaving(true);
+    setMoodTagError(null);
+    try {
+      const saved = await apiFetch<BookmarkMoodTag[]>(
+        "/api/bookmark/mood-tags/order",
+        {
+          method: "PUT",
+          body: JSON.stringify({
+            ids: next.map((tag) => tag.id),
+          }),
+        },
+      );
+      setMoodTags(saved);
+    } catch (reason) {
+      setMoodTagError(
+        reason instanceof Error
+          ? reason.message
+          : "기분 태그 순서를 변경하지 못했습니다.",
+      );
+      await loadMoodTags();
+    } finally {
+      setMoodTagSaving(false);
+    }
+  };
+
   const handleDeleteMoodTag = async (tag: BookmarkMoodTag) => {
     if (moodTagSaving) return;
     if (!window.confirm(`"${tag.name}" 기분 태그를 삭제할까요?`)) {
@@ -991,7 +1028,7 @@ export default function BookmarkClient({ username }: { username: string }) {
           }),
         },
       );
-      setGoalWakeTime(saved.wake_time?.slice(0, 5) ?? "");
+      setGoalWakeTime(formatTime24h(saved.wake_time));
       setGoalMoodTagId(saved.mood_tag_id ?? null);
       setData((previous) =>
         previous ? { ...previous, goal: saved } : previous,
@@ -2221,17 +2258,44 @@ export default function BookmarkClient({ username }: { username: string }) {
               </p>
             ) : (
               <ul className="bookmark-category-list">
-                {moodTags.map((tag) => (
+                {moodTags.map((tag, index) => (
                   <li key={tag.id}>
                     <span>{tag.name}</span>
-                    <button
-                      type="button"
-                      className="bookmark-text-button is-danger"
-                      disabled={moodTagSaving}
-                      onClick={() => void handleDeleteMoodTag(tag)}
-                    >
-                      삭제
-                    </button>
+                    <div className="bookmark-category-actions">
+                      <button
+                        type="button"
+                        className="bookmark-text-button"
+                        aria-label="위로 이동"
+                        disabled={moodTagSaving || index === 0}
+                        onClick={() =>
+                          void handleMoveMoodTag(tag.id, -1)
+                        }
+                      >
+                        ↑
+                      </button>
+                      <button
+                        type="button"
+                        className="bookmark-text-button"
+                        aria-label="아래로 이동"
+                        disabled={
+                          moodTagSaving ||
+                          index === moodTags.length - 1
+                        }
+                        onClick={() =>
+                          void handleMoveMoodTag(tag.id, 1)
+                        }
+                      >
+                        ↓
+                      </button>
+                      <button
+                        type="button"
+                        className="bookmark-text-button is-danger"
+                        disabled={moodTagSaving}
+                        onClick={() => void handleDeleteMoodTag(tag)}
+                      >
+                        삭제
+                      </button>
+                    </div>
                   </li>
                 ))}
               </ul>
