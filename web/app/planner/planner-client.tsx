@@ -205,15 +205,6 @@ function shiftMonth(monthKey: string, delta: number) {
   return `${date.getUTCFullYear()}-${pad2(date.getUTCMonth() + 1)}`;
 }
 
-function monthBounds(monthKey: string) {
-  const [year, month] = monthKey.split("-").map(Number);
-  const lastDay = new Date(Date.UTC(year, month, 0)).getUTCDate();
-  return {
-    start: `${monthKey}-01`,
-    end: `${monthKey}-${pad2(lastDay)}`,
-  };
-}
-
 function monthLabel(monthKey: string) {
   const [year, month] = monthKey.split("-").map(Number);
   return new Date(Date.UTC(year, month - 1, 1)).toLocaleDateString("ko-KR", {
@@ -479,11 +470,13 @@ export default function PlannerClient({ username }: { username: string }) {
 
   const loadEvents = useCallback(async (monthKey: string) => {
     const requestId = ++eventsRequestRef.current;
-    const bounds = monthBounds(monthKey);
+    const visibleCells = monthCells(monthKey);
+    const start = visibleCells[0].date;
+    const end = visibleCells[visibleCells.length - 1].date;
     setEventsLoading(true);
     try {
       const data = await apiFetch<PlannerEventsResponse>(
-        `/api/planner/events?start=${bounds.start}&end=${bounds.end}`,
+        `/api/planner/events?start=${start}&end=${end}`,
         { cache: "no-store" },
       );
       if (requestId !== eventsRequestRef.current) return;
@@ -594,6 +587,10 @@ export default function PlannerClient({ username }: { username: string }) {
         .filter((event) => eventDate(event) === selectedDate)
         .sort((a, b) => b.occurred_at.localeCompare(a.occurred_at)),
     [events, selectedDate],
+  );
+  const eventDates = useMemo(
+    () => new Set(events.map(eventDate)),
+    [events],
   );
   const colorGroups = useMemo(() => {
     const groups = new Map<
@@ -1448,6 +1445,15 @@ export default function PlannerClient({ username }: { username: string }) {
                           (task) => task.schedule_type === "single",
                         );
                         const dayTaskCount = dayTasks.length;
+                        const hasTaskRecord = colorViewTasks.some(
+                          (task) =>
+                            task.start_date <= cell.date &&
+                            cell.date <= task.end_date,
+                        );
+                        const hasPastRecords =
+                          cell.date < today &&
+                          (hasTaskRecord ||
+                            eventDates.has(cell.date));
                         return (
                           <button
                             type="button"
@@ -1457,6 +1463,7 @@ export default function PlannerClient({ username }: { username: string }) {
                               cell.inMonth ? "" : "is-outside",
                               cell.date === today ? "is-today" : "",
                               cell.date === selectedDate ? "is-selected" : "",
+                              hasPastRecords ? "has-past-records" : "",
                               dayTaskCount > 0 ? "has-items" : "",
                             ]
                               .filter(Boolean)
