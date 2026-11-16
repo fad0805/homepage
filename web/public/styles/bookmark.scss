@@ -309,10 +309,13 @@
 
   h3 {
     margin: 0;
+    padding-left: 0.1rem;
     color: var(--title-color);
-    font-family: Eulyoo1945-SemiBold, GowunDodum, sans-serif;
-    font-size: 0.82rem;
+    font-family: inherit;
+    font-size: 0.64rem;
     font-weight: normal;
+    letter-spacing: 0.12em;
+    opacity: 0.52;
   }
 
   span {
@@ -320,6 +323,22 @@
     font-size: 0.58rem;
     opacity: 0.45;
   }
+}
+
+.bookmark-routine-group.is-done-group .bookmark-routine-group-header h3 {
+  opacity: 0.5;
+}
+
+.bookmark-routine-group-header h3 .bookmark-routine-group-check {
+  margin-left: 0.3rem;
+  color: #4f8f5b;
+  font-size: 0.72rem;
+  letter-spacing: 0;
+  opacity: 0.9;
+}
+
+[data-theme='dark'] .bookmark-routine-group-check {
+  color: #8fd39a;
 }
 
 .bookmark-routine-group .bookmark-item-list {

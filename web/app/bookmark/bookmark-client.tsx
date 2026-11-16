@@ -870,6 +870,19 @@ export default function BookmarkClient({ username }: { username: string }) {
     }
   };
 
+  const isRoutineDone = (routine: BookmarkRoutine) => {
+    const isDaily = routine.frequency === "daily";
+    const isCount =
+      routine.tracking_mode === "count" && !isDaily;
+    if (isCount || routine.frequency === "weekly") {
+      return routine.completed_count >= routine.target_count;
+    }
+    return (
+      routine.occurrences.length > 0 &&
+      routine.occurrences.every((occurrence) => occurrence.done)
+    );
+  };
+
   const renderRoutines = () => {
     if (routines.length === 0) {
       return (
@@ -884,41 +897,74 @@ export default function BookmarkClient({ username }: { username: string }) {
     const categoryById = new Map(
       categories.map((category) => [category.id, category]),
     );
-    const groups: Array<{
+    type RoutineGroup = {
       key: string;
       name: string;
       routines: BookmarkRoutine[];
-    }> = categories.map((category) => ({
-      key: `category-${category.id}`,
-      name: category.name,
-      routines: routines.filter(
-        (routine) => routine.category_id === category.id,
+      done: boolean;
+    };
+    const buildCategoryGroups = (
+      key: string,
+      name: string,
+      items: BookmarkRoutine[],
+    ): RoutineGroup[] => {
+      if (items.length === 0) return [];
+      const pending = items.filter(
+        (routine) => !isRoutineDone(routine),
+      );
+      const done = items.filter(isRoutineDone);
+      const groups: RoutineGroup[] = [];
+      if (pending.length > 0) {
+        groups.push({
+          key: `${key}-pending`,
+          name,
+          routines: pending,
+          done: false,
+        });
+      }
+      if (done.length > 0) {
+        groups.push({
+          key: `${key}-done`,
+          name,
+          routines: done,
+          done: true,
+        });
+      }
+      return groups;
+    };
+
+    const categoryGroups = categories.flatMap((category) =>
+      buildCategoryGroups(
+        `category-${category.id}`,
+        category.name,
+        routines.filter(
+          (routine) => routine.category_id === category.id,
+        ),
       ),
-    }));
+    );
     const uncategorized = routines.filter(
       (routine) =>
         routine.category_id === null ||
         !categoryById.has(routine.category_id),
     );
-    if (uncategorized.length > 0) {
-      groups.push({
-        key: "uncategorized",
-        name: "미분류",
-        routines: uncategorized,
-      });
-    }
+    const allGroups = [
+      ...categoryGroups,
+      ...buildCategoryGroups(
+        "uncategorized",
+        "미분류",
+        uncategorized,
+      ),
+    ];
+    const groups = [
+      ...allGroups.filter((group) => !group.done),
+      ...allGroups.filter((group) => group.done),
+    ];
 
     const renderRoutineItem = (routine: BookmarkRoutine) => {
       const isDaily = routine.frequency === "daily";
       const isCount =
         routine.tracking_mode === "count" && !isDaily;
-      const allDone =
-        isCount || routine.frequency === "weekly"
-          ? routine.completed_count >= routine.target_count
-          : routine.occurrences.length > 0 &&
-            routine.occurrences.every(
-              (occurrence) => occurrence.done,
-            );
+      const allDone = isRoutineDone(routine);
       return (
         <li
           className={`bookmark-item${allDone ? " is-done" : ""}`}
@@ -1042,11 +1088,23 @@ export default function BookmarkClient({ username }: { username: string }) {
           .filter((group) => group.routines.length > 0)
           .map((group) => (
             <section
-              className="bookmark-routine-group"
+              className={`bookmark-routine-group${
+                group.done ? " is-done-group" : ""
+              }`}
               key={group.key}
             >
               <header className="bookmark-routine-group-header">
-                <h3>{group.name}</h3>
+                <h3>
+                  {group.name}
+                  {group.done ? (
+                    <span
+                      className="bookmark-routine-group-check"
+                      aria-label="완료"
+                    >
+                      ✓
+                    </span>
+                  ) : null}
+                </h3>
                 <span>{group.routines.length}</span>
               </header>
               <ul className="bookmark-item-list">
