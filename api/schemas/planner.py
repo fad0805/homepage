@@ -105,4 +105,5 @@ class PlannerEventPreview(BaseModel):
     title: str | None = None
     summary: str | None = None
     content_html: str | None = None
+    detail_url: str | None = None
     fields: dict[str, str | None] = Field(default_factory=dict)

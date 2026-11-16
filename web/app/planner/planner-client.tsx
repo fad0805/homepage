@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import {
   FormEvent,
   useCallback,
@@ -83,6 +84,7 @@ interface PlannerEventPreview {
   title: string | null;
   summary: string | null;
   content_html: string | null;
+  detail_url: string | null;
   fields: Record<string, string | null>;
 }
 
@@ -1586,6 +1588,23 @@ export default function PlannerClient({ username }: { username: string }) {
                       </p>
                     </div>
                     <div className="planner-day-panel-actions">
+                      {colorGroups.length > 0 ? (
+                        <button
+                          type="button"
+                          className="planner-text-button"
+                          disabled={
+                            selectedColorGroups.length ===
+                            colorGroups.length
+                          }
+                          onClick={() =>
+                            setSelectedColorGroups(
+                              colorGroups.map((group) => group.key),
+                            )
+                          }
+                        >
+                          전체 선택
+                        </button>
+                      ) : null}
                       {selectedColorGroups.length > 0 ? (
                         <button
                           type="button"
@@ -2185,6 +2204,14 @@ export default function PlannerClient({ username }: { username: string }) {
                         __html: preview.content_html,
                       }}
                     />
+                  ) : null}
+                  {preview.detail_url ? (
+                    <Link
+                      className="planner-preview-detail-link"
+                      href={preview.detail_url}
+                    >
+                      상세 페이지로 이동
+                    </Link>
                   ) : null}
                   {!preview.summary &&
                   !preview.content_html &&

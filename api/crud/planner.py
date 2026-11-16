@@ -742,6 +742,7 @@ def _preview(
     title: str | None,
     summary: str | None = None,
     content_html: str | None = None,
+    detail_url: str | None = None,
     fields: dict | None = None,
 ) -> dict:
     return {
@@ -750,6 +751,7 @@ def _preview(
         "title": title,
         "summary": summary,
         "content_html": content_html,
+        "detail_url": detail_url,
         "fields": fields or {},
     }
 
@@ -795,6 +797,7 @@ def get_event_preview(
                 entity_type="book",
                 title=obj.title,
                 summary=obj.description,
+                detail_url=f"/books?book={obj.id}",
                 fields={
                     "tags": ", ".join(obj.tags or []),
                     "category": (
@@ -816,6 +819,9 @@ def get_event_preview(
                 title=obj.title,
                 summary=obj.subtitle,
                 content_html=sanitize_index_html(obj.body),
+                detail_url=(
+                    f"/books?book={obj.book_id}&chapter={obj.id}"
+                ),
                 fields={
                     "book": obj.book.title if obj.book else None,
                     "tags": ", ".join(obj.tags or []),
@@ -835,6 +841,7 @@ def get_event_preview(
                 entity_type="illustration",
                 title=obj.title,
                 summary=obj.description,
+                detail_url=f"/illustrations/{obj.id}",
                 fields={
                     "tags": ", ".join(obj.tags or []),
                     "images": f"{len(obj.images)}장",
@@ -854,6 +861,7 @@ def get_event_preview(
                 entity_type="character",
                 title=obj.name,
                 summary=obj.description,
+                detail_url=f"/characters/profile?character={obj.id}",
                 fields={
                     "nickname": obj.nickname,
                     "age": obj.age,
