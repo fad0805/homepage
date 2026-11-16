@@ -94,6 +94,127 @@
   opacity: 0.65;
 }
 
+.planner-filter {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.6rem;
+  padding: 0.55rem 0.65rem;
+  border: 1px solid color-mix(in srgb, var(--theme-main) 34%, transparent);
+  border-radius: 0.8rem;
+  background: var(--planner-card-bg);
+  color: color-mix(in srgb, var(--foreground) 55%, transparent);
+  font-size: 0.7rem;
+
+  label {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    min-width: 0;
+
+    > span {
+      color: var(--title-color);
+      font-size: 0.66rem;
+      opacity: 0.72;
+      white-space: nowrap;
+    }
+  }
+
+  input[type='date'],
+  input[type='search'] {
+    box-sizing: border-box;
+    padding: 0.35rem 0.5rem;
+    border: 1px solid rgba(0, 0, 0, 0.16);
+    border-radius: 0.45rem;
+    background: var(--input-background);
+    color: var(--input-text);
+    font-family: inherit;
+    font-size: 0.72rem;
+
+    &:focus {
+      outline: 2px solid var(--title-color);
+      outline-offset: 1px;
+    }
+  }
+}
+
+.planner-filter__range {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.5rem;
+}
+
+.planner-filter__query {
+  flex: 1 1 12rem;
+
+  input {
+    flex: 1;
+    width: 100%;
+  }
+}
+
+.planner-filter__dash {
+  opacity: 0.45;
+}
+
+.planner-filter__submit {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.28rem;
+  padding: 0.38rem 0.75rem;
+  border: 1px solid transparent;
+  border-radius: 0.45rem;
+  background: var(--title-color);
+  color: #fff;
+  font-family: inherit;
+  font-size: 0.72rem;
+  cursor: pointer;
+
+  &:disabled {
+    cursor: default;
+    opacity: 0.5;
+  }
+}
+
+.planner-filter__reset {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--title-color);
+  font-family: inherit;
+  font-size: 0.7rem;
+  cursor: pointer;
+}
+
+[data-theme='dark'] .planner-filter input[type='date'],
+[data-theme='dark'] .planner-filter input[type='search'] {
+  border-color: rgba(255, 255, 255, 0.18);
+}
+
+.planner-search-section {
+  margin-top: 0.9rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid color-mix(in srgb, var(--theme-main) 24%, transparent);
+
+  h3 {
+    margin: 0;
+    color: var(--title-color);
+    font-size: 0.76rem;
+    font-weight: normal;
+  }
+
+  .planner-history-list {
+    margin-top: 0.55rem;
+  }
+}
+
+.planner-search-section:first-of-type {
+  margin-top: 0.8rem;
+  padding-top: 0;
+  border-top: 0;
+}
+
 .planner-tabs {
   display: inline-flex;
   gap: 0.2rem;

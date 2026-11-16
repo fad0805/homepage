@@ -68,6 +68,11 @@ interface PlannerEventsResponse {
   events: PlannerEvent[];
 }
 
+interface PlannerSearchResults {
+  tasks: PlannerTask[];
+  events: PlannerEvent[];
+}
+
 interface PlannerColor {
   id: number;
   color: string;
@@ -147,6 +152,12 @@ const ACTION_LABELS: Record<string, string> = {
   completed: "완료",
 };
 
+const TASK_STATUS_LABELS: Record<TaskStatus, string> = {
+  active: "진행 중",
+  inactive: "비활성",
+  trashed: "휴지통",
+};
+
 const FIELD_LABELS: Record<string, string> = {
   title: "제목",
   subtitle: "부제",
@@ -188,6 +199,26 @@ const FIELD_LABELS: Record<string, string> = {
   username: "아이디",
 };
 
+function MagnifierIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width="15"
+      height="15"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <circle cx="11" cy="11" r="7" />
+      <path d="m20 20-3.5-3.5" />
+    </svg>
+  );
+}
+
 function pad2(value: number) {
   return String(value).padStart(2, "0");
 }
@@ -204,6 +235,15 @@ function shiftMonth(monthKey: string, delta: number) {
   const [year, month] = monthKey.split("-").map(Number);
   const date = new Date(Date.UTC(year, month - 1 + delta, 1));
   return `${date.getUTCFullYear()}-${pad2(date.getUTCMonth() + 1)}`;
+}
+
+function monthBounds(monthKey: string) {
+  const [year, month] = monthKey.split("-").map(Number);
+  const lastDay = new Date(Date.UTC(year, month, 0)).getUTCDate();
+  return {
+    start: `${monthKey}-01`,
+    end: `${monthKey}-${pad2(lastDay)}`,
+  };
 }
 
 function monthLabel(monthKey: string) {
@@ -360,6 +400,24 @@ function sortColorGroupTasks(tasks: PlannerTask[]) {
   });
 }
 
+const TASK_STATUS_ORDER: Record<TaskStatus, number> = {
+  active: 0,
+  inactive: 1,
+  trashed: 2,
+};
+
+function sortSearchTasks(tasks: PlannerTask[]) {
+  return [...tasks].sort((a, b) => {
+    const status =
+      TASK_STATUS_ORDER[a.status] - TASK_STATUS_ORDER[b.status];
+    if (status !== 0) return status;
+    if (a.start_date !== b.start_date) {
+      return a.start_date.localeCompare(b.start_date);
+    }
+    return a.id - b.id;
+  });
+}
+
 function changeValue(value: unknown) {
   if (value === null || value === undefined || value === "") return "(없음)";
   if (Array.isArray(value)) return value.join(", ") || "(없음)";
@@ -387,6 +445,7 @@ function emptyForm(today: string): TaskFormState {
 
 export default function PlannerClient({ username }: { username: string }) {
   const initialToday = todayDateInputValue();
+  const initialSearchBounds = monthBounds(initialToday.slice(0, 7));
   const [today, setToday] = useState(initialToday);
   const [tasks, setTasks] = useState<PlannerTask[]>([]);
   const [events, setEvents] = useState<PlannerEvent[]>([]);
@@ -394,6 +453,13 @@ export default function PlannerClient({ username }: { username: string }) {
   const [selectedDate, setSelectedDate] = useState(initialToday);
   const [viewMonth, setViewMonth] = useState(initialToday.slice(0, 7));
   const [activeTab, setActiveTab] = useState<PlannerTab>("active");
+  const [searchFrom, setSearchFrom] = useState(initialSearchBounds.start);
+  const [searchTo, setSearchTo] = useState(initialSearchBounds.end);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searching, setSearching] = useState(false);
+  const [searchResults, setSearchResults] =
+    useState<PlannerSearchResults | null>(null);
   const [form, setForm] = useState<TaskFormState>(() => emptyForm(initialToday));
   const [editingId, setEditingId] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
@@ -433,8 +499,11 @@ export default function PlannerClient({ username }: { username: string }) {
       setTasks(sortTasks(data.tasks));
       if (!initializedToday.current) {
         initializedToday.current = true;
+        const bounds = monthBounds(data.today.slice(0, 7));
         setSelectedDate(data.today);
         setViewMonth(data.today.slice(0, 7));
+        setSearchFrom(bounds.start);
+        setSearchTo(bounds.end);
         setForm((previous) =>
           previous.title || previous.notes
             ? previous
@@ -660,6 +729,12 @@ export default function PlannerClient({ username }: { username: string }) {
   }, [colorGroups]);
   const selectedFormColor =
     savedColors.find((color) => color.id === form.colorId) ?? null;
+  const defaultSearchBounds = monthBounds(viewMonth);
+  const hasSearchFilter =
+    searchOpen ||
+    searchQuery.trim() !== "" ||
+    searchFrom !== defaultSearchBounds.start ||
+    searchTo !== defaultSearchBounds.end;
 
   const resetForm = () => {
     setEditingId(null);
@@ -700,7 +775,131 @@ export default function PlannerClient({ username }: { username: string }) {
     setViewMonth(today.slice(0, 7));
   };
 
+  const selectTab = (tab: PlannerTab) => {
+    setSearchOpen(false);
+    setSearchResults(null);
+    setSearching(false);
+    setActiveTab(tab);
+  };
+
+  const closeSearchResults = () => {
+    setSearchOpen(false);
+    setSearchResults(null);
+    setSearching(false);
+  };
+
+  const resetSearch = () => {
+    const bounds = monthBounds(viewMonth);
+    setSearchFrom(bounds.start);
+    setSearchTo(bounds.end);
+    setSearchQuery("");
+    setSearchOpen(false);
+    setSearchResults(null);
+    setSearching(false);
+    setError(null);
+  };
+
+  const handleSearch = async (
+    event: FormEvent<HTMLFormElement>,
+  ) => {
+    event.preventDefault();
+    if (searching) return;
+    if (!searchFrom || !searchTo) {
+      setError("검색할 날짜 범위를 입력해주세요.");
+      return;
+    }
+    if (searchFrom > searchTo) {
+      setError("검색 종료일은 시작일보다 빠를 수 없습니다.");
+      return;
+    }
+    const fromTime = Date.parse(`${searchFrom}T00:00:00Z`);
+    const toTime = Date.parse(`${searchTo}T00:00:00Z`);
+    if (Number.isNaN(fromTime) || Number.isNaN(toTime)) {
+      setError("검색 날짜를 확인해주세요.");
+      return;
+    }
+    if (Math.round((toTime - fromTime) / 86_400_000) > 366) {
+      setError("한 번에 1년 범위까지만 검색할 수 있습니다.");
+      return;
+    }
+
+    const normalized = searchQuery.trim().toLowerCase();
+    setSearchOpen(true);
+    setSearchResults(null);
+    setSearching(true);
+    setError(null);
+    try {
+      const data = await apiFetch<PlannerEventsResponse>(
+        `/api/planner/events?start=${searchFrom}&end=${searchTo}`,
+        { cache: "no-store" },
+      );
+      const taskMatches = sortSearchTasks(
+        tasks.filter((task) => {
+          if (
+            task.start_date > searchTo ||
+            task.end_date < searchFrom
+          ) {
+            return false;
+          }
+          if (!normalized) return true;
+          const chip = task.color_id
+            ? savedColors.find(
+                (color) => color.id === task.color_id,
+              )
+            : null;
+          const haystack = [
+            task.title,
+            task.notes,
+            TASK_STATUS_LABELS[task.status],
+            chip?.name,
+            chip?.color,
+          ]
+            .filter(Boolean)
+            .join(" ")
+            .toLowerCase();
+          return haystack.includes(normalized);
+        }),
+      );
+      const eventMatches = data.events.filter((item) => {
+        if (!normalized) return true;
+        const changes = item.changes ?? [];
+        const haystack = [
+          item.title,
+          item.notes,
+          ENTITY_LABELS[item.entity_type],
+          ACTION_LABELS[item.action],
+          ...changes.flatMap((change) => [
+            change.field,
+            change.before,
+            change.after,
+          ]),
+        ]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase();
+        return haystack.includes(normalized);
+      });
+      setSearchResults({
+        tasks: taskMatches,
+        events: eventMatches,
+      });
+    } catch (reason) {
+      setError(
+        reason instanceof Error
+          ? reason.message
+          : "검색하지 못했습니다.",
+      );
+      setSearchOpen(false);
+    } finally {
+      setSearching(false);
+    }
+  };
+
   const refresh = async () => {
+    if (searchOpen) {
+      setSearchOpen(false);
+      setSearchResults(null);
+    }
     await Promise.all([
       loadTasks(),
       loadEvents(viewMonth),
@@ -716,6 +915,9 @@ export default function PlannerClient({ username }: { username: string }) {
 
   const selectDate = (date: string) => {
     setSelectedDate(date);
+    setSearchOpen(false);
+    setSearchResults(null);
+    setSearching(false);
     const monthKey = date.slice(0, 7);
     if (monthKey !== viewMonth) {
       setViewMonth(monthKey);
@@ -932,7 +1134,7 @@ export default function PlannerClient({ username }: { username: string }) {
         method: "PATCH",
         body: JSON.stringify({ pinned: !task.pinned }),
       });
-      await loadTasks();
+      await refresh();
     } catch (reason) {
       setError(
         reason instanceof Error
@@ -1285,6 +1487,33 @@ export default function PlannerClient({ username }: { username: string }) {
       </ul>
     );
 
+  const renderHistoryItems = (items: PlannerEvent[]) => (
+    <ul className="planner-history-list">
+      {items.map((event) => (
+        <li key={event.id}>
+          <button
+            type="button"
+            className="planner-history-item"
+            onClick={() => openEvent(event)}
+          >
+            <span className="planner-history-kind">
+              {ENTITY_LABELS[event.entity_type] || event.entity_type}
+            </span>
+            <span className="planner-history-title">
+              {event.title || "제목 없음"}
+            </span>
+            <span className="planner-history-action">
+              {ACTION_LABELS[event.action] || event.action}
+            </span>
+            <span className="planner-history-time">
+              {formatDateTime(event.occurred_at)}
+            </span>
+          </button>
+        </li>
+      ))}
+    </ul>
+  );
+
   const renderHistory = (dateEvents: PlannerEvent[]) => (
     <div className="planner-history-section">
       <h3>변경 이력</h3>
@@ -1295,31 +1524,7 @@ export default function PlannerClient({ username }: { username: string }) {
           이 날짜의 변경 이력이 없습니다.
         </p>
       ) : (
-        <ul className="planner-history-list">
-          {dateEvents.map((event) => (
-            <li key={event.id}>
-              <button
-                type="button"
-                className="planner-history-item"
-                onClick={() => openEvent(event)}
-              >
-                <span className="planner-history-kind">
-                  {ENTITY_LABELS[event.entity_type] ||
-                    event.entity_type}
-                </span>
-                <span className="planner-history-title">
-                  {event.title || "제목 없음"}
-                </span>
-                <span className="planner-history-action">
-                  {ACTION_LABELS[event.action] || event.action}
-                </span>
-                <span className="planner-history-time">
-                  {formatDateTime(event.occurred_at)}
-                </span>
-              </button>
-            </li>
-          ))}
-        </ul>
+        renderHistoryItems(dateEvents)
       )}
     </div>
   );
@@ -1386,7 +1591,7 @@ export default function PlannerClient({ username }: { username: string }) {
               role="tab"
               aria-selected={activeTab === "active"}
               className={activeTab === "active" ? "is-active" : ""}
-              onClick={() => setActiveTab("active")}
+              onClick={() => selectTab("active")}
             >
               진행 중
             </button>
@@ -1395,7 +1600,7 @@ export default function PlannerClient({ username }: { username: string }) {
               role="tab"
               aria-selected={activeTab === "colors"}
               className={activeTab === "colors" ? "is-active" : ""}
-              onClick={() => setActiveTab("colors")}
+              onClick={() => selectTab("colors")}
             >
               색상별
             </button>
@@ -1404,7 +1609,7 @@ export default function PlannerClient({ username }: { username: string }) {
               role="tab"
               aria-selected={activeTab === "inactive"}
               className={activeTab === "inactive" ? "is-active" : ""}
-              onClick={() => setActiveTab("inactive")}
+              onClick={() => selectTab("inactive")}
             >
               비활성 {inactiveTasks.length}
             </button>
@@ -1413,7 +1618,7 @@ export default function PlannerClient({ username }: { username: string }) {
               role="tab"
               aria-selected={activeTab === "trashed"}
               className={activeTab === "trashed" ? "is-active" : ""}
-              onClick={() => setActiveTab("trashed")}
+              onClick={() => selectTab("trashed")}
             >
               휴지통 {trashedTasks.length}
             </button>
@@ -1421,6 +1626,63 @@ export default function PlannerClient({ username }: { username: string }) {
         </header>
 
         {error ? <p className="planner-error">{error}</p> : null}
+
+        <form className="planner-filter" onSubmit={handleSearch}>
+          <div className="planner-filter__range">
+            <label>
+              <span>시작일</span>
+              <input
+                type="date"
+                value={searchFrom}
+                required
+                onChange={(event) =>
+                  setSearchFrom(event.target.value)
+                }
+              />
+            </label>
+            <span className="planner-filter__dash">~</span>
+            <label>
+              <span>종료일</span>
+              <input
+                type="date"
+                value={searchTo}
+                required
+                onChange={(event) =>
+                  setSearchTo(event.target.value)
+                }
+              />
+            </label>
+          </div>
+          <label className="planner-filter__query">
+            <span>검색어</span>
+            <input
+              type="search"
+              value={searchQuery}
+              placeholder="일정·이력 검색"
+              aria-label="일정과 이력 검색"
+              onChange={(event) =>
+                setSearchQuery(event.target.value)
+              }
+            />
+          </label>
+          <button
+            type="submit"
+            className="planner-filter__submit"
+            disabled={loading || searching}
+          >
+            <MagnifierIcon />
+            {searching ? "검색 중" : "검색"}
+          </button>
+          {hasSearchFilter ? (
+            <button
+              type="button"
+              className="planner-filter__reset"
+              onClick={resetSearch}
+            >
+              초기화
+            </button>
+          ) : null}
+        </form>
 
         {loading ? (
           <p className="planner-status">불러오는 중...</p>
@@ -1564,7 +1826,69 @@ export default function PlannerClient({ username }: { username: string }) {
             </section>
 
             <aside className="planner-side">
-              {activeTab === "active" ? (
+              {searchOpen ? (
+                <section className="planner-day-panel planner-search-panel">
+                  <div className="planner-day-panel-header">
+                    <div>
+                      <p className="planner-eyebrow">통합 검색</p>
+                      <h2>검색 결과</h2>
+                      <p>
+                        {formatDateOnly(searchFrom)} ~{" "}
+                        {formatDateOnly(searchTo)}
+                        {searchQuery.trim()
+                          ? ` · "${searchQuery.trim()}"`
+                          : ""}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      className="planner-text-button"
+                      onClick={closeSearchResults}
+                    >
+                      닫기
+                    </button>
+                  </div>
+                  {searching ? (
+                    <p className="planner-status">검색 중...</p>
+                  ) : searchResults ? (
+                    <>
+                      <div className="planner-search-section">
+                        <h3>일정 {searchResults.tasks.length}</h3>
+                        {searchResults.tasks.length === 0 ? (
+                          <p className="planner-empty">
+                            검색된 일정이 없습니다.
+                          </p>
+                        ) : (
+                          <ul className="planner-task-list">
+                            {searchResults.tasks.map((task) =>
+                              task.status === "active"
+                                ? renderActiveTask(task)
+                                : renderStoredTask(
+                                    task,
+                                    task.status === "trashed",
+                                  ),
+                            )}
+                          </ul>
+                        )}
+                      </div>
+                      <div className="planner-search-section">
+                        <h3>이력 {searchResults.events.length}</h3>
+                        {searchResults.events.length === 0 ? (
+                          <p className="planner-empty">
+                            검색된 이력이 없습니다.
+                          </p>
+                        ) : (
+                          renderHistoryItems(searchResults.events)
+                        )}
+                      </div>
+                    </>
+                  ) : (
+                    <p className="planner-empty">
+                      검색 결과가 없습니다.
+                    </p>
+                  )}
+                </section>
+              ) : activeTab === "active" ? (
                 <section className="planner-day-panel planner-date-panel">
                   <div className="planner-day-panel-header">
                     <div>
