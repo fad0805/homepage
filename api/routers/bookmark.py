@@ -5,21 +5,28 @@ from sqlalchemy.orm import Session
 
 from crud.bookmark import (
     create_routine,
+    create_routine_category,
     delete_routine,
+    delete_routine_category,
     get_period,
     get_routine_history,
     get_today,
+    list_routine_categories,
     save_goal,
     save_rating,
     save_review,
     set_routine_check,
     update_routine,
+    update_routine_category,
 )
 from db.session import get_db
 from routers.utils import require_auth
 from schemas.bookmark import (
     BookmarkGoalRead,
     BookmarkGoalUpdate,
+    BookmarkRoutineCategoryCreate,
+    BookmarkRoutineCategoryRead,
+    BookmarkRoutineCategoryUpdate,
     BookmarkPeriodRead,
     BookmarkRatingRead,
     BookmarkRatingUpdate,
@@ -55,6 +62,59 @@ def read_period(
         period_type=period_type,
         period_start=period_start,
     )
+
+
+@router.get(
+    "/categories",
+    response_model=list[BookmarkRoutineCategoryRead],
+)
+def read_categories(
+    response: Response,
+    db: Session = Depends(get_db),
+    user=Depends(require_auth),
+):
+    _no_store(response)
+    return list_routine_categories(db, user.id)
+
+
+@router.post(
+    "/categories",
+    response_model=BookmarkRoutineCategoryRead,
+)
+def post_category(
+    payload: BookmarkRoutineCategoryCreate,
+    response: Response,
+    db: Session = Depends(get_db),
+    user=Depends(require_auth),
+):
+    _no_store(response)
+    return create_routine_category(db, payload, user.id)
+
+
+@router.patch(
+    "/categories/{category_id}",
+    response_model=BookmarkRoutineCategoryRead,
+)
+def patch_category(
+    category_id: int,
+    payload: BookmarkRoutineCategoryUpdate,
+    response: Response,
+    db: Session = Depends(get_db),
+    user=Depends(require_auth),
+):
+    _no_store(response)
+    return update_routine_category(db, category_id, payload, user.id)
+
+
+@router.delete("/categories/{category_id}")
+def remove_category(
+    category_id: int,
+    response: Response,
+    db: Session = Depends(get_db),
+    user=Depends(require_auth),
+):
+    _no_store(response)
+    return delete_routine_category(db, category_id, user.id)
 
 
 @router.get("/today", response_model=BookmarkPeriodRead)

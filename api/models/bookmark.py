@@ -18,6 +18,49 @@ from sqlalchemy.orm import relationship
 from db.base import Base
 
 
+class BookmarkRoutineCategory(Base):
+    """A user-defined grouping for routine lists."""
+
+    __tablename__ = "bookmark_routine_categories"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(
+        Integer,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    name = Column(String(80), nullable=False)
+    position = Column(
+        Integer,
+        nullable=False,
+        default=0,
+        server_default="0",
+    )
+    created_at = Column(DateTime, default=func.now(), nullable=False)
+    updated_at = Column(
+        DateTime,
+        default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+    user = relationship("User")
+
+    __table_args__ = (
+        UniqueConstraint(
+            "user_id",
+            "name",
+            name="uq_bookmark_routine_categories_user_name",
+        ),
+        Index(
+            "ix_bookmark_routine_categories_user_position",
+            "user_id",
+            "position",
+        ),
+    )
+
+
 class BookmarkRoutine(Base):
     """A recurring routine managed by one user."""
 
@@ -32,6 +75,15 @@ class BookmarkRoutine(Base):
     )
     title = Column(String(255), nullable=False)
     notes = Column(Text, nullable=True)
+    category_id = Column(
+        Integer,
+        ForeignKey(
+            "bookmark_routine_categories.id",
+            ondelete="SET NULL",
+        ),
+        nullable=True,
+        index=True,
+    )
     frequency = Column(String(10), nullable=False)
     tracking_mode = Column(
         String(10),
@@ -73,6 +125,7 @@ class BookmarkRoutine(Base):
     )
 
     user = relationship("User")
+    category = relationship("BookmarkRoutineCategory")
     checks = relationship(
         "BookmarkRoutineCheck",
         back_populates="routine",

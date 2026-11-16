@@ -11,6 +11,7 @@ import {
   type BookmarkRating,
   type BookmarkReview,
   type BookmarkRoutine,
+  type BookmarkRoutineCategory,
   type BookmarkRoutineFrequency,
   type BookmarkRoutineHistory,
   type BookmarkTrackingMode,
@@ -254,6 +255,18 @@ export default function BookmarkClient({ username }: { username: string }) {
   const [itemNotes, setItemNotes] = useState("");
   const [itemSaving, setItemSaving] = useState(false);
 
+  const [categories, setCategories] = useState<
+    BookmarkRoutineCategory[]
+  >([]);
+  const [categoryModalOpen, setCategoryModalOpen] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState("");
+  const [categorySaving, setCategorySaving] = useState(false);
+  const [categoryError, setCategoryError] = useState<string | null>(
+    null,
+  );
+  const [routineCategoryId, setRoutineCategoryId] = useState<
+    number | null
+  >(null);
   const [routineMode, setRoutineMode] =
     useState<BookmarkTrackingMode>("count");
   const [routineTarget, setRoutineTarget] = useState("1");
@@ -294,9 +307,25 @@ export default function BookmarkClient({ username }: { username: string }) {
     }
   }, [periodStart, view]);
 
+  const loadCategories = useCallback(async () => {
+    try {
+      const next = await apiFetch<BookmarkRoutineCategory[]>(
+        "/api/bookmark/categories",
+        { cache: "no-store" },
+      );
+      setCategories(next);
+    } catch {
+      // The routine list can still render uncategorized entries.
+    }
+  }, []);
+
   useEffect(() => {
     void loadPeriod();
   }, [loadPeriod]);
+
+  useEffect(() => {
+    void loadCategories();
+  }, [loadCategories]);
 
   const changeView = (next: BookmarkView) => {
     setView(next);
@@ -329,6 +358,7 @@ export default function BookmarkClient({ username }: { username: string }) {
     setEditingRoutine(null);
     setItemTitle("");
     setItemNotes("");
+    setRoutineCategoryId(null);
     setRoutineMode("count");
     setRoutineTarget("1");
     setRoutineWeekday(0);
@@ -345,6 +375,7 @@ export default function BookmarkClient({ username }: { username: string }) {
     setEditingRoutine(routine);
     setItemTitle(routine.title);
     setItemNotes(routine.notes ?? "");
+    setRoutineCategoryId(routine.category_id);
     setRoutineMode(routine.tracking_mode);
     setRoutineTarget(String(routine.target_count));
     setRoutineWeekday(routine.weekday ?? 0);
@@ -391,6 +422,73 @@ export default function BookmarkClient({ username }: { username: string }) {
     setHistoryData(null);
     setHistoryError(null);
     setHistoryLoading(false);
+  };
+
+  const openCategoryModal = () => {
+    setCategoryModalOpen(true);
+    setNewCategoryName("");
+    setCategoryError(null);
+  };
+
+  const closeCategoryModal = () => {
+    setCategoryModalOpen(false);
+    setNewCategoryName("");
+    setCategoryError(null);
+  };
+
+  const handleAddCategory = async () => {
+    if (!newCategoryName.trim() || categorySaving) return;
+    setCategorySaving(true);
+    setCategoryError(null);
+    try {
+      await apiFetch<BookmarkRoutineCategory>(
+        "/api/bookmark/categories",
+        {
+          method: "POST",
+          body: JSON.stringify({ name: newCategoryName }),
+        },
+      );
+      setNewCategoryName("");
+      await loadCategories();
+    } catch (reason) {
+      setCategoryError(
+        reason instanceof Error
+          ? reason.message
+          : "카테고리를 추가하지 못했습니다.",
+      );
+    } finally {
+      setCategorySaving(false);
+    }
+  };
+
+  const handleDeleteCategory = async (
+    category: BookmarkRoutineCategory,
+  ) => {
+    if (categorySaving) return;
+    if (
+      !window.confirm(
+        `"${category.name}" 카테고리를 삭제할까요? 루틴은 미분류로 이동합니다.`,
+      )
+    ) {
+      return;
+    }
+    setCategorySaving(true);
+    setCategoryError(null);
+    try {
+      await apiFetch(`/api/bookmark/categories/${category.id}`, {
+        method: "DELETE",
+      });
+      await loadCategories();
+      await loadPeriod();
+    } catch (reason) {
+      setCategoryError(
+        reason instanceof Error
+          ? reason.message
+          : "카테고리를 삭제하지 못했습니다.",
+      );
+    } finally {
+      setCategorySaving(false);
+    }
   };
 
   const closeRoutineModal = () => {
@@ -485,6 +583,7 @@ export default function BookmarkClient({ username }: { username: string }) {
             body: JSON.stringify({
               title: itemTitle,
               notes: itemNotes || null,
+              category_id: routineCategoryId,
               tracking_mode: mode,
               target_count: targetCount,
               ...schedule,
@@ -498,6 +597,7 @@ export default function BookmarkClient({ username }: { username: string }) {
             frequency: modalFrequency,
             title: itemTitle,
             notes: itemNotes || null,
+            category_id: routineCategoryId,
             tracking_mode: mode,
             target_count: targetCount,
             ...schedule,
@@ -764,144 +864,193 @@ export default function BookmarkClient({ username }: { username: string }) {
     }
   };
 
-  const renderRoutines = () =>
-    routines.length === 0 ? (
-      <p className="bookmark-empty-row">
-        {view === "today"
-          ? "오늘 수행할 루틴이 없습니다. 연·분기·월·주·일 탭에서 루틴을 추가할 수 있습니다."
-          : "이 기간에 등록된 루틴이 없습니다."}
-      </p>
-    ) : (
-      <ul className="bookmark-item-list">
-        {routines.map((routine) => {
-          const isDaily = routine.frequency === "daily";
-          const isCount =
-            routine.tracking_mode === "count" && !isDaily;
-          const allDone =
-            isCount || routine.frequency === "weekly"
-              ? routine.completed_count >= routine.target_count
-              : routine.occurrences.length > 0 &&
-                routine.occurrences.every(
-                  (occurrence) => occurrence.done,
-                );
-          return (
-            <li
-              className={`bookmark-item${allDone ? " is-done" : ""}`}
-              key={routine.id}
-            >
-              <div className="bookmark-item-main">
-                <div className="bookmark-routine-heading">
-                  <span className="bookmark-routine-title">
-                    {routine.title}
-                  </span>
-                  <p className="bookmark-item-schedule">
-                    {routineScheduleLabel(routine)}
-                  </p>
-                </div>
+  const renderRoutines = () => {
+    if (routines.length === 0) {
+      return (
+        <p className="bookmark-empty-row">
+          {view === "today"
+            ? "오늘 수행할 루틴이 없습니다. 일·주·월·분기·연 탭에서 루틴을 추가할 수 있습니다."
+            : "이 기간에 등록된 루틴이 없습니다."}
+        </p>
+      );
+    }
 
-                {isCount ? (
-                  <div className="bookmark-routine-counter">
-                    <button
-                      type="button"
-                      className="bookmark-count-button"
-                      aria-label="1회 줄이기"
-                      disabled={routine.completed_count <= 0}
-                      onClick={() =>
-                        void setRoutineCount(
-                          routine,
-                          routine.completed_count - 1,
-                        )
-                      }
-                    >
-                      −
-                    </button>
-                    <span className="bookmark-routine-progress">
-                      <strong>{routine.completed_count}</strong>
-                      <span>/ {routine.target_count}회</span>
-                    </span>
-                    <button
-                      type="button"
-                      className="bookmark-count-button"
-                      aria-label="1회 추가"
-                      disabled={
-                        routine.completed_count >= routine.target_count
-                      }
-                      onClick={() =>
-                        void setRoutineCount(
-                          routine,
-                          routine.completed_count + 1,
-                        )
-                      }
-                    >
-                      +
-                    </button>
-                  </div>
-                ) : (
-                  <>
-                    <div className="bookmark-occurrence-list">
-                      {routine.occurrences.map((occurrence) => (
-                        <label
-                          className={`bookmark-occurrence${
-                            occurrence.done ? " is-done" : ""
-                          }`}
-                          key={occurrence.date}
-                        >
-                          <input
-                            type="checkbox"
-                            checked={occurrence.done}
-                            onChange={() =>
-                              void toggleOccurrence(
-                                routine,
-                                occurrence.date,
-                                occurrence.done,
-                              )
-                            }
-                          />
-                          <span>
-                            {occurrenceLabel(
-                              occurrence.date,
-                              view,
-                              routine.frequency,
-                            )}
-                          </span>
-                        </label>
-                      ))}
-                    </div>
-                    {routine.frequency === "weekly" &&
-                    routine.target_count > 1 ? (
-                      <p className="bookmark-routine-week-progress">
-                        이번 주 {routine.completed_count}/
-                        {routine.target_count}회
-                      </p>
-                    ) : null}
-                  </>
-                )}
-
-                {routine.notes ? (
-                  <p className="bookmark-item-notes">{routine.notes}</p>
-                ) : null}
-              </div>
-              <div className="bookmark-item-actions">
-                <button
-                  type="button"
-                  className="bookmark-text-button"
-                  onClick={() => void openHistory(routine)}
-                >
-                  기록
-                </button>
-                <button
-                  type="button"
-                  className="bookmark-text-button"
-                  onClick={() => openEditRoutine(routine)}
-                >
-                  수정
-                </button>
-              </div>
-            </li>
-          );
-        })}
-      </ul>
+    const categoryById = new Map(
+      categories.map((category) => [category.id, category]),
     );
+    const groups: Array<{
+      key: string;
+      name: string;
+      routines: BookmarkRoutine[];
+    }> = categories.map((category) => ({
+      key: `category-${category.id}`,
+      name: category.name,
+      routines: routines.filter(
+        (routine) => routine.category_id === category.id,
+      ),
+    }));
+    const uncategorized = routines.filter(
+      (routine) =>
+        routine.category_id === null ||
+        !categoryById.has(routine.category_id),
+    );
+    if (uncategorized.length > 0) {
+      groups.push({
+        key: "uncategorized",
+        name: "미분류",
+        routines: uncategorized,
+      });
+    }
+
+    const renderRoutineItem = (routine: BookmarkRoutine) => {
+      const isDaily = routine.frequency === "daily";
+      const isCount =
+        routine.tracking_mode === "count" && !isDaily;
+      const allDone =
+        isCount || routine.frequency === "weekly"
+          ? routine.completed_count >= routine.target_count
+          : routine.occurrences.length > 0 &&
+            routine.occurrences.every(
+              (occurrence) => occurrence.done,
+            );
+      return (
+        <li
+          className={`bookmark-item${allDone ? " is-done" : ""}`}
+          key={routine.id}
+        >
+          <div className="bookmark-item-main">
+            <div className="bookmark-routine-heading">
+              <span className="bookmark-routine-title">
+                {routine.title}
+              </span>
+              <p className="bookmark-item-schedule">
+                {routineScheduleLabel(routine)}
+              </p>
+            </div>
+
+            {isCount ? (
+              <div className="bookmark-routine-counter">
+                <button
+                  type="button"
+                  className="bookmark-count-button"
+                  aria-label="1회 줄이기"
+                  disabled={routine.completed_count <= 0}
+                  onClick={() =>
+                    void setRoutineCount(
+                      routine,
+                      routine.completed_count - 1,
+                    )
+                  }
+                >
+                  −
+                </button>
+                <span className="bookmark-routine-progress">
+                  <strong>{routine.completed_count}</strong>
+                  <span>/ {routine.target_count}회</span>
+                </span>
+                <button
+                  type="button"
+                  className="bookmark-count-button"
+                  aria-label="1회 추가"
+                  disabled={
+                    routine.completed_count >= routine.target_count
+                  }
+                  onClick={() =>
+                    void setRoutineCount(
+                      routine,
+                      routine.completed_count + 1,
+                    )
+                  }
+                >
+                  +
+                </button>
+              </div>
+            ) : (
+              <>
+                <div className="bookmark-occurrence-list">
+                  {routine.occurrences.map((occurrence) => (
+                    <label
+                      className={`bookmark-occurrence${
+                        occurrence.done ? " is-done" : ""
+                      }`}
+                      key={occurrence.date}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={occurrence.done}
+                        onChange={() =>
+                          void toggleOccurrence(
+                            routine,
+                            occurrence.date,
+                            occurrence.done,
+                          )
+                        }
+                      />
+                      <span>
+                        {occurrenceLabel(
+                          occurrence.date,
+                          view,
+                          routine.frequency,
+                        )}
+                      </span>
+                    </label>
+                  ))}
+                </div>
+                {routine.frequency === "weekly" &&
+                routine.target_count > 1 ? (
+                  <p className="bookmark-routine-week-progress">
+                    이번 주 {routine.completed_count}/
+                    {routine.target_count}회
+                  </p>
+                ) : null}
+              </>
+            )}
+
+            {routine.notes ? (
+              <p className="bookmark-item-notes">{routine.notes}</p>
+            ) : null}
+          </div>
+          <div className="bookmark-item-actions">
+            <button
+              type="button"
+              className="bookmark-text-button"
+              onClick={() => void openHistory(routine)}
+            >
+              기록
+            </button>
+            <button
+              type="button"
+              className="bookmark-text-button"
+              onClick={() => openEditRoutine(routine)}
+            >
+              수정
+            </button>
+          </div>
+        </li>
+      );
+    };
+
+    return (
+      <div className="bookmark-routine-groups">
+        {groups
+          .filter((group) => group.routines.length > 0)
+          .map((group) => (
+            <section
+              className="bookmark-routine-group"
+              key={group.key}
+            >
+              <header className="bookmark-routine-group-header">
+                <h3>{group.name}</h3>
+                <span>{group.routines.length}</span>
+              </header>
+              <ul className="bookmark-item-list">
+                {group.routines.map(renderRoutineItem)}
+              </ul>
+            </section>
+          ))}
+      </div>
+    );
+  };
 
   return (
     <div id="bookmark-page">
@@ -988,15 +1137,24 @@ export default function BookmarkClient({ username }: { username: string }) {
                         : "할일 / 루틴"}
                     </h2>
                   </div>
-                  {view !== "today" ? (
+                  <div className="bookmark-panel-actions">
                     <button
                       type="button"
-                      className="bookmark-primary"
-                      onClick={openCreateRoutine}
+                      className="bookmark-text-button"
+                      onClick={openCategoryModal}
                     >
-                      추가
+                      카테고리
                     </button>
-                  ) : null}
+                    {view !== "today" ? (
+                      <button
+                        type="button"
+                        className="bookmark-primary"
+                        onClick={openCreateRoutine}
+                      >
+                        추가
+                      </button>
+                    ) : null}
+                  </div>
                 </header>
                 {renderRoutines()}
               </section>
@@ -1139,6 +1297,26 @@ export default function BookmarkClient({ username }: { username: string }) {
                     setItemNotes(event.target.value)
                   }
                 />
+              </label>
+              <label>
+                <span>카테고리</span>
+                <select
+                  value={routineCategoryId ?? ""}
+                  onChange={(event) =>
+                    setRoutineCategoryId(
+                      event.target.value
+                        ? Number(event.target.value)
+                        : null,
+                    )
+                  }
+                >
+                  <option value="">미분류</option>
+                  {categories.map((category) => (
+                    <option value={category.id} key={category.id}>
+                      {category.name}
+                    </option>
+                  ))}
+                </select>
               </label>
 
               <div className="bookmark-schedule">
@@ -1373,6 +1551,92 @@ export default function BookmarkClient({ username }: { username: string }) {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      ) : null}
+
+      {categoryModalOpen ? (
+        <div
+          className="bookmark-modal-overlay"
+          role="presentation"
+          onClick={closeCategoryModal}
+        >
+          <div
+            className="bookmark-modal bookmark-category-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-label="루틴 카테고리 관리"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <header className="bookmark-modal-header">
+              <div>
+                <p className="bookmark-panel-eyebrow">CATEGORY</p>
+                <h2>루틴 카테고리</h2>
+              </div>
+              <button
+                type="button"
+                className="bookmark-text-button"
+                onClick={closeCategoryModal}
+              >
+                닫기
+              </button>
+            </header>
+
+            {categoryError ? (
+              <p className="bookmark-error">{categoryError}</p>
+            ) : null}
+
+            <form
+              className="bookmark-category-add"
+              onSubmit={(event) => {
+                event.preventDefault();
+                void handleAddCategory();
+              }}
+            >
+              <input
+                type="text"
+                value={newCategoryName}
+                maxLength={80}
+                placeholder="새 카테고리 이름"
+                onChange={(event) =>
+                  setNewCategoryName(event.target.value)
+                }
+              />
+              <button
+                type="submit"
+                className="bookmark-primary"
+                disabled={categorySaving || !newCategoryName.trim()}
+              >
+                추가
+              </button>
+            </form>
+
+            {categories.length === 0 ? (
+              <p className="bookmark-empty-row">
+                아직 카테고리가 없습니다.
+              </p>
+            ) : (
+              <ul className="bookmark-category-list">
+                {categories.map((category) => (
+                  <li key={category.id}>
+                    <span>{category.name}</span>
+                    <button
+                      type="button"
+                      className="bookmark-text-button is-danger"
+                      disabled={categorySaving}
+                      onClick={() =>
+                        void handleDeleteCategory(category)
+                      }
+                    >
+                      삭제
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <p className="bookmark-form-hint">
+              카테고리를 삭제하면 해당 루틴은 미분류로 이동합니다.
+            </p>
           </div>
         </div>
       ) : null}

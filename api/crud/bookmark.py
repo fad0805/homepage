@@ -5,18 +5,21 @@ from zoneinfo import ZoneInfo
 
 from fastapi import HTTPException, status
 from sqlalchemy import func
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from models.bookmark import (
     BookmarkGoal,
     BookmarkRating,
     BookmarkReview,
     BookmarkRoutine,
+    BookmarkRoutineCategory,
     BookmarkRoutineCheck,
     BookmarkRoutineMonthlyStat,
 )
 from schemas.bookmark import (
     BookmarkGoalUpdate,
+    BookmarkRoutineCategoryCreate,
+    BookmarkRoutineCategoryUpdate,
     BookmarkRatingUpdate,
     BookmarkReviewUpdate,
     BookmarkRoutineCheckUpdate,
@@ -325,6 +328,29 @@ def _get_routine_or_404(
     return routine
 
 
+def _resolve_category_id(
+    db: Session,
+    user_id: int,
+    category_id: int | None,
+) -> int | None:
+    if category_id is None or category_id <= 0:
+        return None
+    category = (
+        db.query(BookmarkRoutineCategory)
+        .filter(
+            BookmarkRoutineCategory.id == category_id,
+            BookmarkRoutineCategory.user_id == user_id,
+        )
+        .first()
+    )
+    if category is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="루틴 카테고리를 찾을 수 없습니다.",
+        )
+    return category.id
+
+
 def _period_check_count(
     db: Session,
     routine: BookmarkRoutine,
@@ -377,6 +403,8 @@ def _routine_period_dict(
         "id": routine.id,
         "title": routine.title,
         "notes": routine.notes,
+        "category_id": routine.category_id,
+        "category_name": routine.category.name if routine.category else None,
         "frequency": routine.frequency,
         "tracking_mode": routine.tracking_mode,
         "target_count": routine.target_count,
@@ -659,6 +687,7 @@ def get_today(
     target = day or _kst_today()
     routines = (
         db.query(BookmarkRoutine)
+        .options(selectinload(BookmarkRoutine.category))
         .filter(
             BookmarkRoutine.user_id == user_id,
             BookmarkRoutine.active.is_(True),
@@ -770,6 +799,7 @@ def get_period(
     frequency = PERIOD_FREQUENCY[period_type]
     routines = (
         db.query(BookmarkRoutine)
+        .options(selectinload(BookmarkRoutine.category))
         .filter(
             BookmarkRoutine.user_id == user_id,
             BookmarkRoutine.frequency == frequency,
@@ -865,6 +895,11 @@ def create_routine(
     )
     routine = BookmarkRoutine(
         user_id=user_id,
+        category_id=_resolve_category_id(
+            db,
+            user_id,
+            payload.category_id,
+        ),
         title=_clean_title(payload.title),
         notes=_clean_notes(payload.notes),
         frequency=payload.frequency,
@@ -899,6 +934,12 @@ def update_routine(
         )
     if "notes" in data:
         routine.notes = _clean_notes(data["notes"])
+    if "category_id" in data:
+        routine.category_id = _resolve_category_id(
+            db,
+            user_id,
+            data["category_id"],
+        )
     if "active" in data:
         routine.active = bool(data["active"])
 
@@ -1095,6 +1136,136 @@ def prune_old_routine_checks(
     )
     db.commit()
     return deleted_short + deleted_long
+
+
+def list_routine_categories(
+    db: Session,
+    user_id: int,
+) -> list[BookmarkRoutineCategory]:
+    return (
+        db.query(BookmarkRoutineCategory)
+        .filter(BookmarkRoutineCategory.user_id == user_id)
+        .order_by(
+            BookmarkRoutineCategory.position,
+            BookmarkRoutineCategory.id,
+        )
+        .all()
+    )
+
+
+def create_routine_category(
+    db: Session,
+    payload: BookmarkRoutineCategoryCreate,
+    user_id: int,
+) -> BookmarkRoutineCategory:
+    name = (payload.name or "").strip()
+    if not name:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="카테고리 이름을 입력해주세요.",
+        )
+    exists = (
+        db.query(BookmarkRoutineCategory.id)
+        .filter(
+            BookmarkRoutineCategory.user_id == user_id,
+            BookmarkRoutineCategory.name == name,
+        )
+        .first()
+    )
+    if exists is not None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="이미 같은 이름의 카테고리가 있습니다.",
+        )
+    max_position = (
+        db.query(func.max(BookmarkRoutineCategory.position))
+        .filter(BookmarkRoutineCategory.user_id == user_id)
+        .scalar()
+    )
+    category = BookmarkRoutineCategory(
+        user_id=user_id,
+        name=name,
+        position=(max_position or -1) + 1,
+    )
+    db.add(category)
+    db.commit()
+    db.refresh(category)
+    return category
+
+
+def update_routine_category(
+    db: Session,
+    category_id: int,
+    payload: BookmarkRoutineCategoryUpdate,
+    user_id: int,
+) -> BookmarkRoutineCategory:
+    category = (
+        db.query(BookmarkRoutineCategory)
+        .filter(
+            BookmarkRoutineCategory.id == category_id,
+            BookmarkRoutineCategory.user_id == user_id,
+        )
+        .first()
+    )
+    if category is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="루틴 카테고리를 찾을 수 없습니다.",
+        )
+    name = (payload.name or "").strip()
+    if not name:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="카테고리 이름을 입력해주세요.",
+        )
+    duplicate = (
+        db.query(BookmarkRoutineCategory.id)
+        .filter(
+            BookmarkRoutineCategory.user_id == user_id,
+            BookmarkRoutineCategory.name == name,
+            BookmarkRoutineCategory.id != category.id,
+        )
+        .first()
+    )
+    if duplicate is not None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="이미 같은 이름의 카테고리가 있습니다.",
+        )
+    category.name = name
+    db.commit()
+    db.refresh(category)
+    return category
+
+
+def delete_routine_category(
+    db: Session,
+    category_id: int,
+    user_id: int,
+) -> dict:
+    category = (
+        db.query(BookmarkRoutineCategory)
+        .filter(
+            BookmarkRoutineCategory.id == category_id,
+            BookmarkRoutineCategory.user_id == user_id,
+        )
+        .first()
+    )
+    if category is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="루틴 카테고리를 찾을 수 없습니다.",
+        )
+    db.query(BookmarkRoutine).filter(
+        BookmarkRoutine.user_id == user_id,
+        BookmarkRoutine.category_id == category.id,
+    ).update(
+        {BookmarkRoutine.category_id: None},
+        synchronize_session=False,
+    )
+    db.delete(category)
+    db.commit()
+    return {"success": True}
 
 
 def save_goal(

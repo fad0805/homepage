@@ -14,10 +14,30 @@ BookmarkRoutineFrequency = Literal[
 BookmarkTrackingMode = Literal["count", "date"]
 
 
+class BookmarkRoutineCategoryCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=80)
+
+
+class BookmarkRoutineCategoryUpdate(BaseModel):
+    name: str = Field(min_length=1, max_length=80)
+
+
+class BookmarkRoutineCategoryRead(BaseModel):
+    id: int
+    name: str
+    position: int
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
 class BookmarkRoutineCreate(BaseModel):
     frequency: BookmarkRoutineFrequency
     title: str = Field(min_length=1, max_length=255)
     notes: str | None = Field(default=None, max_length=4000)
+    category_id: int | None = None
     tracking_mode: BookmarkTrackingMode = "count"
     target_count: int = Field(default=1, ge=1, le=1000)
     weekday: int | None = Field(default=None, ge=0, le=6)
@@ -30,6 +50,7 @@ class BookmarkRoutineCreate(BaseModel):
 class BookmarkRoutineUpdate(BaseModel):
     title: str | None = Field(default=None, min_length=1, max_length=255)
     notes: str | None = Field(default=None, max_length=4000)
+    category_id: int | None = None
     tracking_mode: BookmarkTrackingMode | None = None
     target_count: int | None = Field(default=None, ge=1, le=1000)
     weekday: int | None = Field(default=None, ge=0, le=6)
@@ -45,6 +66,7 @@ class BookmarkRoutineRead(BaseModel):
     title: str
     notes: str | None = None
     frequency: BookmarkRoutineFrequency
+    category_id: int | None = None
     tracking_mode: BookmarkTrackingMode
     target_count: int
     weekday: int | None = None
@@ -67,6 +89,7 @@ class BookmarkRoutineOccurrenceRead(BaseModel):
 
 
 class BookmarkRoutinePeriodRead(BookmarkRoutineRead):
+    category_name: str | None = None
     period_type: BookmarkPeriodType
     period_start: date
     completed_count: int = 0

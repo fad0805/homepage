@@ -14,11 +14,21 @@ export interface BookmarkRoutineOccurrence {
   done: boolean;
 }
 
+export interface BookmarkRoutineCategory {
+  id: number;
+  name: string;
+  position: number;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface BookmarkRoutine {
   id: number;
   title: string;
   notes: string | null;
   frequency: BookmarkRoutineFrequency;
+  category_id: number | null;
+  category_name: string | null;
   tracking_mode: BookmarkTrackingMode;
   target_count: number;
   weekday: number | null;
@@ -103,6 +113,8 @@ export function routineWeekdays(routine: {
 
 export function routineScheduleLabel(routine: {
   frequency: BookmarkRoutineFrequency;
+  category_id: number | null;
+  category_name: string | null;
   tracking_mode: BookmarkTrackingMode;
   target_count: number;
   weekday: number | null;
