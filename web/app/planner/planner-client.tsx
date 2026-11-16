@@ -384,10 +384,8 @@ export default function PlannerClient({ username }: { username: string }) {
   const [preview, setPreview] = useState<PlannerEventPreview | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [taskModalOpen, setTaskModalOpen] = useState(false);
-  const [dayModalDate, setDayModalDate] = useState<string | null>(null);
   const initializedToday = useRef(false);
   const eventsRequestRef = useRef(0);
-  const todayMonth = today.slice(0, 7);
 
   const loadTasks = useCallback(async () => {
     try {
@@ -420,28 +418,15 @@ export default function PlannerClient({ username }: { username: string }) {
 
   const loadEvents = useCallback(async (monthKey: string) => {
     const requestId = ++eventsRequestRef.current;
-    const monthKeys = Array.from(
-      new Set([monthKey, todayMonth].filter(Boolean)),
-    );
+    const bounds = monthBounds(monthKey);
     setEventsLoading(true);
     try {
-      const responses = await Promise.all(
-        monthKeys.map((key) => {
-          const bounds = monthBounds(key);
-          return apiFetch<PlannerEventsResponse>(
-            `/api/planner/events?start=${bounds.start}&end=${bounds.end}`,
-            { cache: "no-store" },
-          );
-        }),
+      const data = await apiFetch<PlannerEventsResponse>(
+        `/api/planner/events?start=${bounds.start}&end=${bounds.end}`,
+        { cache: "no-store" },
       );
       if (requestId !== eventsRequestRef.current) return;
-      const byId = new Map<number, PlannerEvent>();
-      for (const response of responses) {
-        for (const event of response.events) {
-          byId.set(event.id, event);
-        }
-      }
-      setEvents(Array.from(byId.values()));
+      setEvents(data.events);
     } catch (reason) {
       if (requestId !== eventsRequestRef.current) return;
       setError(
@@ -454,7 +439,7 @@ export default function PlannerClient({ username }: { username: string }) {
         setEventsLoading(false);
       }
     }
-  }, [todayMonth]);
+  }, []);
 
   useEffect(() => {
     void loadTasks();
@@ -465,7 +450,7 @@ export default function PlannerClient({ username }: { username: string }) {
   }, [loadEvents, viewMonth]);
 
   useEffect(() => {
-    if (!selectedEvent && !taskModalOpen && !dayModalDate) return;
+    if (!selectedEvent && !taskModalOpen) return;
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
       if (selectedEvent) {
@@ -478,16 +463,11 @@ export default function PlannerClient({ username }: { username: string }) {
         setEditingId(null);
         setForm(emptyForm(today));
         setError(null);
-        return;
-      }
-      if (dayModalDate) {
-        setDayModalDate(null);
-        setSelectedDate(today);
       }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [selectedEvent, taskModalOpen, dayModalDate, today]);
+  }, [selectedEvent, taskModalOpen, today]);
 
   const cells = useMemo(() => monthCells(viewMonth), [viewMonth]);
   const activeTasks = useMemo(
@@ -506,39 +486,21 @@ export default function PlannerClient({ username }: { username: string }) {
     () => tasks.filter((task) => task.status === "trashed"),
     [tasks],
   );
-  const todayTasks = useMemo(
+  const selectedTasks = useMemo(
     () =>
       sortTasks(
-        activeTasks.filter((task) => taskAppearsOn(task, today, today)),
+        activeTasks.filter((task) =>
+          taskAppearsOn(task, selectedDate, today),
+        ),
       ),
-    [activeTasks, today],
+    [activeTasks, selectedDate, today],
   );
-  const todayEvents = useMemo(
+  const selectedEvents = useMemo(
     () =>
       events
-        .filter((event) => eventDate(event) === today)
+        .filter((event) => eventDate(event) === selectedDate)
         .sort((a, b) => b.occurred_at.localeCompare(a.occurred_at)),
-    [events, today],
-  );
-  const dayModalTasks = useMemo(
-    () =>
-      dayModalDate
-        ? sortTasks(
-            activeTasks.filter((task) =>
-              taskAppearsOn(task, dayModalDate, today),
-            ),
-          )
-        : [],
-    [activeTasks, dayModalDate, today],
-  );
-  const dayModalEvents = useMemo(
-    () =>
-      dayModalDate
-        ? events
-            .filter((event) => eventDate(event) === dayModalDate)
-            .sort((a, b) => b.occurred_at.localeCompare(a.occurred_at))
-        : [],
-    [events, dayModalDate],
+    [events, selectedDate],
   );
 
   const resetForm = () => {
@@ -558,11 +520,6 @@ export default function PlannerClient({ username }: { username: string }) {
     setTaskModalOpen(true);
   };
 
-  const closeDayModal = () => {
-    setDayModalDate(null);
-    setSelectedDate(today);
-  };
-
   const refresh = async () => {
     await Promise.all([loadTasks(), loadEvents(viewMonth)]);
   };
@@ -570,7 +527,7 @@ export default function PlannerClient({ username }: { username: string }) {
   const changeMonth = (delta: number) => {
     const next = shiftMonth(viewMonth, delta);
     setViewMonth(next);
-    setSelectedDate(next === todayMonth ? today : "");
+    setSelectedDate(`${next}-01`);
   };
 
   const selectDate = (date: string) => {
@@ -578,11 +535,6 @@ export default function PlannerClient({ username }: { username: string }) {
     const monthKey = date.slice(0, 7);
     if (monthKey !== viewMonth) {
       setViewMonth(monthKey);
-    }
-    if (date === today) {
-      setDayModalDate(null);
-    } else {
-      setDayModalDate(date);
     }
   };
 
@@ -1241,24 +1193,38 @@ export default function PlannerClient({ username }: { username: string }) {
 
             <aside className="planner-side">
               {activeTab === "active" ? (
-                <section className="planner-day-panel planner-today-panel">
+                <section className="planner-day-panel planner-date-panel">
                   <div className="planner-day-panel-header">
                     <div>
-                      <p className="planner-eyebrow">오늘</p>
-                      <h2>{formatDayLabel(today)}</h2>
+                      <p className="planner-eyebrow">
+                        {selectedDate === today ? "오늘" : "선택한 날짜"}
+                      </p>
+                      <h2>{formatDayLabel(selectedDate)}</h2>
                       <p>
-                        일정 {todayTasks.length}개 · 이력 {todayEvents.length}개
+                        일정 {selectedTasks.length}개 · 이력{" "}
+                        {selectedEvents.length}개
                       </p>
                     </div>
-                    <button
-                      type="button"
-                      className="planner-primary"
-                      onClick={openNewTask}
-                    >
-                      새 일정
-                    </button>
+                    <div className="planner-day-panel-actions">
+                      {selectedDate !== today ? (
+                        <button
+                          type="button"
+                          className="planner-text-button"
+                          onClick={() => selectDate(today)}
+                        >
+                          오늘로
+                        </button>
+                      ) : null}
+                      <button
+                        type="button"
+                        className="planner-primary"
+                        onClick={openNewTask}
+                      >
+                        새 일정
+                      </button>
+                    </div>
                   </div>
-                  {renderDayDetail(todayTasks, todayEvents)}
+                  {renderDayDetail(selectedTasks, selectedEvents)}
                 </section>
               ) : (
                 <section className="planner-day-panel">
@@ -1496,45 +1462,6 @@ export default function PlannerClient({ username }: { username: string }) {
                       : "추가"}
               </button>
             </form>
-          </div>
-        </div>
-      ) : null}
-
-      {dayModalDate ? (
-        <div
-          className="planner-modal-overlay is-day"
-          role="presentation"
-          onClick={closeDayModal}
-        >
-          <div
-            className="planner-modal planner-day-modal"
-            role="dialog"
-            aria-modal="true"
-            aria-label={`${formatDayLabel(dayModalDate)} 상세`}
-            onClick={(event) => event.stopPropagation()}
-          >
-            <div className="planner-modal-header">
-              <div>
-                <p className="planner-modal-eyebrow">일정 상세</p>
-                <h2>{formatDayLabel(dayModalDate)}</h2>
-                <p className="planner-modal-time">
-                  일정 {dayModalTasks.length}개 · 이력{" "}
-                  {dayModalEvents.length}개
-                </p>
-              </div>
-              <button
-                type="button"
-                className="planner-icon-button"
-                aria-label="닫기"
-                onClick={closeDayModal}
-              >
-                ×
-              </button>
-            </div>
-            {error ? <p className="planner-error">{error}</p> : null}
-            <div className="planner-day-modal-body">
-              {renderDayDetail(dayModalTasks, dayModalEvents)}
-            </div>
           </div>
         </div>
       ) : null}

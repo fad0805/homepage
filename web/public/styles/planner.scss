@@ -627,10 +627,15 @@
   > div {
     min-width: 0;
   }
+}
 
-  > .planner-primary {
-    flex-shrink: 0;
-  }
+.planner-day-panel-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.35rem;
+  flex-shrink: 0;
 }
 
 .planner-empty,
@@ -758,22 +763,10 @@
   width: min(32rem, 100%);
 }
 
-.planner-day-modal {
-  width: min(46rem, 100%);
-}
-
 .planner-form.is-modal {
   padding: 0;
   border: 0;
   background: transparent;
-}
-
-.planner-day-modal-body {
-  margin-top: 0.9rem;
-}
-
-.planner-day-modal-body .planner-task-list {
-  margin-top: 0;
 }
 
 .planner-modal-header {
