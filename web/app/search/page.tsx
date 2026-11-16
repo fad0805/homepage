@@ -91,20 +91,25 @@ export default async function SearchPage({
   let failed = false;
   const currentUser = await getCurrentUser();
 
+  const searchSuffix = q ? `?q=${encodeURIComponent(q)}` : "";
+
   try {
     [books, chapters, illustrations] = await Promise.all([
-      serverApiFetch<Book[]>("/books", {
+      serverApiFetch<Book[]>(`/books${searchSuffix}`, {
         tags: ["books"],
         auth: Boolean(currentUser),
       }),
-      serverApiFetch<Chapter[]>("/chapters", {
+      serverApiFetch<Chapter[]>(`/chapters${searchSuffix}`, {
         tags: ["chapters"],
         auth: Boolean(currentUser),
       }),
-      serverApiFetch<IllustrationItem[]>("/illustrations", {
-        tags: ["illustrations"],
-        auth: Boolean(currentUser),
-      }),
+      serverApiFetch<IllustrationItem[]>(
+        `/illustrations${searchSuffix}`,
+        {
+          tags: ["illustrations"],
+          auth: Boolean(currentUser),
+        },
+      ),
     ]);
   } catch (error) {
     console.error(error);

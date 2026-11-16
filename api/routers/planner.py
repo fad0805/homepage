@@ -15,6 +15,7 @@ from crud.planner import (
     get_tasks,
     restore_task,
     save_color,
+    search_planner,
     trash_task,
     update_color,
     update_task,
@@ -28,6 +29,7 @@ from schemas.planner import (
     PlannerColorUpdate,
     PlannerEventPreview,
     PlannerEventsResponse,
+    PlannerSearchResponse,
     PlannerTaskCreate,
     PlannerTaskRead,
     PlannerTasksResponse,
@@ -83,6 +85,25 @@ def remove_color(
 ):
     _no_store(response)
     return delete_color(db, color_id, user.id)
+
+
+@router.get("/search", response_model=PlannerSearchResponse)
+def read_search(
+    start: date,
+    end: date,
+    response: Response,
+    q: str | None = None,
+    db: Session = Depends(get_db),
+    user=Depends(require_auth),
+):
+    _no_store(response)
+    return search_planner(
+        db,
+        user.id,
+        start_date=start,
+        end_date=end,
+        query=q,
+    )
 
 
 @router.get("/tasks", response_model=PlannerTasksResponse)

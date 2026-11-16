@@ -48,6 +48,7 @@ async def upload_chapter_image(
 def get_chapters(
     request: Request,
     mine: bool = False,
+    q: str | None = None,
     db: Session = Depends(get_db),
     current_user=Depends(get_optional_user),
 ):
@@ -62,9 +63,14 @@ def get_chapters(
             db,
             include_hidden=True,
             owner_user_id=current_user.id,
+            query=q,
         )
     if current_user is not None and is_admin(current_user):
-        chapters = get_all_chapters(db, include_hidden=True)
+        chapters = get_all_chapters(
+            db,
+            include_hidden=True,
+            query=q,
+        )
     else:
         chapters = get_all_chapters(
             db,
@@ -72,6 +78,7 @@ def get_chapters(
             granted_chapters=grants.chapters,
             granted_books=grants.books,
             viewer_user_id=current_user.id if current_user else None,
+            query=q,
         )
     return filter_by_author(chapters, get_default_author_id(db))
 

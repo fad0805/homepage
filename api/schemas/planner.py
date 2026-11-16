@@ -100,6 +100,11 @@ class PlannerEventsResponse(BaseModel):
     events: list[PlannerEventRead] = Field(default_factory=list)
 
 
+class PlannerSearchResponse(BaseModel):
+    tasks: list[PlannerTaskRead] = Field(default_factory=list)
+    events: list[PlannerEventRead] = Field(default_factory=list)
+
+
 class PlannerEventPreview(BaseModel):
     available: bool
     entity_type: str

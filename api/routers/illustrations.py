@@ -90,16 +90,22 @@ def _require_owned_illustration(
     include_in_schema=False,
 )
 def read_illustrations(
+    q: str | None = None,
     db: Session = Depends(get_db),
     current_user=Depends(get_optional_user),
 ):
     """Return public illustrations plus the viewer's own hidden ones."""
     if current_user is not None and is_admin(current_user):
-        illustrations = get_visible_illustrations(db, include_hidden=True)
+        illustrations = get_visible_illustrations(
+            db,
+            include_hidden=True,
+            query=q,
+        )
     else:
         illustrations = get_visible_illustrations(
             db,
             viewer_user_id=current_user.id if current_user else None,
+            query=q,
         )
     return filter_by_author(
         illustrations,

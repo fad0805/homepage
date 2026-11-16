@@ -152,12 +152,6 @@ const ACTION_LABELS: Record<string, string> = {
   completed: "완료",
 };
 
-const TASK_STATUS_LABELS: Record<TaskStatus, string> = {
-  active: "진행 중",
-  inactive: "비활성",
-  trashed: "휴지통",
-};
-
 const FIELD_LABELS: Record<string, string> = {
   title: "제목",
   subtitle: "부제",
@@ -395,24 +389,6 @@ function sortColorGroupTasks(tasks: PlannerTask[]) {
     }
     if (a.end_date !== b.end_date) {
       return a.end_date.localeCompare(b.end_date);
-    }
-    return a.id - b.id;
-  });
-}
-
-const TASK_STATUS_ORDER: Record<TaskStatus, number> = {
-  active: 0,
-  inactive: 1,
-  trashed: 2,
-};
-
-function sortSearchTasks(tasks: PlannerTask[]) {
-  return [...tasks].sort((a, b) => {
-    const status =
-      TASK_STATUS_ORDER[a.status] - TASK_STATUS_ORDER[b.status];
-    if (status !== 0) return status;
-    if (a.start_date !== b.start_date) {
-      return a.start_date.localeCompare(b.start_date);
     }
     return a.id - b.id;
   });
@@ -823,66 +799,20 @@ export default function PlannerClient({ username }: { username: string }) {
       return;
     }
 
-    const normalized = searchQuery.trim().toLowerCase();
+    const trimmedQuery = searchQuery.trim();
+    const queryString = trimmedQuery
+      ? `&q=${encodeURIComponent(trimmedQuery)}`
+      : "";
     setSearchOpen(true);
     setSearchResults(null);
     setSearching(true);
     setError(null);
     try {
-      const data = await apiFetch<PlannerEventsResponse>(
-        `/api/planner/events?start=${searchFrom}&end=${searchTo}`,
+      const data = await apiFetch<PlannerSearchResults>(
+        `/api/planner/search?start=${searchFrom}&end=${searchTo}${queryString}`,
         { cache: "no-store" },
       );
-      const taskMatches = sortSearchTasks(
-        tasks.filter((task) => {
-          if (
-            task.start_date > searchTo ||
-            task.end_date < searchFrom
-          ) {
-            return false;
-          }
-          if (!normalized) return true;
-          const chip = task.color_id
-            ? savedColors.find(
-                (color) => color.id === task.color_id,
-              )
-            : null;
-          const haystack = [
-            task.title,
-            task.notes,
-            TASK_STATUS_LABELS[task.status],
-            chip?.name,
-            chip?.color,
-          ]
-            .filter(Boolean)
-            .join(" ")
-            .toLowerCase();
-          return haystack.includes(normalized);
-        }),
-      );
-      const eventMatches = data.events.filter((item) => {
-        if (!normalized) return true;
-        const changes = item.changes ?? [];
-        const haystack = [
-          item.title,
-          item.notes,
-          ENTITY_LABELS[item.entity_type],
-          ACTION_LABELS[item.action],
-          ...changes.flatMap((change) => [
-            change.field,
-            change.before,
-            change.after,
-          ]),
-        ]
-          .filter(Boolean)
-          .join(" ")
-          .toLowerCase();
-        return haystack.includes(normalized);
-      });
-      setSearchResults({
-        tasks: taskMatches,
-        events: eventMatches,
-      });
+      setSearchResults(data);
     } catch (reason) {
       setError(
         reason instanceof Error

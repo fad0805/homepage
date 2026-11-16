@@ -2,10 +2,11 @@ import os
 from datetime import datetime, timedelta, timezone
 
 from fastapi import HTTPException, status
-from sqlalchemy import func, or_
+from sqlalchemy import Text, cast, func, or_
 from sqlalchemy.orm import Session
 
 from core.mastodon import maybe_notify_chapter
+from core.search import like_pattern, search_tokens
 from models.books import Book, BookCategory, Chapter, ChapterView
 from schemas.books import (
     BookCategoryCreate,
@@ -264,21 +265,40 @@ def get_all_books(
     include_hidden: bool = False,
     viewer_user_id: int | None = None,
     owner_user_id: int | None = None,
+    query: str | None = None,
 ):
-    query = db.query(Book)
+    books_query = db.query(Book)
     if owner_user_id is not None:
-        query = query.filter(Book.user_id == owner_user_id)
+        books_query = books_query.filter(Book.user_id == owner_user_id)
     elif not include_hidden:
-        query = query.filter(Book.visible.is_(True))
+        books_query = books_query.filter(Book.visible.is_(True))
     elif viewer_user_id is not None:
         # Public viewers see all public books plus only their own hidden ones.
-        query = query.filter(
+        books_query = books_query.filter(
             or_(
                 Book.visible.is_(True),
                 Book.user_id == viewer_user_id,
             )
         )
-    books = query.order_by(Book.order, Book.id).all()
+
+    tokens = search_tokens(query)
+    if tokens:
+        books_query = books_query.outerjoin(
+            BookCategory,
+            Book.category_id == BookCategory.id,
+        )
+        for token in tokens:
+            pattern = like_pattern(token)
+            books_query = books_query.filter(
+                or_(
+                    Book.title.ilike(pattern, escape="\\"),
+                    Book.description.ilike(pattern, escape="\\"),
+                    cast(Book.tags, Text).ilike(pattern, escape="\\"),
+                    BookCategory.name.ilike(pattern, escape="\\"),
+                )
+            )
+
+    books = books_query.order_by(Book.order, Book.id).all()
     if not include_hidden:
         books = [
             book
@@ -434,8 +454,9 @@ def get_all_chapters(
     granted_books: frozenset[int] = frozenset(),
     viewer_user_id: int | None = None,
     owner_user_id: int | None = None,
+    query: str | None = None,
 ):
-    query = (
+    chapters_query = (
         db.query(Chapter)
         .join(Book, Chapter.book_id == Book.id)
         .order_by(
@@ -446,10 +467,23 @@ def get_all_chapters(
         )
     )
     if owner_user_id is not None:
-        query = query.filter(Chapter.user_id == owner_user_id)
+        chapters_query = chapters_query.filter(
+            Chapter.user_id == owner_user_id
+        )
+
+    tokens = search_tokens(query)
+    for token in tokens:
+        pattern = like_pattern(token)
+        chapters_query = chapters_query.filter(
+            or_(
+                Chapter.title.ilike(pattern, escape="\\"),
+                Chapter.subtitle.ilike(pattern, escape="\\"),
+                cast(Chapter.tags, Text).ilike(pattern, escape="\\"),
+            )
+        )
 
     result = []
-    for chapter in query.all():
+    for chapter in chapters_query.all():
         is_own = (
             viewer_user_id is not None
             and (

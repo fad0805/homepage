@@ -2,10 +2,11 @@ import os
 from datetime import date, datetime, timedelta
 
 from fastapi import HTTPException, status
-from sqlalchemy import func, or_
+from sqlalchemy import Text, cast, func, or_
 from sqlalchemy.orm import Session, selectinload
 
 from core.mastodon import maybe_notify_illustration
+from core.search import like_pattern, search_tokens
 from core.uploads import delete_replaced_upload, delete_uploaded_file
 from models.illustrations import (
     Illustration,
@@ -109,22 +110,39 @@ def get_visible_illustrations(
     db: Session,
     viewer_user_id: int | None = None,
     include_hidden: bool = False,
+    query: str | None = None,
 ):
     """Return public groups, own hidden groups, or every group for admins."""
-    query = _group_query(db)
+    illustrations_query = _group_query(db)
     if include_hidden and viewer_user_id is None:
         pass
     elif viewer_user_id is None:
-        query = query.filter(Illustration.visible.is_(True))
+        illustrations_query = illustrations_query.filter(
+            Illustration.visible.is_(True)
+        )
     else:
-        query = query.filter(
+        illustrations_query = illustrations_query.filter(
             or_(
                 Illustration.visible.is_(True),
                 Illustration.user_id == viewer_user_id,
             )
         )
+
+    tokens = search_tokens(query)
+    for token in tokens:
+        pattern = like_pattern(token)
+        illustrations_query = illustrations_query.filter(
+            or_(
+                Illustration.title.ilike(pattern, escape="\\"),
+                cast(Illustration.tags, Text).ilike(
+                    pattern,
+                    escape="\\",
+                ),
+            )
+        )
+
     illustrations = (
-        query.order_by(
+        illustrations_query.order_by(
             Illustration.order.asc(),
             Illustration.created_at.desc(),
             Illustration.id.desc(),

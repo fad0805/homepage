@@ -38,6 +38,7 @@ router = APIRouter()
 @router.get("")
 def get_books(
     mine: bool = False,
+    q: str | None = None,
     db: Session = Depends(get_db),
     current_user=Depends(get_optional_user),
 ):
@@ -51,14 +52,16 @@ def get_books(
             db,
             include_hidden=True,
             owner_user_id=current_user.id,
+            query=q,
         )
     if current_user is not None and is_admin(current_user):
-        books = get_all_books(db, include_hidden=True)
+        books = get_all_books(db, include_hidden=True, query=q)
     else:
         books = get_all_books(
             db,
             include_hidden=current_user is not None,
             viewer_user_id=current_user.id if current_user else None,
+            query=q,
         )
     return filter_by_author(books, get_default_author_id(db))
 
