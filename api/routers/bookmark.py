@@ -7,6 +7,7 @@ from crud.bookmark import (
     create_routine,
     delete_routine,
     get_period,
+    get_routine_history,
     save_goal,
     save_rating,
     save_review,
@@ -25,6 +26,7 @@ from schemas.bookmark import (
     BookmarkReviewUpdate,
     BookmarkRoutineCheckUpdate,
     BookmarkRoutineCreate,
+    BookmarkRoutineHistoryRead,
     BookmarkRoutinePeriodRead,
     BookmarkRoutineRead,
     BookmarkRoutineUpdate,
@@ -86,6 +88,20 @@ def remove_routine(
 ):
     _no_store(response)
     return delete_routine(db, routine_id, user.id)
+
+
+@router.get(
+    "/routines/{routine_id}/history",
+    response_model=BookmarkRoutineHistoryRead,
+)
+def read_routine_history(
+    routine_id: int,
+    response: Response,
+    db: Session = Depends(get_db),
+    user=Depends(require_auth),
+):
+    _no_store(response)
+    return get_routine_history(db, routine_id, user.id)
 
 
 @router.put(

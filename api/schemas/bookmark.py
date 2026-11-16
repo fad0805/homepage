@@ -73,6 +73,28 @@ class BookmarkRoutineCheckUpdate(BaseModel):
     done: bool
 
 
+class BookmarkRoutineHistoryDayRead(BaseModel):
+    date: date
+    scheduled: bool
+    done: bool
+
+
+class BookmarkRoutineHistoryMonthRead(BaseModel):
+    month_start: date
+    completed_count: int
+    expected_count: int
+
+    class Config:
+        from_attributes = True
+
+
+class BookmarkRoutineHistoryRead(BaseModel):
+    daily: list[BookmarkRoutineHistoryDayRead] = Field(default_factory=list)
+    monthly: list[BookmarkRoutineHistoryMonthRead] = Field(
+        default_factory=list
+    )
+
+
 class BookmarkGoalUpdate(BaseModel):
     period_type: BookmarkPeriodType
     period_start: date

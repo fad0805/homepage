@@ -1,6 +1,7 @@
 import calendar
 from datetime import date, datetime, timedelta, timezone
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from fastapi import HTTPException, status
 from sqlalchemy import func
@@ -12,6 +13,7 @@ from models.bookmark import (
     BookmarkReview,
     BookmarkRoutine,
     BookmarkRoutineCheck,
+    BookmarkRoutineMonthlyStat,
 )
 from schemas.bookmark import (
     BookmarkGoalUpdate,
@@ -38,6 +40,10 @@ FREQUENCY_CHECK_PERIOD = {
     "yearly": "year",
 }
 FREQUENCIES = set(FREQUENCY_CHECK_PERIOD)
+
+KST = ZoneInfo("Asia/Seoul")
+SHORT_RETENTION_MONTHS = 3
+LONG_RETENTION_MONTHS = 36
 
 
 def _utc_naive_now() -> datetime:
@@ -273,6 +279,286 @@ def _routine_occurrences(
     return []
 
 
+def _kst_today() -> date:
+    return datetime.now(KST).date()
+
+
+def _shift_months(value: date, months: int) -> date:
+    total = value.year * 12 + value.month - 1 + months
+    year, month_index = divmod(total, 12)
+    month = month_index + 1
+    day = min(value.day, calendar.monthrange(year, month)[1])
+    return date(year, month, day)
+
+
+def _month_start(value: date) -> date:
+    return value.replace(day=1)
+
+
+def _month_end(value: date) -> date:
+    first = _month_start(value)
+    return date(
+        first.year,
+        first.month,
+        calendar.monthrange(first.year, first.month)[1],
+    )
+
+
+def _done_day_dates(
+    db: Session,
+    routine: BookmarkRoutine,
+    start: date,
+    end: date,
+) -> set[date]:
+    rows = (
+        db.query(BookmarkRoutineCheck.period_start)
+        .filter(
+            BookmarkRoutineCheck.user_id == routine.user_id,
+            BookmarkRoutineCheck.routine_id == routine.id,
+            BookmarkRoutineCheck.period_type == "day",
+            BookmarkRoutineCheck.done.is_(True),
+            BookmarkRoutineCheck.period_start >= start,
+            BookmarkRoutineCheck.period_start <= end,
+        )
+        .all()
+    )
+    return {row[0] for row in rows}
+
+
+def _has_done_period_check(
+    db: Session,
+    routine: BookmarkRoutine,
+    period_type: str,
+    period_start: date,
+) -> bool:
+    return (
+        db.query(BookmarkRoutineCheck.id)
+        .filter(
+            BookmarkRoutineCheck.user_id == routine.user_id,
+            BookmarkRoutineCheck.routine_id == routine.id,
+            BookmarkRoutineCheck.period_type == period_type,
+            BookmarkRoutineCheck.period_start == period_start,
+            BookmarkRoutineCheck.done.is_(True),
+        )
+        .first()
+        is not None
+    )
+
+
+def _routine_month_values(
+    db: Session,
+    routine: BookmarkRoutine,
+    month_start: date,
+) -> tuple[int, int] | None:
+    first = _month_start(month_start)
+    last = _month_end(first)
+
+    if routine.frequency == "daily":
+        completed = len(_done_day_dates(db, routine, first, last))
+        return completed, last.day
+
+    if routine.frequency == "weekly":
+        weekdays = set(_routine_weekdays(routine))
+        if not weekdays:
+            return None
+        expected_dates = {
+            first + timedelta(days=offset)
+            for offset in range(last.day)
+            if (first + timedelta(days=offset)).weekday() in weekdays
+        }
+        if not expected_dates:
+            return None
+        completed = len(
+            _done_day_dates(db, routine, first, last) & expected_dates
+        )
+        return completed, len(expected_dates)
+
+    if routine.frequency == "monthly":
+        if not _routine_due(routine, first):
+            return None
+        return (
+            1
+            if _has_done_period_check(db, routine, "month", first)
+            else 0,
+            1,
+        )
+
+    if routine.frequency == "quarterly":
+        quarter_month = ((first.month - 1) // 3) * 3 + 1
+        if first.month != quarter_month:
+            return None
+        quarter_start = date(first.year, quarter_month, 1)
+        return (
+            1
+            if _has_done_period_check(
+                db,
+                routine,
+                "quarter",
+                quarter_start,
+            )
+            else 0,
+            1,
+        )
+
+    if routine.frequency == "yearly":
+        if first.month != 1:
+            return None
+        year_start = date(first.year, 1, 1)
+        return (
+            1
+            if _has_done_period_check(db, routine, "year", year_start)
+            else 0,
+            1,
+        )
+
+    return None
+
+
+def _upsert_routine_monthly_stat(
+    db: Session,
+    routine: BookmarkRoutine,
+    month_start: date,
+) -> None:
+    db.flush()
+    values = _routine_month_values(db, routine, month_start)
+    if values is None:
+        return
+    first = _month_start(month_start)
+    completed, expected = values
+    stat = (
+        db.query(BookmarkRoutineMonthlyStat)
+        .filter(
+            BookmarkRoutineMonthlyStat.user_id == routine.user_id,
+            BookmarkRoutineMonthlyStat.routine_id == routine.id,
+            BookmarkRoutineMonthlyStat.month_start == first,
+        )
+        .first()
+    )
+    if stat is None:
+        stat = BookmarkRoutineMonthlyStat(
+            user_id=routine.user_id,
+            routine_id=routine.id,
+            routine_title=routine.title,
+            frequency=routine.frequency,
+            month_start=first,
+            completed_count=completed,
+            expected_count=expected,
+        )
+        db.add(stat)
+        return
+    stat.routine_title = routine.title
+    stat.frequency = routine.frequency
+    stat.completed_count = completed
+    stat.expected_count = expected
+
+
+def prune_old_routine_checks(
+    db: Session,
+    *,
+    today: date | None = None,
+) -> int:
+    """Keep detailed checks for the recent graph; preserve monthly stats."""
+    current = today or _kst_today()
+    short_cutoff = _shift_months(current, -SHORT_RETENTION_MONTHS)
+    long_cutoff = _shift_months(current, -LONG_RETENTION_MONTHS)
+    # Backfill any monthly aggregates that are missing, including checks
+    # created before the monthly stats table existed. This also rolls up
+    # checks that are about to be pruned.
+    check_pairs = (
+        db.query(
+            BookmarkRoutineCheck.user_id,
+            BookmarkRoutineCheck.routine_id,
+            BookmarkRoutineCheck.period_start,
+        )
+        .filter(BookmarkRoutineCheck.routine_id.isnot(None))
+        .all()
+    )
+    existing_stats = {
+        (row.user_id, row.routine_id, row.month_start)
+        for row in db.query(
+            BookmarkRoutineMonthlyStat.user_id,
+            BookmarkRoutineMonthlyStat.routine_id,
+            BookmarkRoutineMonthlyStat.month_start,
+        ).all()
+    }
+    missing_pairs = {
+        (user_id, routine_id, _month_start(period_start))
+        for user_id, routine_id, period_start in check_pairs
+        if (user_id, routine_id, _month_start(period_start))
+        not in existing_stats
+    }
+    for _user_id, routine_id, month_start in missing_pairs:
+        routine = db.get(BookmarkRoutine, routine_id)
+        if routine is not None:
+            _upsert_routine_monthly_stat(db, routine, month_start)
+    if missing_pairs:
+        db.flush()
+
+    deleted_short = (
+        db.query(BookmarkRoutineCheck)
+        .filter(
+            BookmarkRoutineCheck.period_type.in_(["day", "week"]),
+            BookmarkRoutineCheck.period_start < short_cutoff,
+        )
+        .delete(synchronize_session=False)
+    )
+    deleted_long = (
+        db.query(BookmarkRoutineCheck)
+        .filter(
+            BookmarkRoutineCheck.period_type.in_(
+                ["month", "quarter", "year"]
+            ),
+            BookmarkRoutineCheck.period_start < long_cutoff,
+        )
+        .delete(synchronize_session=False)
+    )
+    db.commit()
+    return deleted_short + deleted_long
+
+
+def get_routine_history(
+    db: Session,
+    routine_id: int,
+    user_id: int,
+    *,
+    today: date | None = None,
+) -> dict[str, Any]:
+    routine = _get_routine_or_404(db, routine_id, user_id)
+    current = today or _kst_today()
+    daily: list[dict[str, Any]] = []
+    if routine.frequency in {"daily", "weekly"}:
+        start = _shift_months(current, -SHORT_RETENTION_MONTHS)
+        done_dates = _done_day_dates(db, routine, start, current)
+        weekdays = (
+            set(_routine_weekdays(routine))
+            if routine.frequency == "weekly"
+            else set(range(7))
+        )
+        day = start
+        while day <= current:
+            daily.append(
+                {
+                    "date": day,
+                    "scheduled": day.weekday() in weekdays,
+                    "done": day in done_dates,
+                }
+            )
+            day += timedelta(days=1)
+
+    monthly = (
+        db.query(BookmarkRoutineMonthlyStat)
+        .filter(
+            BookmarkRoutineMonthlyStat.user_id == user_id,
+            BookmarkRoutineMonthlyStat.routine_id == routine.id,
+            BookmarkRoutineMonthlyStat.month_start
+            <= _month_start(current),
+        )
+        .order_by(BookmarkRoutineMonthlyStat.month_start)
+        .all()
+    )
+    return {"daily": daily, "monthly": monthly}
+
+
 def _routine_period_dict(
     routine: BookmarkRoutine,
     *,
@@ -485,6 +771,12 @@ def update_routine(
 
     if "title" in data:
         routine.title = _clean_title(data["title"])
+        db.query(BookmarkRoutineMonthlyStat).filter(
+            BookmarkRoutineMonthlyStat.routine_id == routine.id
+        ).update(
+            {BookmarkRoutineMonthlyStat.routine_title: routine.title},
+            synchronize_session=False,
+        )
     if "notes" in data:
         routine.notes = _clean_notes(data["notes"])
     if "active" in data:
@@ -575,6 +867,11 @@ def set_routine_check(
         db.add(check)
     check.done = bool(payload.done)
     check.completed_at = _utc_naive_now() if payload.done else None
+    _upsert_routine_monthly_stat(
+        db,
+        routine,
+        _month_start(payload.period_start),
+    )
     db.commit()
     db.refresh(check)
     return _routine_period_dict(

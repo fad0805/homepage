@@ -31,6 +31,23 @@ export interface BookmarkRoutine {
   occurrences: BookmarkRoutineOccurrence[];
 }
 
+export interface BookmarkRoutineHistoryDay {
+  date: string;
+  scheduled: boolean;
+  done: boolean;
+}
+
+export interface BookmarkRoutineHistoryMonth {
+  month_start: string;
+  completed_count: number;
+  expected_count: number;
+}
+
+export interface BookmarkRoutineHistory {
+  daily: BookmarkRoutineHistoryDay[];
+  monthly: BookmarkRoutineHistoryMonth[];
+}
+
 export interface BookmarkGoal {
   id: number;
   period_type: BookmarkPeriodType;

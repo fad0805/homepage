@@ -13,6 +13,7 @@ import {
   type BookmarkReview,
   type BookmarkRoutine,
   type BookmarkRoutineFrequency,
+  type BookmarkRoutineHistory,
   routineScheduleLabel,
 } from "@/lib/bookmark";
 import { apiFetch } from "@/lib/api";
@@ -162,6 +163,25 @@ function occurrenceLabel(value: string, type: BookmarkPeriodType) {
   return "올해";
 }
 
+function historyDayTitle(
+  value: string,
+  scheduled: boolean,
+  done: boolean,
+) {
+  const date = parseDateKey(value);
+  const label = `${date.getUTCFullYear()}.${pad2(
+    date.getUTCMonth() + 1,
+  )}.${pad2(date.getUTCDate())}`;
+  return `${label} · ${
+    done ? "완료" : scheduled ? "미완료" : "예정 없음"
+  }`;
+}
+
+function historyMonthLabel(value: string) {
+  const date = parseDateKey(value);
+  return `${date.getUTCFullYear()}.${pad2(date.getUTCMonth() + 1)}`;
+}
+
 function periodLabel(value: string, type: BookmarkPeriodType) {
   const date = parseDateKey(value);
   const year = date.getUTCFullYear();
@@ -210,6 +230,12 @@ export default function BookmarkClient({ username }: { username: string }) {
   const [routineModalOpen, setRoutineModalOpen] = useState(false);
   const [editingRoutine, setEditingRoutine] =
     useState<BookmarkRoutine | null>(null);
+  const [historyRoutine, setHistoryRoutine] =
+    useState<BookmarkRoutine | null>(null);
+  const [historyData, setHistoryData] =
+    useState<BookmarkRoutineHistory | null>(null);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState<string | null>(null);
   const [itemTitle, setItemTitle] = useState("");
   const [itemNotes, setItemNotes] = useState("");
   const [itemSaving, setItemSaving] = useState(false);
@@ -304,6 +330,35 @@ export default function BookmarkClient({ username }: { username: string }) {
     setRoutineNthWeek(routine.nth_week ?? 1);
     setRoutineMonth(routine.month ?? 1);
     setError(null);
+  };
+
+  const openHistory = async (routine: BookmarkRoutine) => {
+    setHistoryRoutine(routine);
+    setHistoryData(null);
+    setHistoryLoading(true);
+    setHistoryError(null);
+    try {
+      const history = await apiFetch<BookmarkRoutineHistory>(
+        `/api/bookmark/routines/${routine.id}/history`,
+        { cache: "no-store" },
+      );
+      setHistoryData(history);
+    } catch (reason) {
+      setHistoryError(
+        reason instanceof Error
+          ? reason.message
+          : "달성 기록을 불러오지 못했습니다.",
+      );
+    } finally {
+      setHistoryLoading(false);
+    }
+  };
+
+  const closeHistory = () => {
+    setHistoryRoutine(null);
+    setHistoryData(null);
+    setHistoryError(null);
+    setHistoryLoading(false);
   };
 
   const closeRoutineModal = () => {
@@ -641,13 +696,22 @@ export default function BookmarkClient({ username }: { username: string }) {
                   <p className="bookmark-item-notes">{routine.notes}</p>
                 ) : null}
               </div>
-              <button
-                type="button"
-                className="bookmark-text-button"
-                onClick={() => openEditRoutine(routine)}
-              >
-                수정
-              </button>
+              <div className="bookmark-item-actions">
+                <button
+                  type="button"
+                  className="bookmark-text-button"
+                  onClick={() => void openHistory(routine)}
+                >
+                  기록
+                </button>
+                <button
+                  type="button"
+                  className="bookmark-text-button"
+                  onClick={() => openEditRoutine(routine)}
+                >
+                  수정
+                </button>
+              </div>
             </li>
           );
         })}
@@ -1045,6 +1109,164 @@ export default function BookmarkClient({ username }: { username: string }) {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      ) : null}
+
+      {historyRoutine ? (
+        <div
+          className="bookmark-modal-overlay"
+          role="presentation"
+          onClick={closeHistory}
+        >
+          <div
+            className="bookmark-modal bookmark-history-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-label="루틴 달성 기록"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <header className="bookmark-modal-header">
+              <div>
+                <p className="bookmark-panel-eyebrow">
+                  {FREQUENCY_LABELS[historyRoutine.frequency]}
+                </p>
+                <h2>{historyRoutine.title} 달성 기록</h2>
+              </div>
+              <button
+                type="button"
+                className="bookmark-text-button"
+                onClick={closeHistory}
+              >
+                닫기
+              </button>
+            </header>
+
+            {historyLoading ? (
+              <p className="bookmark-status">불러오는 중...</p>
+            ) : null}
+            {historyError ? (
+              <p className="bookmark-error">{historyError}</p>
+            ) : null}
+
+            {historyData ? (
+              <>
+                {historyData.daily.length > 0 ? (
+                  <section className="bookmark-history-section">
+                    <div className="bookmark-history-heading">
+                      <h3>최근 3개월 · 일간</h3>
+                      <span>상세 기록 보관 범위</span>
+                    </div>
+                    <div className="bookmark-history-heatmap">
+                      <div className="bookmark-history-weekdays">
+                        {WEEKDAY_SHORT.map((day) => (
+                          <span key={day}>{day}</span>
+                        ))}
+                      </div>
+                      <div className="bookmark-history-days">
+                        {Array.from(
+                          {
+                            length:
+                              (parseDateKey(
+                                historyData.daily[0]?.date ?? "",
+                              ).getUTCDay() +
+                                6) %
+                              7,
+                          },
+                          (_, index) => (
+                            <span
+                              className="bookmark-history-day is-blank"
+                              key={`blank-${index}`}
+                            />
+                          ),
+                        )}
+                        {historyData.daily.map((day) => (
+                          <span
+                            className={`bookmark-history-day ${
+                              day.scheduled
+                                ? day.done
+                                  ? "is-done"
+                                  : "is-missed"
+                                : "is-off"
+                            }`}
+                            key={day.date}
+                            title={historyDayTitle(
+                              day.date,
+                              day.scheduled,
+                              day.done,
+                            )}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                    <div className="bookmark-history-legend">
+                      <span>
+                        <i className="is-done" />
+                        완료
+                      </span>
+                      <span>
+                        <i className="is-missed" />
+                        미완료
+                      </span>
+                      <span>
+                        <i className="is-off" />
+                        예정 없음
+                      </span>
+                    </div>
+                  </section>
+                ) : (
+                  <p className="bookmark-history-note">
+                    일간 상세 그래프는 일·주 루틴에서 제공됩니다.
+                  </p>
+                )}
+
+                <section className="bookmark-history-section">
+                  <div className="bookmark-history-heading">
+                    <h3>월간 달성률</h3>
+                    <span>3개월 이후는 월 단위 집계로 보관</span>
+                  </div>
+                  {historyData.monthly.length === 0 ? (
+                    <p className="bookmark-empty-row">
+                      아직 월간 집계가 없습니다.
+                    </p>
+                  ) : (
+                    <ul className="bookmark-history-months">
+                      {historyData.monthly
+                        .slice()
+                        .reverse()
+                        .map((month) => {
+                          const rate =
+                            month.expected_count > 0
+                              ? Math.round(
+                                  (month.completed_count /
+                                    month.expected_count) *
+                                    100,
+                                )
+                              : 0;
+                          return (
+                            <li key={month.month_start}>
+                              <span className="bookmark-history-month-label">
+                                {historyMonthLabel(month.month_start)}
+                              </span>
+                              <div className="bookmark-history-bar">
+                                <span
+                                  style={{
+                                    width: `${Math.min(100, rate)}%`,
+                                  }}
+                                />
+                              </div>
+                              <span className="bookmark-history-rate">
+                                {month.completed_count}/
+                                {month.expected_count}
+                              </span>
+                            </li>
+                          );
+                        })}
+                    </ul>
+                  )}
+                </section>
+              </>
+            ) : null}
           </div>
         </div>
       ) : null}

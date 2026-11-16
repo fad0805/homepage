@@ -655,6 +655,12 @@
   }
 }
 
+.bookmark-item-actions {
+  display: flex;
+  flex-shrink: 0;
+  gap: 0.1rem;
+}
+
 .bookmark-modal-actions {
   display: flex;
   flex-wrap: wrap;
@@ -702,6 +708,225 @@
   color: var(--title-color);
   font-size: 0.68rem;
   opacity: 0.72;
+}
+
+.bookmark-history-modal {
+  width: min(38rem, 100%);
+}
+
+.bookmark-history-modal .bookmark-modal-header {
+  margin-bottom: 0.8rem;
+}
+
+.bookmark-history-section + .bookmark-history-section {
+  margin-top: 1rem;
+  padding-top: 0.9rem;
+  border-top: 1px solid
+    color-mix(in srgb, var(--theme-main) 24%, transparent);
+}
+
+.bookmark-history-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.35rem;
+
+  h3 {
+    margin: 0;
+    color: var(--title-color);
+    font-family: Eulyoo1945-SemiBold, GowunDodum, sans-serif;
+    font-size: 0.9rem;
+    font-weight: normal;
+  }
+
+  span {
+    color: var(--foreground);
+    font-size: 0.58rem;
+    opacity: 0.45;
+  }
+}
+
+.bookmark-history-heatmap {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.35rem;
+  margin-top: 0.65rem;
+  padding-bottom: 0.2rem;
+  overflow-x: auto;
+}
+
+.bookmark-history-weekdays {
+  display: grid;
+  flex-shrink: 0;
+  grid-template-rows: repeat(7, 0.72rem);
+  gap: 2px;
+
+  span {
+    display: flex;
+    align-items: center;
+    color: var(--title-color);
+    font-size: 0.54rem;
+    line-height: 1;
+    opacity: 0.45;
+  }
+}
+
+.bookmark-history-days {
+  display: grid;
+  grid-auto-flow: column;
+  grid-template-rows: repeat(7, 0.72rem);
+  grid-auto-columns: 0.72rem;
+  gap: 2px;
+}
+
+.bookmark-history-day {
+  display: block;
+  width: 0.72rem;
+  height: 0.72rem;
+  border: 1px solid transparent;
+  border-radius: 0.18rem;
+
+  &.is-done {
+    background: #4f8f5b;
+  }
+
+  &.is-missed {
+    border-color: color-mix(
+      in srgb,
+      var(--theme-main) 38%,
+      transparent
+    );
+    background: color-mix(
+      in srgb,
+      var(--theme-main) 12%,
+      transparent
+    );
+  }
+
+  &.is-off {
+    background: color-mix(
+      in srgb,
+      var(--foreground) 7%,
+      transparent
+    );
+  }
+
+  &.is-blank {
+    background: transparent;
+  }
+}
+
+.bookmark-history-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+  margin-top: 0.55rem;
+
+  span {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    color: var(--foreground);
+    font-size: 0.58rem;
+    opacity: 0.58;
+  }
+
+  i {
+    display: inline-block;
+    width: 0.65rem;
+    height: 0.65rem;
+    border: 1px solid transparent;
+    border-radius: 0.16rem;
+
+    &.is-done {
+      background: #4f8f5b;
+    }
+
+    &.is-missed {
+      border-color: color-mix(
+        in srgb,
+        var(--theme-main) 38%,
+        transparent
+      );
+      background: color-mix(
+        in srgb,
+        var(--theme-main) 12%,
+        transparent
+      );
+    }
+
+    &.is-off {
+      background: color-mix(
+        in srgb,
+        var(--foreground) 7%,
+        transparent
+      );
+    }
+  }
+}
+
+.bookmark-history-note {
+  margin: 0.8rem 0 0;
+  color: var(--foreground);
+  font-size: 0.68rem;
+  line-height: 1.55;
+  opacity: 0.55;
+}
+
+.bookmark-history-months {
+  display: flex;
+  flex-direction: column;
+  gap: 0.38rem;
+  max-height: 15rem;
+  margin: 0.65rem 0 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+
+  li {
+    display: grid;
+    grid-template-columns: 3.6rem minmax(0, 1fr) 3.1rem;
+    align-items: center;
+    gap: 0.5rem;
+  }
+}
+
+.bookmark-history-month-label {
+  color: var(--title-color);
+  font-size: 0.62rem;
+  opacity: 0.7;
+}
+
+.bookmark-history-bar {
+  height: 0.55rem;
+  overflow: hidden;
+  border-radius: 999px;
+  background: color-mix(
+    in srgb,
+    var(--theme-main) 14%,
+    transparent
+  );
+
+  span {
+    display: block;
+    height: 100%;
+    border-radius: 999px;
+    background: #4f8f5b;
+  }
+}
+
+.bookmark-history-rate {
+  color: var(--foreground);
+  font-size: 0.58rem;
+  text-align: right;
+  opacity: 0.55;
+}
+
+[data-theme='dark'] .bookmark-history-day.is-done,
+[data-theme='dark'] .bookmark-history-legend i.is-done,
+[data-theme='dark'] .bookmark-history-bar span {
+  background: #8fd39a;
 }
 
 .bookmark-form-hint {

@@ -9,6 +9,7 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from core import audit as _planner_audit  # noqa: F401 - registers history hooks
+from core.bookmark_retention import bookmark_retention_loop
 from core.config import API_DOCS_ENABLED, ENVIRONMENT
 from core.mastodon import mastodon_publish_loop
 from core.uploads import UPLOAD_DIR, ensure_upload_dir
@@ -49,12 +50,18 @@ async def lifespan(app:FastAPI):
     with SessionLocal() as db:
         hash_legacy_refresh_tokens(db)
     mastodon_task = asyncio.create_task(mastodon_publish_loop())
+    bookmark_retention_task = asyncio.create_task(
+        bookmark_retention_loop()
+    )
     try:
         yield
     finally:
         mastodon_task.cancel()
+        bookmark_retention_task.cancel()
         with suppress(asyncio.CancelledError):
             await mastodon_task
+        with suppress(asyncio.CancelledError):
+            await bookmark_retention_task
 
 app = FastAPI(
     lifespan=lifespan,

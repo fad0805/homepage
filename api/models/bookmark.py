@@ -120,6 +120,65 @@ class BookmarkRoutineCheck(Base):
     )
 
 
+class BookmarkRoutineMonthlyStat(Base):
+    """Persistent monthly aggregate for one routine."""
+
+    __tablename__ = "bookmark_routine_monthly_stats"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(
+        Integer,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    routine_id = Column(
+        Integer,
+        ForeignKey("bookmark_routines.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    routine_title = Column(String(255), nullable=False)
+    frequency = Column(String(10), nullable=False)
+    month_start = Column(Date, nullable=False)
+    completed_count = Column(
+        Integer,
+        nullable=False,
+        default=0,
+        server_default="0",
+    )
+    expected_count = Column(
+        Integer,
+        nullable=False,
+        default=0,
+        server_default="0",
+    )
+    created_at = Column(DateTime, default=func.now(), nullable=False)
+    updated_at = Column(
+        DateTime,
+        default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+    user = relationship("User")
+    routine = relationship("BookmarkRoutine")
+
+    __table_args__ = (
+        UniqueConstraint(
+            "user_id",
+            "routine_id",
+            "month_start",
+            name="uq_bookmark_routine_monthly_stats_period",
+        ),
+        Index(
+            "ix_bookmark_routine_monthly_stats_user_month",
+            "user_id",
+            "month_start",
+        ),
+    )
+
+
 class BookmarkGoal(Base):
     """One goal text attached to a user's period."""
 
