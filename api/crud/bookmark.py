@@ -1470,19 +1470,46 @@ def get_routine_history(
             )
             day += timedelta(days=1)
 
-    monthly = (
-        db.query(BookmarkRoutineMonthlyStat)
-        .filter(
-            BookmarkRoutineMonthlyStat.user_id == user_id,
-            BookmarkRoutineMonthlyStat.routine_id == routine.id,
-            BookmarkRoutineMonthlyStat.month_start
-            >= _month_start(routine.start_date),
-            BookmarkRoutineMonthlyStat.month_start
-            <= _month_start(routine.end_date or current),
+    if routine.frequency == "monthly":
+        first_month = max(
+            _month_start(routine.start_date),
+            _shift_months(_month_start(current), -35),
         )
-        .order_by(BookmarkRoutineMonthlyStat.month_start)
-        .all()
-    )
+        current_quarter_end = _period_end(
+            "quarter",
+            _quarter_start(current),
+        )
+        end = routine.end_date or current_quarter_end
+        if end > current_quarter_end:
+            end = current_quarter_end
+        last_month = _month_start(end)
+        monthly: list[dict[str, Any]] = []
+        month = first_month
+        while month <= last_month:
+            values = _routine_month_values(db, routine, month)
+            if values is not None:
+                monthly.append(
+                    {
+                        "month_start": month,
+                        "completed_count": values[0],
+                        "expected_count": values[1],
+                    }
+                )
+            month = _shift_months(month, 1)
+    else:
+        monthly = (
+            db.query(BookmarkRoutineMonthlyStat)
+            .filter(
+                BookmarkRoutineMonthlyStat.user_id == user_id,
+                BookmarkRoutineMonthlyStat.routine_id == routine.id,
+                BookmarkRoutineMonthlyStat.month_start
+                >= _month_start(routine.start_date),
+                BookmarkRoutineMonthlyStat.month_start
+                <= _month_start(routine.end_date or current),
+            )
+            .order_by(BookmarkRoutineMonthlyStat.month_start)
+            .all()
+        )
     return {"daily": daily, "monthly": monthly}
 
 
