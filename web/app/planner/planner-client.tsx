@@ -374,8 +374,11 @@ export default function PlannerClient({ username }: { username: string }) {
   const [selectedEvent, setSelectedEvent] = useState<PlannerEvent | null>(null);
   const [preview, setPreview] = useState<PlannerEventPreview | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
-  const formRef = useRef<HTMLFormElement>(null);
+  const [taskModalOpen, setTaskModalOpen] = useState(false);
+  const [dayModalDate, setDayModalDate] = useState<string | null>(null);
   const initializedToday = useRef(false);
+  const eventsRequestRef = useRef(0);
+  const todayMonth = today.slice(0, 7);
 
   const loadTasks = useCallback(async () => {
     try {
@@ -407,24 +410,42 @@ export default function PlannerClient({ username }: { username: string }) {
   }, []);
 
   const loadEvents = useCallback(async (monthKey: string) => {
-    const bounds = monthBounds(monthKey);
+    const requestId = ++eventsRequestRef.current;
+    const monthKeys = Array.from(
+      new Set([monthKey, todayMonth].filter(Boolean)),
+    );
     setEventsLoading(true);
     try {
-      const data = await apiFetch<PlannerEventsResponse>(
-        `/api/planner/events?start=${bounds.start}&end=${bounds.end}`,
-        { cache: "no-store" },
+      const responses = await Promise.all(
+        monthKeys.map((key) => {
+          const bounds = monthBounds(key);
+          return apiFetch<PlannerEventsResponse>(
+            `/api/planner/events?start=${bounds.start}&end=${bounds.end}`,
+            { cache: "no-store" },
+          );
+        }),
       );
-      setEvents(data.events);
+      if (requestId !== eventsRequestRef.current) return;
+      const byId = new Map<number, PlannerEvent>();
+      for (const response of responses) {
+        for (const event of response.events) {
+          byId.set(event.id, event);
+        }
+      }
+      setEvents(Array.from(byId.values()));
     } catch (reason) {
+      if (requestId !== eventsRequestRef.current) return;
       setError(
         reason instanceof Error
           ? reason.message
           : "이력을 불러오지 못했습니다.",
       );
     } finally {
-      setEventsLoading(false);
+      if (requestId === eventsRequestRef.current) {
+        setEventsLoading(false);
+      }
     }
-  }, []);
+  }, [todayMonth]);
 
   useEffect(() => {
     void loadTasks();
@@ -435,16 +456,29 @@ export default function PlannerClient({ username }: { username: string }) {
   }, [loadEvents, viewMonth]);
 
   useEffect(() => {
-    if (!selectedEvent) return;
+    if (!selectedEvent && !taskModalOpen && !dayModalDate) return;
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
+      if (event.key !== "Escape") return;
+      if (selectedEvent) {
         setSelectedEvent(null);
         setPreview(null);
+        return;
+      }
+      if (taskModalOpen) {
+        setTaskModalOpen(false);
+        setEditingId(null);
+        setForm(emptyForm(today));
+        setError(null);
+        return;
+      }
+      if (dayModalDate) {
+        setDayModalDate(null);
+        setSelectedDate(today);
       }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [selectedEvent]);
+  }, [selectedEvent, taskModalOpen, dayModalDate, today]);
 
   const cells = useMemo(() => monthCells(viewMonth), [viewMonth]);
   const activeTasks = useMemo(
@@ -463,26 +497,61 @@ export default function PlannerClient({ username }: { username: string }) {
     () => tasks.filter((task) => task.status === "trashed"),
     [tasks],
   );
-  const selectedTasks = useMemo(
+  const todayTasks = useMemo(
     () =>
       sortTasks(
-        activeTasks.filter((task) =>
-          taskAppearsOn(task, selectedDate, today),
-        ),
+        activeTasks.filter((task) => taskAppearsOn(task, today, today)),
       ),
-    [activeTasks, selectedDate, today],
+    [activeTasks, today],
   );
-  const selectedEvents = useMemo(
+  const todayEvents = useMemo(
     () =>
       events
-        .filter((event) => eventDate(event) === selectedDate)
+        .filter((event) => eventDate(event) === today)
         .sort((a, b) => b.occurred_at.localeCompare(a.occurred_at)),
-    [events, selectedDate],
+    [events, today],
+  );
+  const dayModalTasks = useMemo(
+    () =>
+      dayModalDate
+        ? sortTasks(
+            activeTasks.filter((task) =>
+              taskAppearsOn(task, dayModalDate, today),
+            ),
+          )
+        : [],
+    [activeTasks, dayModalDate, today],
+  );
+  const dayModalEvents = useMemo(
+    () =>
+      dayModalDate
+        ? events
+            .filter((event) => eventDate(event) === dayModalDate)
+            .sort((a, b) => b.occurred_at.localeCompare(a.occurred_at))
+        : [],
+    [events, dayModalDate],
   );
 
   const resetForm = () => {
     setEditingId(null);
     setForm(emptyForm(today));
+  };
+
+  const closeTaskModal = () => {
+    setTaskModalOpen(false);
+    resetForm();
+    setError(null);
+  };
+
+  const openNewTask = () => {
+    resetForm();
+    setError(null);
+    setTaskModalOpen(true);
+  };
+
+  const closeDayModal = () => {
+    setDayModalDate(null);
+    setSelectedDate(today);
   };
 
   const refresh = async () => {
@@ -492,7 +561,7 @@ export default function PlannerClient({ username }: { username: string }) {
   const changeMonth = (delta: number) => {
     const next = shiftMonth(viewMonth, delta);
     setViewMonth(next);
-    setSelectedDate(`${next}-01`);
+    setSelectedDate(next === todayMonth ? today : "");
   };
 
   const selectDate = (date: string) => {
@@ -500,6 +569,11 @@ export default function PlannerClient({ username }: { username: string }) {
     const monthKey = date.slice(0, 7);
     if (monthKey !== viewMonth) {
       setViewMonth(monthKey);
+    }
+    if (date === today) {
+      setDayModalDate(null);
+    } else {
+      setDayModalDate(date);
     }
   };
 
@@ -516,12 +590,7 @@ export default function PlannerClient({ username }: { username: string }) {
     });
     setActiveTab("active");
     setError(null);
-    window.setTimeout(() => {
-      formRef.current?.scrollIntoView({
-        behavior: "smooth",
-        block: "center",
-      });
-    }, 0);
+    setTaskModalOpen(true);
   };
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -553,7 +622,7 @@ export default function PlannerClient({ username }: { username: string }) {
           body: JSON.stringify(payload),
         });
       }
-      resetForm();
+      closeTaskModal();
       await refresh();
     } catch (reason) {
       setError(
@@ -866,6 +935,66 @@ export default function PlannerClient({ username }: { username: string }) {
     </li>
   );
 
+  const renderDayTasks = (dateTasks: PlannerTask[]) =>
+    dateTasks.length === 0 ? (
+      <p className="planner-empty">
+        이 날짜에 표시할 진행 중 일정이 없습니다.
+      </p>
+    ) : (
+      <ul className="planner-task-list">
+        {dateTasks.map(renderActiveTask)}
+      </ul>
+    );
+
+  const renderHistory = (dateEvents: PlannerEvent[]) => (
+    <div className="planner-history-section">
+      <h3>변경 이력</h3>
+      {eventsLoading ? (
+        <p className="planner-status">이력을 불러오는 중...</p>
+      ) : dateEvents.length === 0 ? (
+        <p className="planner-empty">
+          이 날짜의 변경 이력이 없습니다.
+        </p>
+      ) : (
+        <ul className="planner-history-list">
+          {dateEvents.map((event) => (
+            <li key={event.id}>
+              <button
+                type="button"
+                className="planner-history-item"
+                onClick={() => openEvent(event)}
+              >
+                <span className="planner-history-kind">
+                  {ENTITY_LABELS[event.entity_type] ||
+                    event.entity_type}
+                </span>
+                <span className="planner-history-title">
+                  {event.title || "제목 없음"}
+                </span>
+                <span className="planner-history-action">
+                  {ACTION_LABELS[event.action] || event.action}
+                </span>
+                <span className="planner-history-time">
+                  {formatDateTime(event.occurred_at)}
+                </span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+
+  const renderDayDetail = (
+    dateTasks: PlannerTask[],
+    dateEvents: PlannerEvent[],
+  ) => (
+    <>
+      {renderDayTasks(dateTasks)}
+      {renderHistory(dateEvents)}
+    </>
+  );
+
   return (
     <div id="planner-page">
       <main>
@@ -1030,242 +1159,25 @@ export default function PlannerClient({ username }: { username: string }) {
 
             <aside className="planner-side">
               {activeTab === "active" ? (
-                <>
-                  <form
-                    ref={formRef}
-                    className="planner-form"
-                    onSubmit={handleSubmit}
-                  >
-                    <div className="planner-form-heading">
-                      <h2>{editingId ? "일정 수정" : "새 일정"}</h2>
-                      {editingId ? (
-                        <button
-                          type="button"
-                          className="planner-text-button"
-                          onClick={resetForm}
-                        >
-                          취소
-                        </button>
-                      ) : null}
-                    </div>
-                    <label>
-                      <span>제목</span>
-                      <input
-                        type="text"
-                        value={form.title}
-                        maxLength={255}
-                        placeholder="무엇을 해야 하나요?"
-                        onChange={(event) =>
-                          setForm((previous) => ({
-                            ...previous,
-                            title: event.target.value,
-                          }))
-                        }
-                      />
-                    </label>
-                    <label>
-                      <span>메모</span>
-                      <textarea
-                        rows={3}
-                        value={form.notes}
-                        maxLength={4000}
-                        placeholder="선택 사항"
-                        onChange={(event) =>
-                          setForm((previous) => ({
-                            ...previous,
-                            notes: event.target.value,
-                          }))
-                        }
-                      />
-                    </label>
-                    <div className="planner-segmented" role="group" aria-label="일정 방식">
-                      <button
-                        type="button"
-                        className={
-                          form.scheduleType === "single" ? "is-active" : ""
-                        }
-                        aria-pressed={form.scheduleType === "single"}
-                        onClick={() =>
-                          setForm((previous) => ({
-                            ...previous,
-                            scheduleType: "single",
-                          }))
-                        }
-                      >
-                        단일 날짜
-                      </button>
-                      <button
-                        type="button"
-                        className={
-                          form.scheduleType === "range" ? "is-active" : ""
-                        }
-                        aria-pressed={form.scheduleType === "range"}
-                        onClick={() =>
-                          setForm((previous) => ({
-                            ...previous,
-                            scheduleType: "range",
-                          }))
-                        }
-                      >
-                        범위
-                      </button>
-                    </div>
-                    <div className="planner-form-row">
-                      <label>
-                        <span>시작일</span>
-                        <input
-                          type="date"
-                          value={form.startDate}
-                          onChange={(event) =>
-                            setForm((previous) => ({
-                              ...previous,
-                              startDate: event.target.value,
-                            }))
-                          }
-                        />
-                      </label>
-                      {form.scheduleType === "single" ? (
-                        <label>
-                          <span>마감 기간(일)</span>
-                          <input
-                            type="number"
-                            min={1}
-                            max={365}
-                            value={form.deadlineDays}
-                            onChange={(event) =>
-                              setForm((previous) => ({
-                                ...previous,
-                                deadlineDays: Number(event.target.value) || 1,
-                              }))
-                            }
-                          />
-                        </label>
-                      ) : (
-                        <label>
-                          <span>종료일</span>
-                          <input
-                            type="date"
-                            value={form.endDate}
-                            min={form.startDate}
-                            onChange={(event) =>
-                              setForm((previous) => ({
-                                ...previous,
-                                endDate: event.target.value,
-                              }))
-                            }
-                          />
-                        </label>
-                      )}
-                    </div>
-                    {form.scheduleType === "single" ? (
-                      <p className="planner-form-hint">
-                        오늘 정오 이전 등록은 오늘부터, 정오 이후 등록은
-                        내일부터 마감 기간이 시작됩니다. 오후에 등록해도
-                        오늘 달력에는 바로 표시됩니다.
+                <section className="planner-day-panel planner-today-panel">
+                  <div className="planner-day-panel-header">
+                    <div>
+                      <p className="planner-eyebrow">오늘</p>
+                      <h2>{formatDayLabel(today)}</h2>
+                      <p>
+                        일정 {todayTasks.length}개 · 이력 {todayEvents.length}개
                       </p>
-                    ) : (
-                      <p className="planner-form-hint">
-                        범위 일정은 시작일부터 종료일까지 매일 표시됩니다.
-                      </p>
-                    )}
-                    <label className="planner-checkbox">
-                      <input
-                        type="checkbox"
-                        checked={form.pinned}
-                        onChange={(event) =>
-                          setForm((previous) => ({
-                            ...previous,
-                            pinned: event.target.checked,
-                          }))
-                        }
-                      />
-                      <span>고정 (비활성화되어도 자동 휴지통 이동 방지)</span>
-                    </label>
+                    </div>
                     <button
-                      type="submit"
+                      type="button"
                       className="planner-primary"
-                      disabled={
-                        busyKey !== null || !form.title.trim()
-                      }
+                      onClick={openNewTask}
                     >
-                      {busyKey === "create"
-                        ? "추가 중..."
-                        : busyKey === `update-${editingId}`
-                          ? "저장 중..."
-                          : editingId
-                            ? "저장"
-                            : "추가"}
+                      새 일정
                     </button>
-                  </form>
-
-                  <section className="planner-day-panel">
-                    <div className="planner-day-panel-header">
-                      <div>
-                        <h2>{formatDayLabel(selectedDate)}</h2>
-                        <p>
-                          일정 {selectedTasks.length}개 · 이력{" "}
-                          {selectedEvents.length}개
-                        </p>
-                      </div>
-                      {selectedDate !== today ? (
-                        <button
-                          type="button"
-                          className="planner-text-button"
-                          onClick={() => selectDate(today)}
-                        >
-                          오늘로
-                        </button>
-                      ) : null}
-                    </div>
-
-                    {selectedTasks.length === 0 ? (
-                      <p className="planner-empty">
-                        이 날짜에 표시할 진행 중 일정이 없습니다.
-                      </p>
-                    ) : (
-                      <ul className="planner-task-list">
-                        {selectedTasks.map(renderActiveTask)}
-                      </ul>
-                    )}
-
-                    <div className="planner-history-section">
-                      <h3>변경 이력</h3>
-                      {eventsLoading ? (
-                        <p className="planner-status">이력을 불러오는 중...</p>
-                      ) : selectedEvents.length === 0 ? (
-                        <p className="planner-empty">
-                          이 날짜의 변경 이력이 없습니다.
-                        </p>
-                      ) : (
-                        <ul className="planner-history-list">
-                          {selectedEvents.map((event) => (
-                            <li key={event.id}>
-                              <button
-                                type="button"
-                                className="planner-history-item"
-                                onClick={() => openEvent(event)}
-                              >
-                                <span className="planner-history-kind">
-                                  {ENTITY_LABELS[event.entity_type] ||
-                                    event.entity_type}
-                                </span>
-                                <span className="planner-history-title">
-                                  {event.title || "제목 없음"}
-                                </span>
-                                <span className="planner-history-action">
-                                  {ACTION_LABELS[event.action] || event.action}
-                                </span>
-                                <span className="planner-history-time">
-                                  {formatDateTime(event.occurred_at)}
-                                </span>
-                              </button>
-                            </li>
-                          ))}
-                        </ul>
-                      )}
-                    </div>
-                  </section>
-                </>
+                  </div>
+                  {renderDayDetail(todayTasks, todayEvents)}
+                </section>
               ) : (
                 <section className="planner-day-panel">
                   <div className="planner-day-panel-header">
@@ -1306,9 +1218,229 @@ export default function PlannerClient({ username }: { username: string }) {
         )}
       </main>
 
+      {taskModalOpen ? (
+        <div
+          className="planner-modal-overlay is-task"
+          role="presentation"
+          onClick={closeTaskModal}
+        >
+          <div
+            className="planner-modal planner-task-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-label={editingId ? "일정 수정" : "새 일정"}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <form className="planner-form is-modal" onSubmit={handleSubmit}>
+              <div className="planner-form-heading">
+                <h2>{editingId ? "일정 수정" : "새 일정"}</h2>
+                <button
+                  type="button"
+                  className="planner-text-button"
+                  onClick={closeTaskModal}
+                >
+                  취소
+                </button>
+              </div>
+              {error ? <p className="planner-error">{error}</p> : null}
+              <label>
+                <span>제목</span>
+                <input
+                  type="text"
+                  value={form.title}
+                  maxLength={255}
+                  placeholder="무엇을 해야 하나요?"
+                  onChange={(event) =>
+                    setForm((previous) => ({
+                      ...previous,
+                      title: event.target.value,
+                    }))
+                  }
+                />
+              </label>
+              <label>
+                <span>메모</span>
+                <textarea
+                  rows={3}
+                  value={form.notes}
+                  maxLength={4000}
+                  placeholder="선택 사항"
+                  onChange={(event) =>
+                    setForm((previous) => ({
+                      ...previous,
+                      notes: event.target.value,
+                    }))
+                  }
+                />
+              </label>
+              <div
+                className="planner-segmented"
+                role="group"
+                aria-label="일정 방식"
+              >
+                <button
+                  type="button"
+                  className={
+                    form.scheduleType === "single" ? "is-active" : ""
+                  }
+                  aria-pressed={form.scheduleType === "single"}
+                  onClick={() =>
+                    setForm((previous) => ({
+                      ...previous,
+                      scheduleType: "single",
+                    }))
+                  }
+                >
+                  단일 날짜
+                </button>
+                <button
+                  type="button"
+                  className={
+                    form.scheduleType === "range" ? "is-active" : ""
+                  }
+                  aria-pressed={form.scheduleType === "range"}
+                  onClick={() =>
+                    setForm((previous) => ({
+                      ...previous,
+                      scheduleType: "range",
+                    }))
+                  }
+                >
+                  범위
+                </button>
+              </div>
+              <div className="planner-form-row">
+                <label>
+                  <span>시작일</span>
+                  <input
+                    type="date"
+                    value={form.startDate}
+                    onChange={(event) =>
+                      setForm((previous) => ({
+                        ...previous,
+                        startDate: event.target.value,
+                      }))
+                    }
+                  />
+                </label>
+                {form.scheduleType === "single" ? (
+                  <label>
+                    <span>마감 기간(일)</span>
+                    <input
+                      type="number"
+                      min={1}
+                      max={365}
+                      value={form.deadlineDays}
+                      onChange={(event) =>
+                        setForm((previous) => ({
+                          ...previous,
+                          deadlineDays:
+                            Number(event.target.value) || 1,
+                        }))
+                      }
+                    />
+                  </label>
+                ) : (
+                  <label>
+                    <span>종료일</span>
+                    <input
+                      type="date"
+                      value={form.endDate}
+                      min={form.startDate}
+                      onChange={(event) =>
+                        setForm((previous) => ({
+                          ...previous,
+                          endDate: event.target.value,
+                        }))
+                      }
+                    />
+                  </label>
+                )}
+              </div>
+              {form.scheduleType === "single" ? (
+                <p className="planner-form-hint">
+                  오늘 정오 이전 등록은 오늘부터, 정오 이후 등록은
+                  내일부터 마감 기간이 시작됩니다. 오후에 등록해도
+                  오늘 달력에는 바로 표시됩니다.
+                </p>
+              ) : (
+                <p className="planner-form-hint">
+                  범위 일정은 시작일부터 종료일까지 매일 표시됩니다.
+                </p>
+              )}
+              <label className="planner-checkbox">
+                <input
+                  type="checkbox"
+                  checked={form.pinned}
+                  onChange={(event) =>
+                    setForm((previous) => ({
+                      ...previous,
+                      pinned: event.target.checked,
+                    }))
+                  }
+                />
+                <span>고정 (비활성화되어도 자동 휴지통 이동 방지)</span>
+              </label>
+              <button
+                type="submit"
+                className="planner-primary"
+                disabled={busyKey !== null || !form.title.trim()}
+              >
+                {busyKey === "create"
+                  ? "추가 중..."
+                  : busyKey === `update-${editingId}`
+                    ? "저장 중..."
+                    : editingId
+                      ? "저장"
+                      : "추가"}
+              </button>
+            </form>
+          </div>
+        </div>
+      ) : null}
+
+      {dayModalDate ? (
+        <div
+          className="planner-modal-overlay is-day"
+          role="presentation"
+          onClick={closeDayModal}
+        >
+          <div
+            className="planner-modal planner-day-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-label={`${formatDayLabel(dayModalDate)} 상세`}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="planner-modal-header">
+              <div>
+                <p className="planner-modal-eyebrow">일정 상세</p>
+                <h2>{formatDayLabel(dayModalDate)}</h2>
+                <p className="planner-modal-time">
+                  일정 {dayModalTasks.length}개 · 이력{" "}
+                  {dayModalEvents.length}개
+                </p>
+              </div>
+              <button
+                type="button"
+                className="planner-icon-button"
+                aria-label="닫기"
+                onClick={closeDayModal}
+              >
+                ×
+              </button>
+            </div>
+            {error ? <p className="planner-error">{error}</p> : null}
+            <div className="planner-day-modal-body">
+              {renderDayDetail(dayModalTasks, dayModalEvents)}
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       {selectedEvent ? (
         <div
-          className="planner-modal-overlay"
+          className="planner-modal-overlay is-event"
           role="presentation"
           onClick={closeEvent}
         >

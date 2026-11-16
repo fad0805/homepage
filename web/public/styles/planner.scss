@@ -570,6 +570,14 @@
 .planner-day-panel-header {
   padding-bottom: 0.35rem;
   border-bottom: 1px solid color-mix(in srgb, var(--theme-main) 24%, transparent);
+
+  > div {
+    min-width: 0;
+  }
+
+  > .planner-primary {
+    flex-shrink: 0;
+  }
 }
 
 .planner-empty,
@@ -672,6 +680,14 @@
   padding: 1rem;
   background: rgba(0, 0, 0, 0.42);
   backdrop-filter: blur(2px);
+
+  &.is-task {
+    z-index: 70;
+  }
+
+  &.is-event {
+    z-index: 80;
+  }
 }
 
 .planner-modal {
@@ -683,6 +699,28 @@
   border-radius: 1.15rem;
   background: var(--background);
   box-shadow: 0 1.2rem 3rem rgba(0, 0, 0, 0.25);
+}
+
+.planner-task-modal {
+  width: min(32rem, 100%);
+}
+
+.planner-day-modal {
+  width: min(46rem, 100%);
+}
+
+.planner-form.is-modal {
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.planner-day-modal-body {
+  margin-top: 0.9rem;
+}
+
+.planner-day-modal-body .planner-task-list {
+  margin-top: 0;
 }
 
 .planner-modal-header {
@@ -836,9 +874,9 @@
   }
 
   .planner-side {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-    align-items: start;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
   }
 }
 
