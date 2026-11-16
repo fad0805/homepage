@@ -541,6 +541,117 @@
   opacity: 0.45;
 }
 
+.planner-dday-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  margin-top: 0.8rem;
+  margin-bottom: 0.8rem;
+  padding: 0.6rem 0.7rem;
+  border: 1px solid color-mix(in srgb, #b07a4a 34%, transparent);
+  border-radius: 0.8rem;
+  background: color-mix(
+    in srgb,
+    #b07a4a 7%,
+    var(--planner-soft-bg)
+  );
+}
+
+.planner-dday-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.4rem;
+  color: #b07a4a;
+  font-size: 0.62rem;
+
+  .planner-text-button {
+    color: inherit;
+    opacity: 0.72;
+  }
+}
+
+.planner-dday-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.planner-dday-item {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 0.4rem;
+  min-width: 0;
+  padding: 0.25rem 0.3rem;
+  border: 0;
+  border-radius: 0.5rem;
+  background: transparent;
+  color: inherit;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+
+  &:hover,
+  &:focus-visible {
+    background: color-mix(in srgb, #b07a4a 10%, transparent);
+  }
+}
+
+.planner-dday-badge {
+  flex-shrink: 0;
+  padding: 0.12rem 0.35rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, #b07a4a 14%, transparent);
+  color: #b07a4a;
+  font-size: 0.58rem;
+  font-weight: 600;
+}
+
+.planner-dday-title {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--foreground);
+  font-size: 0.74rem;
+  font-weight: normal;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.planner-dday-date {
+  margin-left: auto;
+  flex-shrink: 0;
+  color: var(--title-color);
+  font-size: 0.6rem;
+  opacity: 0.55;
+}
+
+[data-theme='dark'] .planner-dday-section {
+  border-color: color-mix(in srgb, #e0b27b 30%, transparent);
+  background: color-mix(
+    in srgb,
+    #e0b27b 6%,
+    var(--planner-soft-bg)
+  );
+}
+
+[data-theme='dark'] .planner-dday-heading,
+[data-theme='dark'] .planner-dday-badge {
+  color: #e0b27b;
+}
+
+[data-theme='dark'] .planner-dday-badge {
+  background: color-mix(in srgb, #e0b27b 14%, transparent);
+}
+
+[data-theme='dark'] .planner-dday-item:hover,
+[data-theme='dark'] .planner-dday-item:focus-visible {
+  background: color-mix(in srgb, #e0b27b 10%, transparent);
+}
+
 .planner-special-day-section {
   display: flex;
   flex-direction: column;

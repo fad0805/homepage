@@ -1055,6 +1055,22 @@ export default function PlannerClient({ username }: { username: string }) {
       item.title.toLowerCase().includes(query),
     );
   }, [specialDates, specialSearch]);
+  const upcomingDdays = useMemo(
+    () =>
+      specialDates
+        .filter(
+          (item) =>
+            item.kind === "dday" &&
+            item.event_date !== null &&
+            item.event_date >= today &&
+            !specialDateAppearsOn(item, selectedDate),
+        )
+        .sort((a, b) =>
+          (a.event_date ?? "").localeCompare(b.event_date ?? ""),
+        )
+        .slice(0, 3),
+    [specialDates, selectedDate, today],
+  );
   const eventDates = useMemo(
     () => new Set(events.map(eventDate)),
     [events],
@@ -1333,6 +1349,12 @@ export default function PlannerClient({ username }: { username: string }) {
   const openSpecialEditor = (item: PlannerSpecialDate) => {
     startEditingSpecial(item);
     setSpecialTab("form");
+    setSpecialModalOpen(true);
+  };
+
+  const openSpecialList = () => {
+    setSpecialSearch("");
+    setSpecialTab("list");
     setSpecialModalOpen(true);
   };
 
@@ -2422,6 +2444,47 @@ export default function PlannerClient({ username }: { username: string }) {
     );
   };
 
+  const renderUpcomingDdays = (items: PlannerSpecialDate[]) => {
+    if (items.length === 0) return null;
+    return (
+      <div className="planner-dday-section">
+        <div className="planner-dday-heading">
+          <span>다가오는 디데이</span>
+          <button
+            type="button"
+            className="planner-text-button"
+            onClick={openSpecialList}
+          >
+            전체
+          </button>
+        </div>
+        <ul className="planner-dday-list">
+          {items.map((item) => (
+            <li key={item.id}>
+              <button
+                type="button"
+                className="planner-dday-item"
+                title={`${item.title} 수정`}
+                aria-label={`${item.title} 수정`}
+                onClick={() => openSpecialEditor(item)}
+              >
+                <span className="planner-dday-badge">
+                  {specialDdayLabel(item.event_date ?? "")}
+                </span>
+                <strong className="planner-dday-title">
+                  {item.title}
+                </strong>
+                <span className="planner-dday-date">
+                  {formatDateOnly(item.event_date)}
+                </span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      </div>
+    );
+  };
+
   const renderDaySpecialDates = (items: PlannerSpecialDate[]) => {
     if (items.length === 0) return null;
     return (
@@ -2468,6 +2531,7 @@ export default function PlannerClient({ username }: { username: string }) {
     dateSpecialDates: PlannerSpecialDate[],
   ) => (
     <>
+      {renderUpcomingDdays(upcomingDdays)}
       {renderDaySpecialDates(dateSpecialDates)}
       {renderDayBookmark()}
       {renderDayTasks(dateTasks)}
