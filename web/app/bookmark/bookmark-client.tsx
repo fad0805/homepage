@@ -328,6 +328,13 @@ function historyMonthLabel(value: string) {
   return `${date.getUTCFullYear()}.${pad2(date.getUTCMonth() + 1)}`;
 }
 
+function historyQuarterLabel(value: string) {
+  const date = parseDateKey(value);
+  return `${date.getUTCFullYear()}.Q${
+    Math.floor(date.getUTCMonth() / 3) + 1
+  }`;
+}
+
 function periodLabel(value: string, type: BookmarkPeriodType) {
   const date = parseDateKey(value);
   const year = date.getUTCFullYear();
@@ -2046,6 +2053,43 @@ export default function BookmarkClient({ username }: { username: string }) {
     );
   };
 
+  const isMonthlyHistory = historyRoutine?.frequency === "monthly";
+  const historyBuckets = (() => {
+    const rows = historyData?.monthly ?? [];
+    if (!isMonthlyHistory) {
+      return rows.map((row) => ({
+        period_start: row.month_start,
+        completed_count: row.completed_count,
+        expected_count: row.expected_count,
+      }));
+    }
+    const grouped = new Map<
+      string,
+      {
+        period_start: string;
+        completed_count: number;
+        expected_count: number;
+      }
+    >();
+    for (const row of rows) {
+      const quarterStart = startOfPeriod(row.month_start, "quarter");
+      const current = grouped.get(quarterStart);
+      if (current) {
+        current.completed_count += row.completed_count;
+        current.expected_count += row.expected_count;
+      } else {
+        grouped.set(quarterStart, {
+          period_start: quarterStart,
+          completed_count: row.completed_count,
+          expected_count: row.expected_count,
+        });
+      }
+    }
+    return [...grouped.values()].sort((a, b) =>
+      a.period_start.localeCompare(b.period_start),
+    );
+  })();
+
   return (
     <div id="bookmark-page">
       <main>
@@ -3052,31 +3096,47 @@ export default function BookmarkClient({ username }: { username: string }) {
 
                 <section className="bookmark-history-section">
                   <div className="bookmark-history-heading">
-                    <h3>월간 달성률</h3>
-                    <span>3개월 이후는 월 단위 집계로 보관</span>
+                    <h3>
+                      {isMonthlyHistory
+                        ? "분기 달성률"
+                        : "월간 달성률"}
+                    </h3>
+                    <span>
+                      {isMonthlyHistory
+                        ? "월간 기록을 분기 단위로 묶어 표시"
+                        : "3개월 이후는 월 단위 집계로 보관"}
+                    </span>
                   </div>
-                  {historyData.monthly.length === 0 ? (
+                  {historyBuckets.length === 0 ? (
                     <p className="bookmark-empty-row">
-                      아직 월간 집계가 없습니다.
+                      {isMonthlyHistory
+                        ? "아직 분기 집계가 없습니다."
+                        : "아직 월간 집계가 없습니다."}
                     </p>
                   ) : (
                     <ul className="bookmark-history-months">
-                      {historyData.monthly
+                      {historyBuckets
                         .slice()
                         .reverse()
-                        .map((month) => {
+                        .map((bucket) => {
                           const rate =
-                            month.expected_count > 0
+                            bucket.expected_count > 0
                               ? Math.round(
-                                  (month.completed_count /
-                                    month.expected_count) *
+                                  (bucket.completed_count /
+                                    bucket.expected_count) *
                                     100,
                                 )
                               : 0;
                           return (
-                            <li key={month.month_start}>
+                            <li key={bucket.period_start}>
                               <span className="bookmark-history-month-label">
-                                {historyMonthLabel(month.month_start)}
+                                {isMonthlyHistory
+                                  ? historyQuarterLabel(
+                                      bucket.period_start,
+                                    )
+                                  : historyMonthLabel(
+                                      bucket.period_start,
+                                    )}
                               </span>
                               <div className="bookmark-history-bar">
                                 <span
@@ -3086,8 +3146,8 @@ export default function BookmarkClient({ username }: { username: string }) {
                                 />
                               </div>
                               <span className="bookmark-history-rate">
-                                {month.completed_count}/
-                                {month.expected_count}
+                                {bucket.completed_count}/
+                                {bucket.expected_count}
                               </span>
                             </li>
                           );
