@@ -72,7 +72,7 @@ const SECTIONS = [
   {
     section: "planner",
     label: "부록",
-    description: "일정·색상 칩·완료/변경 이력",
+    description: "일정·색상 칩·월별 완료/변경 이력",
   },
   {
     section: "index",

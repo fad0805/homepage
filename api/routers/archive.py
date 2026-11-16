@@ -16,10 +16,11 @@ import tempfile
 import time
 import zipfile
 from dataclasses import dataclass
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Callable
 from urllib.parse import urlparse
+from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import FileResponse
@@ -51,6 +52,7 @@ ARCHIVE_FORMAT = "missing-island-archive"
 SCHEMA_VERSION = "2.0"
 SITE_NAME = "어디에도 없는 섬"
 SITE_DESCRIPTION = "한 소녀가 있었다."
+KST = ZoneInfo("Asia/Seoul")
 
 CHUNK_SIZE = 1024 * 1024
 SPOOL_MAX_MEMORY = 16 * 1024 * 1024
@@ -62,7 +64,9 @@ DATA_CHARACTERS = "data/characters.json"
 DATA_LINKS = "data/links.json"
 DATA_PROFILE = "data/profile.json"
 DATA_MEMOS = "data/memos.json"
-DATA_PLANNER = "data/planner.json"
+DATA_PLANNER_TASKS = "data/planner/tasks.json"
+DATA_PLANNER_COLORS = "data/planner/colors.json"
+PLANNER_EVENTS_DIR = "data/planner/events"
 DATA_INDEX_PAGES = "data/index_pages.json"
 CHAPTER_LAYOUT = "per_chapter"
 
@@ -646,6 +650,18 @@ def _planner_data(
     return tasks, colors, events
 
 
+def _planner_event_month(value: Any) -> str:
+    if not value:
+        return "unknown"
+    try:
+        moment = datetime.fromisoformat(str(value))
+    except ValueError:
+        return "unknown"
+    if moment.tzinfo is None:
+        moment = moment.replace(tzinfo=timezone.utc)
+    return moment.astimezone(KST).strftime("%Y-%m")
+
+
 def _index_page_data(
     db: Session,
     user_id: int | None,
@@ -755,16 +771,32 @@ def _build_export(
 
     if section in ("all", "planner"):
         tasks, colors, events = _planner_data(db, user_id)
-        sections[DATA_PLANNER] = {
+        sections[DATA_PLANNER_COLORS] = {
             "schema_version": SCHEMA_VERSION,
-            "kind": "planner",
-            "tasks": tasks,
+            "kind": "planner_colors",
             "colors": colors,
-            "events": events,
         }
+        sections[DATA_PLANNER_TASKS] = {
+            "schema_version": SCHEMA_VERSION,
+            "kind": "planner_tasks",
+            "tasks": tasks,
+        }
+        events_by_month: dict[str, list[dict[str, Any]]] = {}
+        for event in events:
+            month = _planner_event_month(event.get("occurred_at"))
+            events_by_month.setdefault(month, []).append(event)
+        for month in sorted(events_by_month):
+            sections[f"{PLANNER_EVENTS_DIR}/{month}.json"] = {
+                "schema_version": SCHEMA_VERSION,
+                "kind": "planner_events",
+                "month": month,
+                "timezone": "Asia/Seoul",
+                "events": events_by_month[month],
+            }
         counts["planner_tasks"] = len(tasks)
         counts["planner_colors"] = len(colors)
         counts["planner_events"] = len(events)
+        counts["planner_event_files"] = len(events_by_month)
 
     if section in ("all", "index"):
         pages = _index_page_data(db, user_id)
@@ -948,7 +980,15 @@ def _readme(
         components.append("- `data/memos.json` — 주석")
     if "planner_tasks" in included:
         components.append(
-            "- `data/planner.json` — 부록 일정·색상 칩·완료/변경 이력"
+            "- `data/planner/tasks.json` — 부록 일정"
+        )
+    if "planner_colors" in included:
+        components.append(
+            "- `data/planner/colors.json` — 부록 색상 칩"
+        )
+    if "planner_events" in included:
+        components.append(
+            "- `data/planner/events/{YYYY-MM}.json` — KST 월별 완료/변경 이력"
         )
     if "index_pages" in included:
         components.append(
