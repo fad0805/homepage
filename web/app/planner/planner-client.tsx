@@ -221,6 +221,9 @@ function eventDate(event: PlannerEvent) {
 function taskAppearsOn(task: PlannerTask, date: string, today: string) {
   if (task.status !== "active") return false;
   if (task.schedule_type === "single") {
+    if (task.start_date > today) {
+      return date === task.start_date;
+    }
     return date === today && task.start_date <= today && today <= task.end_date;
   }
   return task.start_date <= date && date <= task.end_date;
@@ -621,7 +624,11 @@ export default function PlannerClient({ username }: { username: string }) {
     <p className="planner-task-meta">
       {task.schedule_type === "single" ? (
         <>
-          단일 · 마감 {formatDateOnly(task.end_date)}
+          단일 ·{" "}
+          {task.start_date > today
+            ? `시작 ${formatDateOnly(task.start_date)} · `
+            : ""}
+          마감 {formatDateOnly(task.end_date)}
           {task.deadline_days ? ` · ${task.deadline_days}일` : ""}
         </>
       ) : (
