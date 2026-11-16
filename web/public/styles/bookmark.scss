@@ -655,10 +655,6 @@
   min-height: 10rem;
 }
 
-.bookmark-review-panel {
-  min-height: 13rem;
-}
-
 .bookmark-record-textarea,
 .bookmark-review-textarea {
   box-sizing: border-box;
@@ -680,11 +676,6 @@
   resize: vertical;
 }
 
-.bookmark-review-panel .bookmark-record-textarea,
-.bookmark-review-textarea {
-  min-height: 9rem;
-}
-
 .bookmark-record-save,
 .bookmark-review-save {
   align-self: flex-end;
@@ -695,6 +686,7 @@
 
 .bookmark-review-header {
   flex-wrap: wrap;
+  align-items: flex-end;
 }
 
 .bookmark-review-side {
@@ -703,6 +695,7 @@
   align-items: flex-end;
   gap: 0.18rem;
   min-width: 0;
+  margin-top: auto;
 }
 
 .bookmark-review-rating {
@@ -736,11 +729,11 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 1.75rem;
-  height: 1.75rem;
-  padding: 0.08rem;
+  width: 1.4rem;
+  height: 1.4rem;
+  padding: 0.06rem;
   border: 0;
-  border-radius: 0.38rem;
+  border-radius: 0.3rem;
   background: transparent;
   color: color-mix(in srgb, var(--foreground) 32%, transparent);
   cursor: pointer;
