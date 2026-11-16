@@ -545,6 +545,7 @@
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
+  margin-top: 0.8rem;
   margin-bottom: 0.8rem;
   padding: 0.6rem 0.7rem;
   border: 1px solid
@@ -580,9 +581,23 @@
 
 .planner-special-day-item {
   display: flex;
+  width: 100%;
   align-items: center;
   gap: 0.4rem;
   min-width: 0;
+  padding: 0.25rem 0.3rem;
+  border: 0;
+  border-radius: 0.5rem;
+  background: transparent;
+  color: inherit;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+
+  &:hover,
+  &:focus-visible {
+    background: color-mix(in srgb, var(--theme-main) 10%, transparent);
+  }
 }
 
 .planner-special-day-mark {
@@ -689,6 +704,7 @@
 .planner-form input[type='text'],
 .planner-form input[type='date'],
 .planner-form input[type='number'],
+.planner-form select,
 .planner-form textarea {
   width: 100%;
   box-sizing: border-box;
@@ -825,21 +841,39 @@
   align-self: flex-start;
   gap: 0.2rem;
   padding: 0.2rem;
-  border: 1px solid color-mix(in srgb, var(--theme-main) 38%, transparent);
+  border: 1px solid
+    color-mix(in srgb, var(--title-color) 34%, transparent);
   border-radius: 999px;
+  background: var(--input-background);
 
   button {
     padding: 0.32rem 0.7rem;
     border: 0;
     border-radius: 999px;
     background: transparent;
-    color: var(--foreground);
+    color: var(--input-text);
     font-size: 0.72rem;
     cursor: pointer;
-    opacity: 0.66;
+    opacity: 0.58;
+    transition:
+      background 0.16s ease,
+      color 0.16s ease,
+      opacity 0.16s ease;
+
+    &:hover,
+    &:focus-visible {
+      background: color-mix(
+        in srgb,
+        var(--title-color) 10%,
+        transparent
+      );
+      opacity: 0.82;
+    }
 
     &.is-active {
-      background: var(--theme-main);
+      background: var(--title-color);
+      color: var(--background);
+      font-weight: 600;
       opacity: 1;
     }
   }
@@ -1491,18 +1525,62 @@
   }
 }
 
-.planner-special-list {
-  margin-top: 0.9rem;
-  padding-top: 0.8rem;
-  border-top: 1px solid
-    color-mix(in srgb, var(--theme-main) 24%, transparent);
+.planner-special-modal-top {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 0.55rem;
+}
 
-  h3 {
-    margin: 0 0 0.5rem;
+.planner-special-tabs {
+  display: flex;
+  gap: 0.25rem;
+  margin-bottom: 0.8rem;
+  padding: 0.18rem;
+  border-radius: 0.7rem;
+  background: var(--planner-soft-bg);
+
+  button {
+    flex: 1;
+    padding: 0.45rem 0.55rem;
+    border: 0;
+    border-radius: 0.55rem;
+    background: transparent;
     color: var(--title-color);
-    font-size: 0.72rem;
-    font-weight: normal;
+    font-family: inherit;
+    font-size: 0.68rem;
+    cursor: pointer;
+    opacity: 0.62;
+
+    &.is-active {
+      background: var(--input-background);
+      opacity: 1;
+      box-shadow: 0 0.1rem 0.35rem rgba(0, 0, 0, 0.08);
+    }
   }
+}
+
+.planner-special-manager {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.planner-special-search {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.5rem 0.62rem;
+  border: 1px solid color-mix(in srgb, var(--theme-main) 46%, transparent);
+  border-radius: 0.62rem;
+  background: var(--input-background);
+  color: var(--input-text);
+  font-family: inherit;
+  font-size: 0.8rem;
+}
+
+.planner-special-list {
+  max-height: 18rem;
+  overflow-y: auto;
+  padding-right: 0.15rem;
 }
 
 .planner-special-item {

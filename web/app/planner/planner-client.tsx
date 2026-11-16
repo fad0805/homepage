@@ -31,6 +31,7 @@ type TaskScheduleType = ScheduleType | "undated";
 type TaskStatus = "active" | "inactive" | "trashed";
 type PlannerTab = "active" | "colors" | "inactive" | "trashed";
 type SpecialDateKind = "yearly" | "dday";
+type SpecialModalTab = "form" | "list";
 
 interface PlannerTask {
   id: number;
@@ -611,6 +612,8 @@ export default function PlannerClient({ username }: { username: string }) {
   const [events, setEvents] = useState<PlannerEvent[]>([]);
   const [savedColors, setSavedColors] = useState<PlannerColor[]>([]);
   const [specialDates, setSpecialDates] = useState<PlannerSpecialDate[]>([]);
+  const [specialTab, setSpecialTab] = useState<SpecialModalTab>("form");
+  const [specialSearch, setSpecialSearch] = useState("");
   const [monthPickerOpen, setMonthPickerOpen] = useState(false);
   const [monthPickerYear, setMonthPickerYear] = useState(
     Number(initialToday.slice(0, 4)),
@@ -874,6 +877,8 @@ export default function PlannerClient({ username }: { username: string }) {
       }
       if (specialModalOpen) {
         setSpecialModalOpen(false);
+        setSpecialTab("form");
+        setSpecialSearch("");
         setEditingSpecialId(null);
         setSpecialTitle("");
         setSpecialKind("yearly");
@@ -1043,6 +1048,13 @@ export default function PlannerClient({ username }: { username: string }) {
       ),
     [specialDates, selectedDate],
   );
+  const filteredSpecialDates = useMemo(() => {
+    const query = specialSearch.trim().toLowerCase();
+    if (!query) return specialDates;
+    return specialDates.filter((item) =>
+      item.title.toLowerCase().includes(query),
+    );
+  }, [specialDates, specialSearch]);
   const eventDates = useMemo(
     () => new Set(events.map(eventDate)),
     [events],
@@ -1293,12 +1305,16 @@ export default function PlannerClient({ username }: { username: string }) {
 
   const openSpecialManager = () => {
     resetSpecialForm();
+    setSpecialTab("form");
+    setSpecialSearch("");
     setSpecialModalOpen(true);
   };
 
   const closeSpecialManager = () => {
     if (specialSaving) return;
     setSpecialModalOpen(false);
+    setSpecialTab("form");
+    setSpecialSearch("");
     resetSpecialForm();
   };
 
@@ -1312,6 +1328,12 @@ export default function PlannerClient({ username }: { username: string }) {
     setSpecialMonth(item.month ?? 1);
     setSpecialDay(item.day ?? 1);
     setError(null);
+  };
+
+  const openSpecialEditor = (item: PlannerSpecialDate) => {
+    startEditingSpecial(item);
+    setSpecialTab("form");
+    setSpecialModalOpen(true);
   };
 
   const handleSubmitSpecial = async (
@@ -2410,21 +2432,29 @@ export default function PlannerClient({ username }: { username: string }) {
         </div>
         <ul className="planner-special-day-list">
           {items.map((item) => (
-            <li
-              className={`planner-special-day-item is-${item.kind}`}
-              key={item.id}
-            >
-              <span className="planner-special-day-mark" aria-hidden="true">
-                {item.kind === "dday" ? "D" : "✦"}
-              </span>
-              <strong className="planner-special-day-title">
-                {item.title}
-              </strong>
-              <span className="planner-special-day-meta">
-                {item.kind === "dday"
-                  ? specialDdayLabel(item.event_date ?? selectedDate)
-                  : "매년"}
-              </span>
+            <li key={item.id}>
+              <button
+                type="button"
+                className={`planner-special-day-item is-${item.kind}`}
+                title={`${item.title} 수정`}
+                aria-label={`${item.title} 수정`}
+                onClick={() => openSpecialEditor(item)}
+              >
+                <span
+                  className="planner-special-day-mark"
+                  aria-hidden="true"
+                >
+                  {item.kind === "dday" ? "D" : "✦"}
+                </span>
+                <strong className="planner-special-day-title">
+                  {item.title}
+                </strong>
+                <span className="planner-special-day-meta">
+                  {item.kind === "dday"
+                    ? specialDdayLabel(item.event_date ?? selectedDate)
+                    : "매년"}
+                </span>
+              </button>
             </li>
           ))}
         </ul>
@@ -4138,11 +4168,7 @@ export default function PlannerClient({ username }: { username: string }) {
             aria-label="기념일 관리"
             onClick={(event) => event.stopPropagation()}
           >
-            <header className="planner-modal-header">
-              <div>
-                <p className="planner-eyebrow">SPECIAL DATE</p>
-                <h2>기념일 / 디데이</h2>
-              </div>
+            <div className="planner-special-modal-top">
               <button
                 type="button"
                 className="planner-text-button"
@@ -4150,12 +4176,34 @@ export default function PlannerClient({ username }: { username: string }) {
               >
                 닫기
               </button>
-            </header>
+            </div>
 
-            <form
-              className="planner-form is-modal"
-              onSubmit={handleSubmitSpecial}
-            >
+            <div className="planner-special-tabs" role="tablist">
+              <button
+                type="button"
+                role="tab"
+                aria-selected={specialTab === "form"}
+                className={specialTab === "form" ? "is-active" : ""}
+                onClick={() => setSpecialTab("form")}
+              >
+                등록
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={specialTab === "list"}
+                className={specialTab === "list" ? "is-active" : ""}
+                onClick={() => setSpecialTab("list")}
+              >
+                목록 {specialDates.length}
+              </button>
+            </div>
+
+            {specialTab === "form" ? (
+              <form
+                className="planner-form is-modal"
+                onSubmit={handleSubmitSpecial}
+              >
               <div className="planner-segmented" role="group">
                 <button
                   type="button"
@@ -4254,43 +4302,60 @@ export default function PlannerClient({ username }: { username: string }) {
                       : "등록"}
                 </button>
               </div>
-            </form>
-
-            <div className="planner-special-list">
-              <h3>등록된 기념일</h3>
-              {specialDates.length === 0 ? (
-                <p className="planner-empty">
-                  아직 등록된 기념일이 없습니다.
-                </p>
-              ) : (
-                specialDates.map((item) => (
-                  <div className="planner-special-item" key={item.id}>
-                    <button
-                      type="button"
-                      className="planner-special-main"
-                      onClick={() => startEditingSpecial(item)}
-                    >
-                      <strong>{item.title}</strong>
-                      <span>
-                        {item.kind === "yearly"
-                          ? `매년 ${item.month}월 ${item.day}일`
-                          : `${item.event_date} · ${specialDdayLabel(
-                              item.event_date ?? "",
-                            )}`}
-                      </span>
-                    </button>
-                    <button
-                      type="button"
-                      className="planner-text-button is-danger"
-                      disabled={specialSaving}
-                      onClick={() => void handleDeleteSpecial(item)}
-                    >
-                      삭제
-                    </button>
-                  </div>
-                ))
-              )}
-            </div>
+              </form>
+            ) : (
+              <div className="planner-special-manager">
+                <input
+                  type="search"
+                  className="planner-special-search"
+                  value={specialSearch}
+                  placeholder="이름으로 기념일 검색"
+                  aria-label="기념일 검색"
+                  onChange={(event) =>
+                    setSpecialSearch(event.target.value)
+                  }
+                />
+                <div className="planner-special-list">
+                  {filteredSpecialDates.length === 0 ? (
+                    <p className="planner-empty">
+                      {specialDates.length === 0
+                        ? "아직 등록된 기념일이 없습니다."
+                        : "검색 결과가 없습니다."}
+                    </p>
+                  ) : (
+                    filteredSpecialDates.map((item) => (
+                      <div className="planner-special-item" key={item.id}>
+                        <button
+                          type="button"
+                          className="planner-special-main"
+                          onClick={() => {
+                            startEditingSpecial(item);
+                            setSpecialTab("form");
+                          }}
+                        >
+                          <strong>{item.title}</strong>
+                          <span>
+                            {item.kind === "yearly"
+                              ? `매년 ${item.month}월 ${item.day}일`
+                              : `${item.event_date} · ${specialDdayLabel(
+                                  item.event_date ?? "",
+                                )}`}
+                          </span>
+                        </button>
+                        <button
+                          type="button"
+                          className="planner-text-button is-danger"
+                          disabled={specialSaving}
+                          onClick={() => void handleDeleteSpecial(item)}
+                        >
+                          삭제
+                        </button>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       ) : null}
