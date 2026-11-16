@@ -1292,10 +1292,7 @@ export default function PlannerClient({ username }: { username: string }) {
                         const daySingleTasks = dayTasks.filter(
                           (task) => task.schedule_type === "single",
                         );
-                        const dayEvents = events.filter(
-                          (event) => eventDate(event) === cell.date,
-                        );
-                        const total = dayTasks.length + dayEvents.length;
+                        const dayTaskCount = dayTasks.length;
                         return (
                           <button
                             type="button"
@@ -1305,44 +1302,36 @@ export default function PlannerClient({ username }: { username: string }) {
                               cell.inMonth ? "" : "is-outside",
                               cell.date === today ? "is-today" : "",
                               cell.date === selectedDate ? "is-selected" : "",
-                              total > 0 ? "has-items" : "",
+                              dayTaskCount > 0 ? "has-items" : "",
                             ]
                               .filter(Boolean)
                               .join(" ")}
                             onClick={() => selectDate(cell.date)}
-                            aria-label={`${formatDayLabel(cell.date)}${total > 0 ? `, 항목 ${total}개` : ""}`}
+                            aria-label={`${formatDayLabel(cell.date)}${dayTaskCount > 0 ? `, 일정 ${dayTaskCount}개` : ""}`}
                           >
                             <span className="planner-day-number">
                               {cell.day}
                             </span>
-                            {daySingleTasks.length + dayEvents.length > 0 ? (
+                            {daySingleTasks.length > 0 ? (
                               <span className="planner-day-marks">
-                                {daySingleTasks.length > 0 ? (
-                                  <span className="planner-day-task-colors">
-                                    {daySingleTasks
-                                      .slice(0, 3)
-                                      .map((task) => (
-                                        <span
-                                          key={task.id}
-                                          className="planner-day-task-color"
-                                          style={{
-                                            backgroundColor:
-                                              taskColor(task),
-                                          }}
-                                        />
-                                      ))}
-                                    {daySingleTasks.length > 3 ? (
-                                      <span className="planner-day-task-more">
-                                        +{daySingleTasks.length - 3}
-                                      </span>
-                                    ) : null}
-                                  </span>
-                                ) : null}
-                                {dayEvents.length > 0 ? (
-                                  <span className="planner-day-mark is-history">
-                                    {dayEvents.length}
-                                  </span>
-                                ) : null}
+                                <span className="planner-day-task-colors">
+                                  {daySingleTasks
+                                    .slice(0, 3)
+                                    .map((task) => (
+                                      <span
+                                        key={task.id}
+                                        className="planner-day-task-color"
+                                        style={{
+                                          backgroundColor: taskColor(task),
+                                        }}
+                                      />
+                                    ))}
+                                  {daySingleTasks.length > 3 ? (
+                                    <span className="planner-day-task-more">
+                                      +{daySingleTasks.length - 3}
+                                    </span>
+                                  ) : null}
+                                </span>
                               </span>
                             ) : null}
                           </button>

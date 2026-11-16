@@ -301,23 +301,6 @@
   margin-top: 0.3rem;
 }
 
-.planner-day-mark {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 1.05rem;
-  height: 1.05rem;
-  padding: 0 0.22rem;
-  border-radius: 999px;
-  font-size: 0.58rem;
-  line-height: 1;
-
-  &.is-history {
-    border: 1px solid color-mix(in srgb, var(--title-color) 38%, transparent);
-    color: var(--title-color);
-  }
-}
-
 .planner-day-task-colors {
   display: inline-flex;
   flex-wrap: wrap;
@@ -1092,12 +1075,6 @@
 
   .planner-day-number {
     font-size: 0.68rem;
-  }
-
-  .planner-day-mark {
-    min-width: 0.9rem;
-    height: 0.9rem;
-    font-size: 0.52rem;
   }
 
   .planner-day-task-color {
