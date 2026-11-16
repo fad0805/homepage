@@ -130,9 +130,28 @@
 
 .bookmark-period-nav {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 0.35rem;
   min-width: 0;
+}
+
+.bookmark-period-select {
+  min-width: 0;
+  max-width: 100%;
+  padding: 0.25rem 0.35rem;
+  border: 1px solid
+    color-mix(in srgb, var(--theme-main) 38%, transparent);
+  border-radius: 0.45rem;
+  background: var(--input-background);
+  color: var(--input-text);
+  font-family: inherit;
+  font-size: 0.7rem;
+  cursor: pointer;
+}
+
+.bookmark-period-select--week {
+  width: 9rem;
 }
 
 .bookmark-period-label {

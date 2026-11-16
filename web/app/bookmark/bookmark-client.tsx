@@ -226,6 +226,38 @@ function periodLabel(value: string, type: BookmarkPeriodType) {
   }${endMonth}월 ${endDay}일`;
 }
 
+function weekOptionsForYear(year: number) {
+  const jan1 = new Date(Date.UTC(year, 0, 1));
+  const offset = (jan1.getUTCDay() + 6) % 7;
+  let monday = new Date(
+    Date.UTC(year, 0, 1 + (offset === 0 ? 0 : 7 - offset)),
+  );
+  const options: Array<{ value: string; label: string }> = [];
+  while (monday.getUTCFullYear() === year) {
+    const sunday = new Date(
+      Date.UTC(
+        monday.getUTCFullYear(),
+        monday.getUTCMonth(),
+        monday.getUTCDate() + 6,
+      ),
+    );
+    options.push({
+      value: dateKey(monday),
+      label: `${monday.getUTCMonth() + 1}/${monday.getUTCDate()} ~ ${
+        sunday.getUTCMonth() + 1
+      }/${sunday.getUTCDate()}`,
+    });
+    monday = new Date(
+      Date.UTC(
+        monday.getUTCFullYear(),
+        monday.getUTCMonth(),
+        monday.getUTCDate() + 7,
+      ),
+    );
+  }
+  return options;
+}
+
 function monthCalendarDays(monthStart: string) {
   const date = parseDateKey(monthStart);
   const year = date.getUTCFullYear();
@@ -1160,6 +1192,151 @@ export default function BookmarkClient({ username }: { username: string }) {
     );
   };
 
+  const renderPeriodControls = () => {
+    const date = parseDateKey(periodStart);
+    const selectedYear = date.getUTCFullYear();
+    const selectedMonth = date.getUTCMonth() + 1;
+    const selectedQuarter = Math.floor((selectedMonth - 1) / 3) + 1;
+    const currentYear = parseDateKey(todayDateInputValue()).getUTCFullYear();
+    const firstYear = Math.min(currentYear, selectedYear) - 10;
+    const lastYear = Math.max(currentYear, selectedYear) + 10;
+    const years = Array.from(
+      { length: lastYear - firstYear + 1 },
+      (_, index) => firstYear + index,
+    );
+    const setYear = (year: number) => {
+      if (view === "year") {
+        setPeriodStart(`${year}-01-01`);
+      } else if (view === "month") {
+        setPeriodStart(`${year}-${pad2(selectedMonth)}-01`);
+      } else if (view === "quarter") {
+        const month = (selectedQuarter - 1) * 3 + 1;
+        setPeriodStart(`${year}-${pad2(month)}-01`);
+      } else if (view === "week") {
+        const first = weekOptionsForYear(year)[0];
+        if (first) setPeriodStart(first.value);
+      }
+    };
+
+    if (view === "year") {
+      return (
+        <select
+          className="bookmark-period-select"
+          value={selectedYear}
+          onChange={(event) => setYear(Number(event.target.value))}
+        >
+          {years.map((year) => (
+            <option value={year} key={year}>
+              {year}년
+            </option>
+          ))}
+        </select>
+      );
+    }
+    if (view === "month") {
+      return (
+        <>
+          <select
+            className="bookmark-period-select"
+            value={selectedYear}
+            onChange={(event) => setYear(Number(event.target.value))}
+          >
+            {years.map((year) => (
+              <option value={year} key={year}>
+                {year}년
+              </option>
+            ))}
+          </select>
+          <select
+            className="bookmark-period-select"
+            value={selectedMonth}
+            onChange={(event) =>
+              setPeriodStart(
+                `${selectedYear}-${pad2(Number(event.target.value))}-01`,
+              )
+            }
+          >
+            {Array.from({ length: 12 }, (_, index) => (
+              <option value={index + 1} key={index + 1}>
+                {index + 1}월
+              </option>
+            ))}
+          </select>
+        </>
+      );
+    }
+    if (view === "quarter") {
+      return (
+        <>
+          <select
+            className="bookmark-period-select"
+            value={selectedYear}
+            onChange={(event) => setYear(Number(event.target.value))}
+          >
+            {years.map((year) => (
+              <option value={year} key={year}>
+                {year}년
+              </option>
+            ))}
+          </select>
+          <select
+            className="bookmark-period-select"
+            value={selectedQuarter}
+            onChange={(event) => {
+              const month = (Number(event.target.value) - 1) * 3 + 1;
+              setPeriodStart(`${selectedYear}-${pad2(month)}-01`);
+            }}
+          >
+            {[1, 2, 3, 4].map((quarter) => (
+              <option value={quarter} key={quarter}>
+                {quarter}분기
+              </option>
+            ))}
+          </select>
+        </>
+      );
+    }
+    if (view === "week") {
+      const weeks = weekOptionsForYear(selectedYear);
+      return (
+        <>
+          <select
+            className="bookmark-period-select"
+            value={selectedYear}
+            onChange={(event) => setYear(Number(event.target.value))}
+          >
+            {years.map((year) => (
+              <option value={year} key={year}>
+                {year}년
+              </option>
+            ))}
+          </select>
+          <select
+            className="bookmark-period-select bookmark-period-select--week"
+            value={periodStart}
+            onChange={(event) => setPeriodStart(event.target.value)}
+          >
+            {weeks.map((week) => (
+              <option value={week.value} key={week.value}>
+                {week.label}
+              </option>
+            ))}
+          </select>
+        </>
+      );
+    }
+    return (
+      <button
+        type="button"
+        className="bookmark-period-label"
+        title="달력에서 날짜 선택"
+        onClick={openCalendar}
+      >
+        {periodLabel(periodStart, "day")}
+      </button>
+    );
+  };
+
   return (
     <div id="bookmark-page">
       <main>
@@ -1209,14 +1386,7 @@ export default function BookmarkClient({ username }: { username: string }) {
               >
                 ‹
               </button>
-              <button
-                type="button"
-                className="bookmark-period-label"
-                title="달력에서 날짜 선택"
-                onClick={openCalendar}
-              >
-                {periodLabel(periodStart, unitView)}
-              </button>
+              {renderPeriodControls()}
               <button
                 type="button"
                 className="bookmark-icon-button"
