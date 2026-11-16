@@ -353,6 +353,18 @@ function sortTasks(tasks: PlannerTask[]) {
   });
 }
 
+function sortColorGroupTasks(tasks: PlannerTask[]) {
+  return [...tasks].sort((a, b) => {
+    if (a.status !== b.status) {
+      return a.status === "active" ? -1 : 1;
+    }
+    if (a.end_date !== b.end_date) {
+      return a.end_date.localeCompare(b.end_date);
+    }
+    return a.id - b.id;
+  });
+}
+
 function changeValue(value: unknown) {
   if (value === null || value === undefined || value === "") return "(없음)";
   if (Array.isArray(value)) return value.join(", ") || "(없음)";
@@ -395,6 +407,9 @@ export default function PlannerClient({ username }: { username: string }) {
   const [colorSaving, setColorSaving] = useState(false);
   const [newChipColor, setNewChipColor] = useState(DEFAULT_TASK_COLOR);
   const [showChipCreator, setShowChipCreator] = useState(false);
+  const [chipListOpen, setChipListOpen] = useState(false);
+  const [calendarColorFilter, setCalendarColorFilter] =
+    useState("all");
   const [error, setError] = useState<string | null>(null);
   const [selectedEvent, setSelectedEvent] = useState<PlannerEvent | null>(null);
   const [preview, setPreview] = useState<PlannerEventPreview | null>(null);
@@ -486,6 +501,13 @@ export default function PlannerClient({ username }: { username: string }) {
   }, [loadEvents, viewMonth]);
 
   useEffect(() => {
+    if (activeTab === "colors") return;
+    setChipListOpen(false);
+    setCalendarColorFilter("all");
+    setShowChipCreator(false);
+  }, [activeTab]);
+
+  useEffect(() => {
     if (!selectedEvent && !taskModalOpen) return;
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
@@ -510,9 +532,36 @@ export default function PlannerClient({ username }: { username: string }) {
     () => tasks.filter((task) => task.status === "active"),
     [tasks],
   );
+  const colorViewTasks = useMemo(
+    () =>
+      tasks.filter(
+        (task) =>
+          task.status === "active" || task.status === "inactive",
+      ),
+    [tasks],
+  );
+  const calendarTasks = useMemo(() => {
+    if (
+      activeTab !== "colors" ||
+      !chipListOpen ||
+      calendarColorFilter === "all"
+    ) {
+      return activeTasks;
+    }
+    if (calendarColorFilter === "unassigned") {
+      return activeTasks.filter((task) => task.color_id === null);
+    }
+    const chipId = Number(calendarColorFilter.slice(5));
+    return activeTasks.filter((task) => task.color_id === chipId);
+  }, [
+    activeTab,
+    activeTasks,
+    chipListOpen,
+    calendarColorFilter,
+  ]);
   const weeks = useMemo(
-    () => buildCalendarWeeks(cells, activeTasks),
-    [cells, activeTasks],
+    () => buildCalendarWeeks(cells, calendarTasks),
+    [cells, calendarTasks],
   );
   const inactiveTasks = useMemo(
     () => tasks.filter((task) => task.status === "inactive"),
@@ -543,7 +592,7 @@ export default function PlannerClient({ username }: { username: string }) {
       string,
       { color: string | null; tasks: PlannerTask[] }
     >();
-    for (const task of activeTasks) {
+    for (const task of colorViewTasks) {
       const key = task.color_id
         ? `chip:${task.color_id}`
         : "unassigned";
@@ -555,17 +604,11 @@ export default function PlannerClient({ username }: { username: string }) {
       group.tasks.push(task);
       groups.set(key, group);
     }
-    for (const saved of savedColors) {
-      const key = `chip:${saved.id}`;
-      if (!groups.has(key)) {
-        groups.set(key, { color: saved.color, tasks: [] });
-      }
-    }
     return Array.from(groups.entries())
       .map(([key, group]) => ({
         key,
         color: group.color,
-        tasks: sortTasks(group.tasks),
+        tasks: sortColorGroupTasks(group.tasks),
       }))
       .sort((a, b) => {
         const aUnassigned = a.key === "unassigned";
@@ -578,7 +621,24 @@ export default function PlannerClient({ username }: { username: string }) {
           (a.color || "").localeCompare(b.color || "")
         );
       });
-  }, [activeTasks, savedColors]);
+  }, [colorViewTasks, savedColors]);
+  const currentFilterColor =
+    calendarColorFilter === "all"
+      ? null
+      : calendarColorFilter === "unassigned"
+        ? UNASSIGNED_TASK_COLOR
+        : savedColors.find(
+            (saved) => `chip:${saved.id}` === calendarColorFilter,
+          )?.color || UNASSIGNED_TASK_COLOR;
+  const currentFilterLabel =
+    calendarColorFilter === "all"
+      ? "전체"
+      : calendarColorFilter === "unassigned"
+        ? "미지정"
+        : (currentFilterColor || "").toUpperCase();
+  const hasUnassignedTasks = colorViewTasks.some(
+    (task) => task.color_id === null,
+  );
 
   const resetForm = () => {
     setEditingId(null);
@@ -1231,7 +1291,7 @@ export default function PlannerClient({ username }: { username: string }) {
                   <div className="planner-week" key={week.cells[0].date}>
                     <div className="planner-week-days">
                       {week.cells.map((cell) => {
-                        const dayTasks = activeTasks.filter((task) =>
+                        const dayTasks = calendarTasks.filter((task) =>
                           taskAppearsOn(task, cell.date, today),
                         );
                         const daySingleTasks = dayTasks.filter(
@@ -1381,7 +1441,7 @@ export default function PlannerClient({ username }: { username: string }) {
                       <p className="planner-eyebrow">색상별</p>
                       <h2>색상 칩</h2>
                       <p>
-                        진행 중 일정 {activeTasks.length}개 · 칩{" "}
+                        활성·비활성 일정 {colorViewTasks.length}개 · 칩{" "}
                         {savedColors.length}개
                       </p>
                     </div>
@@ -1397,46 +1457,157 @@ export default function PlannerClient({ username }: { username: string }) {
                       </button>
                     </div>
                   </div>
+
+                  <div className="planner-chip-filter">
+                    <button
+                      type="button"
+                      className="planner-chip-filter-toggle"
+                      aria-expanded={chipListOpen}
+                      onClick={() => {
+                        if (chipListOpen) {
+                          setCalendarColorFilter("all");
+                        }
+                        setChipListOpen((previous) => !previous);
+                      }}
+                    >
+                      <span>칩 목록</span>
+                      <span className="planner-chip-filter-current">
+                        {currentFilterColor ? (
+                          <span
+                            className="planner-chip-filter-dot"
+                            style={{
+                              backgroundColor: currentFilterColor,
+                            }}
+                          />
+                        ) : null}
+                        {currentFilterLabel}
+                      </span>
+                      <span
+                        className="planner-chip-filter-caret"
+                        aria-hidden="true"
+                      >
+                        {chipListOpen ? "⌃" : "⌄"}
+                      </span>
+                    </button>
+                    {chipListOpen ? (
+                      <div className="planner-chip-filter-list">
+                        <button
+                          type="button"
+                          className={`planner-color-chip is-none${
+                            calendarColorFilter === "all"
+                              ? " is-active"
+                              : ""
+                          }`}
+                          aria-pressed={calendarColorFilter === "all"}
+                          onClick={() =>
+                            setCalendarColorFilter("all")
+                          }
+                        >
+                          전체
+                        </button>
+                        {savedColors.map((saved) => (
+                          <button
+                            key={saved.id}
+                            type="button"
+                            className={`planner-color-chip${
+                              calendarColorFilter ===
+                              `chip:${saved.id}`
+                                ? " is-active"
+                                : ""
+                            }`}
+                            style={{
+                              backgroundColor: saved.color,
+                            }}
+                            aria-label={`색상 칩 ${saved.color}`}
+                            aria-pressed={
+                              calendarColorFilter ===
+                              `chip:${saved.id}`
+                            }
+                            title={saved.color}
+                            onClick={() =>
+                              setCalendarColorFilter(
+                                `chip:${saved.id}`,
+                              )
+                            }
+                          />
+                        ))}
+                        {hasUnassignedTasks ? (
+                          <button
+                            type="button"
+                            className={`planner-color-chip is-none${
+                              calendarColorFilter === "unassigned"
+                                ? " is-active"
+                                : ""
+                            }`}
+                            aria-pressed={
+                              calendarColorFilter === "unassigned"
+                            }
+                            onClick={() =>
+                              setCalendarColorFilter("unassigned")
+                            }
+                          >
+                            미지정
+                          </button>
+                        ) : null}
+                      </div>
+                    ) : null}
+                  </div>
+
                   {showChipCreator ? renderChipCreator(false) : null}
                   {colorGroups.length === 0 ? (
                     <p className="planner-empty">
-                      색상 칩을 만들고 일정에 지정해보세요.
+                      색상 칩에 지정된 활성·비활성 일정이 없습니다.
                     </p>
                   ) : (
                     <div className="planner-color-group-list">
-                      {colorGroups.map((group) => (
-                        <section
-                          className="planner-color-group"
-                          key={group.key}
-                        >
-                          <div className="planner-color-group-header">
-                            <span
-                              className="planner-color-group-swatch"
-                              style={{
-                                backgroundColor:
-                                  group.color || UNASSIGNED_TASK_COLOR,
-                              }}
-                            />
-                            <strong>
-                              {group.key === "unassigned"
-                                ? "미지정"
-                                : (group.color || "").toUpperCase()}
-                            </strong>
-                            <span className="planner-color-group-count">
-                              {group.tasks.length}
-                            </span>
-                          </div>
-                          {group.tasks.length === 0 ? (
-                            <p className="planner-empty">
-                              이 색의 진행 중 일정이 없습니다.
-                            </p>
-                          ) : (
+                      {colorGroups.map((group) => {
+                        const activeCount = group.tasks.filter(
+                          (task) => task.status === "active",
+                        ).length;
+                        const inactiveCount =
+                          group.tasks.length - activeCount;
+                        return (
+                          <section
+                            className={[
+                              "planner-color-group",
+                              chipListOpen &&
+                              calendarColorFilter === group.key
+                                ? "is-selected"
+                                : "",
+                            ]
+                              .filter(Boolean)
+                              .join(" ")}
+                            key={group.key}
+                          >
+                            <div className="planner-color-group-header">
+                              <span
+                                className="planner-color-group-swatch"
+                                style={{
+                                  backgroundColor:
+                                    group.color ||
+                                    UNASSIGNED_TASK_COLOR,
+                                }}
+                              />
+                              <strong>
+                                {group.key === "unassigned"
+                                  ? "미지정"
+                                  : (group.color || "").toUpperCase()}
+                              </strong>
+                              <span className="planner-color-group-count">
+                                활성 {activeCount} · 비활성{" "}
+                                {inactiveCount}
+                              </span>
+                            </div>
                             <ul className="planner-task-list">
-                              {group.tasks.map(renderActiveTask)}
+                              {group.tasks.map((task) =>
+                                task.status === "active"
+                                  ? renderActiveTask(task)
+                                  : renderStoredTask(task, false),
+                              )}
                             </ul>
-                          )}
-                        </section>
-                      ))}
+                          </section>
+                        );
+                      })}
                     </div>
                   )}
                 </section>
