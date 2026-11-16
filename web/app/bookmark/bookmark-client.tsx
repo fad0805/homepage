@@ -226,6 +226,29 @@ function periodLabel(value: string, type: BookmarkPeriodType) {
   }${endMonth}월 ${endDay}일`;
 }
 
+function monthCalendarDays(monthStart: string) {
+  const date = parseDateKey(monthStart);
+  const year = date.getUTCFullYear();
+  const month = date.getUTCMonth();
+  const first = new Date(Date.UTC(year, month, 1));
+  const offset = (first.getUTCDay() + 6) % 7;
+  return Array.from({ length: 42 }, (_, index) => {
+    const day = new Date(
+      Date.UTC(year, month, 1 - offset + index),
+    );
+    return {
+      key: dateKey(day),
+      day: day.getUTCDate(),
+      inMonth: day.getUTCMonth() === month,
+    };
+  });
+}
+
+function monthLabel(value: string) {
+  const date = parseDateKey(value);
+  return `${date.getUTCFullYear()}년 ${date.getUTCMonth() + 1}월`;
+}
+
 export default function BookmarkClient({ username }: { username: string }) {
   const initialToday = todayDateInputValue();
   const [view, setView] = useState<BookmarkView>("today");
@@ -260,6 +283,10 @@ export default function BookmarkClient({ username }: { username: string }) {
   const [categories, setCategories] = useState<
     BookmarkRoutineCategory[]
   >([]);
+  const [calendarOpen, setCalendarOpen] = useState(false);
+  const [calendarMonth, setCalendarMonth] = useState(() =>
+    startOfPeriod(initialToday, "month"),
+  );
   const [categoryModalOpen, setCategoryModalOpen] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState("");
   const [categorySaving, setCategorySaving] = useState(false);
@@ -337,7 +364,24 @@ export default function BookmarkClient({ username }: { username: string }) {
     } else {
       setPeriodStart((previous) => startOfPeriod(previous, next));
     }
+    setCalendarOpen(false);
     closeRoutineModal();
+  };
+
+  const openCalendar = () => {
+    setCalendarMonth(startOfPeriod(periodStart, "month"));
+    setCalendarOpen(true);
+  };
+
+  const selectCalendarDate = (value: string) => {
+    const today = todayDateInputValue();
+    const nextView: BookmarkView =
+      view === "today" && value !== today ? "day" : view;
+    const nextType: BookmarkPeriodType =
+      nextView === "today" ? "day" : nextView;
+    setView(nextView);
+    setPeriodStart(startOfPeriod(value, nextType));
+    setCalendarOpen(false);
   };
 
   const goToday = () => {
@@ -1147,9 +1191,14 @@ export default function BookmarkClient({ username }: { username: string }) {
             ))}
           </div>
           {view === "today" ? (
-            <span className="bookmark-today-date">
+            <button
+              type="button"
+              className="bookmark-today-date"
+              title="달력에서 날짜 선택"
+              onClick={openCalendar}
+            >
               {periodLabel(periodStart, "day")}
-            </span>
+            </button>
           ) : (
             <div className="bookmark-period-nav">
               <button
@@ -1160,7 +1209,14 @@ export default function BookmarkClient({ username }: { username: string }) {
               >
                 ‹
               </button>
-              <strong>{periodLabel(periodStart, unitView)}</strong>
+              <button
+                type="button"
+                className="bookmark-period-label"
+                title="달력에서 날짜 선택"
+                onClick={openCalendar}
+              >
+                {periodLabel(periodStart, unitView)}
+              </button>
               <button
                 type="button"
                 className="bookmark-icon-button"
@@ -1307,6 +1363,86 @@ export default function BookmarkClient({ username }: { username: string }) {
           </div>
         )}
       </main>
+
+      {calendarOpen ? (
+        <div
+          className="bookmark-modal-overlay"
+          role="presentation"
+          onClick={() => setCalendarOpen(false)}
+        >
+          <div
+            className="bookmark-modal bookmark-calendar-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-label="날짜 선택"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <header className="bookmark-modal-header">
+              <div>
+                <p className="bookmark-panel-eyebrow">DATE</p>
+                <h2>날짜 선택</h2>
+              </div>
+              <button
+                type="button"
+                className="bookmark-text-button"
+                onClick={() => setCalendarOpen(false)}
+              >
+                닫기
+              </button>
+            </header>
+            <div className="bookmark-calendar-header">
+              <button
+                type="button"
+                className="bookmark-icon-button"
+                aria-label="이전 달"
+                onClick={() =>
+                  setCalendarMonth((previous) =>
+                    shiftPeriod(previous, "month", -1),
+                  )
+                }
+              >
+                ‹
+              </button>
+              <strong>{monthLabel(calendarMonth)}</strong>
+              <button
+                type="button"
+                className="bookmark-icon-button"
+                aria-label="다음 달"
+                onClick={() =>
+                  setCalendarMonth((previous) =>
+                    shiftPeriod(previous, "month", 1),
+                  )
+                }
+              >
+                ›
+              </button>
+            </div>
+            <div className="bookmark-calendar-weekdays">
+              {WEEKDAY_SHORT.map((day) => (
+                <span key={day}>{day}</span>
+              ))}
+            </div>
+            <div className="bookmark-calendar-grid">
+              {monthCalendarDays(calendarMonth).map((day) => (
+                <button
+                  type="button"
+                  className={`bookmark-calendar-day${
+                    day.inMonth ? "" : " is-outside"
+                  }${day.key === periodStart ? " is-selected" : ""}${
+                    day.key === todayDateInputValue()
+                      ? " is-today"
+                      : ""
+                  }`}
+                  key={day.key}
+                  onClick={() => selectCalendarDate(day.key)}
+                >
+                  {day.day}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {routineModalOpen ? (
         <div

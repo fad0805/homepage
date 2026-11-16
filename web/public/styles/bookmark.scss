@@ -112,9 +112,20 @@
 
 .bookmark-today-date {
   padding: 0.2rem 0.45rem;
+  border: 0;
+  border-radius: 0.45rem;
+  background: transparent;
   color: var(--title-color);
+  font-family: inherit;
   font-size: 0.72rem;
   opacity: 0.72;
+  cursor: pointer;
+
+  &:hover,
+  &:focus-visible {
+    background: var(--bookmark-soft-bg);
+    opacity: 1;
+  }
 }
 
 .bookmark-period-nav {
@@ -122,16 +133,27 @@
   align-items: center;
   gap: 0.35rem;
   min-width: 0;
+}
 
-  strong {
-    min-width: 8rem;
-    overflow: hidden;
-    color: var(--title-color);
-    font-size: 0.75rem;
-    font-weight: normal;
-    text-align: center;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+.bookmark-period-label {
+  min-width: 8rem;
+  overflow: hidden;
+  padding: 0.2rem 0.4rem;
+  border: 0;
+  border-radius: 0.45rem;
+  background: transparent;
+  color: var(--title-color);
+  font-family: inherit;
+  font-size: 0.75rem;
+  font-weight: normal;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+
+  &:hover,
+  &:focus-visible {
+    background: var(--bookmark-soft-bg);
   }
 }
 
@@ -931,6 +953,77 @@
   opacity: 0.72;
 }
 
+.bookmark-calendar-modal {
+  width: min(26rem, 100%);
+}
+
+.bookmark-calendar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-top: 0.8rem;
+
+  strong {
+    color: var(--title-color);
+    font-family: Eulyoo1945-SemiBold, GowunDodum, sans-serif;
+    font-size: 0.95rem;
+    font-weight: normal;
+  }
+}
+
+.bookmark-calendar-weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 0.2rem;
+  margin-top: 0.65rem;
+  color: var(--foreground);
+  font-size: 0.58rem;
+  text-align: center;
+  opacity: 0.5;
+}
+
+.bookmark-calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 0.2rem;
+  margin-top: 0.25rem;
+}
+
+.bookmark-calendar-day {
+  aspect-ratio: 1;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 0.5rem;
+  background: transparent;
+  color: var(--foreground);
+  font-family: inherit;
+  font-size: 0.7rem;
+  cursor: pointer;
+
+  &:hover,
+  &:focus-visible {
+    background: var(--bookmark-soft-bg);
+  }
+
+  &.is-outside {
+    opacity: 0.28;
+  }
+
+  &.is-today {
+    border-color: color-mix(
+      in srgb,
+      var(--theme-main) 48%,
+      transparent
+    );
+  }
+
+  &.is-selected {
+    background: var(--bookmark-selected-bg);
+    color: var(--title-color);
+  }
+}
+
 .bookmark-history-modal {
   width: min(38rem, 100%);
 }
@@ -1193,9 +1286,9 @@
     justify-content: center;
   }
 
-  .bookmark-period-nav strong {
-    min-width: 0;
+  .bookmark-period-label {
     flex: 1;
+    min-width: 0;
   }
 
   .bookmark-schedule-row {
