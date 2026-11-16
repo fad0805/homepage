@@ -776,13 +776,11 @@
 
 .bookmark-day-meta-fields {
   display: flex;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
   align-items: flex-end;
-  gap: 0.4rem;
+  gap: 0.5rem;
   width: 100%;
   margin-top: 0.65rem;
-  overflow-x: auto;
-  padding-bottom: 0.1rem;
 
   label {
     display: flex;
@@ -820,17 +818,22 @@
     min-width: 5.6rem;
   }
 
-  .bookmark-text-button,
-  .bookmark-day-meta-save {
+}
+
+.bookmark-day-meta-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-top: 0.55rem;
+
+  button {
     flex-shrink: 0;
-    margin-bottom: 0.1rem;
     white-space: nowrap;
   }
 }
 
 .bookmark-day-meta-save {
-  margin-left: auto;
-  flex-shrink: 0;
   padding: 0.38rem 0.65rem;
   font-size: 0.68rem;
 }

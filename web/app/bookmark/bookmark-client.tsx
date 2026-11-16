@@ -1824,6 +1824,8 @@ export default function BookmarkClient({ username }: { username: string }) {
                         ))}
                       </select>
                     </label>
+                  </div>
+                  <div className="bookmark-day-meta-actions">
                     <button
                       type="button"
                       className="bookmark-text-button"
