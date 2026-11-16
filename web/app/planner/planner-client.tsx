@@ -436,7 +436,6 @@ export default function PlannerClient({ username }: { username: string }) {
     start: string;
     end: string;
   } | null>(null);
-  const [dragWarning, setDragWarning] = useState<string | null>(null);
   const dragStartRef = useRef<string | null>(null);
   const dragCurrentRef = useRef<string | null>(null);
   const [viewMonth, setViewMonth] = useState(initialToday.slice(0, 7));
@@ -471,6 +470,7 @@ export default function PlannerClient({ username }: { username: string }) {
     string[]
   >([]);
   const [error, setError] = useState<string | null>(null);
+  const [recordCompleted, setRecordCompleted] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState<PlannerEvent | null>(null);
   const [preview, setPreview] = useState<PlannerEventPreview | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
@@ -729,6 +729,7 @@ export default function PlannerClient({ username }: { username: string }) {
 
   const resetForm = () => {
     setEditingId(null);
+    setRecordCompleted(false);
     setForm(emptyForm(today));
     setShowChipCreator(false);
   };
@@ -743,6 +744,7 @@ export default function PlannerClient({ username }: { username: string }) {
     const startDate =
       selectedDate && selectedDate >= today ? selectedDate : today;
     setEditingId(null);
+    setRecordCompleted(false);
     setForm(emptyForm(startDate));
     setShowChipCreator(false);
     setError(null);
@@ -751,6 +753,7 @@ export default function PlannerClient({ username }: { username: string }) {
 
   const startRestoringCompletedTask = (event: PlannerEvent) => {
     setEditingId(null);
+    setRecordCompleted(false);
     setForm({
       ...emptyForm(today),
       title: event.title || "완료한 일정",
@@ -856,7 +859,6 @@ export default function PlannerClient({ username }: { username: string }) {
     const next = shiftMonth(viewMonth, delta);
     setViewMonth(next);
     setSelectedDate(`${next}-01`);
-    setDragWarning(null);
   };
 
   const selectDate = (date: string) => {
@@ -864,31 +866,38 @@ export default function PlannerClient({ username }: { username: string }) {
     setSearchOpen(false);
     setSearchResults(null);
     setSearching(false);
-    setDragWarning(null);
     const monthKey = date.slice(0, 7);
     if (monthKey !== viewMonth) {
       setViewMonth(monthKey);
     }
   };
 
-  const openNewRangeTask = (first: string, second: string) => {
-    const [from, to] = orderedRange(first, second);
-    if (from < today) {
-      setDragWarning("과거 일정은 잡을 수 없습니다.");
-      return;
-    }
-    setDragWarning(null);
+  const openRangeForm = (
+    startDate: string,
+    endDate: string,
+    completed: boolean,
+  ) => {
+    setRecordCompleted(completed);
     setEditingId(null);
     setForm({
-      ...emptyForm(from),
+      ...emptyForm(startDate),
       scheduleType: "range",
-      startDate: from,
-      endDate: to,
+      startDate,
+      endDate,
     });
     setShowChipCreator(false);
     setError(null);
     setTaskModalOpen(true);
-    selectDate(from);
+    selectDate(completed ? endDate : startDate);
+  };
+
+  const openNewRangeTask = (first: string, second: string) => {
+    const [from, to] = orderedRange(first, second);
+    if (to < today) {
+      openRangeForm(from, to, true);
+      return;
+    }
+    openRangeForm(from < today ? today : from, to, false);
   };
 
   const selectDateRef = useRef(selectDate);
@@ -972,7 +981,6 @@ export default function PlannerClient({ username }: { username: string }) {
     date: string,
   ) => {
     if (event.button !== 0) return;
-    setDragWarning(null);
     dragStartRef.current = date;
     dragCurrentRef.current = date;
     setDragRange({ start: date, end: date });
@@ -980,6 +988,7 @@ export default function PlannerClient({ username }: { username: string }) {
 
   const startEditing = (task: PlannerTask) => {
     setEditingId(task.id);
+    setRecordCompleted(false);
     setForm({
       title: task.title,
       notes: task.notes || "",
@@ -999,10 +1008,44 @@ export default function PlannerClient({ username }: { username: string }) {
     event.preventDefault();
     if (!form.title.trim() || busyKey !== null) return;
 
+    if (!editingId && recordCompleted) {
+      if (!form.startDate || !form.endDate) {
+        setError("시작일과 완료일을 입력해주세요.");
+        return;
+      }
+      if (form.endDate >= today) {
+        setError("완료 기록은 과거 날짜로만 저장할 수 있습니다.");
+        return;
+      }
+      if (form.endDate < form.startDate) {
+        setError("종료일은 시작일보다 빠를 수 없습니다.");
+        return;
+      }
+    }
+
     const key = editingId ? `update-${editingId}` : "create";
     setBusyKey(key);
     setError(null);
     try {
+      if (!editingId && recordCompleted) {
+        await apiFetch("/api/planner/completed", {
+          method: "POST",
+          body: JSON.stringify({
+            title: form.title,
+            notes: form.notes || null,
+            completed_on: form.endDate,
+          }),
+        });
+        const completedOn = form.endDate;
+        closeTaskModal();
+        selectDate(completedOn);
+        await Promise.all([
+          loadTasks(),
+          loadEvents(completedOn.slice(0, 7)),
+        ]);
+        return;
+      }
+
       const payload = {
         title: form.title,
         notes: form.notes || null,
@@ -1031,9 +1074,11 @@ export default function PlannerClient({ username }: { username: string }) {
       setError(
         reason instanceof Error
           ? reason.message
-          : editingId
-            ? "일정을 수정하지 못했습니다."
-            : "일정을 추가하지 못했습니다.",
+          : recordCompleted
+            ? "완료 일정을 기록하지 못했습니다."
+            : editingId
+              ? "일정을 수정하지 못했습니다."
+              : "일정을 추가하지 못했습니다.",
       );
     } finally {
       setBusyKey(null);
@@ -1762,14 +1807,8 @@ export default function PlannerClient({ username }: { username: string }) {
                   ›
                 </button>
               </div>
-              <p
-                className={`planner-calendar-hint${
-                  dragWarning ? " is-warning" : ""
-                }`}
-                role={dragWarning ? "alert" : undefined}
-              >
-                {dragWarning ||
-                  "날짜를 드래그하면 범위 일정을 만들 수 있습니다."}
+              <p className="planner-calendar-hint">
+                날짜를 드래그하면 범위 일정을 만들 수 있습니다.
               </p>
               <div className="planner-weekdays" aria-hidden="true">
                 {["일", "월", "화", "수", "목", "금", "토"].map((day) => (
@@ -2288,12 +2327,24 @@ export default function PlannerClient({ username }: { username: string }) {
             className="planner-modal planner-task-modal"
             role="dialog"
             aria-modal="true"
-            aria-label={editingId ? "일정 수정" : "새 일정"}
+            aria-label={
+              editingId
+                ? "일정 수정"
+                : recordCompleted
+                  ? "완료 일정 기록"
+                  : "새 일정"
+            }
             onClick={(event) => event.stopPropagation()}
           >
             <form className="planner-form is-modal" onSubmit={handleSubmit}>
               <div className="planner-form-heading">
-                <h2>{editingId ? "일정 수정" : "새 일정"}</h2>
+                <h2>
+                  {editingId
+                    ? "일정 수정"
+                    : recordCompleted
+                      ? "완료 일정 기록"
+                      : "새 일정"}
+                </h2>
                 <button
                   type="button"
                   className="planner-text-button"
@@ -2309,7 +2360,11 @@ export default function PlannerClient({ username }: { username: string }) {
                   type="text"
                   value={form.title}
                   maxLength={255}
-                  placeholder="무엇을 해야 하나요?"
+                  placeholder={
+                    recordCompleted
+                      ? "무엇을 했나요?"
+                      : "무엇을 해야 하나요?"
+                  }
                   onChange={(event) =>
                     setForm((previous) => ({
                       ...previous,
@@ -2333,48 +2388,51 @@ export default function PlannerClient({ username }: { username: string }) {
                   }
                 />
               </label>
-              <div
-                className="planner-segmented"
-                role="group"
-                aria-label="일정 방식"
-              >
-                <button
-                  type="button"
-                  className={
-                    form.scheduleType === "single" ? "is-active" : ""
-                  }
-                  aria-pressed={form.scheduleType === "single"}
-                  onClick={() =>
-                    setForm((previous) => ({
-                      ...previous,
-                      scheduleType: "single",
-                    }))
-                  }
+              {recordCompleted ? null : (
+                <div
+                  className="planner-segmented"
+                  role="group"
+                  aria-label="일정 방식"
                 >
-                  단일 날짜
-                </button>
-                <button
-                  type="button"
-                  className={
-                    form.scheduleType === "range" ? "is-active" : ""
-                  }
-                  aria-pressed={form.scheduleType === "range"}
-                  onClick={() =>
-                    setForm((previous) => ({
-                      ...previous,
-                      scheduleType: "range",
-                    }))
-                  }
-                >
-                  범위
-                </button>
-              </div>
+                  <button
+                    type="button"
+                    className={
+                      form.scheduleType === "single" ? "is-active" : ""
+                    }
+                    aria-pressed={form.scheduleType === "single"}
+                    onClick={() =>
+                      setForm((previous) => ({
+                        ...previous,
+                        scheduleType: "single",
+                      }))
+                    }
+                  >
+                    단일 날짜
+                  </button>
+                  <button
+                    type="button"
+                    className={
+                      form.scheduleType === "range" ? "is-active" : ""
+                    }
+                    aria-pressed={form.scheduleType === "range"}
+                    onClick={() =>
+                      setForm((previous) => ({
+                        ...previous,
+                        scheduleType: "range",
+                      }))
+                    }
+                  >
+                    범위
+                  </button>
+                </div>
+              )}
               <div className="planner-form-row">
                 <label>
                   <span>시작일</span>
                   <input
                     type="date"
                     value={form.startDate}
+                    max={recordCompleted ? addDays(today, -1) : undefined}
                     onChange={(event) =>
                       setForm((previous) => ({
                         ...previous,
@@ -2402,11 +2460,12 @@ export default function PlannerClient({ username }: { username: string }) {
                   </label>
                 ) : (
                   <label>
-                    <span>종료일</span>
+                    <span>{recordCompleted ? "완료일" : "종료일"}</span>
                     <input
                       type="date"
                       value={form.endDate}
                       min={form.startDate}
+                      max={recordCompleted ? addDays(today, -1) : undefined}
                       onChange={(event) =>
                         setForm((previous) => ({
                           ...previous,
@@ -2417,71 +2476,73 @@ export default function PlannerClient({ username }: { username: string }) {
                   </label>
                 )}
               </div>
-              <div className="planner-color-field">
-                <span className="planner-field-label">색상 칩</span>
-                <div className="planner-color-chips">
-                  <button
-                    type="button"
-                    className={`planner-color-chip is-none${
-                      form.colorId === null ? " is-active" : ""
-                    }`}
-                    aria-pressed={form.colorId === null}
-                    onClick={() =>
-                      setForm((previous) => ({
-                        ...previous,
-                        colorId: null,
-                      }))
-                    }
-                  >
-                    미지정
-                  </button>
-                  {savedColors.map((saved) => (
+              {recordCompleted ? null : (
+                <div className="planner-color-field">
+                  <span className="planner-field-label">색상 칩</span>
+                  <div className="planner-color-chips">
                     <button
-                      key={saved.id}
                       type="button"
-                      className={`planner-color-chip${
-                        form.colorId === saved.id ? " is-active" : ""
+                      className={`planner-color-chip is-none${
+                        form.colorId === null ? " is-active" : ""
                       }`}
-                      style={{ backgroundColor: saved.color }}
-                      aria-label={`색상 칩 ${saved.name || saved.color}`}
-                      aria-pressed={form.colorId === saved.id}
-                      title={
-                        saved.name
-                          ? `${saved.name} (${saved.color})`
-                          : saved.color
-                      }
+                      aria-pressed={form.colorId === null}
                       onClick={() =>
                         setForm((previous) => ({
                           ...previous,
-                          colorId: saved.id,
+                          colorId: null,
                         }))
                       }
-                    />
-                  ))}
-                  <button
-                    type="button"
-                    className="planner-color-chip-add"
-                    aria-label="새 색상 칩"
-                    onClick={() =>
-                      setShowChipCreator((previous) => !previous)
-                    }
-                  >
-                    +
-                  </button>
+                    >
+                      미지정
+                    </button>
+                    {savedColors.map((saved) => (
+                      <button
+                        key={saved.id}
+                        type="button"
+                        className={`planner-color-chip${
+                          form.colorId === saved.id ? " is-active" : ""
+                        }`}
+                        style={{ backgroundColor: saved.color }}
+                        aria-label={`색상 칩 ${saved.name || saved.color}`}
+                        aria-pressed={form.colorId === saved.id}
+                        title={
+                          saved.name
+                            ? `${saved.name} (${saved.color})`
+                            : saved.color
+                        }
+                        onClick={() =>
+                          setForm((previous) => ({
+                            ...previous,
+                            colorId: saved.id,
+                          }))
+                        }
+                      />
+                    ))}
+                    <button
+                      type="button"
+                      className="planner-color-chip-add"
+                      aria-label="새 색상 칩"
+                      onClick={() =>
+                        setShowChipCreator((previous) => !previous)
+                      }
+                    >
+                      +
+                    </button>
+                  </div>
+                  {selectedFormColor ? (
+                    <span className="planner-color-selected-name">
+                      {selectedFormColor.name ||
+                        selectedFormColor.color.toUpperCase()}
+                    </span>
+                  ) : null}
+                  {showChipCreator ? renderChipCreator(true) : null}
+                  {savedColors.length === 0 ? (
+                    <p className="planner-form-hint">
+                      색상 칩을 만들면 일정을 색상별로 모아볼 수 있습니다.
+                    </p>
+                  ) : null}
                 </div>
-                {selectedFormColor ? (
-                  <span className="planner-color-selected-name">
-                    {selectedFormColor.name ||
-                      selectedFormColor.color.toUpperCase()}
-                  </span>
-                ) : null}
-                {showChipCreator ? renderChipCreator(true) : null}
-                {savedColors.length === 0 ? (
-                  <p className="planner-form-hint">
-                    색상 칩을 만들면 일정을 색상별로 모아볼 수 있습니다.
-                  </p>
-                ) : null}
-              </div>
+              )}
               {form.scheduleType === "single" ? (
                 <p className="planner-form-hint">
                   {form.startDate === today
@@ -2494,34 +2555,42 @@ export default function PlannerClient({ username }: { username: string }) {
                 </p>
               ) : (
                 <p className="planner-form-hint">
-                  범위 일정은 시작일부터 종료일까지 매일 표시됩니다.
+                  {recordCompleted
+                    ? "과거 범위 일정은 완료 이력으로 저장됩니다. 완료일은 범위의 마지막 날이며, 제목·메모·완료일만 남습니다."
+                    : "범위 일정은 시작일부터 종료일까지 매일 표시됩니다."}
                 </p>
               )}
-              <label className="planner-checkbox">
-                <input
-                  type="checkbox"
-                  checked={form.pinned}
-                  onChange={(event) =>
-                    setForm((previous) => ({
-                      ...previous,
-                      pinned: event.target.checked,
-                    }))
-                  }
-                />
-                <span>고정 (비활성화되어도 자동 휴지통 이동 방지)</span>
-              </label>
+              {recordCompleted ? null : (
+                <label className="planner-checkbox">
+                  <input
+                    type="checkbox"
+                    checked={form.pinned}
+                    onChange={(event) =>
+                      setForm((previous) => ({
+                        ...previous,
+                        pinned: event.target.checked,
+                      }))
+                    }
+                  />
+                  <span>고정 (비활성화되어도 자동 휴지통 이동 방지)</span>
+                </label>
+              )}
               <button
                 type="submit"
                 className="planner-primary"
                 disabled={busyKey !== null || !form.title.trim()}
               >
                 {busyKey === "create"
-                  ? "추가 중..."
+                  ? recordCompleted
+                    ? "기록 중..."
+                    : "추가 중..."
                   : busyKey === `update-${editingId}`
                     ? "저장 중..."
                     : editingId
                       ? "저장"
-                      : "추가"}
+                      : recordCompleted
+                        ? "완료로 기록"
+                        : "추가"}
               </button>
             </form>
           </div>

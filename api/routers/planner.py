@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 
 from crud.planner import (
     complete_task,
+    create_completed_record,
     create_task,
     deactivate_task,
     delete_color,
@@ -27,7 +28,9 @@ from schemas.planner import (
     PlannerColorRead,
     PlannerColorsResponse,
     PlannerColorUpdate,
+    PlannerCompletedCreate,
     PlannerEventPreview,
+    PlannerEventRead,
     PlannerEventsResponse,
     PlannerSearchResponse,
     PlannerTaskCreate,
@@ -125,6 +128,17 @@ def post_task(
 ):
     _no_store(response)
     return create_task(db, payload, user.id)
+
+
+@router.post("/completed", response_model=PlannerEventRead)
+def post_completed(
+    payload: PlannerCompletedCreate,
+    response: Response,
+    db: Session = Depends(get_db),
+    user=Depends(require_auth),
+):
+    _no_store(response)
+    return create_completed_record(db, payload, user.id)
 
 
 @router.patch("/tasks/{task_id}", response_model=PlannerTaskRead)

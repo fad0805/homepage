@@ -7,6 +7,12 @@ ScheduleType = Literal["single", "range"]
 TaskStatus = Literal["active", "inactive", "trashed"]
 
 
+class PlannerCompletedCreate(BaseModel):
+    title: str = Field(min_length=1, max_length=255)
+    notes: str | None = Field(default=None, max_length=4000)
+    completed_on: date
+
+
 class PlannerTaskCreate(BaseModel):
     title: str = Field(min_length=1, max_length=255)
     notes: str | None = Field(default=None, max_length=4000)

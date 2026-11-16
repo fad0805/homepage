@@ -20,6 +20,7 @@ from models.profiles import Profile
 from models.users import AuthorSettings
 from schemas.planner import (
     PlannerColorUpdate,
+    PlannerCompletedCreate,
     PlannerEventPreview,
     PlannerTaskCreate,
     PlannerTaskUpdate,
@@ -631,6 +632,42 @@ def complete_task(db: Session, task_id: int, user_id: int) -> dict:
     db.add(event)
     db.commit()
     return {"success": True}
+
+
+def create_completed_record(
+    db: Session,
+    payload: PlannerCompletedCreate,
+    user_id: int,
+) -> dict:
+    """Backfill a past range directly as a completion history entry."""
+    title = _clean_title(payload.title)
+    notes = _clean_notes(payload.notes)
+    if payload.completed_on >= kst_today():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="완료 기록은 과거 날짜로만 만들 수 있습니다.",
+        )
+
+    actor_id = get_audit_actor() or user_id
+    # Noon KST keeps the entry safely on the intended calendar date.
+    occurred_at = (
+        _kst_day_start_utc(payload.completed_on) + timedelta(hours=12)
+    )
+    event = PlannerEvent(
+        owner_user_id=user_id,
+        actor_user_id=actor_id,
+        entity_type="task",
+        entity_id=None,
+        action="completed",
+        title=title,
+        notes=notes,
+        changes=None,
+        occurred_at=occurred_at,
+    )
+    db.add(event)
+    db.commit()
+    db.refresh(event)
+    return _serialize_event(event)
 
 
 def deactivate_task(db: Session, task_id: int, user_id: int) -> dict:

@@ -288,15 +288,6 @@
   color: var(--title-color);
   font-size: 0.68rem;
   opacity: 0.55;
-
-  &.is-warning {
-    color: #b34a4a;
-    opacity: 1;
-  }
-}
-
-[data-theme='dark'] .planner-calendar-hint.is-warning {
-  color: #ff9b9b;
 }
 
 .planner-icon-button {
