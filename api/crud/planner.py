@@ -403,6 +403,21 @@ def complete_task(db: Session, task_id: int, user_id: int) -> dict:
     return {"success": True}
 
 
+def deactivate_task(db: Session, task_id: int, user_id: int) -> dict:
+    task = _get_task_or_404(db, task_id, user_id)
+    if task.status == "trashed":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="휴지통에 있는 일정은 비활성화할 수 없습니다.",
+        )
+    if task.status != "inactive":
+        task.status = "inactive"
+        task.inactive_at = _utc_naive_now()
+        db.commit()
+        db.refresh(task)
+    return _serialize_task(task)
+
+
 def trash_task(db: Session, task_id: int, user_id: int) -> dict:
     task = _get_task_or_404(db, task_id, user_id)
     if task.status != "trashed":

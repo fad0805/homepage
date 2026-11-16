@@ -666,6 +666,36 @@ export default function PlannerClient({ username }: { username: string }) {
     }
   };
 
+  const handleDeactivate = async (task: PlannerTask) => {
+    if (
+      busyKey !== null ||
+      !window.confirm(
+        `"${task.title}" 일정을 비활성화할까요?\n비활성 탭에서 다시 복구할 수 있습니다.`,
+      )
+    ) {
+      return;
+    }
+    const key = `deactivate-${task.id}`;
+    setBusyKey(key);
+    setError(null);
+    try {
+      await apiFetch<PlannerTask>(
+        `/api/planner/tasks/${task.id}/deactivate`,
+        { method: "POST" },
+      );
+      if (editingId === task.id) closeTaskModal();
+      await refresh();
+    } catch (reason) {
+      setError(
+        reason instanceof Error
+          ? reason.message
+          : "일정을 비활성화하지 못했습니다.",
+      );
+    } finally {
+      setBusyKey(null);
+    }
+  };
+
   const handleTrash = async (task: PlannerTask) => {
     if (
       busyKey !== null ||
@@ -846,6 +876,16 @@ export default function PlannerClient({ username }: { username: string }) {
           onClick={() => startEditing(task)}
         >
           수정
+        </button>
+        <button
+          type="button"
+          className="planner-text-button"
+          disabled={busyKey !== null}
+          onClick={() => handleDeactivate(task)}
+        >
+          {busyKey === `deactivate-${task.id}`
+            ? "비활성 중"
+            : "비활성화"}
         </button>
         <button
           type="button"

@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from crud.planner import (
     complete_task,
     create_task,
+    deactivate_task,
     delete_task_permanently,
     get_event_preview,
     get_events,
@@ -74,6 +75,17 @@ def post_task_complete(
 ):
     _no_store(response)
     return complete_task(db, task_id, user.id)
+
+
+@router.post("/tasks/{task_id}/deactivate", response_model=PlannerTaskRead)
+def post_task_deactivate(
+    task_id: int,
+    response: Response,
+    db: Session = Depends(get_db),
+    user=Depends(require_auth),
+):
+    _no_store(response)
+    return deactivate_task(db, task_id, user.id)
 
 
 @router.delete("/tasks/{task_id}")
