@@ -688,7 +688,9 @@
 .bookmark-record-save,
 .bookmark-review-save {
   align-self: flex-end;
+  flex-shrink: 0;
   margin-top: 0.6rem;
+  white-space: nowrap;
 }
 
 .bookmark-rating-panel {
@@ -716,11 +718,11 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 2.15rem;
-  height: 2.15rem;
-  padding: 0.12rem;
+  width: 1.75rem;
+  height: 1.75rem;
+  padding: 0.08rem;
   border: 0;
-  border-radius: 0.45rem;
+  border-radius: 0.38rem;
   background: transparent;
   color: color-mix(in srgb, var(--foreground) 32%, transparent);
   cursor: pointer;

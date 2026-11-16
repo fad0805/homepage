@@ -237,7 +237,9 @@ export default function BookmarkClient({ username }: { username: string }) {
   const [goalSaving, setGoalSaving] = useState(false);
   const [goalSaved, setGoalSaved] = useState(false);
   const [rating, setRating] = useState(0);
+  const [ratingDraft, setRatingDraft] = useState(0);
   const [ratingSaving, setRatingSaving] = useState(false);
+  const [ratingSaved, setRatingSaved] = useState(false);
   const [reviewContent, setReviewContent] = useState("");
   const [reviewSaving, setReviewSaving] = useState(false);
   const [reviewSaved, setReviewSaved] = useState(false);
@@ -293,8 +295,10 @@ export default function BookmarkClient({ username }: { username: string }) {
       setData(next);
       setGoalContent(next.goal?.content ?? "");
       setRating(next.rating?.rating ?? 0);
+      setRatingDraft(next.rating?.rating ?? 0);
       setReviewContent(next.review?.content ?? "");
       setGoalSaved(false);
+      setRatingSaved(false);
       setReviewSaved(false);
     } catch (reason) {
       setError(
@@ -796,12 +800,17 @@ export default function BookmarkClient({ username }: { username: string }) {
     }
   };
 
-  const handleSetRating = async (nextRating: number) => {
+  const handleRatingChange = (nextRating: number) => {
     if (ratingSaving) return;
-    const previousRating = rating;
-    setRating(nextRating);
+    setRatingDraft(nextRating);
+    setRatingSaved(false);
+  };
+
+  const handleSaveRating = async () => {
+    if (ratingSaving || ratingDraft === rating) return;
     setRatingSaving(true);
     setError(null);
+    setRatingSaved(false);
     try {
       const saved = await apiFetch<BookmarkRating | null>(
         "/api/bookmark/rating",
@@ -810,22 +819,23 @@ export default function BookmarkClient({ username }: { username: string }) {
           body: JSON.stringify({
             period_type: recordPeriodType,
             period_start: periodStart,
-            rating: nextRating,
+            rating: ratingDraft,
           }),
         },
       );
-      setRating(saved?.rating ?? 0);
+      const nextRating = saved?.rating ?? 0;
+      setRating(nextRating);
+      setRatingDraft(nextRating);
       setData((previous) =>
         previous ? { ...previous, rating: saved } : previous,
       );
+      setRatingSaved(true);
     } catch (reason) {
-      setRating(previousRating);
       setError(
         reason instanceof Error
           ? reason.message
           : "별점을 저장하지 못했습니다.",
       );
-      await loadPeriod();
     } finally {
       setRatingSaving(false);
     }
@@ -1197,16 +1207,27 @@ export default function BookmarkClient({ username }: { username: string }) {
                     <p className="bookmark-panel-eyebrow">RATING</p>
                     <h2>별점</h2>
                   </div>
+                  {ratingSaved ? (
+                    <span className="bookmark-saved">저장됨</span>
+                  ) : null}
                 </header>
                 <p className="bookmark-rating-description">
-                  세잎클로버로 이 기간을 최대 5점까지 평가합니다. 같은
+                  세잎클로버를 선택한 뒤 저장 버튼을 눌러주세요. 같은
                   점수를 다시 누르면 초기화됩니다.
                 </p>
                 <CloverRating
-                  value={rating}
-                  onChange={(value) => void handleSetRating(value)}
+                  value={ratingDraft}
+                  onChange={handleRatingChange}
                   disabled={ratingSaving}
                 />
+                <button
+                  type="button"
+                  className="bookmark-primary bookmark-record-save"
+                  disabled={ratingSaving || ratingDraft === rating}
+                  onClick={() => void handleSaveRating()}
+                >
+                  {ratingSaving ? "저장 중..." : "저장"}
+                </button>
               </section>
 
               <section className="bookmark-panel bookmark-record-panel bookmark-review-panel">
