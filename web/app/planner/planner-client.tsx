@@ -3,6 +3,7 @@
 import Link from "next/link";
 import {
   FormEvent,
+  PointerEvent as ReactPointerEvent,
   useCallback,
   useEffect,
   useMemo,
@@ -419,6 +420,10 @@ function emptyForm(today: string): TaskFormState {
   };
 }
 
+function orderedRange(a: string, b: string): [string, string] {
+  return a <= b ? [a, b] : [b, a];
+}
+
 export default function PlannerClient({ username }: { username: string }) {
   const initialToday = todayDateInputValue();
   const initialSearchBounds = monthBounds(initialToday.slice(0, 7));
@@ -427,6 +432,12 @@ export default function PlannerClient({ username }: { username: string }) {
   const [events, setEvents] = useState<PlannerEvent[]>([]);
   const [savedColors, setSavedColors] = useState<PlannerColor[]>([]);
   const [selectedDate, setSelectedDate] = useState(initialToday);
+  const [dragRange, setDragRange] = useState<{
+    start: string;
+    end: string;
+  } | null>(null);
+  const dragStartRef = useRef<string | null>(null);
+  const dragCurrentRef = useRef<string | null>(null);
   const [viewMonth, setViewMonth] = useState(initialToday.slice(0, 7));
   const [activeTab, setActiveTab] = useState<PlannerTab>("active");
   const [searchFrom, setSearchFrom] = useState(initialSearchBounds.start);
@@ -711,6 +722,9 @@ export default function PlannerClient({ username }: { username: string }) {
     searchQuery.trim() !== "" ||
     searchFrom !== defaultSearchBounds.start ||
     searchTo !== defaultSearchBounds.end;
+  const dragBounds = dragRange
+    ? orderedRange(dragRange.start, dragRange.end)
+    : null;
 
   const resetForm = () => {
     setEditingId(null);
@@ -852,6 +866,109 @@ export default function PlannerClient({ username }: { username: string }) {
     if (monthKey !== viewMonth) {
       setViewMonth(monthKey);
     }
+  };
+
+  const openNewRangeTask = (first: string, second: string) => {
+    const [from, to] = orderedRange(first, second);
+    const startDate = from < today ? today : from;
+    const endDate = to < startDate ? startDate : to;
+    setEditingId(null);
+    setForm({
+      ...emptyForm(startDate),
+      scheduleType: "range",
+      startDate,
+      endDate,
+    });
+    setShowChipCreator(false);
+    setError(null);
+    setTaskModalOpen(true);
+    selectDate(startDate);
+  };
+
+  const selectDateRef = useRef(selectDate);
+  selectDateRef.current = selectDate;
+  const openNewRangeTaskRef = useRef(openNewRangeTask);
+  openNewRangeTaskRef.current = openNewRangeTask;
+
+  useEffect(() => {
+    const dateAtPoint = (x: number, y: number): string | null => {
+      for (const element of document.elementsFromPoint(x, y)) {
+        const cell = (element as HTMLElement).closest<HTMLElement>(
+          "[data-calendar-date]",
+        );
+        const date = cell?.dataset.calendarDate;
+        if (date) return date;
+      }
+
+      // Range bars sit below the day cells. Use the nearest cell so a drag
+      // does not stall when the pointer crosses one.
+      let nearestDate: string | null = null;
+      let nearestDistance = Number.POSITIVE_INFINITY;
+      for (const cell of Array.from(
+        document.querySelectorAll<HTMLElement>("[data-calendar-date]"),
+      )) {
+        const rect = cell.getBoundingClientRect();
+        const dx =
+          x < rect.left ? rect.left - x : x > rect.right ? x - rect.right : 0;
+        const dy =
+          y < rect.top ? rect.top - y : y > rect.bottom ? y - rect.bottom : 0;
+        const distance = dx * dx + dy * dy;
+        if (distance < nearestDistance) {
+          nearestDistance = distance;
+          nearestDate = cell.dataset.calendarDate || null;
+        }
+      }
+      return nearestDate && nearestDistance <= 96 * 96 ? nearestDate : null;
+    };
+
+    const handlePointerMove = (event: PointerEvent) => {
+      if (dragStartRef.current === null) return;
+      const date = dateAtPoint(event.clientX, event.clientY);
+      if (!date || date === dragCurrentRef.current) return;
+      dragCurrentRef.current = date;
+      setDragRange({ start: dragStartRef.current, end: date });
+    };
+
+    const cancelDrag = () => {
+      dragStartRef.current = null;
+      dragCurrentRef.current = null;
+      setDragRange(null);
+    };
+
+    const finishDrag = (event: PointerEvent) => {
+      const start = dragStartRef.current;
+      if (start === null) return;
+      const date = dateAtPoint(event.clientX, event.clientY);
+      const current = date || dragCurrentRef.current || start;
+      cancelDrag();
+      const [from, to] = orderedRange(start, current);
+      if (from === to) {
+        selectDateRef.current(from);
+        return;
+      }
+      openNewRangeTaskRef.current(from, to);
+    };
+
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", finishDrag);
+    window.addEventListener("pointercancel", cancelDrag);
+    window.addEventListener("blur", cancelDrag);
+    return () => {
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", finishDrag);
+      window.removeEventListener("pointercancel", cancelDrag);
+      window.removeEventListener("blur", cancelDrag);
+    };
+  }, []);
+
+  const startCalendarDrag = (
+    event: ReactPointerEvent<HTMLButtonElement>,
+    date: string,
+  ) => {
+    if (event.button !== 0) return;
+    dragStartRef.current = date;
+    dragCurrentRef.current = date;
+    setDragRange({ start: date, end: date });
   };
 
   const startEditing = (task: PlannerTask) => {
@@ -1638,6 +1755,9 @@ export default function PlannerClient({ username }: { username: string }) {
                   ›
                 </button>
               </div>
+              <p className="planner-calendar-hint">
+                날짜를 드래그하면 범위 일정을 만들 수 있습니다.
+              </p>
               <div className="planner-weekdays" aria-hidden="true">
                 {["일", "월", "화", "수", "목", "금", "토"].map((day) => (
                   <span key={day}>{day}</span>
@@ -1664,10 +1784,19 @@ export default function PlannerClient({ username }: { username: string }) {
                           cell.date < today &&
                           (hasTaskRecord ||
                             eventDates.has(cell.date));
+                        const inDragRange =
+                          dragBounds !== null &&
+                          dragBounds[0] <= cell.date &&
+                          cell.date <= dragBounds[1];
+                        const isDragEdge =
+                          dragBounds !== null &&
+                          (cell.date === dragBounds[0] ||
+                            cell.date === dragBounds[1]);
                         return (
                           <button
                             type="button"
                             key={cell.date}
+                            data-calendar-date={cell.date}
                             className={[
                               "planner-calendar-day",
                               cell.inMonth ? "" : "is-outside",
@@ -1675,10 +1804,19 @@ export default function PlannerClient({ username }: { username: string }) {
                               cell.date === selectedDate ? "is-selected" : "",
                               hasPastRecords ? "has-past-records" : "",
                               dayTaskCount > 0 ? "has-items" : "",
+                              inDragRange ? "is-drag-range" : "",
+                              isDragEdge ? "is-drag-edge" : "",
                             ]
                               .filter(Boolean)
                               .join(" ")}
-                            onClick={() => selectDate(cell.date)}
+                            onPointerDown={(event) =>
+                              startCalendarDrag(event, cell.date)
+                            }
+                            onClick={(event) => {
+                              if (event.detail === 0) {
+                                selectDate(cell.date);
+                              }
+                            }}
                             aria-label={`${formatDayLabel(cell.date)}${dayTaskCount > 0 ? `, 일정 ${dayTaskCount}개` : ""}`}
                           >
                             <span className="planner-day-number">
