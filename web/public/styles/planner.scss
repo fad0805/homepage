@@ -1244,6 +1244,17 @@
   opacity: 0.65;
 }
 
+.planner-task-detail-color {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+
+  .planner-task-color {
+    width: 0.7rem;
+    height: 0.7rem;
+  }
+}
+
 .planner-task-detail-modal .planner-error {
   margin-top: 0.75rem;
 }

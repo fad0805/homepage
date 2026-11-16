@@ -992,6 +992,11 @@ export default function PlannerClient({ username }: { username: string }) {
     ) ?? null;
   const selectedFormColor =
     savedColors.find((color) => color.id === form.colorId) ?? null;
+  const selectedTaskColor = selectedTask
+    ? (savedColors.find(
+        (color) => color.id === selectedTask.color_id,
+      ) ?? null)
+    : null;
   const defaultSearchBounds = monthBounds(viewMonth);
   const hasSearchFilter =
     searchOpen ||
@@ -1998,6 +2003,11 @@ export default function PlannerClient({ username }: { username: string }) {
     >
       <div className="planner-task-main">
         <div className="planner-task-title-row">
+          <span
+            className="planner-task-color"
+            style={{ backgroundColor: taskColor(task) }}
+            aria-hidden="true"
+          />
           <strong>{task.title}</strong>
         </div>
         <p className="planner-task-meta planner-task-deadline">
@@ -3159,6 +3169,20 @@ export default function PlannerClient({ username }: { username: string }) {
                 <p className="planner-modal-eyebrow">일정</p>
                 <h2>{selectedTask.title}</h2>
                 <p className="planner-task-detail-meta">
+                  <span className="planner-task-detail-color">
+                    <span
+                      className="planner-task-color"
+                      style={{
+                        backgroundColor: taskColor(selectedTask),
+                      }}
+                      aria-hidden="true"
+                    />
+                    <span>
+                      {selectedTaskColor?.name ||
+                        (selectedTask.color || "").toUpperCase() ||
+                        "미지정"}
+                    </span>
+                  </span>
                   <span>
                     {selectedTask.end_date
                       ? `마감 ${formatDateOnly(selectedTask.end_date)}`
