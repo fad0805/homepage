@@ -1,4 +1,13 @@
-from sqlalchemy import Column, String, Integer, Text, DateTime, ForeignKey, func
+from sqlalchemy import (
+    Column,
+    String,
+    Integer,
+    Text,
+    DateTime,
+    ForeignKey,
+    UniqueConstraint,
+    func,
+)
 from sqlalchemy.orm import relationship
 
 from db.base import Base
@@ -8,6 +17,9 @@ from models.users import User
 
 class Profile(Base):
     __tablename__ = "profiles"
+    __table_args__ = (
+        UniqueConstraint("user_id", name="uq_profiles_user_id"),
+    )
     id = Column(Integer, primary_key=True, autoincrement=True)
     user_id = Column(
         Integer,

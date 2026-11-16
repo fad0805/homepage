@@ -1,4 +1,5 @@
 from fastapi import HTTPException, status
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
 
 from core.html_sanitizer import sanitize_index_html
@@ -72,13 +73,43 @@ def get_profile(db: Session, profile_id: int):
 
 def create_profile(db: Session, profile: ProfileCreate, user_id: int):
     """
-    Create a new profile owned by the signed-in author.
+    Create or update the signed-in author's single profile.
     """
-    data = profile.model_dump(exclude={"user_id"})
+    data = profile.model_dump(exclude={"created_at"})
     data["profile"] = sanitize_index_html(data.get("profile"))
+    existing = (
+        db.query(Profile)
+        .filter(Profile.user_id == user_id)
+        .first()
+    )
+    if existing is not None:
+        return update_profile(
+            db,
+            existing.id,
+            ProfileUpdate(**data),
+            user_id,
+        )
+
     db_profile = Profile(**data, user_id=user_id)
     db.add(db_profile)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        # A concurrent request created the profile first.
+        db.rollback()
+        existing = (
+            db.query(Profile)
+            .filter(Profile.user_id == user_id)
+            .first()
+        )
+        if existing is None:
+            raise
+        return update_profile(
+            db,
+            existing.id,
+            ProfileUpdate(**data),
+            user_id,
+        )
     db.refresh(db_profile)
     return _serialize_profile(db_profile)
 
