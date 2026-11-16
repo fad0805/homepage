@@ -433,6 +433,7 @@ def _date_period_entry(
     period_type: str,
     period_start: date,
     today: date | None = None,
+    require_month_due: bool = True,
 ) -> dict[str, Any] | None:
     if routine.frequency == "daily":
         done = _period_check_count(db, routine, "day", period_start) > 0
@@ -476,7 +477,7 @@ def _date_period_entry(
         )
     if routine.frequency == "monthly":
         month = _month_start(period_start)
-        if not _routine_monthly_due(routine, month):
+        if require_month_due and not _routine_monthly_due(routine, month):
             return None
         completed = _period_check_count(db, routine, "month", month)
         return _routine_period_dict(
@@ -703,21 +704,23 @@ def get_today(
     )
     entries: list[dict[str, Any]] = []
     for routine in routines:
-        if routine.frequency != "daily" and routine.tracking_mode == "count":
-            period_type = _check_period_type(routine)
-            period_start = _check_period_start(routine, target)
-            entries.append(
-                _count_period_entry(
-                    db,
-                    routine,
-                    period_type=period_type,
-                    period_start=period_start,
-                )
+        if routine.frequency == "daily":
+            entry = _date_period_entry(
+                db,
+                routine,
+                period_type="day",
+                period_start=target,
             )
+        elif routine.tracking_mode == "count":
+            entry = _count_period_entry(
+                db,
+                routine,
+                period_type=_check_period_type(routine),
+                period_start=_check_period_start(routine, target),
+            )
+        elif not _routine_due_on_day(routine, target):
             continue
-        if not _routine_due_on_day(routine, target):
-            continue
-        if routine.frequency == "weekly":
+        elif routine.frequency == "weekly":
             entry = _date_period_entry(
                 db,
                 routine,
@@ -725,27 +728,11 @@ def get_today(
                 period_start=target,
                 today=target,
             )
-        elif routine.frequency == "monthly":
-            entry = _date_period_entry(
-                db,
-                routine,
-                period_type="month",
-                period_start=target,
-            )
-        elif routine.frequency == "yearly":
-            entry = _date_period_entry(
-                db,
-                routine,
-                period_type="year",
-                period_start=target,
-            )
-        elif routine.frequency == "quarterly":
-            entry = None
         else:
             entry = _date_period_entry(
                 db,
                 routine,
-                period_type="day",
+                period_type=_check_period_type(routine),
                 period_start=target,
             )
         if entry is not None:

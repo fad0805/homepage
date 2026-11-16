@@ -150,9 +150,6 @@
   cursor: pointer;
 }
 
-.bookmark-period-select--week {
-  width: 9rem;
-}
 
 .bookmark-period-label {
   min-width: 8rem;
@@ -1033,6 +1030,22 @@
     border-color: color-mix(
       in srgb,
       var(--theme-main) 48%,
+      transparent
+    );
+  }
+
+  &.is-period {
+    background: color-mix(
+      in srgb,
+      var(--theme-main) 10%,
+      transparent
+    );
+  }
+
+  &.is-hovered {
+    background: color-mix(
+      in srgb,
+      var(--theme-main) 24%,
       transparent
     );
   }

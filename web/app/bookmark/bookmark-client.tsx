@@ -172,6 +172,7 @@ function occurrenceLabel(
   }
   if (view === "today") {
     if (frequency === "monthly") return "이번 달";
+    if (frequency === "quarterly") return "이번 분기";
     if (frequency === "yearly") return "올해";
     return "오늘";
   }
@@ -224,38 +225,6 @@ function periodLabel(value: string, type: BookmarkPeriodType) {
   return `${year}년 ${month}월 ${day}일 ~ ${
     endYear !== year ? `${endYear}년 ` : ""
   }${endMonth}월 ${endDay}일`;
-}
-
-function weekOptionsForYear(year: number) {
-  const jan1 = new Date(Date.UTC(year, 0, 1));
-  const offset = (jan1.getUTCDay() + 6) % 7;
-  let monday = new Date(
-    Date.UTC(year, 0, 1 + (offset === 0 ? 0 : 7 - offset)),
-  );
-  const options: Array<{ value: string; label: string }> = [];
-  while (monday.getUTCFullYear() === year) {
-    const sunday = new Date(
-      Date.UTC(
-        monday.getUTCFullYear(),
-        monday.getUTCMonth(),
-        monday.getUTCDate() + 6,
-      ),
-    );
-    options.push({
-      value: dateKey(monday),
-      label: `${monday.getUTCMonth() + 1}/${monday.getUTCDate()} ~ ${
-        sunday.getUTCMonth() + 1
-      }/${sunday.getUTCDate()}`,
-    });
-    monday = new Date(
-      Date.UTC(
-        monday.getUTCFullYear(),
-        monday.getUTCMonth(),
-        monday.getUTCDate() + 7,
-      ),
-    );
-  }
-  return options;
 }
 
 function monthCalendarDays(monthStart: string) {
@@ -319,6 +288,9 @@ export default function BookmarkClient({ username }: { username: string }) {
   const [calendarMonth, setCalendarMonth] = useState(() =>
     startOfPeriod(initialToday, "month"),
   );
+  const [calendarHoverDate, setCalendarHoverDate] = useState<
+    string | null
+  >(null);
   const [categoryModalOpen, setCategoryModalOpen] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState("");
   const [categorySaving, setCategorySaving] = useState(false);
@@ -402,16 +374,13 @@ export default function BookmarkClient({ username }: { username: string }) {
 
   const openCalendar = () => {
     setCalendarMonth(startOfPeriod(periodStart, "month"));
+    setCalendarHoverDate(null);
     setCalendarOpen(true);
   };
 
   const selectCalendarDate = (value: string) => {
-    const today = todayDateInputValue();
-    const nextView: BookmarkView =
-      view === "today" && value !== today ? "day" : view;
     const nextType: BookmarkPeriodType =
-      nextView === "today" ? "day" : nextView;
-    setView(nextView);
+      view === "today" ? "day" : view;
     setPeriodStart(startOfPeriod(value, nextType));
     setCalendarOpen(false);
   };
@@ -431,6 +400,7 @@ export default function BookmarkClient({ username }: { username: string }) {
     view === "today" ? "day" : view;
   const unitView: BookmarkPeriodType =
     view === "today" ? "day" : view;
+  const isTodaySelected = periodStart === todayDateInputValue();
 
   const openCreateRoutine = () => {
     setRoutineModalOpen(true);
@@ -1192,6 +1162,17 @@ export default function BookmarkClient({ username }: { username: string }) {
     );
   };
 
+  const calendarRange = (value: string) => {
+    if (view === "week") {
+      const start = startOfPeriod(value, "week");
+      return {
+        start,
+        end: shiftPeriod(start, "day", 6),
+      };
+    }
+    return { start: value, end: value };
+  };
+
   const renderPeriodControls = () => {
     const date = parseDateKey(periodStart);
     const selectedYear = date.getUTCFullYear();
@@ -1212,9 +1193,6 @@ export default function BookmarkClient({ username }: { username: string }) {
       } else if (view === "quarter") {
         const month = (selectedQuarter - 1) * 3 + 1;
         setPeriodStart(`${year}-${pad2(month)}-01`);
-      } else if (view === "week") {
-        const first = weekOptionsForYear(year)[0];
-        if (first) setPeriodStart(first.value);
       }
     };
 
@@ -1297,32 +1275,15 @@ export default function BookmarkClient({ username }: { username: string }) {
       );
     }
     if (view === "week") {
-      const weeks = weekOptionsForYear(selectedYear);
       return (
-        <>
-          <select
-            className="bookmark-period-select"
-            value={selectedYear}
-            onChange={(event) => setYear(Number(event.target.value))}
-          >
-            {years.map((year) => (
-              <option value={year} key={year}>
-                {year}년
-              </option>
-            ))}
-          </select>
-          <select
-            className="bookmark-period-select bookmark-period-select--week"
-            value={periodStart}
-            onChange={(event) => setPeriodStart(event.target.value)}
-          >
-            {weeks.map((week) => (
-              <option value={week.value} key={week.value}>
-                {week.label}
-              </option>
-            ))}
-          </select>
-        </>
+        <button
+          type="button"
+          className="bookmark-period-label"
+          title="달력에서 주간 선택"
+          onClick={openCalendar}
+        >
+          {periodLabel(periodStart, "week")}
+        </button>
       );
     }
     return (
@@ -1418,12 +1379,16 @@ export default function BookmarkClient({ username }: { username: string }) {
                   <div>
                     <p className="bookmark-panel-eyebrow">
                       {view === "today"
-                        ? "오늘 수행 가능"
+                        ? isTodaySelected
+                          ? "오늘 수행 가능"
+                          : "선택일 기준"
                         : ROUTINE_SECTION_LABELS[unitView]}
                     </p>
                     <h2>
                       {view === "today"
-                        ? "오늘의 루틴"
+                        ? isTodaySelected
+                          ? "오늘의 루틴"
+                          : "선택일의 루틴"
                         : "할일 / 루틴"}
                     </h2>
                   </div>
@@ -1592,23 +1557,45 @@ export default function BookmarkClient({ username }: { username: string }) {
                 <span key={day}>{day}</span>
               ))}
             </div>
-            <div className="bookmark-calendar-grid">
-              {monthCalendarDays(calendarMonth).map((day) => (
-                <button
-                  type="button"
-                  className={`bookmark-calendar-day${
-                    day.inMonth ? "" : " is-outside"
-                  }${day.key === periodStart ? " is-selected" : ""}${
-                    day.key === todayDateInputValue()
-                      ? " is-today"
-                      : ""
-                  }`}
-                  key={day.key}
-                  onClick={() => selectCalendarDate(day.key)}
-                >
-                  {day.day}
-                </button>
-              ))}
+            <div
+              className="bookmark-calendar-grid"
+              onMouseLeave={() => setCalendarHoverDate(null)}
+            >
+              {monthCalendarDays(calendarMonth).map((day) => {
+                const selectedRange = calendarRange(periodStart);
+                const hoverRange = calendarHoverDate
+                  ? calendarRange(calendarHoverDate)
+                  : null;
+                const inSelected =
+                  day.key >= selectedRange.start &&
+                  day.key <= selectedRange.end;
+                const inHover = hoverRange
+                  ? day.key >= hoverRange.start &&
+                    day.key <= hoverRange.end
+                  : false;
+                return (
+                  <button
+                    type="button"
+                    className={`bookmark-calendar-day${
+                      day.inMonth ? "" : " is-outside"
+                    }${inSelected ? " is-period" : ""}${
+                      inHover ? " is-hovered" : ""
+                    }${day.key === periodStart ? " is-selected" : ""}${
+                      day.key === todayDateInputValue()
+                        ? " is-today"
+                        : ""
+                    }`}
+                    key={day.key}
+                    onMouseEnter={() =>
+                      setCalendarHoverDate(day.key)
+                    }
+                    onFocus={() => setCalendarHoverDate(day.key)}
+                    onClick={() => selectCalendarDate(day.key)}
+                  >
+                    {day.day}
+                  </button>
+                );
+              })}
             </div>
           </div>
         </div>
