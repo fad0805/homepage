@@ -35,6 +35,7 @@ import { PlannerChipManager } from "./planner-chip-manager";
 import { PlannerColorPanel } from "./planner-color-panel";
 import { PlannerDatePanel } from "./planner-date-panel";
 import { PlannerEventPreviewModal } from "./planner-event-preview-modal";
+import { PlannerFilterForm } from "./planner-filter-form";
 import { PlannerInactivePanel } from "./planner-inactive-panel";
 import { PlannerMonthPicker } from "./planner-month-picker";
 import { PlannerSearchPanel } from "./planner-search-panel";
@@ -1914,62 +1915,19 @@ export default function PlannerClient({ username }: { username: string }) {
 
         {error ? <p className="planner-error">{error}</p> : null}
 
-        <form className="planner-filter" onSubmit={handleSearch}>
-          <div className="planner-filter__range">
-            <label>
-              <span>시작일</span>
-              <input
-                type="date"
-                value={searchFrom}
-                required
-                onChange={(event) =>
-                  setSearchFrom(event.target.value)
-                }
-              />
-            </label>
-            <span className="planner-filter__dash">~</span>
-            <label>
-              <span>종료일</span>
-              <input
-                type="date"
-                value={searchTo}
-                required
-                onChange={(event) =>
-                  setSearchTo(event.target.value)
-                }
-              />
-            </label>
-          </div>
-          <label className="planner-filter__query">
-            <span>검색어</span>
-            <input
-              type="search"
-              value={searchQuery}
-              placeholder="일정·이력 검색"
-              aria-label="일정과 이력 검색"
-              onChange={(event) =>
-                setSearchQuery(event.target.value)
-              }
-            />
-          </label>
-          <button
-            type="submit"
-            className="planner-filter__submit"
-            disabled={loading || searching}
-          >
-            <MagnifierIcon />
-            {searching ? "검색 중" : "검색"}
-          </button>
-          {hasSearchFilter ? (
-            <button
-              type="button"
-              className="planner-filter__reset"
-              onClick={resetSearch}
-            >
-              초기화
-            </button>
-          ) : null}
-        </form>
+        <PlannerFilterForm
+          searchFrom={searchFrom}
+          searchTo={searchTo}
+          searchQuery={searchQuery}
+          loading={loading}
+          searching={searching}
+          hasSearchFilter={hasSearchFilter}
+          onFromChange={setSearchFrom}
+          onToChange={setSearchTo}
+          onQueryChange={setSearchQuery}
+          onSubmit={handleSearch}
+          onReset={resetSearch}
+        />
 
         {loading ? (
           <p className="planner-status">불러오는 중...</p>
