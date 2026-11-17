@@ -65,6 +65,13 @@ export interface PlannerColor {
   created_at: string;
 }
 
+export interface PlannerColorGroup {
+  key: string;
+  color: string | null;
+  name: string | null;
+  tasks: PlannerTask[];
+}
+
 export interface PlannerColorsResponse {
   colors: PlannerColor[];
 }

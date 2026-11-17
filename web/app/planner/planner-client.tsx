@@ -28,6 +28,7 @@ import "@/public/styles/planner.scss";
 
 import { PlannerCalendar } from "./planner-calendar";
 import { PlannerChipManager } from "./planner-chip-manager";
+import { PlannerColorPanel } from "./planner-color-panel";
 import { PlannerDatePanel } from "./planner-date-panel";
 import { PlannerEventPreviewModal } from "./planner-event-preview-modal";
 import { PlannerMonthPicker } from "./planner-month-picker";
@@ -2282,113 +2283,17 @@ export default function PlannerClient({ username }: { username: string }) {
                   )}
                 </PlannerDatePanel>
               ) : activeTab === "colors" ? (
-                <section className="planner-day-panel planner-color-panel">
-                  <div className="planner-day-panel-header">
-                    <div>
-                      <p className="planner-eyebrow">색상별</p>
-                      <h2>색상 칩</h2>
-                      <p>
-                        활성 일정 {activeTasks.length}개 · 칩{" "}
-                        {savedColors.length}개
-                      </p>
-                    </div>
-                    <div className="planner-day-panel-actions">
-                      <button
-                        type="button"
-                        className="planner-primary"
-                        onClick={openChipManager}
-                      >
-                        칩 관리
-                      </button>
-                    </div>
-                  </div>
-
-                  {colorGroups.length === 0 ? (
-                    <p className="planner-empty">
-                      색상 칩에 지정된 활성 일정이 없습니다.
-                    </p>
-                  ) : (
-                    <>
-                      <div className="planner-color-swatch-grid">
-                        {colorGroups.map((group) => {
-                          const selected =
-                            selectedColorGroups.includes(group.key);
-                          const label = colorGroupLabel(group);
-                          return (
-                            <button
-                              type="button"
-                              key={group.key}
-                              className={[
-                                "planner-color-swatch-button",
-                                selected ? "is-selected" : "",
-                                group.key === "unassigned"
-                                  ? "is-unassigned"
-                                  : "",
-                              ]
-                                .filter(Boolean)
-                                .join(" ")}
-                              style={{
-                                backgroundColor:
-                                  group.color ||
-                                  UNASSIGNED_TASK_COLOR,
-                              }}
-                              aria-label={label}
-                              aria-pressed={selected}
-                              title={label}
-                              onClick={() =>
-                                selectColorGroup(group.key)
-                              }
-                            />
-                          );
-                        })}
-                      </div>
-                      {selectedColorGroup ? (
-                        <div className="planner-color-task-panel">
-                          <div className="planner-color-task-header">
-                            <div className="planner-color-task-title">
-                              <span
-                                className="planner-color-group-swatch"
-                                style={{
-                                  backgroundColor:
-                                    selectedColorGroup.color ||
-                                    UNASSIGNED_TASK_COLOR,
-                                }}
-                              />
-                              <strong>
-                                {colorGroupLabel(selectedColorGroup)}
-                              </strong>
-                              <span className="planner-color-task-count">
-                                활성 {selectedColorGroup.tasks.length}개
-                              </span>
-                            </div>
-                            <button
-                              type="button"
-                              className="planner-text-button"
-                              onClick={() => setSelectedColorGroups([])}
-                            >
-                              선택 해제
-                            </button>
-                          </div>
-                          {selectedColorGroup.tasks.length === 0 ? (
-                            <p className="planner-empty">
-                              이 칩에 등록된 활성 일정이 없습니다.
-                            </p>
-                          ) : (
-                            <ul className="planner-task-list">
-                              {selectedColorGroup.tasks.map(
-                                renderTaskCard,
-                              )}
-                            </ul>
-                          )}
-                        </div>
-                      ) : (
-                        <p className="planner-empty">
-                          색상 칩을 선택하면 해당 일정이 표시됩니다.
-                        </p>
-                      )}
-                    </>
-                  )}
-                </section>
+                <PlannerColorPanel
+                  activeCount={activeTasks.length}
+                  chipCount={savedColors.length}
+                  colorGroups={colorGroups}
+                  selectedKeys={selectedColorGroups}
+                  selectedGroup={selectedColorGroup}
+                  onSelectGroup={selectColorGroup}
+                  onClearSelection={() => setSelectedColorGroups([])}
+                  onOpenChipManager={openChipManager}
+                  renderTaskCard={renderTaskCard}
+                />
               ) : (
                 <section className="planner-day-panel">
                   <div className="planner-day-panel-header">
