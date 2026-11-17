@@ -46,6 +46,7 @@ import { apiFetch } from "@/lib/api";
 import { todayDateInputValue } from "@/lib/datetime";
 
 import { BookmarkCalendarModal } from "./bookmark-calendar-modal";
+import { BookmarkMoodTagModal } from "./bookmark-mood-tag-modal";
 import { CloverRating } from "./clover-rating";
 import {
   SortableCategoryItem,
@@ -2501,115 +2502,22 @@ export default function BookmarkClient({ username }: { username: string }) {
       ) : null}
 
       {moodTagModalOpen ? (
-        <div
-          className="bookmark-modal-overlay"
-          role="presentation"
-          onClick={closeMoodTagModal}
-        >
-          <div
-            className="bookmark-modal bookmark-category-modal"
-            role="dialog"
-            aria-modal="true"
-            aria-label="기분 태그 관리"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <header className="bookmark-modal-header">
-              <div>
-                <p className="bookmark-panel-eyebrow">MOOD</p>
-                <h2>기분 태그</h2>
-              </div>
-              <button
-                type="button"
-                className="bookmark-text-button"
-                onClick={closeMoodTagModal}
-              >
-                닫기
-              </button>
-            </header>
-
-            {moodTagError ? (
-              <p className="bookmark-error">{moodTagError}</p>
-            ) : null}
-
-            {editingMoodTag ? (
-              <p className="bookmark-form-hint">
-                {editingMoodTag.name} 태그 수정 중
-              </p>
-            ) : null}
-            <form
-              className="bookmark-category-add"
-              onSubmit={(event) => {
-                event.preventDefault();
-                void handleAddMoodTag();
-              }}
-            >
-              <input
-                type="text"
-                value={newMoodTagName}
-                maxLength={40}
-                placeholder={
-                  editingMoodTag ? "기분 태그 이름" : "새 기분 태그"
-                }
-                onChange={(event) =>
-                  setNewMoodTagName(event.target.value)
-                }
-              />
-              <button
-                type="submit"
-                className="bookmark-primary"
-                disabled={moodTagSaving || !newMoodTagName.trim()}
-              >
-                {editingMoodTag ? "저장" : "추가"}
-              </button>
-              {editingMoodTag ? (
-                <button
-                  type="button"
-                  className="bookmark-text-button"
-                  disabled={moodTagSaving}
-                  onClick={cancelEditMoodTag}
-                >
-                  취소
-                </button>
-              ) : null}
-            </form>
-
-            {moodTags.length === 0 ? (
-              <p className="bookmark-empty-row">
-                아직 기분 태그가 없습니다.
-              </p>
-            ) : (
-              <DndContext
-                sensors={dndSensors}
-                collisionDetection={closestCenter}
-                onDragEnd={handleMoodDragEnd}
-              >
-                <SortableContext
-                  items={moodTags.map((tag) => tag.id)}
-                  strategy={verticalListSortingStrategy}
-                >
-                  <ul className="bookmark-category-list">
-                    {moodTags.map((tag) => (
-                      <SortableMoodTagItem
-                        key={tag.id}
-                        tag={tag}
-                        saving={moodTagSaving}
-                        onEdit={startEditMoodTag}
-                        onDelete={(item) =>
-                          void handleDeleteMoodTag(item)
-                        }
-                      />
-                    ))}
-                  </ul>
-                </SortableContext>
-              </DndContext>
-            )}
-            <p className="bookmark-form-hint">
-              삭제한 태그를 선택한 날짜 기록은 기분 없음으로 바뀝니다.
-            </p>
-          </div>
-        </div>
+        <BookmarkMoodTagModal
+          error={moodTagError}
+          editingTag={editingMoodTag}
+          name={newMoodTagName}
+          saving={moodTagSaving}
+          tags={moodTags}
+          sensors={dndSensors}
+          onNameChange={setNewMoodTagName}
+          onClose={closeMoodTagModal}
+          onSubmitTag={() => void handleAddMoodTag()}
+          onCancelEdit={cancelEditMoodTag}
+          onDragEnd={handleMoodDragEnd}
+          onEdit={startEditMoodTag}
+          onDelete={(tag) => void handleDeleteMoodTag(tag)}
+        />
       ) : null}
-
       {categoryModalOpen ? (
         <div
           className="bookmark-modal-overlay"
