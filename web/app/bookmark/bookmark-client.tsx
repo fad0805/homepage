@@ -715,9 +715,10 @@ export default function BookmarkClient({ username }: { username: string }) {
       <div className="bookmark-routine-groups">
         {routineGroups.map((group) => {
           const collapseKey = `kind:${group.key}`;
-          const collapsed = Boolean(
-            collapsedSections[collapseKey],
-          );
+          const collapsed =
+            collapseKey in collapsedSections
+              ? collapsedSections[collapseKey]
+              : group.key === "done";
           const panelId = `bookmark-routine-kind-${group.key}`;
 
           return (
