@@ -8,6 +8,7 @@ interface PlannerTaskCardProps {
   busy: boolean;
   onOpen: (task: PlannerTask) => void;
   onComplete: (task: PlannerTask) => void;
+  onPin: (task: PlannerTask) => void;
   onToggleNote: (index: number) => void;
 }
 
@@ -17,6 +18,7 @@ export function PlannerTaskCard({
   busy,
   onOpen,
   onComplete,
+  onPin,
   onToggleNote,
 }: PlannerTaskCardProps) {
   return (
@@ -76,6 +78,19 @@ export function PlannerTaskCard({
             </div>
           ) : null}
         </div>
+        {task.status === "inactive" ? (
+          <button
+            type="button"
+            className="planner-text-button planner-task-pin-toggle"
+            disabled={busy}
+            onClick={(event) => {
+              event.stopPropagation();
+              onPin(task);
+            }}
+          >
+            {task.pinned ? "고정 해제" : "고정"}
+          </button>
+        ) : null}
       </li>
   );
 }

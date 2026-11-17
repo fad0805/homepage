@@ -1132,6 +1132,7 @@ export default function PlannerClient({ username }: { username: string }) {
         task.status === "active" ? startEditing : openTaskDetail
       }
       onComplete={(item) => void handleComplete(item)}
+      onPin={(item) => void handlePin(item)}
       onToggleNote={(index) => void handleToggleTaskNote(task, index)}
     />
   );
