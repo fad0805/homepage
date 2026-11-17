@@ -59,15 +59,21 @@ export function PlannerTaskCard({
             </span>
           </div>
           {task.notes ? (
-            <PlannerNoteContent
-              notes={task.notes}
-              disabled={
-                task.status === "trashed" || noteSavingId !== null
-              }
-              onToggle={(index) =>
-                void onToggleNote(index)
-              }
-            />
+            <div
+              className={`planner-task-notes${
+                task.status === "active" ? " has-check" : ""
+              }`}
+            >
+              <PlannerNoteContent
+                notes={task.notes}
+                disabled={
+                  task.status === "trashed" || noteSavingId !== null
+                }
+                onToggle={(index) =>
+                  void onToggleNote(index)
+                }
+              />
+            </div>
           ) : null}
         </div>
       </li>
