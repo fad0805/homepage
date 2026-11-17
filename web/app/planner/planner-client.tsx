@@ -30,6 +30,7 @@ import { PlannerCalendar } from "./planner-calendar";
 import { PlannerDayDetail } from "./planner-day-detail";
 import { PlannerHistoryList } from "./planner-history-list";
 import { PlannerTaskCard } from "./planner-task-card";
+import { PlannerChipCreator } from "./planner-chip-creator";
 import { PlannerChipManager } from "./planner-chip-manager";
 import { PlannerColorPanel } from "./planner-color-panel";
 import { PlannerDatePanel } from "./planner-date-panel";
@@ -1849,44 +1850,19 @@ export default function PlannerClient({ username }: { username: string }) {
     selectForForm: boolean,
     showCancel = true,
   ) => (
-    <div className="planner-color-creator">
-      <input
-        type="color"
-        value={newChipColor}
-        aria-label="새 색상 칩 색상"
-        onChange={(event) => setNewChipColor(event.target.value)}
-      />
-      <span className="planner-color-value">
-        {newChipColor.toUpperCase()}
-      </span>
-      <input
-        type="text"
-        className="planner-color-name-input"
-        value={newChipName}
-        maxLength={80}
-        placeholder="칩 이름 (선택)"
-        aria-label="새 색상 칩 이름"
-        onChange={(event) => setNewChipName(event.target.value)}
-      />
-      <button
-        type="button"
-        className="planner-text-button"
-        disabled={colorSaving}
-        onClick={() => void handleCreateColor(selectForForm)}
-      >
-        {colorSaving ? "추가 중" : "칩 추가"}
-      </button>
-      {showCancel ? (
-        <button
-          type="button"
-          className="planner-text-button"
-          onClick={() => setShowChipCreator(false)}
-        >
-          취소
-        </button>
-      ) : null}
-    </div>
+    <PlannerChipCreator
+      color={newChipColor}
+      name={newChipName}
+      saving={colorSaving}
+      onColorChange={setNewChipColor}
+      onNameChange={setNewChipName}
+      onCreate={() => void handleCreateColor(selectForForm)}
+      onCancel={
+        showCancel ? () => setShowChipCreator(false) : undefined
+      }
+    />
   );
+
 
   return (
     <div id="planner-page">
