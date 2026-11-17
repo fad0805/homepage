@@ -41,7 +41,15 @@ function parseBlocks(notes: string): NoteBlock[] {
   return blocks;
 }
 
-export function BookmarkRoutineNotes({ notes }: { notes: string }) {
+export function BookmarkRoutineNotes({
+  notes,
+  disabled = false,
+  onToggle,
+}: {
+  notes: string;
+  disabled?: boolean;
+  onToggle?: (index: number) => void;
+}) {
   const blocks = parseBlocks(notes);
   return (
     <div className="bookmark-item-notes">
@@ -57,11 +65,17 @@ export function BookmarkRoutineNotes({ notes }: { notes: string }) {
                 className={item.checkbox ? "is-check" : undefined}
               >
                 {item.checkbox ? (
-                  <label className="bookmark-note-check">
+                  <label
+                    className={`bookmark-note-check${
+                      onToggle && !disabled ? " is-interactive" : ""
+                    }`}
+                    onClick={(event) => event.stopPropagation()}
+                  >
                     <input
                       type="checkbox"
                       checked={item.checked}
-                      disabled
+                      disabled={disabled || !onToggle}
+                      onChange={() => onToggle?.(item.index)}
                     />
                     <span
                       className={

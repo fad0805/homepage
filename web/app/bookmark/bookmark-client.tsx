@@ -317,6 +317,7 @@ export default function BookmarkClient({ username }: { username: string }) {
     handleRoutineDragEnd,
     setRoutineCount,
     setRoutineDone,
+    toggleRoutineNote,
   } = useBookmarkRoutines({
     routines,
     unitView,
@@ -539,7 +540,13 @@ export default function BookmarkClient({ username }: { username: string }) {
             ) : null}
 
             {routine.notes ? (
-              <BookmarkRoutineNotes notes={routine.notes} />
+              <BookmarkRoutineNotes
+                notes={routine.notes}
+                disabled={isStopped}
+                onToggle={(index) =>
+                  void toggleRoutineNote(routine, index)
+                }
+              />
             ) : null}
           </div>
         </SortableRoutineItem>

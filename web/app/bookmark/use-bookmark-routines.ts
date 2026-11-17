@@ -422,6 +422,54 @@ export function useBookmarkRoutines({
     }
   };
 
+  const toggleRoutineNote = async (
+    routine: BookmarkRoutine,
+    noteIndex: number,
+  ) => {
+    const lines = (routine.notes ?? "").split("\n");
+    const line = lines[noteIndex];
+    if (line === undefined) return;
+    const match = line.match(
+      /^(\s*(?:[-*]\s+)?\[)([ xX]?)(\]\s*)(.*)$/,
+    );
+    if (!match) return;
+    const checked = match[2].toLowerCase() === "x";
+    lines[noteIndex] = `${match[1]}${checked ? " " : "x"}${
+      match[3]
+    }${match[4]}`;
+    const notes = lines.join("\n");
+
+    onError(null);
+    setData((previous) =>
+      previous
+        ? {
+            ...previous,
+            routines: previous.routines.map((current) =>
+              current.id === routine.id
+                ? { ...current, notes }
+                : current,
+            ),
+          }
+        : previous,
+    );
+    try {
+      await apiFetch<BookmarkRoutine>(
+        `/api/bookmark/routines/${routine.id}`,
+        {
+          method: "PATCH",
+          body: JSON.stringify({ notes }),
+        },
+      );
+    } catch (reason) {
+      onError(
+        reason instanceof Error
+          ? reason.message
+          : "루틴 메모를 변경하지 못했습니다.",
+      );
+      await loadPeriod();
+    }
+  };
+
   const setRoutineDone = async (
     routine: BookmarkRoutine,
     done: boolean,
@@ -575,5 +623,6 @@ export function useBookmarkRoutines({
     handleRoutineDragEnd,
     setRoutineCount,
     setRoutineDone,
+    toggleRoutineNote,
   };
 }
