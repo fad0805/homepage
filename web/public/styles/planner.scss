@@ -419,7 +419,7 @@
     border-color 0.16s ease,
     opacity 0.16s ease;
 
-  &.completion-level-1:not(.is-selected):not(.is-drag-range):not(.is-drag-edge) {
+  &.completion-level-1:not(.is-drag-range):not(.is-drag-edge) {
     background: color-mix(
       in srgb,
       var(--theme-main) 20%,
@@ -427,7 +427,7 @@
     );
   }
 
-  &.completion-level-2:not(.is-selected):not(.is-drag-range):not(.is-drag-edge) {
+  &.completion-level-2:not(.is-drag-range):not(.is-drag-edge) {
     background: color-mix(
       in srgb,
       var(--theme-main) 45%,
@@ -435,7 +435,7 @@
     );
   }
 
-  &.completion-level-3:not(.is-selected):not(.is-drag-range):not(.is-drag-edge) {
+  &.completion-level-3:not(.is-drag-range):not(.is-drag-edge) {
     background: color-mix(
       in srgb,
       var(--theme-main) 70%,
@@ -443,7 +443,7 @@
     );
   }
 
-  &.completion-level-4:not(.is-selected):not(.is-drag-range):not(.is-drag-edge) {
+  &.completion-level-4:not(.is-drag-range):not(.is-drag-edge) {
     background: color-mix(
       in srgb,
       var(--theme-main) 35%,
@@ -494,19 +494,19 @@
   }
 }
 
-[data-theme='dark'] .planner-calendar-day.completion-level-1:not(.is-selected):not(.is-drag-range):not(.is-drag-edge) {
+[data-theme='dark'] .planner-calendar-day.completion-level-1:not(.is-drag-range):not(.is-drag-edge) {
   background: color-mix(in srgb, #8fd39a 14%, var(--input-background));
 }
 
-[data-theme='dark'] .planner-calendar-day.completion-level-2:not(.is-selected):not(.is-drag-range):not(.is-drag-edge) {
+[data-theme='dark'] .planner-calendar-day.completion-level-2:not(.is-drag-range):not(.is-drag-edge) {
   background: color-mix(in srgb, #8fd39a 30%, var(--input-background));
 }
 
-[data-theme='dark'] .planner-calendar-day.completion-level-3:not(.is-selected):not(.is-drag-range):not(.is-drag-edge) {
+[data-theme='dark'] .planner-calendar-day.completion-level-3:not(.is-drag-range):not(.is-drag-edge) {
   background: color-mix(in srgb, #8fd39a 48%, var(--input-background));
 }
 
-[data-theme='dark'] .planner-calendar-day.completion-level-4:not(.is-selected):not(.is-drag-range):not(.is-drag-edge) {
+[data-theme='dark'] .planner-calendar-day.completion-level-4:not(.is-drag-range):not(.is-drag-edge) {
   background: color-mix(in srgb, #8fd39a 68%, var(--input-background));
 }
 
