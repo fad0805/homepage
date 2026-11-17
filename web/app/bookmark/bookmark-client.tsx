@@ -135,9 +135,6 @@ export default function BookmarkClient({ username }: { username: string }) {
     setAnchorDate,
   });
   const [statsRange, setStatsRange] = useState<StatsRange>("month");
-  const [expandedDoneSections, setExpandedDoneSections] = useState<
-    Set<string>
-  >(() => new Set());
 
   const dndSensors = useSensors(
     useSensor(PointerSensor, {
@@ -427,18 +424,6 @@ export default function BookmarkClient({ username }: { username: string }) {
     );
   };
 
-  const toggleDoneSection = (key: string) => {
-    setExpandedDoneSections((previous) => {
-      const next = new Set(previous);
-      if (next.has(key)) {
-        next.delete(key);
-      } else {
-        next.add(key);
-      }
-      return next;
-    });
-  };
-
   const renderRoutines = () => {
     if (routines.length === 0) {
       return (
@@ -459,8 +444,7 @@ export default function BookmarkClient({ username }: { username: string }) {
       key: string;
       name: string;
       categoryId: number | null;
-      pending: BookmarkRoutine[];
-      done: BookmarkRoutine[];
+      items: BookmarkRoutine[];
     };
     const buildCategorySection = (
       key: string,
@@ -468,17 +452,12 @@ export default function BookmarkClient({ username }: { username: string }) {
       categoryId: number | null,
       items: BookmarkRoutine[],
     ): RoutineSection | null => {
-      const pending = items.filter(
-        (routine) => !isRoutineDone(routine),
-      );
-      const done = items.filter(isRoutineDone);
-      if (pending.length === 0 && done.length === 0) return null;
+      if (items.length === 0) return null;
       return {
         key,
         name,
         categoryId,
-        pending,
-        done,
+        items,
       };
     };
 
@@ -517,37 +496,39 @@ export default function BookmarkClient({ username }: { username: string }) {
       return sections;
     };
 
-    const countRoutines = routines.filter(isCountRoutine);
-    const dateRoutines = routines.filter(
+    const pendingRoutines = routines.filter(
+      (routine) => !isRoutineDone(routine),
+    );
+    const doneRoutines = routines.filter(isRoutineDone);
+    const dateRoutines = pendingRoutines.filter(
       (routine) => !isCountRoutine(routine),
     );
-    const showKindSections =
-      periodType === "day" &&
-      countRoutines.length > 0 &&
-      dateRoutines.length > 0;
-    const kindSections = showKindSections
-      ? [
-          {
-            key: "date",
-            label: `${MODE_LABELS.date} 루틴`,
-            routines: dateRoutines,
-          },
-          {
-            key: "count",
-            label: `${MODE_LABELS.count} 루틴`,
-            routines: countRoutines,
-          },
-        ].map((kind) => ({
-          ...kind,
-          sections: buildCategorySections(
-            kind.routines,
-            `${kind.key}:`,
-          ),
-        }))
-      : [];
-    const sections = showKindSections
-      ? []
-      : buildCategorySections(routines);
+    const countRoutines = pendingRoutines.filter(isCountRoutine);
+    const routineGroups = [
+      {
+        key: "date",
+        label: `${MODE_LABELS.date} 루틴`,
+        items: dateRoutines,
+      },
+      {
+        key: "count",
+        label: `${MODE_LABELS.count} 루틴`,
+        items: countRoutines,
+      },
+      {
+        key: "done",
+        label: "완료",
+        items: doneRoutines,
+      },
+    ]
+      .map((group) => ({
+        ...group,
+        sections: buildCategorySections(
+          group.items,
+          `${group.key}:`,
+        ),
+      }))
+      .filter((group) => group.sections.length > 0);
 
     const isSectionCollapsed = (section: RoutineSection) =>
       Boolean(collapsedSections[section.key]);
@@ -693,11 +674,7 @@ export default function BookmarkClient({ username }: { username: string }) {
 
     const renderCategorySection = (section: RoutineSection) => {
       const collapsed = isSectionCollapsed(section);
-      const total = section.pending.length + section.done.length;
       const panelId = `bookmark-routine-section-${section.key}`;
-      const doneKey = `${periodType}:${section.key}:done`;
-      const doneExpanded = expandedDoneSections.has(doneKey);
-      const donePanelId = `${panelId}-done`;
 
       return (
         <section
@@ -724,46 +701,11 @@ export default function BookmarkClient({ username }: { username: string }) {
                 <span>{section.name}</span>
               </button>
             </h3>
-            <span>{total}</span>
+            <span>{section.items.length}</span>
           </header>
 
           <div id={panelId} hidden={collapsed}>
-            {section.pending.length > 0
-              ? renderRoutineList(
-                  `${section.key}-pending`,
-                  section.pending,
-                )
-              : null}
-            {section.done.length > 0 ? (
-              <div className="bookmark-routine-group is-done-group">
-                <header className="bookmark-routine-group-header">
-                  <h3>
-                    <button
-                      type="button"
-                      className="bookmark-routine-group-toggle"
-                      aria-expanded={doneExpanded}
-                      aria-controls={donePanelId}
-                      onClick={() => toggleDoneSection(doneKey)}
-                    >
-                      <span
-                        className="bookmark-category-group-arrow"
-                        aria-hidden="true"
-                      >
-                        {doneExpanded ? "▾" : "▸"}
-                      </span>
-                      완료
-                    </button>
-                  </h3>
-                  <span>{section.done.length}</span>
-                </header>
-                <div id={donePanelId} hidden={!doneExpanded}>
-                  {renderRoutineList(
-                    `${section.key}-done`,
-                    section.done,
-                  )}
-                </div>
-              </div>
-            ) : null}
+            {renderRoutineList(`${section.key}-list`, section.items)}
           </div>
         </section>
       );
@@ -771,55 +713,50 @@ export default function BookmarkClient({ username }: { username: string }) {
 
     return (
       <div className="bookmark-routine-groups">
-        {showKindSections
-          ? kindSections.map((kind) => {
-              const collapseKey = `kind:${kind.key}`;
-              const collapsed = Boolean(
-                collapsedSections[collapseKey],
-              );
-              const panelId = `bookmark-routine-kind-${kind.key}`;
+        {routineGroups.map((group) => {
+          const collapseKey = `kind:${group.key}`;
+          const collapsed = Boolean(
+            collapsedSections[collapseKey],
+          );
+          const panelId = `bookmark-routine-kind-${group.key}`;
 
-              return (
-                <section
-                  className={`bookmark-routine-kind-group${
-                    collapsed ? " is-collapsed" : ""
-                  }`}
-                  key={kind.key}
-                >
-                  <header className="bookmark-routine-kind-header">
-                    <h3>
-                      <button
-                        type="button"
-                        className="bookmark-routine-kind-toggle"
-                        aria-expanded={!collapsed}
-                        aria-controls={panelId}
-                        onClick={() =>
-                          setSectionCollapsed(
-                            collapseKey,
-                            !collapsed,
-                          )
-                        }
-                      >
-                        <span
-                          className="bookmark-category-group-arrow"
-                          aria-hidden="true"
-                        >
-                          {collapsed ? "▸" : "▾"}
-                        </span>
-                        <span>{kind.label}</span>
-                      </button>
-                    </h3>
-                    <span>{kind.routines.length}</span>
-                  </header>
-                  <div id={panelId} hidden={collapsed}>
-                    <div className="bookmark-routine-kind-body">
-                      {kind.sections.map(renderCategorySection)}
-                    </div>
-                  </div>
-                </section>
-              );
-            })
-          : sections.map(renderCategorySection)}
+          return (
+            <section
+              className={`bookmark-routine-kind-group${
+                collapsed ? " is-collapsed" : ""
+              }`}
+              key={group.key}
+            >
+              <header className="bookmark-routine-kind-header">
+                <h3>
+                  <button
+                    type="button"
+                    className="bookmark-routine-kind-toggle"
+                    aria-expanded={!collapsed}
+                    aria-controls={panelId}
+                    onClick={() =>
+                      setSectionCollapsed(collapseKey, !collapsed)
+                    }
+                  >
+                    <span
+                      className="bookmark-category-group-arrow"
+                      aria-hidden="true"
+                    >
+                      {collapsed ? "▸" : "▾"}
+                    </span>
+                    <span>{group.label}</span>
+                  </button>
+                </h3>
+                <span>{group.items.length}</span>
+              </header>
+              <div id={panelId} hidden={collapsed}>
+                <div className="bookmark-routine-kind-body">
+                  {group.sections.map(renderCategorySection)}
+                </div>
+              </div>
+            </section>
+          );
+        })}
       </div>
     );
   };
