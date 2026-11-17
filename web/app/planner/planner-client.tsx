@@ -30,6 +30,7 @@ import { PlannerCalendar } from "./planner-calendar";
 import { PlannerDayDetail } from "./planner-day-detail";
 import { PlannerHistoryList } from "./planner-history-list";
 import { PlannerTabs } from "./planner-tabs";
+import { usePlannerSearch } from "./use-planner-search";
 import { PlannerTaskCard } from "./planner-task-card";
 import { PlannerChipCreator } from "./planner-chip-creator";
 import { PlannerChipManager } from "./planner-chip-manager";
@@ -101,7 +102,6 @@ import {
 
 export default function PlannerClient({ username }: { username: string }) {
   const initialToday = todayDateInputValue();
-  const initialSearchBounds = monthBounds(initialToday.slice(0, 7));
   const [today, setToday] = useState(initialToday);
   const [tasks, setTasks] = useState<PlannerTask[]>([]);
   const [events, setEvents] = useState<PlannerEvent[]>([]);
@@ -137,13 +137,6 @@ export default function PlannerClient({ username }: { username: string }) {
   const dragCurrentRef = useRef<string | null>(null);
   const [viewMonth, setViewMonth] = useState(initialToday.slice(0, 7));
   const [activeTab, setActiveTab] = useState<PlannerTab>("active");
-  const [searchFrom, setSearchFrom] = useState(initialSearchBounds.start);
-  const [searchTo, setSearchTo] = useState(initialSearchBounds.end);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [searchOpen, setSearchOpen] = useState(false);
-  const [searching, setSearching] = useState(false);
-  const [searchResults, setSearchResults] =
-    useState<PlannerSearchResults | null>(null);
   const [form, setForm] = useState<TaskFormState>(() => emptyForm(initialToday));
   const [editingId, setEditingId] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
@@ -181,6 +174,22 @@ export default function PlannerClient({ username }: { username: string }) {
     string | null
   >(null);
   const [error, setError] = useState<string | null>(null);
+  const {
+    searchFrom,
+    setSearchFrom,
+    searchTo,
+    setSearchTo,
+    searchQuery,
+    setSearchQuery,
+    searchOpen,
+    searching,
+    searchResults,
+    hasSearchFilter,
+    handleSearch,
+    closeSearchResults,
+    updateSearchTaskNotes,
+    resetSearch,
+  } = usePlannerSearch({ viewMonth, onError: setError });
   const [recordCompleted, setRecordCompleted] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState<PlannerEvent | null>(null);
   const [selectedTask, setSelectedTask] = useState<PlannerTask | null>(null);
@@ -681,12 +690,6 @@ export default function PlannerClient({ username }: { username: string }) {
         (color) => color.id === selectedTask.color_id,
       ) ?? null)
     : null;
-  const defaultSearchBounds = monthBounds(viewMonth);
-  const hasSearchFilter =
-    searchOpen ||
-    searchQuery.trim() !== "" ||
-    searchFrom !== defaultSearchBounds.start ||
-    searchTo !== defaultSearchBounds.end;
   const dragBounds = dragRange
     ? orderedRange(dragRange.start, dragRange.end)
     : null;
@@ -723,77 +726,8 @@ export default function PlannerClient({ username }: { username: string }) {
   };
 
   const selectTab = (tab: PlannerTab) => {
-    setSearchOpen(false);
-    setSearchResults(null);
-    setSearching(false);
+    closeSearchResults();
     setActiveTab(tab);
-  };
-
-  const closeSearchResults = () => {
-    setSearchOpen(false);
-    setSearchResults(null);
-    setSearching(false);
-  };
-
-  const resetSearch = () => {
-    const bounds = monthBounds(viewMonth);
-    setSearchFrom(bounds.start);
-    setSearchTo(bounds.end);
-    setSearchQuery("");
-    setSearchOpen(false);
-    setSearchResults(null);
-    setSearching(false);
-    setError(null);
-  };
-
-  const handleSearch = async (
-    event: FormEvent<HTMLFormElement>,
-  ) => {
-    event.preventDefault();
-    if (searching) return;
-    if (!searchFrom || !searchTo) {
-      setError("검색할 날짜 범위를 입력해주세요.");
-      return;
-    }
-    if (searchFrom > searchTo) {
-      setError("검색 종료일은 시작일보다 빠를 수 없습니다.");
-      return;
-    }
-    const fromTime = Date.parse(`${searchFrom}T00:00:00Z`);
-    const toTime = Date.parse(`${searchTo}T00:00:00Z`);
-    if (Number.isNaN(fromTime) || Number.isNaN(toTime)) {
-      setError("검색 날짜를 확인해주세요.");
-      return;
-    }
-    if (Math.round((toTime - fromTime) / 86_400_000) > 366) {
-      setError("한 번에 1년 범위까지만 검색할 수 있습니다.");
-      return;
-    }
-
-    const trimmedQuery = searchQuery.trim();
-    const queryString = trimmedQuery
-      ? `&q=${encodeURIComponent(trimmedQuery)}`
-      : "";
-    setSearchOpen(true);
-    setSearchResults(null);
-    setSearching(true);
-    setError(null);
-    try {
-      const data = await apiFetch<PlannerSearchResults>(
-        `/api/planner/search?start=${searchFrom}&end=${searchTo}${queryString}`,
-        { cache: "no-store" },
-      );
-      setSearchResults(data);
-    } catch (reason) {
-      setError(
-        reason instanceof Error
-          ? reason.message
-          : "검색하지 못했습니다.",
-      );
-      setSearchOpen(false);
-    } finally {
-      setSearching(false);
-    }
   };
 
   const openMonthPicker = () => {
@@ -986,8 +920,7 @@ export default function PlannerClient({ username }: { username: string }) {
 
   const refresh = async () => {
     if (searchOpen) {
-      setSearchOpen(false);
-      setSearchResults(null);
+      closeSearchResults();
     }
     await Promise.all([
       loadTasks(),
@@ -1005,9 +938,7 @@ export default function PlannerClient({ username }: { username: string }) {
 
   const selectDate = (date: string) => {
     setSelectedDate(date);
-    setSearchOpen(false);
-    setSearchResults(null);
-    setSearching(false);
+    closeSearchResults();
     const monthKey = date.slice(0, 7);
     if (monthKey !== viewMonth) {
       setViewMonth(monthKey);
@@ -1482,16 +1413,7 @@ export default function PlannerClient({ username }: { username: string }) {
     setSelectedTask((previous) =>
       previous?.id === taskId ? { ...previous, notes } : previous,
     );
-    setSearchResults((previous) =>
-      previous
-        ? {
-            ...previous,
-            tasks: previous.tasks.map((task) =>
-              task.id === taskId ? { ...task, notes } : task,
-            ),
-          }
-        : previous,
-    );
+    updateSearchTaskNotes(taskId, notes);
   };
 
   const handleToggleTaskNote = async (
