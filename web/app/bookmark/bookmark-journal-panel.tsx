@@ -33,7 +33,7 @@ function formatAverage(value: number | null) {
 function countText(node: BookmarkJournalNode) {
   return (
     `목표 ${node.goal_count} · 후기 ${node.review_count} · ` +
-    `평점 ${formatAverage(node.average_rating)}`
+    `평균 평점 ${formatAverage(node.average_rating)}`
   );
 }
 
@@ -103,6 +103,13 @@ function levelLabel(
   level: JournalLevel,
   node: BookmarkJournalNode | null,
 ) {
+  if (level === "week") {
+    const date = parseDateKey(value);
+    const week = Math.floor((date.getUTCDate() - 1) / 7) + 1;
+    return `${date.getUTCFullYear()}년 ${
+      date.getUTCMonth() + 1
+    }월 ${week}째주`;
+  }
   if (node) return node.label;
   if (level === "decade") {
     return `${parseDateKey(value).getUTCFullYear()}년대`;
@@ -265,10 +272,13 @@ export function BookmarkJournalPanel() {
         : null;
     return (
       <div className="bookmark-journal-decade-summary">
-        <p>
-          목표 {goalCount} · 후기 {reviewCount} · 평점{" "}
-          {formatAverage(average)}
-        </p>
+        <div className="bookmark-journal-summary">
+          <p>
+            목표 {goalCount} · 후기 {reviewCount} · 평균 평점{" "}
+            {formatAverage(average)}
+          </p>
+          <span className="bookmark-journal-range">{title}</span>
+        </div>
       </div>
     );
   };
@@ -322,9 +332,12 @@ export function BookmarkJournalPanel() {
     }
     return (
       <>
-        <p className="bookmark-journal-hint">
-          {countText(currentNode)}
-        </p>
+        <div className="bookmark-journal-summary">
+          <p className="bookmark-journal-hint">
+            {countText(currentNode)}
+          </p>
+          <span className="bookmark-journal-range">{title}</span>
+        </div>
         {renderRecord(currentNode)}
         {level === "week" ? renderWeekDays(currentNode) : null}
       </>
@@ -372,10 +385,6 @@ export function BookmarkJournalPanel() {
           ) : null}
         </div>
       </div>
-
-      <p className="bookmark-journal-hint">
-        주간 기록에서 시작해 월·분기·연·10년 단위로 올라갑니다.
-      </p>
 
       <div className="bookmark-journal-breadcrumb">
         {breadcrumb.map((item, index) => (
