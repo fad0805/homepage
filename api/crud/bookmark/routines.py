@@ -276,6 +276,11 @@ def set_routine_check(
         db.add(check)
     check.count = payload.count
     check.done = payload.count > 0
+    if (
+        payload.manual_done is not None
+        and routine.tracking_mode == "count"
+    ):
+        check.manual_done = payload.manual_done
     check.completed_at = _utc_naive_now() if payload.count > 0 else None
     _upsert_routine_monthly_stat(
         db,
@@ -289,4 +294,5 @@ def set_routine_check(
         period_type=payload.period_type,
         period_start=payload.period_start,
         completed_count=payload.count,
+        manual_done=bool(check.manual_done),
     )

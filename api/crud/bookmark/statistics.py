@@ -5,6 +5,35 @@ from .categories import list_routine_categories
 from .schedule import _quarter_matches, _routine_monthly_due_date
 
 
+def _period_check_completed(
+    db: Session,
+    routine: BookmarkRoutine,
+    period_type: str,
+    period_start: date,
+) -> int:
+    if routine.tracking_mode != "count":
+        return _period_check_count(db, routine, period_type, period_start)
+    row = (
+        db.query(
+            BookmarkRoutineCheck.count,
+            BookmarkRoutineCheck.manual_done,
+        )
+        .filter(
+            BookmarkRoutineCheck.user_id == routine.user_id,
+            BookmarkRoutineCheck.routine_id == routine.id,
+            BookmarkRoutineCheck.period_type == period_type,
+            BookmarkRoutineCheck.period_start == period_start,
+        )
+        .first()
+    )
+    if row is None:
+        return 0
+    count, manual_done = row
+    if manual_done:
+        return max(1, int(routine.target_count or 1))
+    return int(count or 0)
+
+
 def _routine_month_values(
     db: Session,
     routine: BookmarkRoutine,
@@ -59,9 +88,11 @@ def _routine_month_values(
             expected = target * len(expected_weeks)
             if expected <= 0:
                 return None
-            completed = (
+            rows = (
                 db.query(
-                    func.coalesce(func.sum(BookmarkRoutineCheck.count), 0)
+                    BookmarkRoutineCheck.period_start,
+                    BookmarkRoutineCheck.count,
+                    BookmarkRoutineCheck.manual_done,
                 )
                 .filter(
                     BookmarkRoutineCheck.user_id == routine.user_id,
@@ -69,9 +100,13 @@ def _routine_month_values(
                     BookmarkRoutineCheck.period_type == "week",
                     BookmarkRoutineCheck.period_start.in_(expected_weeks),
                 )
-                .scalar()
+                .all()
             )
-            return int(completed or 0), expected
+            completed = sum(
+                target if manual_done else int(count or 0)
+                for _period_start, count, manual_done in rows
+            )
+            return completed, expected
         weekdays = set(_routine_weekdays(routine))
         if not weekdays:
             return None
@@ -99,7 +134,7 @@ def _routine_month_values(
             ):
                 return None
             return _period_check_count(db, routine, "month", first), 1
-        return _period_check_count(db, routine, "month", first), target
+        return _period_check_completed(db, routine, "month", first), target
 
     if routine.frequency == "quarterly":
         if first.month not in QUARTER_START_MONTHS:
@@ -107,12 +142,14 @@ def _routine_month_values(
         if not _quarter_matches(routine, first):
             return None
         quarter = date(first.year, first.month, 1)
-        completed = _period_check_count(db, routine, "quarter", quarter)
+        completed = _period_check_completed(
+            db, routine, "quarter", quarter
+        )
         return completed, 1 if routine.tracking_mode == "date" else target
 
     if first.month != 1:
         return None
-    completed = _period_check_count(db, routine, "year", first)
+    completed = _period_check_completed(db, routine, "year", first)
     return completed, 1 if routine.tracking_mode == "date" else target
 
 
@@ -220,7 +257,7 @@ def _weekly_stat_buckets(
             )
             continue
         if routine.tracking_mode == "count":
-            completed = _period_check_count(
+            completed = _period_check_completed(
                 db,
                 routine,
                 "week",

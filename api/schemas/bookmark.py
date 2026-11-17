@@ -143,6 +143,7 @@ class BookmarkRoutinePeriodRead(BookmarkRoutineRead):
     period_type: BookmarkPeriodType
     period_start: date
     completed_count: int = 0
+    manual_done: bool = False
     occurrences: list[BookmarkRoutineOccurrenceRead] = Field(
         default_factory=list
     )
@@ -153,6 +154,7 @@ class BookmarkRoutineCheckUpdate(BaseModel):
     period_type: BookmarkPeriodType
     period_start: date
     count: int = Field(ge=0, le=1000)
+    manual_done: bool | None = None
 
 
 class BookmarkRoutineHistoryDayRead(BaseModel):

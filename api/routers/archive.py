@@ -711,6 +711,7 @@ def _bookmark_data(
             "period_type": check.period_type,
             "period_start": _iso(check.period_start),
             "done": bool(check.done),
+            "manual_done": bool(check.manual_done),
             "count": check.count,
             "completed_at": _iso(check.completed_at),
             "created_at": _iso(check.created_at),

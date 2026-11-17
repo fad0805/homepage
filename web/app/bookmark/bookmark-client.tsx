@@ -329,7 +329,10 @@ export default function BookmarkClient({ username }: { username: string }) {
     const isCount =
       routine.tracking_mode === "count" && !isDaily;
     if (isCount || routine.frequency === "weekly") {
-      return routine.completed_count >= routine.target_count;
+      return (
+        routine.manual_done ||
+        routine.completed_count >= routine.target_count
+      );
     }
     return (
       routine.occurrences.length > 0 &&

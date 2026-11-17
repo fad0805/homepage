@@ -45,6 +45,7 @@ export interface BookmarkRoutine {
   period_type: BookmarkPeriodType;
   period_start: string;
   completed_count: number;
+  manual_done: boolean;
   occurrences: BookmarkRoutineOccurrence[];
   next_date?: string | null;
 }

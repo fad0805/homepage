@@ -184,6 +184,12 @@ class BookmarkRoutineCheck(Base):
         default=False,
         server_default="false",
     )
+    manual_done = Column(
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default="false",
+    )
     count = Column(
         Integer,
         nullable=False,

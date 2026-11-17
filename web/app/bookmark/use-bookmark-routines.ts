@@ -429,10 +429,40 @@ export function useBookmarkRoutines({
     const isDaily = routine.frequency === "daily";
     const isCount = routine.tracking_mode === "count" && !isDaily;
     if (isCount) {
-      await setRoutineCount(
-        routine,
-        done ? routine.target_count : 0,
+      onError(null);
+      setData((previous) =>
+        previous
+          ? {
+              ...previous,
+              routines: previous.routines.map((current) =>
+                current.id === routine.id
+                  ? { ...current, manual_done: done }
+                  : current,
+              ),
+            }
+          : previous,
       );
+      try {
+        await apiFetch<BookmarkRoutine>(
+          `/api/bookmark/routines/${routine.id}/check`,
+          {
+            method: "PUT",
+            body: JSON.stringify({
+              period_type: routine.period_type,
+              period_start: routine.period_start,
+              count: routine.completed_count,
+              manual_done: done,
+            }),
+          },
+        );
+      } catch (reason) {
+        onError(
+          reason instanceof Error
+            ? reason.message
+            : "루틴 체크 상태를 변경하지 못했습니다.",
+        );
+        await loadPeriod();
+      }
       return;
     }
 

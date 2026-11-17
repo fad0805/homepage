@@ -198,6 +198,76 @@ class BookmarkStatisticsTests(
         self.assertEqual(stat.completed_count, 2)
         self.assertEqual(stat.expected_count, 15)
 
+    def test_weekly_count_manual_done_keeps_execution_count(self) -> None:
+        routine = self.make_routine(
+            frequency="weekly",
+            tracking_mode="count",
+            target_count=3,
+            start_date=date(2026, 3, 4),
+        )
+        set_routine_check(
+            self.db,
+            routine.id,
+            BookmarkRoutineCheckUpdate(
+                period_type="week",
+                period_start=date(2026, 3, 2),
+                count=1,
+            ),
+            routine.user_id,
+        )
+
+        checked = set_routine_check(
+            self.db,
+            routine.id,
+            BookmarkRoutineCheckUpdate(
+                period_type="week",
+                period_start=date(2026, 3, 2),
+                count=1,
+                manual_done=True,
+            ),
+            routine.user_id,
+        )
+        self.assertEqual(checked["completed_count"], 1)
+        self.assertTrue(checked["manual_done"])
+        self.assertEqual(
+            _routine_month_values(self.db, routine, date(2026, 3, 1)),
+            (3, 15),
+        )
+
+        with patch(
+            "crud.bookmark.statistics._kst_today",
+            return_value=date(2026, 3, 17),
+        ):
+            stats = get_statistics(self.db, routine.user_id)
+        entry = next(
+            item for item in stats["routines"] if item["id"] == routine.id
+        )
+        bucket = next(
+            item
+            for item in entry["buckets"]
+            if item["period_start"] == date(2026, 3, 2)
+        )
+        self.assertEqual(bucket["completed_count"], 3)
+        self.assertEqual(bucket["expected_count"], 3)
+
+        unchecked = set_routine_check(
+            self.db,
+            routine.id,
+            BookmarkRoutineCheckUpdate(
+                period_type="week",
+                period_start=date(2026, 3, 2),
+                count=1,
+                manual_done=False,
+            ),
+            routine.user_id,
+        )
+        self.assertEqual(unchecked["completed_count"], 1)
+        self.assertFalse(unchecked["manual_done"])
+        self.assertEqual(
+            _routine_month_values(self.db, routine, date(2026, 3, 1)),
+            (1, 15),
+        )
+
     def test_weekly_date_started_midweek_keeps_first_partial_week(
         self,
     ) -> None:

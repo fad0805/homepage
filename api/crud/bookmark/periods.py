@@ -131,17 +131,27 @@ def _count_period_entry(
     period_type: str,
     period_start: date,
 ) -> dict[str, Any]:
-    completed = _period_check_count(
-        db,
-        routine,
-        period_type,
-        period_start,
+    check = (
+        db.query(
+            BookmarkRoutineCheck.count,
+            BookmarkRoutineCheck.manual_done,
+        )
+        .filter(
+            BookmarkRoutineCheck.user_id == routine.user_id,
+            BookmarkRoutineCheck.routine_id == routine.id,
+            BookmarkRoutineCheck.period_type == period_type,
+            BookmarkRoutineCheck.period_start == period_start,
+        )
+        .first()
     )
+    completed = int(check[0] or 0) if check else 0
+    manual_done = bool(check[1]) if check else False
     return _routine_period_dict(
         routine,
         period_type=period_type,
         period_start=period_start,
         completed_count=completed,
+        manual_done=manual_done,
     )
 
 

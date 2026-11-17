@@ -294,6 +294,7 @@ def _routine_period_dict(
     period_type: str,
     period_start: date,
     completed_count: int,
+    manual_done: bool = False,
     occurrences: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     return {
@@ -319,6 +320,7 @@ def _routine_period_dict(
         "period_type": period_type,
         "period_start": period_start,
         "completed_count": completed_count,
+        "manual_done": manual_done,
         "occurrences": occurrences
         if occurrences is not None
         else [{"date": period_start, "done": completed_count > 0}],
