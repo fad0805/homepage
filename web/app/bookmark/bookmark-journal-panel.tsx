@@ -273,6 +273,29 @@ export function BookmarkJournalPanel() {
     );
   };
 
+  const renderWeekDays = (node: BookmarkJournalNode) => (
+    <div className="bookmark-journal-section">
+      <h3>일간 기록</h3>
+      {node.children.length === 0 ? (
+        <p className="bookmark-empty-row">
+          이 주에 기록된 일간 회고가 없습니다.
+        </p>
+      ) : (
+        <div className="bookmark-journal-record-list">
+          {node.children.map((day) => (
+            <article
+              className="bookmark-journal-day"
+              key={day.period_start}
+            >
+              <strong>{day.label}</strong>
+              {renderRecord(day)}
+            </article>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+
   const renderContent = () => {
     if (loading) {
       return <p className="bookmark-status">회고를 불러오는 중...</p>;
@@ -303,6 +326,7 @@ export function BookmarkJournalPanel() {
           {countText(currentNode)}
         </p>
         {renderRecord(currentNode)}
+        {level === "week" ? renderWeekDays(currentNode) : null}
       </>
     );
   };
