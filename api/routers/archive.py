@@ -25,12 +25,22 @@ from zoneinfo import ZoneInfo
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import FileResponse
 from sqlalchemy import and_, func
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from core.archive_jobs import ArchiveJobBusy, ArchiveJobManager
 from core.config import ARCHIVE_DIR, ARCHIVE_THROTTLE_SECONDS
 from core.uploads import get_upload_source, open_uploaded_file
 from db.session import SessionLocal, get_db
+from models.bookmark import (
+    BookmarkGoal,
+    BookmarkMoodTag,
+    BookmarkRating,
+    BookmarkReview,
+    BookmarkRoutine,
+    BookmarkRoutineCategory,
+    BookmarkRoutineCheck,
+    BookmarkRoutineMonthlyStat,
+)
 from models.books import Book, BookCategory, Chapter
 from models.characters import Character, CharacterRelationship, Doll, Location
 from models.index_page import IndexPage
@@ -64,6 +74,7 @@ DATA_CHARACTERS = "data/characters.json"
 DATA_LINKS = "data/links.json"
 DATA_PROFILE = "data/profile.json"
 DATA_MEMOS = "data/memos.json"
+DATA_BOOKMARK = "data/bookmark.json"
 DATA_PLANNER_TASKS = "data/planner/tasks.json"
 DATA_PLANNER_COLORS = "data/planner/colors.json"
 PLANNER_EVENTS_DIR = "data/planner/events"
@@ -82,6 +93,7 @@ CONTENT_KEYS = [
     "link_categories",
     "profiles",
     "memos",
+    "bookmark",
     "planner_tasks",
     "planner_colors",
     "planner_events",
@@ -96,6 +108,7 @@ SECTION_LABELS = {
     "illustrations": "삽화",
     "links": "놀러가기",
     "memos": "주석",
+    "bookmark": "책갈피",
     "planner": "부록",
     "index": "인덱스",
 }
@@ -113,6 +126,7 @@ SECTION_CONTENT_KEYS = {
     "illustrations": ["illustrations"],
     "links": ["links", "link_categories"],
     "memos": ["memos"],
+    "bookmark": ["bookmark"],
     "planner": [
         "planner_tasks",
         "planner_colors",
@@ -583,6 +597,225 @@ def _memo_data(
     ]
 
 
+def _bookmark_data(
+    db: Session,
+    user_id: int | None,
+) -> tuple[
+    list[dict[str, Any]],
+    list[dict[str, Any]],
+    list[dict[str, Any]],
+    list[dict[str, Any]],
+    list[dict[str, Any]],
+    list[dict[str, Any]],
+    list[dict[str, Any]],
+    list[dict[str, Any]],
+]:
+    category_query = db.query(BookmarkRoutineCategory)
+    routine_query = db.query(BookmarkRoutine).options(
+        selectinload(BookmarkRoutine.category)
+    )
+    check_query = db.query(BookmarkRoutineCheck)
+    stat_query = db.query(BookmarkRoutineMonthlyStat)
+    mood_tag_query = db.query(BookmarkMoodTag)
+    goal_query = db.query(BookmarkGoal).options(
+        selectinload(BookmarkGoal.mood_tag)
+    )
+    rating_query = db.query(BookmarkRating)
+    review_query = db.query(BookmarkReview)
+
+    if user_id is not None:
+        category_query = category_query.filter(
+            BookmarkRoutineCategory.user_id == user_id
+        )
+        routine_query = routine_query.filter(
+            BookmarkRoutine.user_id == user_id
+        )
+        check_query = check_query.filter(
+            BookmarkRoutineCheck.user_id == user_id
+        )
+        stat_query = stat_query.filter(
+            BookmarkRoutineMonthlyStat.user_id == user_id
+        )
+        mood_tag_query = mood_tag_query.filter(
+            BookmarkMoodTag.user_id == user_id
+        )
+        goal_query = goal_query.filter(BookmarkGoal.user_id == user_id)
+        rating_query = rating_query.filter(
+            BookmarkRating.user_id == user_id
+        )
+        review_query = review_query.filter(
+            BookmarkReview.user_id == user_id
+        )
+
+    categories = [
+        {
+            "id": category.id,
+            "user_id": category.user_id,
+            "name": category.name,
+            "position": category.position,
+            "created_at": _iso(category.created_at),
+            "updated_at": _iso(category.updated_at),
+        }
+        for category in category_query.order_by(
+            BookmarkRoutineCategory.user_id,
+            BookmarkRoutineCategory.position,
+            BookmarkRoutineCategory.id,
+        ).all()
+    ]
+    routines = [
+        {
+            "id": routine.id,
+            "user_id": routine.user_id,
+            "title": routine.title,
+            "notes": routine.notes,
+            "category_id": routine.category_id,
+            "category_name": (
+                routine.category.name if routine.category else None
+            ),
+            "frequency": routine.frequency,
+            "start_date": _iso(routine.start_date),
+            "end_date": _iso(routine.end_date),
+            "tracking_mode": routine.tracking_mode,
+            "target_count": routine.target_count,
+            "weekday": routine.weekday,
+            "weekdays": routine.weekdays or [],
+            "day_of_month": routine.day_of_month,
+            "nth_week": routine.nth_week,
+            "month": routine.month,
+            "active": bool(routine.active),
+            "calendar_only": bool(routine.calendar_only),
+            "calendar_pinned": bool(routine.calendar_pinned),
+            "position": routine.position,
+            "created_at": _iso(routine.created_at),
+            "updated_at": _iso(routine.updated_at),
+        }
+        for routine in routine_query.order_by(
+            BookmarkRoutine.user_id,
+            BookmarkRoutine.position,
+            BookmarkRoutine.id,
+        ).all()
+    ]
+    checks = [
+        {
+            "id": check.id,
+            "user_id": check.user_id,
+            "routine_id": check.routine_id,
+            "period_type": check.period_type,
+            "period_start": _iso(check.period_start),
+            "done": bool(check.done),
+            "count": check.count,
+            "completed_at": _iso(check.completed_at),
+            "created_at": _iso(check.created_at),
+            "updated_at": _iso(check.updated_at),
+        }
+        for check in check_query.order_by(
+            BookmarkRoutineCheck.user_id,
+            BookmarkRoutineCheck.routine_id,
+            BookmarkRoutineCheck.period_start,
+            BookmarkRoutineCheck.id,
+        ).all()
+    ]
+    monthly_stats = [
+        {
+            "id": stat.id,
+            "user_id": stat.user_id,
+            "routine_id": stat.routine_id,
+            "routine_title": stat.routine_title,
+            "frequency": stat.frequency,
+            "month_start": _iso(stat.month_start),
+            "completed_count": stat.completed_count,
+            "expected_count": stat.expected_count,
+            "created_at": _iso(stat.created_at),
+            "updated_at": _iso(stat.updated_at),
+        }
+        for stat in stat_query.order_by(
+            BookmarkRoutineMonthlyStat.user_id,
+            BookmarkRoutineMonthlyStat.month_start,
+            BookmarkRoutineMonthlyStat.routine_id,
+            BookmarkRoutineMonthlyStat.id,
+        ).all()
+    ]
+    mood_tags = [
+        {
+            "id": tag.id,
+            "user_id": tag.user_id,
+            "name": tag.name,
+            "position": tag.position,
+            "created_at": _iso(tag.created_at),
+            "updated_at": _iso(tag.updated_at),
+        }
+        for tag in mood_tag_query.order_by(
+            BookmarkMoodTag.user_id,
+            BookmarkMoodTag.position,
+            BookmarkMoodTag.id,
+        ).all()
+    ]
+    goals = [
+        {
+            "id": goal.id,
+            "user_id": goal.user_id,
+            "period_type": goal.period_type,
+            "period_start": _iso(goal.period_start),
+            "content": goal.content,
+            "wake_time": _iso(goal.wake_time),
+            "mood_tag_id": goal.mood_tag_id,
+            "mood_tag_name": goal.mood_tag_name,
+            "created_at": _iso(goal.created_at),
+            "updated_at": _iso(goal.updated_at),
+        }
+        for goal in goal_query.order_by(
+            BookmarkGoal.user_id,
+            BookmarkGoal.period_start,
+            BookmarkGoal.period_type,
+            BookmarkGoal.id,
+        ).all()
+    ]
+    ratings = [
+        {
+            "id": rating.id,
+            "user_id": rating.user_id,
+            "period_type": rating.period_type,
+            "period_start": _iso(rating.period_start),
+            "rating": rating.rating,
+            "created_at": _iso(rating.created_at),
+            "updated_at": _iso(rating.updated_at),
+        }
+        for rating in rating_query.order_by(
+            BookmarkRating.user_id,
+            BookmarkRating.period_start,
+            BookmarkRating.period_type,
+            BookmarkRating.id,
+        ).all()
+    ]
+    reviews = [
+        {
+            "id": review.id,
+            "user_id": review.user_id,
+            "period_type": review.period_type,
+            "period_start": _iso(review.period_start),
+            "content": review.content,
+            "created_at": _iso(review.created_at),
+            "updated_at": _iso(review.updated_at),
+        }
+        for review in review_query.order_by(
+            BookmarkReview.user_id,
+            BookmarkReview.period_start,
+            BookmarkReview.period_type,
+            BookmarkReview.id,
+        ).all()
+    ]
+    return (
+        categories,
+        routines,
+        checks,
+        monthly_stats,
+        mood_tags,
+        goals,
+        ratings,
+        reviews,
+    )
+
+
 def _planner_data(
     db: Session,
     user_id: int | None,
@@ -768,6 +1001,43 @@ def _build_export(
             "memos": memos,
         }
         counts["memos"] = len(memos)
+
+    if section in ("all", "bookmark"):
+        (
+            routine_categories,
+            routines,
+            routine_checks,
+            routine_monthly_stats,
+            mood_tags,
+            goals,
+            ratings,
+            reviews,
+        ) = _bookmark_data(db, user_id)
+        sections[DATA_BOOKMARK] = {
+            "schema_version": SCHEMA_VERSION,
+            "kind": "bookmark",
+            "routine_categories": routine_categories,
+            "routines": routines,
+            "routine_checks": routine_checks,
+            "routine_monthly_stats": routine_monthly_stats,
+            "mood_tags": mood_tags,
+            "goals": goals,
+            "ratings": ratings,
+            "reviews": reviews,
+        }
+        counts["bookmark_routine_categories"] = len(routine_categories)
+        counts["bookmark_routines"] = len(routines)
+        counts["bookmark_special_dates"] = sum(
+            1 for routine in routines if routine["calendar_only"]
+        )
+        counts["bookmark_routine_checks"] = len(routine_checks)
+        counts["bookmark_routine_monthly_stats"] = len(
+            routine_monthly_stats
+        )
+        counts["bookmark_mood_tags"] = len(mood_tags)
+        counts["bookmark_goals"] = len(goals)
+        counts["bookmark_ratings"] = len(ratings)
+        counts["bookmark_reviews"] = len(reviews)
 
     if section in ("all", "planner"):
         tasks, colors, events = _planner_data(db, user_id)
@@ -978,6 +1248,11 @@ def _readme(
         components.append("- `data/profile.json` — 프로필")
     if "memos" in included:
         components.append("- `data/memos.json` — 주석")
+    if "bookmark" in included:
+        components.append(
+            "- `data/bookmark.json` — 책갈피 루틴·카테고리·수행 기록·"
+            "월간 통계·기분 태그·목표·별점·회고"
+        )
     if "planner_tasks" in included:
         components.append(
             "- `data/planner/tasks.json` — 부록 일정"
@@ -1038,6 +1313,8 @@ def _readme(
 - S3/로컬 저장소에서 찾지 못한 이미지는 `manifest.json`의
   `skipped_files`에 기록되고 `archive_path`는 `null`이 됩니다.
 - 외부 URL 이미지(예: 링크 배너)는 다운로드하지 않고 URL만 보존합니다.
+- 책갈피 `routines` 중 `calendar_only: true`인 항목은 디데이·기념일
+  기록입니다.
 - `users`, 세션, 방문 기록, 갤러리 초대·세션, Mastodon 설정·토큰,
   임시저장(`chapter_drafts`), 조회 기록은 포함하지 않습니다.
 - 이 아카이브에는 비공개 글·삽화와 주석이 포함될 수 있으므로 안전하게

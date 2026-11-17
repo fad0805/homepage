@@ -75,6 +75,12 @@ const SECTIONS = [
     description: "일정·색상 칩·월별 완료/변경 이력",
   },
   {
+    section: "bookmark",
+    label: "책갈피",
+    description:
+      "루틴·카테고리·수행 기록·월간 통계·기분 태그·목표·별점·회고",
+  },
+  {
     section: "index",
     label: "인덱스",
     description: "통합/작가 인덱스 내용",
@@ -317,7 +323,10 @@ export default function AdminExportPage() {
         <header className="admin-dashboard-panel__head">
           <div>
             <h2>전체 내보내기</h2>
-            <p>책·삽화·등장인물·링크·프로필·주석·부록·인덱스를 모두 담습니다.</p>
+            <p>
+              책·삽화·등장인물·링크·프로필·주석·책갈피·부록·인덱스를
+              모두 담습니다.
+            </p>
           </div>
         </header>
         <div className="admin-dashboard-archive__body">
