@@ -532,13 +532,6 @@ export default function BookmarkClient({ username }: { username: string }) {
               ) : null}
             </div>
 
-            {routine.frequency === "weekly" &&
-              routine.target_count > 1 ? (
-              <p className="bookmark-routine-week-progress">
-                이번 주 {routine.completed_count}/
-                {routine.target_count}회
-              </p>
-            ) : null}
 
             {routine.notes ? (
               <BookmarkRoutineNotes
