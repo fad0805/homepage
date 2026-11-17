@@ -70,6 +70,7 @@ export function useBookmarkJournalTree() {
     tree,
     loading,
     error,
+    reload: load,
     moveDecade,
     goToday,
     goToDate,

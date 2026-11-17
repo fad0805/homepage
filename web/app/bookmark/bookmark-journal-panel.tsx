@@ -7,6 +7,7 @@ import type {
 } from "@/lib/bookmark";
 import { todayDateInputValue } from "@/lib/datetime";
 
+import { BookmarkJournalEditModal } from "./bookmark-journal-edit-modal";
 import { useBookmarkJournalTree } from "./use-bookmark-journal-tree";
 import {
   parseDateKey,
@@ -167,12 +168,14 @@ function findNode(
 }
 
 export function BookmarkJournalPanel() {
-  const { tree, loading, error, goToDate } =
+  const { tree, loading, error, reload, goToDate } =
     useBookmarkJournalTree();
   const [anchorDate, setAnchorDate] = useState(() =>
     todayDateInputValue(),
   );
   const [level, setLevel] = useState<JournalLevel>("week");
+  const [editingNode, setEditingNode] =
+    useState<BookmarkJournalNode | null>(null);
 
   const periodStart = levelStart(anchorDate, level);
   const node = tree
@@ -312,6 +315,7 @@ export function BookmarkJournalPanel() {
               <col className="is-goal" />
               <col className="is-rating" />
               <col className="is-review" />
+              <col className="is-action" />
             </colgroup>
             <thead>
               <tr>
@@ -319,6 +323,7 @@ export function BookmarkJournalPanel() {
                 <th scope="col">목표</th>
                 <th scope="col">별점</th>
                 <th scope="col">회고</th>
+                <th scope="col">수정</th>
               </tr>
             </thead>
             <tbody>
@@ -330,6 +335,15 @@ export function BookmarkJournalPanel() {
                   <td>{textOrDash(day.goal?.content)}</td>
                   <td>{renderRating(day) ?? "-"}</td>
                   <td>{textOrDash(day.review?.content)}</td>
+                  <td>
+                    <button
+                      type="button"
+                      className="bookmark-text-button bookmark-journal-row-edit"
+                      onClick={() => setEditingNode(day)}
+                    >
+                      수정
+                    </button>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -369,6 +383,13 @@ export function BookmarkJournalPanel() {
           <p className="bookmark-journal-hint">
             {countText(currentNode)}
           </p>
+          <button
+            type="button"
+            className="bookmark-text-button bookmark-journal-edit-button"
+            onClick={() => setEditingNode(currentNode)}
+          >
+            수정
+          </button>
         </div>
         {renderRecord(currentNode)}
         {level === "week" ? renderWeekDays(currentNode) : null}
@@ -437,6 +458,17 @@ export function BookmarkJournalPanel() {
       </div>
 
       {renderContent()}
+
+      {editingNode ? (
+        <BookmarkJournalEditModal
+          node={editingNode}
+          onClose={() => setEditingNode(null)}
+          onSaved={() => {
+            setEditingNode(null);
+            void reload();
+          }}
+        />
+      ) : null}
     </section>
   );
 }

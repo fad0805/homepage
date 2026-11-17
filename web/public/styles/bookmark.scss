@@ -2180,6 +2180,10 @@
     width: auto;
   }
 
+  col.is-action {
+    width: 3.2rem;
+  }
+
   th,
   td {
     padding: 0.45rem 0.5rem;
@@ -2215,6 +2219,40 @@
   tbody tr:last-child th,
   tbody tr:last-child td {
     border-bottom: 0;
+  }
+}
+
+.bookmark-journal-edit-button {
+  margin-left: auto;
+}
+
+.bookmark-journal-row-edit {
+  padding: 0.1rem 0.2rem;
+  font-size: 0.62rem;
+  white-space: nowrap;
+}
+
+.bookmark-journal-edit-modal {
+  width: min(34rem, 100%);
+}
+
+.bookmark-journal-edit-form {
+  margin-top: 0.75rem;
+}
+
+.bookmark-journal-edit-rating {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+
+  > span {
+    color: var(--title-color);
+    font-size: 0.68rem;
+    opacity: 0.72;
+  }
+
+  .clover-rating {
+    margin-top: 0;
   }
 }
 
