@@ -29,6 +29,7 @@ import "@/public/styles/planner.scss";
 import { PlannerCalendar } from "./planner-calendar";
 import { PlannerEventPreviewModal } from "./planner-event-preview-modal";
 import { PlannerMonthPicker } from "./planner-month-picker";
+import { PlannerSpecialModal } from "./planner-special-modal";
 import { PlannerTaskDetailModal } from "./planner-task-detail-modal";
 import { PlannerTaskModal } from "./planner-task-modal";
 import { MagnifierIcon } from "./planner-icons";
@@ -2868,243 +2869,38 @@ export default function PlannerClient({ username }: { username: string }) {
         />
       ) : null}
       {specialModalOpen ? (
-        <div
-          className="planner-modal-overlay is-task"
-          role="presentation"
-          onClick={closeSpecialManager}
-        >
-          <div
-            className="planner-modal planner-task-modal planner-special-modal"
-            role="dialog"
-            aria-modal="true"
-            aria-label="기념일 관리"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <div className="planner-special-modal-top">
-              <button
-                type="button"
-                className="planner-text-button"
-                onClick={closeSpecialManager}
-              >
-                닫기
-              </button>
-            </div>
-
-            <div className="planner-special-tabs" role="tablist">
-              <button
-                type="button"
-                role="tab"
-                aria-selected={specialTab === "form"}
-                className={specialTab === "form" ? "is-active" : ""}
-                onClick={() => setSpecialTab("form")}
-              >
-                등록
-              </button>
-              <button
-                type="button"
-                role="tab"
-                aria-selected={specialTab === "list"}
-                className={specialTab === "list" ? "is-active" : ""}
-                onClick={() => setSpecialTab("list")}
-              >
-                디데이 목록 {ddaySpecialDates.length}
-              </button>
-            </div>
-
-            {specialTab === "form" ? (
-              <form
-                className="planner-form is-modal"
-                onSubmit={handleSubmitSpecial}
-              >
-              <div className="planner-segmented" role="group">
-                <button
-                  type="button"
-                  className={specialKind === "yearly" ? "is-active" : ""}
-                  onClick={() => setSpecialKind("yearly")}
-                >
-                  기념일
-                </button>
-                <button
-                  type="button"
-                  className={specialKind === "dday" ? "is-active" : ""}
-                  onClick={() => setSpecialKind("dday")}
-                >
-                  디데이
-                </button>
-              </div>
-              <label>
-                <span>이름</span>
-                <input
-                  type="text"
-                  value={specialTitle}
-                  maxLength={255}
-                  required
-                  placeholder={
-                    specialKind === "yearly"
-                      ? "생일, 기념일"
-                      : "디데이 이름"
-                  }
-                  onChange={(event) =>
-                    setSpecialTitle(event.target.value)
-                  }
-                />
-              </label>
-              {specialKind === "yearly" ? (
-                <div className="planner-date-row">
-                  <label>
-                    <span>월</span>
-                    <select
-                      value={specialMonth}
-                      onChange={(event) =>
-                        setSpecialMonth(Number(event.target.value))
-                      }
-                    >
-                      {Array.from({ length: 12 }, (_, index) => (
-                        <option value={index + 1} key={index + 1}>
-                          {index + 1}월
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label>
-                    <span>일</span>
-                    <input
-                      type="number"
-                      min={1}
-                      max={31}
-                      value={specialDay}
-                      onChange={(event) =>
-                        setSpecialDay(Number(event.target.value))
-                      }
-                    />
-                  </label>
-                </div>
-              ) : (
-                <label>
-                  <span>날짜</span>
-                  <input
-                    type="date"
-                    value={specialEventDate}
-                    required
-                    onChange={(event) =>
-                      handleSpecialEventDateChange(event.target.value)
-                    }
-                  />
-                </label>
-              )}
-              {specialKind === "dday" ? (
-                <label className="planner-checkbox planner-special-pin">
-                  <input
-                    type="checkbox"
-                    checked={specialPinned}
-                    onChange={(event) =>
-                      setSpecialPinned(event.target.checked)
-                    }
-                  />
-                  <span>
-                    날짜가 지나도 D+ 카운트로 계속 표시
-                  </span>
-                </label>
-              ) : null}
-              <div className="planner-form-actions">
-                {editingSpecial !== null ? (
-                  <button
-                    type="button"
-                    className="planner-text-button is-danger planner-special-delete"
-                    disabled={specialSaving}
-                    onClick={() => void handleDeleteSpecial(editingSpecial)}
-                  >
-                    삭제
-                  </button>
-                ) : null}
-                {editingSpecialId !== null ? (
-                  <button
-                    type="button"
-                    className="planner-text-button"
-                    onClick={resetSpecialForm}
-                  >
-                    새로 등록
-                  </button>
-                ) : null}
-                <button
-                  type="submit"
-                  className="planner-primary"
-                  disabled={specialSaving || !specialTitle.trim()}
-                >
-                  {specialSaving
-                    ? "저장 중..."
-                    : editingSpecialId !== null
-                      ? "수정 저장"
-                      : "등록"}
-                </button>
-              </div>
-              </form>
-            ) : (
-              <div className="planner-special-manager">
-                <input
-                  type="search"
-                  className="planner-special-search"
-                  value={specialSearch}
-                  placeholder="이름으로 디데이 검색"
-                  aria-label="디데이 검색"
-                  onChange={(event) =>
-                    setSpecialSearch(event.target.value)
-                  }
-                />
-                <div className="planner-special-list">
-                  {filteredSpecialDates.length === 0 ? (
-                    <p className="planner-empty">
-                      {ddaySpecialDates.length === 0
-                        ? "아직 등록된 디데이가 없습니다."
-                        : "검색 결과가 없습니다."}
-                    </p>
-                  ) : (
-                    filteredSpecialDates.map((item) => (
-                      <div className="planner-special-item" key={item.id}>
-                        <button
-                          type="button"
-                          className="planner-special-main"
-                          onClick={() => {
-                            startEditingSpecial(item);
-                            setSpecialTab("form");
-                          }}
-                        >
-                          <strong>{item.title}</strong>
-                          <span>
-                            {item.kind === "yearly"
-                              ? `매년 ${item.month}월 ${item.day}일`
-                              : `${item.event_date} · ${specialDdayLabel(
-                                  item.event_date ?? "",
-                                )}`}
-                          </span>
-                        </button>
-                        <button
-                          type="button"
-                          className={`planner-text-button planner-special-pin-toggle${
-                            item.pinned ? " is-active" : ""
-                          }`}
-                          aria-pressed={item.pinned}
-                          disabled={specialSaving}
-                          onClick={() => void handleToggleSpecialPin(item)}
-                        >
-                          {item.pinned ? "고정 해제" : "고정"}
-                        </button>
-                        <button
-                          type="button"
-                          className="planner-text-button is-danger"
-                          disabled={specialSaving}
-                          onClick={() => void handleDeleteSpecial(item)}
-                        >
-                          삭제
-                        </button>
-                      </div>
-                    ))
-                  )}
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
+        <PlannerSpecialModal
+          tab={specialTab}
+          ddayCount={ddaySpecialDates.length}
+          filtered={filteredSpecialDates}
+          kind={specialKind}
+          title={specialTitle}
+          month={specialMonth}
+          day={specialDay}
+          eventDate={specialEventDate}
+          pinned={specialPinned}
+          editingSpecial={editingSpecial}
+          editingId={editingSpecialId}
+          saving={specialSaving}
+          search={specialSearch}
+          onClose={closeSpecialManager}
+          onTabChange={setSpecialTab}
+          onKindChange={setSpecialKind}
+          onTitleChange={setSpecialTitle}
+          onMonthChange={setSpecialMonth}
+          onDayChange={setSpecialDay}
+          onEventDateChange={handleSpecialEventDateChange}
+          onPinnedChange={setSpecialPinned}
+          onSearchChange={setSpecialSearch}
+          onSubmit={handleSubmitSpecial}
+          onDelete={(item) => void handleDeleteSpecial(item)}
+          onReset={resetSpecialForm}
+          onStartEdit={(item) => {
+            startEditingSpecial(item);
+            setSpecialTab("form");
+          }}
+          onTogglePin={(item) => void handleToggleSpecialPin(item)}
+        />
       ) : null}
     </div>
   );
