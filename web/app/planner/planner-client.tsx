@@ -28,6 +28,7 @@ import "@/public/styles/planner.scss";
 
 import { PlannerCalendar } from "./planner-calendar";
 import { PlannerChipManager } from "./planner-chip-manager";
+import { PlannerDatePanel } from "./planner-date-panel";
 import { PlannerEventPreviewModal } from "./planner-event-preview-modal";
 import { PlannerMonthPicker } from "./planner-month-picker";
 import { PlannerSearchPanel } from "./planner-search-panel";
@@ -2265,46 +2266,21 @@ export default function PlannerClient({ username }: { username: string }) {
                   renderHistoryItems={renderHistoryItems}
                 />
               ) : activeTab === "active" ? (
-                <section className="planner-day-panel planner-date-panel">
-                  <div className="planner-day-panel-header">
-                    <div>
-                      <p className="planner-eyebrow">
-                        {selectedDate === today ? "오늘" : "선택한 날짜"}
-                      </p>
-                      <h2>{formatDayLabel(selectedDate)}</h2>
-                      <p>
-                        일정 {selectedTasks.length}개 · 기념일{" "}
-                        {selectedSpecialDates.length}개 · 이력{" "}
-                        {selectedEvents.length}개
-                      </p>
-                    </div>
-                    <div className="planner-day-panel-actions">
-                      {selectedDate !== today ? (
-                        <button
-                          type="button"
-                          className="planner-text-button"
-                          onClick={() => selectDate(today)}
-                        >
-                          오늘로
-                        </button>
-                      ) : null}
-                      <button
-                        type="button"
-                        className="planner-primary"
-                        onClick={openNewTask}
-                      >
-                        {selectedDate && selectedDate < today
-                          ? "완료 기록"
-                          : "새 일정"}
-                      </button>
-                    </div>
-                  </div>
+                <PlannerDatePanel
+                  selectedDate={selectedDate}
+                  today={today}
+                  taskCount={selectedTasks.length}
+                  specialCount={selectedSpecialDates.length}
+                  eventCount={selectedEvents.length}
+                  onSelectToday={() => selectDate(today)}
+                  onOpenNewTask={openNewTask}
+                >
                   {renderDayDetail(
                     selectedTasks,
                     selectedEvents,
                     selectedSpecialDates,
                   )}
-                </section>
+                </PlannerDatePanel>
               ) : activeTab === "colors" ? (
                 <section className="planner-day-panel planner-color-panel">
                   <div className="planner-day-panel-header">
