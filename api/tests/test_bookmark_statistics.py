@@ -130,6 +130,72 @@ class BookmarkStatisticsTests(
         self.assertEqual(bucket["completed_count"], 1)
         self.assertEqual(bucket["expected_count"], 1)
 
+    def test_weekly_count_started_midweek_keeps_first_week(self) -> None:
+        # 2026-03-04 is Wednesday; its check week starts Monday 2026-03-02.
+        self.assertEqual(date(2026, 3, 4).weekday(), 2)
+        routine = self.make_routine(
+            frequency="weekly",
+            tracking_mode="count",
+            target_count=3,
+            start_date=date(2026, 3, 4),
+        )
+        self.add_check(
+            routine,
+            "week",
+            date(2026, 3, 2),
+            count=2,
+        )
+        self.assertEqual(
+            _routine_month_values(self.db, routine, date(2026, 3, 1)),
+            (2, 15),
+        )
+
+    def test_weekly_count_started_on_first_day_midweek_keeps_partial_week(
+        self,
+    ) -> None:
+        # 2026-04-01 is Wednesday; its check week starts Monday 2026-03-30.
+        self.assertEqual(date(2026, 4, 1).weekday(), 2)
+        routine = self.make_routine(
+            frequency="weekly",
+            tracking_mode="count",
+            target_count=2,
+            start_date=date(2026, 4, 1),
+        )
+        self.add_check(
+            routine,
+            "week",
+            date(2026, 3, 30),
+            count=1,
+        )
+        self.assertEqual(
+            _routine_month_values(self.db, routine, date(2026, 4, 1)),
+            (1, 10),
+        )
+
+    def test_weekly_count_month_boundary_week_is_counted_once(self) -> None:
+        # 2026-03-30 is Monday; the week crosses into April.
+        self.assertEqual(date(2026, 3, 30).weekday(), 0)
+        routine = self.make_routine(
+            frequency="weekly",
+            tracking_mode="count",
+            target_count=2,
+            start_date=date(2026, 3, 30),
+        )
+        self.add_check(
+            routine,
+            "week",
+            date(2026, 3, 30),
+            count=1,
+        )
+        self.assertEqual(
+            _routine_month_values(self.db, routine, date(2026, 3, 1)),
+            (1, 2),
+        )
+        self.assertEqual(
+            _routine_month_values(self.db, routine, date(2026, 4, 1)),
+            (0, 8),
+        )
+
     def test_period_includes_future_routines_with_next_date(self) -> None:
         current = self.make_routine(
             frequency="monthly",

@@ -41,15 +41,24 @@ def _routine_month_values(
 
     if routine.frequency == "weekly":
         if routine.tracking_mode == "count":
-            expected_dates = [
-                first + timedelta(days=offset)
-                for offset in range(last.day)
-                if (first + timedelta(days=offset)).weekday() == 0
-                and active_start
-                <= first + timedelta(days=offset)
-                <= active_end
-            ]
-            expected = target * len(expected_dates)
+            # Weekly checks are stored with Monday as period_start. The first
+            # week can begin before a mid-week routine start, but it is still
+            # a count-bearing week when its end overlaps the active range.
+            # A week starting before the month belongs to this month only when
+            # the routine itself starts in this month; otherwise that Monday
+            # was already counted by the previous month.
+            expected_weeks: list[date] = []
+            week_start = first - timedelta(days=first.weekday())
+            while week_start <= active_end:
+                if (
+                    week_start + timedelta(days=6) >= active_start
+                    and (week_start >= first or routine.start_date >= first)
+                ):
+                    expected_weeks.append(week_start)
+                week_start += timedelta(weeks=1)
+            expected = target * len(expected_weeks)
+            if expected <= 0:
+                return None
             completed = (
                 db.query(
                     func.coalesce(func.sum(BookmarkRoutineCheck.count), 0)
@@ -58,13 +67,10 @@ def _routine_month_values(
                     BookmarkRoutineCheck.user_id == routine.user_id,
                     BookmarkRoutineCheck.routine_id == routine.id,
                     BookmarkRoutineCheck.period_type == "week",
-                    BookmarkRoutineCheck.period_start >= active_start,
-                    BookmarkRoutineCheck.period_start <= active_end,
+                    BookmarkRoutineCheck.period_start.in_(expected_weeks),
                 )
                 .scalar()
             )
-            if expected <= 0:
-                return None
             return int(completed or 0), expected
         weekdays = set(_routine_weekdays(routine))
         if not weekdays:
