@@ -51,6 +51,7 @@ import { BookmarkHistoryModal } from "./bookmark-history-modal";
 import { BookmarkMoodTagModal } from "./bookmark-mood-tag-modal";
 import { BookmarkRoutineModal } from "./bookmark-routine-modal";
 import { BookmarkStatisticsPanel } from "./bookmark-statistics-panel";
+import { useBookmarkCalendar } from "./use-bookmark-calendar";
 import { useBookmarkCategories } from "./use-bookmark-categories";
 import { useBookmarkData } from "./use-bookmark-data";
 import { useBookmarkMoodTags } from "./use-bookmark-mood-tags";
@@ -105,6 +106,21 @@ export default function BookmarkClient({ username }: { username: string }) {
   const [view, setView] = useState<BookmarkView>("today");
   const collapseStorageKey = `bookmark-category-collapse:${username}:${view}`;
   const [periodStart, setPeriodStart] = useState(initialToday);
+  const {
+    calendarOpen,
+    calendarMonth,
+    setCalendarMonth,
+    calendarHoverDate,
+    setCalendarHoverDate,
+    openCalendar,
+    closeCalendar,
+    selectCalendarDate,
+    calendarRange,
+  } = useBookmarkCalendar({
+    view,
+    periodStart,
+    setPeriodStart,
+  });
   const [statsRange, setStatsRange] = useState<StatsRange>("month");
 
   const [goalContent, setGoalContent] = useState("");
@@ -145,13 +161,6 @@ export default function BookmarkClient({ username }: { username: string }) {
   const [itemNotes, setItemNotes] = useState("");
   const [itemSaving, setItemSaving] = useState(false);
 
-  const [calendarOpen, setCalendarOpen] = useState(false);
-  const [calendarMonth, setCalendarMonth] = useState(() =>
-    startOfPeriod(initialToday, "month"),
-  );
-  const [calendarHoverDate, setCalendarHoverDate] = useState<
-    string | null
-  >(null);
   const [routineOrderSaving, setRoutineOrderSaving] = useState(false);
   const [routineCategoryId, setRoutineCategoryId] = useState<
     number | null
@@ -256,21 +265,8 @@ export default function BookmarkClient({ username }: { username: string }) {
         startOfPeriod(todayDateInputValue(), next),
       );
     }
-    setCalendarOpen(false);
+    closeCalendar();
     closeRoutineModal();
-  };
-
-  const openCalendar = () => {
-    setCalendarMonth(startOfPeriod(periodStart, "month"));
-    setCalendarHoverDate(null);
-    setCalendarOpen(true);
-  };
-
-  const selectCalendarDate = (value: string) => {
-    const nextType: BookmarkPeriodType =
-      view === "today" || view === "stats" ? "day" : view;
-    setPeriodStart(startOfPeriod(value, nextType));
-    setCalendarOpen(false);
   };
 
   const routines = data?.routines ?? [];
@@ -1183,17 +1179,6 @@ export default function BookmarkClient({ username }: { username: string }) {
     );
   };
 
-  const calendarRange = (value: string) => {
-    if (view === "week") {
-      const start = startOfPeriod(value, "week");
-      return {
-        start,
-        end: shiftPeriod(start, "day", 6),
-      };
-    }
-    return { start: value, end: value };
-  };
-
   const renderStatistics = () => (
     <BookmarkStatisticsPanel
       statistics={statistics}
@@ -1497,7 +1482,7 @@ export default function BookmarkClient({ username }: { username: string }) {
           onMonthChange={setCalendarMonth}
           onHoverDateChange={setCalendarHoverDate}
           onSelectDate={selectCalendarDate}
-          onClose={() => setCalendarOpen(false)}
+          onClose={closeCalendar}
           calendarRange={calendarRange}
         />
       ) : null}
