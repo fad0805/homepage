@@ -1277,6 +1277,19 @@
   }
 }
 
+.planner-task-check {
+  width: 0.9rem;
+  height: 0.9rem;
+  flex-shrink: 0;
+  margin: 0;
+  accent-color: var(--theme-main);
+  cursor: pointer;
+
+  &:disabled {
+    cursor: default;
+  }
+}
+
 .planner-task-color {
   width: 0.55rem;
   height: 0.55rem;

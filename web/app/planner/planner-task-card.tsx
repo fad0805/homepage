@@ -5,14 +5,18 @@ import { PlannerNoteContent } from "./planner-note-content";
 interface PlannerTaskCardProps {
   task: PlannerTask;
   noteSavingId: number | null;
+  busy: boolean;
   onOpen: (task: PlannerTask) => void;
+  onComplete: (task: PlannerTask) => void;
   onToggleNote: (index: number) => void;
 }
 
 export function PlannerTaskCard({
   task,
   noteSavingId,
+  busy,
   onOpen,
+  onComplete,
   onToggleNote,
 }: PlannerTaskCardProps) {
   return (
@@ -32,6 +36,17 @@ export function PlannerTaskCard({
       >
         <div className="planner-task-main">
           <div className="planner-task-title-row">
+            {task.status === "active" ? (
+              <input
+                type="checkbox"
+                className="planner-task-check"
+                checked={false}
+                disabled={busy}
+                aria-label={`${task.title} 완료`}
+                onClick={(event) => event.stopPropagation()}
+                onChange={() => onComplete(task)}
+              />
+            ) : null}
             <span
               className="planner-task-color"
               style={{ backgroundColor: taskColor(task) }}

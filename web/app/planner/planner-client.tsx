@@ -1107,7 +1107,9 @@ export default function PlannerClient({ username }: { username: string }) {
     <PlannerTaskCard
       task={task}
       noteSavingId={noteSavingId}
+      busy={busyKey !== null}
       onOpen={openTaskDetail}
+      onComplete={(item) => void handleComplete(item)}
       onToggleNote={(index) => void handleToggleTaskNote(task, index)}
     />
   );
