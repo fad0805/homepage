@@ -338,12 +338,12 @@
 .bookmark-routine-groups {
   display: flex;
   flex-direction: column;
-  gap: 0.9rem;
-  margin-top: 0.65rem;
+  gap: 0.55rem;
+  margin-top: 0.5rem;
 }
 
 .bookmark-category-group + .bookmark-category-group {
-  padding-top: 0.9rem;
+  padding-top: 0.55rem;
   border-top: 1px solid
     color-mix(in srgb, var(--theme-main) 20%, transparent);
 }
@@ -409,15 +409,15 @@
 }
 
 .bookmark-category-group .bookmark-item-list {
-  margin-top: 0.45rem;
+  margin-top: 0.3rem;
 }
 
 .bookmark-category-group .bookmark-routine-group.is-done-group {
-  margin-top: 0.6rem;
+  margin-top: 0.45rem;
 }
 
 .bookmark-routine-group + .bookmark-routine-group {
-  padding-top: 0.9rem;
+  padding-top: 0.55rem;
   border-top: 1px solid
     color-mix(in srgb, var(--theme-main) 20%, transparent);
 }
@@ -475,7 +475,7 @@
 }
 
 .bookmark-routine-group .bookmark-item-list {
-  margin-top: 0.45rem;
+  margin-top: 0.3rem;
 }
 
 .bookmark-stats-panel {
@@ -863,8 +863,8 @@
 .bookmark-item-list {
   display: flex;
   flex-direction: column;
-  gap: 0.4rem;
-  margin: 0.65rem 0 0;
+  gap: 0.25rem;
+  margin: 0.45rem 0 0;
   padding: 0;
   list-style: none;
 }
@@ -873,11 +873,11 @@
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 0.6rem;
-  padding: 0.55rem 0.6rem;
+  gap: 0.4rem;
+  padding: 0.35rem 0.45rem;
   border: 1px solid
     color-mix(in srgb, var(--theme-main) 22%, transparent);
-  border-radius: 0.7rem;
+  border-radius: 0.65rem;
   background: color-mix(
     in srgb,
     var(--input-background) 45%,
@@ -956,7 +956,7 @@
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
-  gap: 0.2rem 0.5rem;
+  gap: 0.12rem 0.35rem;
 }
 
 .bookmark-routine-check {
@@ -975,7 +975,7 @@
 
 .bookmark-routine-title {
   color: var(--foreground);
-  font-size: 0.78rem;
+  font-size: 0.74rem;
   line-height: 1.45;
   overflow-wrap: anywhere;
 }
@@ -986,25 +986,25 @@
 }
 
 .bookmark-routine-status {
-  padding: 0.12rem 0.35rem;
+  padding: 0.1rem 0.3rem;
   border: 1px solid
     color-mix(in srgb, var(--theme-main) 34%, transparent);
   border-radius: 999px;
   color: var(--title-color);
-  font-size: 0.56rem;
+  font-size: 0.52rem;
   opacity: 0.6;
 }
 
 .bookmark-item-schedule {
   margin: 0;
   color: var(--title-color);
-  font-size: 0.6rem;
+  font-size: 0.56rem;
   opacity: 0.6;
 }
 
 .bookmark-routine-next {
   color: var(--title-color);
-  font-size: 0.6rem;
+  font-size: 0.56rem;
   opacity: 0.55;
   white-space: nowrap;
 }
@@ -1035,25 +1035,26 @@
 }
 
 .bookmark-routine-week-progress {
-  margin: 0.32rem 0 0;
+  margin: 0.2rem 0 0;
   color: var(--title-color);
-  font-size: 0.6rem;
+  font-size: 0.56rem;
   opacity: 0.58;
 }
 
 .bookmark-routine-counter {
   display: flex;
   align-items: center;
-  gap: 0.4rem;
-  margin-top: 0.45rem;
+  gap: 0.3rem;
+  margin-left: auto;
+  align-self: center;
 }
 
 .bookmark-count-button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 1.65rem;
-  height: 1.65rem;
+  width: 1.45rem;
+  height: 1.45rem;
   padding: 0;
   border: 1px solid
     color-mix(in srgb, var(--theme-main) 38%, transparent);
@@ -1061,7 +1062,7 @@
   background: var(--bookmark-soft-bg);
   color: var(--title-color);
   font-family: inherit;
-  font-size: 0.9rem;
+  font-size: 0.8rem;
   line-height: 1;
   cursor: pointer;
 
@@ -1081,20 +1082,20 @@
 }
 
 .bookmark-routine-progress {
-  min-width: 3.2rem;
+  min-width: 2.9rem;
   color: var(--title-color);
-  font-size: 0.7rem;
+  font-size: 0.66rem;
   text-align: center;
 
   strong {
     font-family: Eulyoo1945-SemiBold, GowunDodum, sans-serif;
-    font-size: 0.88rem;
+    font-size: 0.82rem;
     font-weight: normal;
   }
 
   span {
-    margin-left: 0.12rem;
-    font-size: 0.62rem;
+    margin-left: 0.1rem;
+    font-size: 0.58rem;
     opacity: 0.62;
   }
 }
@@ -1149,10 +1150,10 @@
 }
 
 .bookmark-item-notes {
-  margin: 0.3rem 0 0 1.35rem;
+  margin: 0.2rem 0 0 1.35rem;
   color: var(--foreground);
-  font-size: 0.68rem;
-  line-height: 1.55;
+  font-size: 0.64rem;
+  line-height: 1.45;
   opacity: 0.7;
 }
 

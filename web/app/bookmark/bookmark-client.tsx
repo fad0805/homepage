@@ -486,9 +486,7 @@ export default function BookmarkClient({ username }: { username: string }) {
                   예정 {periodLabel(routine.next_date, "day")}
                 </span>
               ) : null}
-            </div>
-
-            {isCount ? (
+              {isCount ? (
               <div className="bookmark-routine-counter">
                 {!isStopped ? (
                   <button
@@ -531,7 +529,10 @@ export default function BookmarkClient({ username }: { username: string }) {
                   </button>
                 ) : null}
               </div>
-            ) : routine.frequency === "weekly" &&
+              ) : null}
+            </div>
+
+            {routine.frequency === "weekly" &&
               routine.target_count > 1 ? (
               <p className="bookmark-routine-week-progress">
                 이번 주 {routine.completed_count}/
