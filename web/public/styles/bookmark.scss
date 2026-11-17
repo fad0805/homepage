@@ -1944,42 +1944,11 @@
   }
 }
 
-.bookmark-journal-jump {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.35rem;
-
-  label {
-    color: var(--title-color);
-    font-size: 0.62rem;
-    opacity: 0.72;
-  }
-
-  input {
-    padding: 0.28rem 0.4rem;
-    border: 1px solid
-      color-mix(in srgb, var(--theme-main) 42%, transparent);
-    border-radius: 0.5rem;
-    background: var(--input-background);
-    color: var(--input-text);
-    font-family: inherit;
-    font-size: 0.66rem;
-  }
-}
-
 .bookmark-journal-hint {
   margin: 0.45rem 0 0;
   color: var(--foreground);
   font-size: 0.62rem;
   opacity: 0.5;
-}
-
-.bookmark-journal-jump-message {
-  margin: 0.35rem 0 0;
-  color: var(--title-color);
-  font-size: 0.62rem;
-  opacity: 0.72;
 }
 
 .bookmark-journal-breadcrumb {
@@ -2011,6 +1980,23 @@
   strong {
     padding: 0.1rem 0.2rem;
     font-weight: 600;
+  }
+}
+
+.bookmark-journal-crumb {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.bookmark-journal-decade-summary {
+  margin-top: 0.8rem;
+
+  p {
+    margin: 0;
+    color: var(--foreground);
+    font-size: 0.72rem;
+    opacity: 0.66;
   }
 }
 

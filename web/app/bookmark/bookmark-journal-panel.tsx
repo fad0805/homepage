@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import { CloverIcon } from "@/app/bookmark/clover-rating";
 import type {
@@ -8,30 +8,22 @@ import type {
 import { todayDateInputValue } from "@/lib/datetime";
 
 import { useBookmarkJournalTree } from "./use-bookmark-journal-tree";
-import { parseDateKey } from "./bookmark-utils";
+import {
+  parseDateKey,
+  periodLabel,
+  shiftPeriod,
+  startOfPeriod,
+} from "./bookmark-utils";
 
-function decadeStartForDate(value: string) {
-  const year = parseDateKey(value).getUTCFullYear();
-  return `${Math.floor(year / 10) * 10}-01-01`;
-}
+type JournalLevel = "week" | "month" | "quarter" | "year" | "decade";
 
-function findDayPath(tree: BookmarkJournalTree, target: string) {
-  for (const year of tree.years) {
-    for (const quarter of year.children) {
-      for (const month of quarter.children) {
-        for (const week of month.children) {
-          const day = week.children.find(
-            (item) => item.period_start === target,
-          );
-          if (day) {
-            return { year, quarter, month, week, day };
-          }
-        }
-      }
-    }
-  }
-  return null;
-}
+const EMPTY_LABELS: Record<JournalLevel, string> = {
+  week: "이 주에 기록된 회고가 없습니다.",
+  month: "이 달에 기록된 회고가 없습니다.",
+  quarter: "이 분기에 기록된 회고가 없습니다.",
+  year: "이 해에 기록된 회고가 없습니다.",
+  decade: "이 10년에 기록된 회고가 없습니다.",
+};
 
 function formatAverage(value: number | null) {
   if (value === null) return "-";
@@ -94,145 +86,194 @@ function renderRecord(node: BookmarkJournalNode) {
   );
 }
 
-export function BookmarkJournalPanel() {
-  const { tree, loading, error, moveDecade, goToday, goToDate } =
-    useBookmarkJournalTree();
-  const [yearStart, setYearStart] = useState<string | null>(null);
-  const [quarterStart, setQuarterStart] = useState<string | null>(
-    null,
+function decadeStartForDate(value: string) {
+  const year = parseDateKey(value).getUTCFullYear();
+  return `${Math.floor(year / 10) * 10}-01-01`;
+}
+
+function levelStart(value: string, level: JournalLevel) {
+  if (level === "decade") {
+    return decadeStartForDate(value);
+  }
+  return startOfPeriod(value, level);
+}
+
+function levelLabel(
+  value: string,
+  level: JournalLevel,
+  node: BookmarkJournalNode | null,
+) {
+  if (node) return node.label;
+  if (level === "decade") {
+    return `${parseDateKey(value).getUTCFullYear()}년대`;
+  }
+  return periodLabel(value, level);
+}
+
+function findNode(
+  tree: BookmarkJournalTree,
+  level: JournalLevel,
+  periodStart: string,
+): BookmarkJournalNode | null {
+  if (level === "decade") return null;
+  if (level === "year") {
+    return (
+      tree.years.find(
+        (year) => year.period_start === periodStart,
+      ) ?? null
+    );
+  }
+  const years = tree.years;
+  if (level === "quarter") {
+    return (
+      years
+        .flatMap((year) => year.children)
+        .find(
+          (quarter) => quarter.period_start === periodStart,
+        ) ?? null
+    );
+  }
+  const quarters = years.flatMap((year) => year.children);
+  if (level === "month") {
+    return (
+      quarters
+        .flatMap((quarter) => quarter.children)
+        .find((month) => month.period_start === periodStart) ??
+      null
+    );
+  }
+  return (
+    quarters
+      .flatMap((quarter) => quarter.children)
+      .flatMap((month) => month.children)
+      .find((week) => week.period_start === periodStart) ?? null
   );
-  const [monthStart, setMonthStart] = useState<string | null>(null);
-  const [weekStart, setWeekStart] = useState<string | null>(null);
-  const [dayStart, setDayStart] = useState<string | null>(null);
-  const [dayPicker, setDayPicker] = useState(() =>
+}
+
+export function BookmarkJournalPanel() {
+  const { tree, loading, error, goToDate } =
+    useBookmarkJournalTree();
+  const [anchorDate, setAnchorDate] = useState(() =>
     todayDateInputValue(),
   );
-  const [pendingDay, setPendingDay] = useState<string | null>(null);
-  const [dayJumpMessage, setDayJumpMessage] = useState<string | null>(
-    null,
-  );
+  const [level, setLevel] = useState<JournalLevel>("week");
 
-  useEffect(() => {
-    setYearStart(null);
-    setQuarterStart(null);
-    setMonthStart(null);
-    setWeekStart(null);
-    setDayStart(null);
-  }, [tree?.decade_start]);
+  const periodStart = levelStart(anchorDate, level);
+  const node = tree
+    ? findNode(tree, level, periodStart)
+    : null;
+  const title = levelLabel(periodStart, level, node);
+  const currentNode = level === "decade" ? null : node;
 
-  useEffect(() => {
-    if (!pendingDay || !tree) return;
-    if (tree.decade_start !== decadeStartForDate(pendingDay)) {
-      return;
-    }
-    const path = findDayPath(tree, pendingDay);
-    setPendingDay(null);
-    if (!path) {
-      setDayJumpMessage(
-        "해당 날짜에 기록된 일간 회고가 없습니다.",
-      );
-      return;
-    }
-    setDayJumpMessage(null);
-    setYearStart(path.year.period_start);
-    setQuarterStart(path.quarter.period_start);
-    setMonthStart(path.month.period_start);
-    setWeekStart(path.week.period_start);
-    setDayStart(path.day.period_start);
-  }, [pendingDay, tree]);
+  const weekStart = startOfPeriod(anchorDate, "week");
+  const monthStart = startOfPeriod(anchorDate, "month");
+  const quarterStart = startOfPeriod(anchorDate, "quarter");
+  const yearStart = startOfPeriod(anchorDate, "year");
+  const decadeStart = decadeStartForDate(anchorDate);
+  const lookup = (target: JournalLevel, start: string) =>
+    tree ? findNode(tree, target, start) : null;
 
-  const jumpToDay = () => {
-    if (!dayPicker) return;
-    setDayJumpMessage(null);
-    setPendingDay(dayPicker);
-    goToDate(dayPicker);
-  };
-
-  const yearNode =
-    yearStart === null
-      ? null
-      : tree?.years.find((year) => year.period_start === yearStart) ??
-        null;
-  const quarterNode =
-    yearNode && quarterStart !== null
-      ? yearNode.children.find(
-          (quarter) => quarter.period_start === quarterStart,
-        ) ?? null
-      : null;
-  const monthNode =
-    yearNode && monthStart !== null
-      ? (quarterNode
-          ? quarterNode.children
-          : yearNode.children.flatMap(
-              (quarter) => quarter.children,
-            )
-        ).find((month) => month.period_start === monthStart) ??
-        null
-      : null;
-  const weekNode =
-    monthNode && weekStart !== null
-      ? monthNode.children.find(
-          (week) => week.period_start === weekStart,
-        ) ?? null
-      : null;
-  const dayNode =
-    weekNode && dayStart !== null
-      ? weekNode.children.find(
-          (day) => day.period_start === dayStart,
-        ) ?? null
-      : null;
-
-  const decadeYears = tree
-    ? [...tree.years].sort((a, b) =>
-        a.period_start.localeCompare(b.period_start),
-      )
-    : [];
-  const yearMonths = yearNode
-    ? yearNode.children
-        .flatMap((quarter) => quarter.children)
-        .sort((a, b) => a.period_start.localeCompare(b.period_start))
-    : [];
-  const quarterMonths = quarterNode
-    ? [...quarterNode.children].sort((a, b) =>
-        a.period_start.localeCompare(b.period_start),
-      )
-    : [];
-
-  const openMonth = (month: BookmarkJournalNode) => {
-    const parent = yearNode?.children.find((quarter) =>
-      quarter.children.some(
-        (item) => item.period_start === month.period_start,
+  const breadcrumb = [
+    {
+      level: "week" as const,
+      start: weekStart,
+      label: levelLabel(
+        weekStart,
+        "week",
+        lookup("week", weekStart),
       ),
-    );
-    setQuarterStart(parent?.period_start ?? null);
-    setMonthStart(month.period_start);
-    setWeekStart(null);
-    setDayStart(null);
+    },
+    {
+      level: "month" as const,
+      start: monthStart,
+      label: levelLabel(
+        monthStart,
+        "month",
+        lookup("month", monthStart),
+      ),
+    },
+    {
+      level: "quarter" as const,
+      start: quarterStart,
+      label: levelLabel(
+        quarterStart,
+        "quarter",
+        lookup("quarter", quarterStart),
+      ),
+    },
+    {
+      level: "year" as const,
+      start: yearStart,
+      label: levelLabel(
+        yearStart,
+        "year",
+        lookup("year", yearStart),
+      ),
+    },
+    {
+      level: "decade" as const,
+      start: decadeStart,
+      label: `${parseDateKey(decadeStart).getUTCFullYear()}년대`,
+    },
+  ];
+
+  const selectLevel = (next: JournalLevel) => {
+    setLevel(next);
   };
 
-  const goBack = () => {
-    if (dayStart) {
-      setDayStart(null);
-      return;
-    }
-    if (weekStart) {
-      setWeekStart(null);
-      return;
-    }
-    if (monthStart) {
-      setMonthStart(null);
-      return;
-    }
-    if (quarterStart) {
-      setQuarterStart(null);
-      return;
-    }
-    if (yearStart) {
-      setYearStart(null);
-    }
+  const moveWeek = (delta: number) => {
+    const next = shiftPeriod(weekStart, "week", delta);
+    setAnchorDate(next);
+    setLevel("week");
+    goToDate(next);
+  };
+
+  const goToday = () => {
+    const today = todayDateInputValue();
+    setAnchorDate(today);
+    setLevel("week");
+    goToDate(today);
   };
 
   const renderDecade = () => {
+    const goalCount = tree
+      ? tree.years.reduce((sum, year) => sum + year.goal_count, 0)
+      : 0;
+    const reviewCount = tree
+      ? tree.years.reduce(
+          (sum, year) => sum + year.review_count,
+          0,
+        )
+      : 0;
+    const ratingCount = tree
+      ? tree.years.reduce(
+          (sum, year) => sum + year.rating_count,
+          0,
+        )
+      : 0;
+    const ratingSum = tree
+      ? tree.years.reduce(
+          (sum, year) =>
+            sum +
+            (year.average_rating ?? 0) * year.rating_count,
+          0,
+        )
+      : 0;
+    const average =
+      ratingCount > 0
+        ? Math.round((ratingSum / ratingCount) * 100) / 100
+        : null;
+    return (
+      <div className="bookmark-journal-decade-summary">
+        <p>
+          목표 {goalCount} · 후기 {reviewCount} · 평점{" "}
+          {formatAverage(average)}
+        </p>
+      </div>
+    );
+  };
+
+  const renderContent = () => {
     if (loading) {
       return <p className="bookmark-status">회고를 불러오는 중...</p>;
     }
@@ -240,184 +281,31 @@ export function BookmarkJournalPanel() {
       return <p className="bookmark-error">{error}</p>;
     }
     if (!tree) return null;
-    if (decadeYears.length === 0) {
+    if (level === "decade") {
+      return tree.years.length > 0 ? (
+        renderDecade()
+      ) : (
+        <p className="bookmark-empty-row">
+          {EMPTY_LABELS.decade}
+        </p>
+      );
+    }
+    if (!currentNode) {
       return (
         <p className="bookmark-empty-row">
-          이 10년에 기록된 회고가 없습니다.
+          {EMPTY_LABELS[level]}
         </p>
       );
     }
     return (
-      <div className="bookmark-journal-grid">
-        {decadeYears.map((year) => (
-          <button
-            type="button"
-            className="bookmark-journal-card"
-            key={year.period_start}
-            onClick={() => {
-              setYearStart(year.period_start);
-              setQuarterStart(null);
-              setMonthStart(null);
-              setWeekStart(null);
-              setDayStart(null);
-            }}
-          >
-            <strong>{year.label}</strong>
-            <span>{countText(year)}</span>
-          </button>
-        ))}
-      </div>
-    );
-  };
-
-  const renderYear = (node: BookmarkJournalNode) => {
-    const quarters = node.children;
-    return (
       <>
-        {renderRecord(node)}
-        {quarters.length > 0 ? (
-          <div className="bookmark-journal-section">
-            <h3>분기</h3>
-            <div className="bookmark-journal-record-list">
-              {quarters.map((quarter) => (
-                <button
-                  type="button"
-                  className="bookmark-journal-record-card is-clickable"
-                  key={quarter.period_start}
-                  onClick={() => {
-                    setQuarterStart(quarter.period_start);
-                    setMonthStart(null);
-                    setWeekStart(null);
-                    setDayStart(null);
-                  }}
-                >
-                  <strong>{quarter.label}</strong>
-                  {renderRecord(quarter)}
-                </button>
-              ))}
-            </div>
-          </div>
-        ) : null}
-        <div className="bookmark-journal-section">
-          <h3>월간 기록</h3>
-          {yearMonths.length === 0 ? (
-            <p className="bookmark-empty-row">
-              이 해에 기록된 월간 회고가 없습니다.
-            </p>
-          ) : (
-            <div className="bookmark-journal-grid is-months">
-              {yearMonths.map((month) => (
-                <button
-                  type="button"
-                  className="bookmark-journal-card"
-                  key={month.period_start}
-                  onClick={() => openMonth(month)}
-                >
-                  <strong>
-                    {Number(month.period_start.slice(5, 7))}월
-                  </strong>
-                  <span>{countText(month)}</span>
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
+        <p className="bookmark-journal-hint">
+          {countText(currentNode)}
+        </p>
+        {renderRecord(currentNode)}
       </>
     );
   };
-
-  const renderQuarter = (node: BookmarkJournalNode) => (
-    <>
-      {renderRecord(node)}
-      <div className="bookmark-journal-section">
-        <h3>월간 기록</h3>
-        {quarterMonths.length === 0 ? (
-          <p className="bookmark-empty-row">
-            이 분기에 기록된 월간 회고가 없습니다.
-          </p>
-        ) : (
-          <div className="bookmark-journal-grid is-months">
-            {quarterMonths.map((month) => (
-              <button
-                type="button"
-                className="bookmark-journal-card"
-                key={month.period_start}
-                onClick={() => openMonth(month)}
-              >
-                <strong>
-                  {Number(month.period_start.slice(5, 7))}월
-                </strong>
-                <span>{countText(month)}</span>
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
-    </>
-  );
-
-  const renderMonth = (node: BookmarkJournalNode) => (
-    <>
-      {renderRecord(node)}
-      <div className="bookmark-journal-section">
-        <h3>주 단위 기록</h3>
-        {node.children.length === 0 ? (
-          <p className="bookmark-empty-row">
-            이 달에 기록된 주간 기록이 없습니다.
-          </p>
-        ) : (
-          <div className="bookmark-journal-grid is-weeks">
-            {node.children.map((week) => (
-              <button
-                type="button"
-                className="bookmark-journal-card"
-                key={week.period_start}
-                onClick={() => {
-                  setWeekStart(week.period_start);
-                  setDayStart(null);
-                }}
-              >
-                <strong>{week.label}</strong>
-                <span>{countText(week)}</span>
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
-    </>
-  );
-
-  const renderWeek = (node: BookmarkJournalNode) => (
-    <>
-      {renderRecord(node)}
-      <div className="bookmark-journal-section">
-        <h3>일간 기록</h3>
-        {node.children.length === 0 ? (
-          <p className="bookmark-empty-row">
-            이 주에 기록된 일간 기록이 없습니다.
-          </p>
-        ) : (
-          <div className="bookmark-journal-record-list">
-            {node.children.map((day) => (
-              <button
-                type="button"
-                className="bookmark-journal-day is-clickable"
-                key={day.period_start}
-                onClick={() => setDayStart(day.period_start)}
-              >
-                <strong>{day.label}</strong>
-                {renderRecord(day)}
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
-    </>
-  );
-
-  const renderDay = (node: BookmarkJournalNode) => (
-    <>{renderRecord(node)}</>
-  );
 
   return (
     <section className="bookmark-panel bookmark-journal-panel">
@@ -429,171 +317,61 @@ export function BookmarkJournalPanel() {
         <button
           type="button"
           className="bookmark-text-button"
-          onClick={() => {
-            setYearStart(null);
-            setQuarterStart(null);
-            setMonthStart(null);
-            setWeekStart(null);
-            setDayStart(null);
-            setPendingDay(null);
-            setDayJumpMessage(null);
-            goToday();
-          }}
+          onClick={goToday}
         >
-          이번 10년
+          오늘
         </button>
       </header>
 
       <div className="bookmark-journal-toolbar">
         <div className="bookmark-journal-nav">
-          <button
-            type="button"
-            className="bookmark-icon-button"
-            aria-label="이전 10년"
-            onClick={() => moveDecade(-1)}
-          >
-            ‹
-          </button>
-          <strong>{tree?.label ?? "..."}</strong>
-          <button
-            type="button"
-            className="bookmark-icon-button"
-            aria-label="다음 10년"
-            onClick={() => moveDecade(1)}
-          >
-            ›
-          </button>
+          {level === "week" ? (
+            <button
+              type="button"
+              className="bookmark-icon-button"
+              aria-label="이전 주"
+              onClick={() => moveWeek(-1)}
+            >
+              ‹
+            </button>
+          ) : null}
+          <strong>{title}</strong>
+          {level === "week" ? (
+            <button
+              type="button"
+              className="bookmark-icon-button"
+              aria-label="다음 주"
+              onClick={() => moveWeek(1)}
+            >
+              ›
+            </button>
+          ) : null}
         </div>
-        <div className="bookmark-journal-jump">
-          <label htmlFor="bookmark-journal-day">
-            일간부터 보기
-          </label>
-          <input
-            id="bookmark-journal-day"
-            type="date"
-            value={dayPicker}
-            onChange={(event) => {
-              setDayPicker(event.target.value);
-              setDayJumpMessage(null);
-            }}
-          />
-          <button
-            type="button"
-            className="bookmark-text-button"
-            disabled={!dayPicker}
-            onClick={jumpToDay}
-          >
-            열기
-          </button>
-        </div>
-        {yearStart ? (
-          <button
-            type="button"
-            className="bookmark-text-button"
-            onClick={goBack}
-          >
-            위로
-          </button>
-        ) : null}
       </div>
 
       <p className="bookmark-journal-hint">
-        주간·일간 기록은 주 시작일(월요일) 기준으로 묶입니다.
+        주간 기록에서 시작해 월·분기·연·10년 단위로 올라갑니다.
       </p>
-      {dayJumpMessage ? (
-        <p className="bookmark-journal-jump-message">
-          {dayJumpMessage}
-        </p>
-      ) : null}
 
       <div className="bookmark-journal-breadcrumb">
-        <button
-          type="button"
-          onClick={() => {
-            setYearStart(null);
-            setQuarterStart(null);
-            setMonthStart(null);
-            setWeekStart(null);
-            setDayStart(null);
-          }}
-        >
-          {tree?.label ?? "10년"}
-        </button>
-        {yearNode ? (
-          <>
-            <span>/</span>
-            <button
-              type="button"
-              onClick={() => {
-                setQuarterStart(null);
-                setMonthStart(null);
-                setWeekStart(null);
-                setDayStart(null);
-              }}
-            >
-              {yearNode.label}
-            </button>
-          </>
-        ) : null}
-        {quarterNode ? (
-          <>
-            <span>/</span>
-            <button
-              type="button"
-              onClick={() => {
-                setMonthStart(null);
-                setWeekStart(null);
-                setDayStart(null);
-              }}
-            >
-              {quarterNode.label}
-            </button>
-          </>
-        ) : null}
-        {monthNode ? (
-          <>
-            <span>/</span>
-            <button
-              type="button"
-              onClick={() => {
-                setWeekStart(null);
-                setDayStart(null);
-              }}
-            >
-              {monthNode.label}
-            </button>
-          </>
-        ) : null}
-        {weekNode ? (
-          <>
-            <span>/</span>
-            <button
-              type="button"
-              onClick={() => setDayStart(null)}
-            >
-              {weekNode.label}
-            </button>
-          </>
-        ) : null}
-        {dayNode ? (
-          <>
-            <span>/</span>
-            <strong>{dayNode.label}</strong>
-          </>
-        ) : null}
+        {breadcrumb.map((item, index) => (
+          <span className="bookmark-journal-crumb" key={item.level}>
+            {index > 0 ? <span>/</span> : null}
+            {item.level === level ? (
+              <strong>{item.label}</strong>
+            ) : (
+              <button
+                type="button"
+                onClick={() => selectLevel(item.level)}
+              >
+                {item.label}
+              </button>
+            )}
+          </span>
+        ))}
       </div>
 
-      {dayNode
-        ? renderDay(dayNode)
-        : weekNode
-          ? renderWeek(weekNode)
-          : monthNode
-            ? renderMonth(monthNode)
-            : quarterNode
-              ? renderQuarter(quarterNode)
-              : yearNode
-                ? renderYear(yearNode)
-                : renderDecade()}
+      {renderContent()}
     </section>
   );
 }
