@@ -620,22 +620,12 @@
   flex-shrink: 0;
   padding: 0 0.08rem;
   border-radius: 0.2rem;
-  background: color-mix(
-    in srgb,
-    var(--theme-main) 18%,
-    var(--input-background)
-  );
   color: var(--title-color);
   font-size: 0.35rem;
   font-weight: 600;
   line-height: 1;
 
   &.is-dday {
-    background: color-mix(
-      in srgb,
-      #b07a4a 20%,
-      var(--input-background)
-    );
     color: #b07a4a;
   }
 }
