@@ -490,10 +490,9 @@ export default function PlannerClient({ username }: { username: string }) {
       ),
     [specialDates, selectedDate],
   );
-  const completionCounts = useMemo(() => {
+  const historyCounts = useMemo(() => {
     const counts = new Map<string, number>();
     for (const event of events) {
-      if (event.action !== "completed") continue;
       const date = eventDate(event);
       counts.set(date, (counts.get(date) ?? 0) + 1);
     }
@@ -1178,7 +1177,7 @@ export default function PlannerClient({ username }: { username: string }) {
               today={today}
               selectedDate={selectedDate}
               dragBounds={dragBounds}
-              completionCounts={completionCounts}
+              historyCounts={historyCounts}
               onChangeMonth={changeMonth}
               onOpenMonthPicker={openMonthPicker}
               onOpenSpecialManager={openSpecialManager}

@@ -22,7 +22,7 @@ interface PlannerCalendarProps {
   today: string;
   selectedDate: string;
   dragBounds: [string, string] | null;
-  completionCounts: Map<string, number>;
+  historyCounts: Map<string, number>;
   onChangeMonth: (delta: number) => void;
   onOpenMonthPicker: () => void;
   onOpenSpecialManager: () => void;
@@ -42,7 +42,7 @@ export function PlannerCalendar({
   today,
   selectedDate,
   dragBounds,
-  completionCounts,
+  historyCounts,
   onChangeMonth,
   onOpenMonthPicker,
   onOpenSpecialManager,
@@ -110,16 +110,16 @@ export function PlannerCalendar({
                   (item) =>
                     specialDateAppearsOn(item, cell.date),
                 );
-                const completionCount =
-                  completionCounts.get(cell.date) ?? 0;
-                const completionLevel =
-                  completionCount >= 7
+                const historyCount =
+                  historyCounts.get(cell.date) ?? 0;
+                const historyLevel =
+                  historyCount >= 7
                     ? 4
-                    : completionCount >= 4
+                    : historyCount >= 4
                       ? 3
-                      : completionCount >= 2
+                      : historyCount >= 2
                         ? 2
-                        : completionCount > 0
+                        : historyCount > 0
                           ? 1
                           : 0;
                 const inDragRange =
@@ -140,8 +140,8 @@ export function PlannerCalendar({
                       cell.inMonth ? "" : "is-outside",
                       cell.date === today ? "is-today" : "",
                       cell.date === selectedDate ? "is-selected" : "",
-                      completionLevel > 0
-                        ? `completion-level-${completionLevel}`
+                      historyLevel > 0
+                        ? `history-level-${historyLevel}`
                         : "",
                       dayTaskCount > 0 ||
                       daySpecialDates.length > 0
@@ -169,8 +169,8 @@ export function PlannerCalendar({
                         ? `, 기념일 ${daySpecialDates.length}개`
                         : ""
                     }${
-                      completionCount > 0
-                        ? `, 완료 기록 ${completionCount}개`
+                      historyCount > 0
+                        ? `, 변경 이력 ${historyCount}개`
                         : ""
                     }`}
                   >
