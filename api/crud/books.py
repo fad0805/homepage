@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from core.mastodon import maybe_notify_chapter
 from core.search import like_pattern, search_tokens
+from crud.tags import sync_chapter_tags
 from models.books import Book, BookCategory, Chapter, ChapterView
 from schemas.books import (
     BookCategoryCreate,
@@ -29,9 +30,12 @@ MAX_PINNED_CHAPTERS = 5
 
 def _clean_tags(tags: list[str] | None) -> list[str]:
     cleaned: list[str] = []
+    seen: set[str] = set()
     for tag in tags or []:
-        value = tag.strip()
-        if value and value not in cleaned:
+        value = tag.strip()[:255]
+        key = value.lower()
+        if value and key not in seen:
+            seen.add(key)
             cleaned.append(value)
     return cleaned[:20]
 
@@ -645,6 +649,8 @@ def create_chapter(
         _check_pinned_chapter_limit(db, payload.book_id)
     chapter = Chapter(**data)
     db.add(chapter)
+    db.flush()
+    sync_chapter_tags(db, chapter)
     db.commit()
     db.refresh(chapter)
     if payload.notify_mastodon:
@@ -714,6 +720,8 @@ def update_chapter(
         _reorder_chapters_by_created_at(db, previous_book_id)
         _reorder_chapters_by_created_at(db, next_book_id)
 
+    db.flush()
+    sync_chapter_tags(db, chapter)
     db.commit()
     db.refresh(chapter)
 

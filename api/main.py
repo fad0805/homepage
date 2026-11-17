@@ -12,6 +12,7 @@ from core import audit as _planner_audit  # noqa: F401 - registers history hooks
 from core.bookmark_retention import bookmark_retention_loop
 from core.config import API_DOCS_ENABLED, ENVIRONMENT
 from core.mastodon import mastodon_publish_loop
+from core.tag_cleanup import tag_cleanup_loop
 from core.uploads import UPLOAD_DIR, ensure_upload_dir
 from crud.users import hash_legacy_refresh_tokens
 from db.session import SessionLocal
@@ -32,6 +33,7 @@ from routers import (
     planner,
     profiles,
     settings,
+    tags,
     users,
     visits,
 )
@@ -53,11 +55,13 @@ async def lifespan(app:FastAPI):
     bookmark_retention_task = asyncio.create_task(
         bookmark_retention_loop()
     )
+    tag_cleanup_task = asyncio.create_task(tag_cleanup_loop())
     try:
         yield
     finally:
         mastodon_task.cancel()
         bookmark_retention_task.cancel()
+        tag_cleanup_task.cancel()
         with suppress(asyncio.CancelledError):
             await mastodon_task
         with suppress(asyncio.CancelledError):
@@ -132,6 +136,7 @@ app.include_router(
     tags=["chapter-drafts"],
 )
 app.include_router(settings.router, prefix="/settings", tags=["settings"])
+app.include_router(tags.router, prefix="/tags", tags=["tags"])
 app.include_router(users.router, prefix="/users", tags=["signin"])
 app.include_router(visits.router, prefix="/visits", tags=["visits"])
 

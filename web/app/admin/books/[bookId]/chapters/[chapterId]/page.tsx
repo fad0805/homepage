@@ -12,6 +12,7 @@ import { useParams, useRouter } from "next/navigation";
 
 import { MastodonShare } from "@/components/mastodon-share";
 import { RichTextEditor } from "@/components/rich-text-editor";
+import { TagInput } from "@/components/tag-input";
 import { apiFetch } from "@/lib/api";
 import { formatDateTime } from "@/lib/datetime";
 
@@ -951,9 +952,9 @@ export default function AdminChapterEdit() {
               </div>
               <label className="admin-field">
                 <span>태그</span>
-                <input
+                <TagInput
                   value={tagsInput}
-                  onChange={(event) => setTagsInput(event.target.value)}
+                  onChange={setTagsInput}
                   placeholder="쉼표로 구분 (선택)"
                 />
               </label>

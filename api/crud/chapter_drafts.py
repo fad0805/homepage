@@ -12,9 +12,12 @@ MAX_DRAFT_KEY_LENGTH = 120
 
 def _clean_tags(tags: list[str] | None) -> list[str]:
     cleaned: list[str] = []
+    seen: set[str] = set()
     for tag in tags or []:
-        value = tag.strip()
-        if value and value not in cleaned:
+        value = tag.strip()[:255]
+        key = value.lower()
+        if value and key not in seen:
+            seen.add(key)
             cleaned.append(value)
     return cleaned[:20]
 

@@ -13,6 +13,7 @@ import {
   type CropStageConfig,
   type CroppedImageResult,
 } from "@/components/image-crop-modal";
+import { TagInput } from "@/components/tag-input";
 import { apiFetch } from "@/lib/api";
 import {
   formatDate,
@@ -1257,10 +1258,10 @@ export default function AdminIllustrations() {
           </label>
           <label className="admin-illustrations-field">
             <span>태그 <em>선택</em></span>
-            <input
+            <TagInput
               value={tagsInput}
               placeholder="쉼표로 구분 (예: 바다, 밤)"
-              onChange={(event) => setTagsInput(event.target.value)}
+              onChange={setTagsInput}
             />
           </label>
         </div>
@@ -1375,10 +1376,11 @@ export default function AdminIllustrations() {
               </button>
               <label className="admin-illustrations-bulkbar__tags">
                 <span>태그</span>
-                <input
+                <TagInput
                   value={bulkTags}
                   placeholder="쉼표로 구분"
-                  onChange={(event) => setBulkTags(event.target.value)}
+                  onChange={setBulkTags}
+                  className="is-inline"
                 />
               </label>
               <button
@@ -1684,12 +1686,10 @@ export default function AdminIllustrations() {
                   </label>
                   <label className="admin-illustration-card__field">
                     <span>태그</span>
-                    <input
+                    <TagInput
                       value={editingTagsInput}
                       placeholder="쉼표로 구분 (예: 바다, 밤)"
-                      onChange={(event) =>
-                        setEditingTagsInput(event.target.value)
-                      }
+                      onChange={setEditingTagsInput}
                     />
                   </label>
                   <label className="admin-illustration-card__field is-inline">

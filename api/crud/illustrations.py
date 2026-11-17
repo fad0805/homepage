@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session, selectinload
 from core.mastodon import maybe_notify_illustration
 from core.search import like_pattern, search_tokens
 from core.uploads import delete_replaced_upload, delete_uploaded_file
+from crud.tags import sync_illustration_tags
 from models.illustrations import (
     Illustration,
     IllustrationImage,
@@ -27,9 +28,12 @@ ILLUSTRATION_VIEW_DEDUP_MINUTES = int(
 
 def _clean_tags(tags: list[str] | None) -> list[str]:
     cleaned: list[str] = []
+    seen: set[str] = set()
     for tag in tags or []:
-        value = tag.strip()
-        if value and value not in cleaned:
+        value = tag.strip()[:255]
+        key = value.lower()
+        if value and key not in seen:
+            seen.add(key)
             cleaned.append(value)
     return cleaned[:20]
 
@@ -287,6 +291,7 @@ def create_illustration_group(
             index = min(max(representative_index, 0), len(images) - 1)
             group.representative_image_id = images[index].id
 
+        sync_illustration_tags(db, group)
         db.commit()
     except Exception:
         db.rollback()
@@ -392,6 +397,8 @@ def update_illustration(
     for key, value in data.items():
         setattr(illustration, key, value)
 
+    db.flush()
+    sync_illustration_tags(db, illustration)
     db.commit()
     db.refresh(illustration)
     if not was_visible and illustration.visible is not False:
@@ -546,6 +553,10 @@ def bulk_update_illustrations(
         if not was_visible and illustration.visible is not False:
             became_visible.append(illustration)
 
+    db.flush()
+    if "tags" in data:
+        for illustration in illustrations:
+            sync_illustration_tags(db, illustration)
     db.commit()
     for illustration in became_visible:
         maybe_notify_illustration(db, illustration)

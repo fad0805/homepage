@@ -13,6 +13,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import relationship
 
 from db.base import Base
+from models.tags import ChapterTag, IllustrationTag, Tag  # noqa: F401
 from models.users import User
 
 

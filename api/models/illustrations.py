@@ -15,6 +15,7 @@ from sqlalchemy.orm import relationship
 
 from db.base import Base
 from db.types import ImageUrl
+from models.tags import ChapterTag, IllustrationTag, Tag  # noqa: F401
 from models.users import User
 
 
