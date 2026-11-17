@@ -2092,6 +2092,28 @@
   }
 }
 
+button.bookmark-journal-record-card,
+button.bookmark-journal-day {
+  width: 100%;
+  color: var(--foreground);
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color 0.16s ease,
+    background 0.16s ease;
+
+  &:hover,
+  &:focus-visible {
+    border-color: color-mix(
+      in srgb,
+      var(--theme-main) 52%,
+      transparent
+    );
+    background: var(--bookmark-soft-bg);
+  }
+}
+
 .bookmark-journal-record {
   display: flex;
   flex-direction: column;

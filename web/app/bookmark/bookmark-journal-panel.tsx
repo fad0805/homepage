@@ -70,13 +70,19 @@ export function BookmarkJournalPanel() {
   const { tree, loading, error, moveDecade, goToday } =
     useBookmarkJournalTree();
   const [yearStart, setYearStart] = useState<string | null>(null);
+  const [quarterStart, setQuarterStart] = useState<string | null>(
+    null,
+  );
   const [monthStart, setMonthStart] = useState<string | null>(null);
   const [weekStart, setWeekStart] = useState<string | null>(null);
+  const [dayStart, setDayStart] = useState<string | null>(null);
 
   useEffect(() => {
     setYearStart(null);
+    setQuarterStart(null);
     setMonthStart(null);
     setWeekStart(null);
+    setDayStart(null);
   }, [tree?.decade_start]);
 
   const yearNode =
@@ -84,16 +90,32 @@ export function BookmarkJournalPanel() {
       ? null
       : tree?.years.find((year) => year.period_start === yearStart) ??
         null;
+  const quarterNode =
+    yearNode && quarterStart !== null
+      ? yearNode.children.find(
+          (quarter) => quarter.period_start === quarterStart,
+        ) ?? null
+      : null;
   const monthNode =
     yearNode && monthStart !== null
-      ? yearNode.children
-          .flatMap((quarter) => quarter.children)
-          .find((month) => month.period_start === monthStart) ?? null
+      ? (quarterNode
+          ? quarterNode.children
+          : yearNode.children.flatMap(
+              (quarter) => quarter.children,
+            )
+        ).find((month) => month.period_start === monthStart) ??
+        null
       : null;
   const weekNode =
     monthNode && weekStart !== null
       ? monthNode.children.find(
           (week) => week.period_start === weekStart,
+        ) ?? null
+      : null;
+  const dayNode =
+    weekNode && dayStart !== null
+      ? weekNode.children.find(
+          (day) => day.period_start === dayStart,
         ) ?? null
       : null;
 
@@ -107,14 +129,39 @@ export function BookmarkJournalPanel() {
         .flatMap((quarter) => quarter.children)
         .sort((a, b) => a.period_start.localeCompare(b.period_start))
     : [];
+  const quarterMonths = quarterNode
+    ? [...quarterNode.children].sort((a, b) =>
+        a.period_start.localeCompare(b.period_start),
+      )
+    : [];
+
+  const openMonth = (month: BookmarkJournalNode) => {
+    const parent = yearNode?.children.find((quarter) =>
+      quarter.children.some(
+        (item) => item.period_start === month.period_start,
+      ),
+    );
+    setQuarterStart(parent?.period_start ?? null);
+    setMonthStart(month.period_start);
+    setWeekStart(null);
+    setDayStart(null);
+  };
 
   const goBack = () => {
+    if (dayStart) {
+      setDayStart(null);
+      return;
+    }
     if (weekStart) {
       setWeekStart(null);
       return;
     }
     if (monthStart) {
       setMonthStart(null);
+      return;
+    }
+    if (quarterStart) {
+      setQuarterStart(null);
       return;
     }
     if (yearStart) {
@@ -146,8 +193,10 @@ export function BookmarkJournalPanel() {
             key={year.period_start}
             onClick={() => {
               setYearStart(year.period_start);
+              setQuarterStart(null);
               setMonthStart(null);
               setWeekStart(null);
+              setDayStart(null);
             }}
           >
             <strong>{year.label}</strong>
@@ -159,27 +208,29 @@ export function BookmarkJournalPanel() {
   };
 
   const renderYear = (node: BookmarkJournalNode) => {
-    const quarterRecords = node.children.filter(
-      (quarter) =>
-        quarter.rating ||
-        quarter.goal?.content ||
-        quarter.review?.content,
-    );
+    const quarters = node.children;
     return (
       <>
         {renderRecord(node)}
-        {quarterRecords.length > 0 ? (
+        {quarters.length > 0 ? (
           <div className="bookmark-journal-section">
-            <h3>분기 기록</h3>
+            <h3>분기</h3>
             <div className="bookmark-journal-record-list">
-              {quarterRecords.map((quarter) => (
-                <article
-                  className="bookmark-journal-record-card"
+              {quarters.map((quarter) => (
+                <button
+                  type="button"
+                  className="bookmark-journal-record-card is-clickable"
                   key={quarter.period_start}
+                  onClick={() => {
+                    setQuarterStart(quarter.period_start);
+                    setMonthStart(null);
+                    setWeekStart(null);
+                    setDayStart(null);
+                  }}
                 >
                   <strong>{quarter.label}</strong>
                   {renderRecord(quarter)}
-                </article>
+                </button>
               ))}
             </div>
           </div>
@@ -197,10 +248,7 @@ export function BookmarkJournalPanel() {
                   type="button"
                   className="bookmark-journal-card"
                   key={month.period_start}
-                  onClick={() => {
-                    setMonthStart(month.period_start);
-                    setWeekStart(null);
-                  }}
+                  onClick={() => openMonth(month)}
                 >
                   <strong>
                     {Number(month.period_start.slice(5, 7))}월
@@ -214,6 +262,36 @@ export function BookmarkJournalPanel() {
       </>
     );
   };
+
+  const renderQuarter = (node: BookmarkJournalNode) => (
+    <>
+      {renderRecord(node)}
+      <div className="bookmark-journal-section">
+        <h3>월간 기록</h3>
+        {quarterMonths.length === 0 ? (
+          <p className="bookmark-empty-row">
+            이 분기에 기록된 월간 회고가 없습니다.
+          </p>
+        ) : (
+          <div className="bookmark-journal-grid is-months">
+            {quarterMonths.map((month) => (
+              <button
+                type="button"
+                className="bookmark-journal-card"
+                key={month.period_start}
+                onClick={() => openMonth(month)}
+              >
+                <strong>
+                  {Number(month.period_start.slice(5, 7))}월
+                </strong>
+                <span>{countText(month)}</span>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    </>
+  );
 
   const renderMonth = (node: BookmarkJournalNode) => (
     <>
@@ -231,7 +309,10 @@ export function BookmarkJournalPanel() {
                 type="button"
                 className="bookmark-journal-card"
                 key={week.period_start}
-                onClick={() => setWeekStart(week.period_start)}
+                onClick={() => {
+                  setWeekStart(week.period_start);
+                  setDayStart(null);
+                }}
               >
                 <strong>{week.label}</strong>
                 <span>{countText(week)}</span>
@@ -255,18 +336,24 @@ export function BookmarkJournalPanel() {
         ) : (
           <div className="bookmark-journal-record-list">
             {node.children.map((day) => (
-              <article
-                className="bookmark-journal-day"
+              <button
+                type="button"
+                className="bookmark-journal-day is-clickable"
                 key={day.period_start}
+                onClick={() => setDayStart(day.period_start)}
               >
                 <strong>{day.label}</strong>
                 {renderRecord(day)}
-              </article>
+              </button>
             ))}
           </div>
         )}
       </div>
     </>
+  );
+
+  const renderDay = (node: BookmarkJournalNode) => (
+    <>{renderRecord(node)}</>
   );
 
   return (
@@ -325,8 +412,10 @@ export function BookmarkJournalPanel() {
           type="button"
           onClick={() => {
             setYearStart(null);
+            setQuarterStart(null);
             setMonthStart(null);
             setWeekStart(null);
+            setDayStart(null);
           }}
         >
           {tree?.label ?? "10년"}
@@ -337,11 +426,28 @@ export function BookmarkJournalPanel() {
             <button
               type="button"
               onClick={() => {
+                setQuarterStart(null);
                 setMonthStart(null);
                 setWeekStart(null);
+                setDayStart(null);
               }}
             >
               {yearNode.label}
+            </button>
+          </>
+        ) : null}
+        {quarterNode ? (
+          <>
+            <span>/</span>
+            <button
+              type="button"
+              onClick={() => {
+                setMonthStart(null);
+                setWeekStart(null);
+                setDayStart(null);
+              }}
+            >
+              {quarterNode.label}
             </button>
           </>
         ) : null}
@@ -350,7 +456,10 @@ export function BookmarkJournalPanel() {
             <span>/</span>
             <button
               type="button"
-              onClick={() => setWeekStart(null)}
+              onClick={() => {
+                setWeekStart(null);
+                setDayStart(null);
+              }}
             >
               {monthNode.label}
             </button>
@@ -359,18 +468,33 @@ export function BookmarkJournalPanel() {
         {weekNode ? (
           <>
             <span>/</span>
-            <strong>{weekNode.label}</strong>
+            <button
+              type="button"
+              onClick={() => setDayStart(null)}
+            >
+              {weekNode.label}
+            </button>
+          </>
+        ) : null}
+        {dayNode ? (
+          <>
+            <span>/</span>
+            <strong>{dayNode.label}</strong>
           </>
         ) : null}
       </div>
 
-      {weekNode
-        ? renderWeek(weekNode)
-        : monthNode
-          ? renderMonth(monthNode)
-          : yearNode
-            ? renderYear(yearNode)
-            : renderDecade()}
+      {dayNode
+        ? renderDay(dayNode)
+        : weekNode
+          ? renderWeek(weekNode)
+          : monthNode
+            ? renderMonth(monthNode)
+            : quarterNode
+              ? renderQuarter(quarterNode)
+              : yearNode
+                ? renderYear(yearNode)
+                : renderDecade()}
     </section>
   );
 }
