@@ -422,7 +422,7 @@
   &.history-level-1:not(.is-drag-range):not(.is-drag-edge) {
     background: color-mix(
       in srgb,
-      var(--theme-main) 20%,
+      var(--theme-main) 14%,
       var(--input-background)
     );
   }
@@ -430,7 +430,7 @@
   &.history-level-2:not(.is-drag-range):not(.is-drag-edge) {
     background: color-mix(
       in srgb,
-      var(--theme-main) 45%,
+      var(--theme-main) 30%,
       var(--input-background)
     );
   }
@@ -438,16 +438,16 @@
   &.history-level-3:not(.is-drag-range):not(.is-drag-edge) {
     background: color-mix(
       in srgb,
-      var(--theme-main) 70%,
-      var(--title-color)
+      var(--theme-main) 48%,
+      var(--input-background)
     );
   }
 
   &.history-level-4:not(.is-drag-range):not(.is-drag-edge) {
     background: color-mix(
       in srgb,
-      var(--theme-main) 35%,
-      var(--title-color)
+      var(--theme-main) 66%,
+      var(--input-background)
     );
   }
 
@@ -495,19 +495,19 @@
 }
 
 [data-theme='dark'] .planner-calendar-day.history-level-1:not(.is-drag-range):not(.is-drag-edge) {
-  background: color-mix(in srgb, #8fd39a 14%, var(--input-background));
+  background: color-mix(in srgb, #8fd39a 12%, var(--input-background));
 }
 
 [data-theme='dark'] .planner-calendar-day.history-level-2:not(.is-drag-range):not(.is-drag-edge) {
-  background: color-mix(in srgb, #8fd39a 30%, var(--input-background));
+  background: color-mix(in srgb, #8fd39a 24%, var(--input-background));
 }
 
 [data-theme='dark'] .planner-calendar-day.history-level-3:not(.is-drag-range):not(.is-drag-edge) {
-  background: color-mix(in srgb, #8fd39a 48%, var(--input-background));
+  background: color-mix(in srgb, #8fd39a 38%, var(--input-background));
 }
 
 [data-theme='dark'] .planner-calendar-day.history-level-4:not(.is-drag-range):not(.is-drag-edge) {
-  background: color-mix(in srgb, #8fd39a 68%, var(--input-background));
+  background: color-mix(in srgb, #8fd39a 54%, var(--input-background));
 }
 
 .planner-day-number {
