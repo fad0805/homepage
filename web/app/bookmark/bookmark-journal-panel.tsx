@@ -15,6 +15,7 @@ import {
   periodLabel,
   shiftPeriod,
   startOfPeriod,
+  weekOfMonthLabel,
 } from "./bookmark-utils";
 
 type JournalLevel = "week" | "month" | "quarter" | "year" | "decade";
@@ -93,6 +94,14 @@ function textOrDash(value: string | null | undefined) {
   return text ? text : "-";
 }
 
+function hasAnyRecord(node: BookmarkJournalNode) {
+  return (
+    node.goal_count > 0 ||
+    node.review_count > 0 ||
+    node.rating_count > 0
+  );
+}
+
 function decadeStartForDate(value: string) {
   const year = parseDateKey(value).getUTCFullYear();
   return `${Math.floor(year / 10) * 10}-01-01`;
@@ -112,10 +121,9 @@ function levelLabel(
 ) {
   if (level === "week") {
     const date = parseDateKey(value);
-    const week = Math.floor((date.getUTCDate() - 1) / 7) + 1;
     return `${date.getUTCFullYear()}년 ${
       date.getUTCMonth() + 1
-    }월 ${week}째주`;
+    }월 ${weekOfMonthLabel(value)}`;
   }
   if (node) return node.label;
   if (level === "decade") {
@@ -203,6 +211,89 @@ function weekDayNodes(
     const start = shiftPeriod(node.period_start, "day", index);
     return existing.get(start) ?? emptyNode("day", start);
   });
+}
+
+type ParentLevel = Exclude<JournalLevel, "week">;
+
+const CHILD_TABLE_LABELS: Record<
+  ParentLevel,
+  { title: string; column: string }
+> = {
+  month: { title: "주간 기록", column: "주" },
+  quarter: { title: "월간 기록", column: "월" },
+  year: { title: "분기 기록", column: "분기" },
+  decade: { title: "연간 기록", column: "연도" },
+};
+
+function childLevelFor(level: ParentLevel): BookmarkJournalNodeLevel {
+  if (level === "decade") return "year";
+  if (level === "year") return "quarter";
+  if (level === "quarter") return "month";
+  return "week";
+}
+
+function monthWeekStarts(monthStart: string): string[] {
+  const monthDate = parseDateKey(monthStart);
+  let cursor = startOfPeriod(monthStart, "week");
+  let cursorDate = parseDateKey(cursor);
+  if (
+    cursorDate.getUTCFullYear() !== monthDate.getUTCFullYear() ||
+    cursorDate.getUTCMonth() !== monthDate.getUTCMonth()
+  ) {
+    cursor = shiftPeriod(cursor, "day", 7);
+    cursorDate = parseDateKey(cursor);
+  }
+  const starts: string[] = [];
+  while (
+    cursorDate.getUTCFullYear() === monthDate.getUTCFullYear() &&
+    cursorDate.getUTCMonth() === monthDate.getUTCMonth()
+  ) {
+    starts.push(cursor);
+    cursor = shiftPeriod(cursor, "day", 7);
+    cursorDate = parseDateKey(cursor);
+  }
+  return starts;
+}
+
+function childStartsFor(level: ParentLevel, start: string): string[] {
+  if (level === "decade") {
+    return Array.from({ length: 10 }, (_, index) =>
+      shiftPeriod(start, "year", index),
+    );
+  }
+  if (level === "year") {
+    return Array.from({ length: 4 }, (_, index) =>
+      shiftPeriod(start, "quarter", index),
+    );
+  }
+  if (level === "quarter") {
+    return Array.from({ length: 3 }, (_, index) =>
+      shiftPeriod(start, "month", index),
+    );
+  }
+  return monthWeekStarts(start);
+}
+
+function childNodesFor(
+  level: ParentLevel,
+  start: string,
+  existing: BookmarkJournalNode[],
+): BookmarkJournalNode[] {
+  const childLevel = childLevelFor(level);
+  const byStart = new Map(
+    existing
+      .filter((child) => child.level === childLevel)
+      .map((child) => [child.period_start, child]),
+  );
+  return childStartsFor(level, start).map(
+    (childStart) =>
+      byStart.get(childStart) ?? emptyNode(childLevel, childStart),
+  );
+}
+
+function childLabel(child: BookmarkJournalNode) {
+  const label = levelLabel(child.period_start, child.level, child);
+  return child.level === "year" ? label : withoutYear(label);
 }
 
 export function BookmarkJournalPanel() {
@@ -388,6 +479,64 @@ export function BookmarkJournalPanel() {
     </div>
   );
 
+  const renderChildTable = (
+    parentLevel: ParentLevel,
+    start: string,
+    existing: BookmarkJournalNode[],
+  ) => {
+    const labels = CHILD_TABLE_LABELS[parentLevel];
+    const children = childNodesFor(parentLevel, start, existing);
+    return (
+      <div className="bookmark-journal-section">
+        <h3>{labels.title}</h3>
+        <div className="bookmark-journal-table-wrap">
+          <table className="bookmark-journal-table">
+            <colgroup>
+              <col className="is-date" />
+              <col className="is-goal" />
+              <col className="is-rating" />
+              <col className="is-review" />
+            </colgroup>
+            <thead>
+              <tr>
+                <th scope="col">{labels.column}</th>
+                <th scope="col">목표</th>
+                <th scope="col">별점</th>
+                <th scope="col">회고</th>
+              </tr>
+            </thead>
+            <tbody>
+              {children.map((child) => (
+                <tr
+                  key={`${child.level}:${child.period_start}`}
+                  className="is-editable"
+                  tabIndex={0}
+                  title="클릭해서 수정"
+                  aria-label={`${childLabel(child)} 기록 수정`}
+                  onClick={() => setEditingNode(child)}
+                  onKeyDown={(event) => {
+                    if (
+                      event.target === event.currentTarget &&
+                      (event.key === "Enter" || event.key === " ")
+                    ) {
+                      event.preventDefault();
+                      setEditingNode(child);
+                    }
+                  }}
+                >
+                  <th scope="row">{childLabel(child)}</th>
+                  <td>{textOrDash(child.goal?.content)}</td>
+                  <td>{renderRating(child) ?? "-"}</td>
+                  <td>{textOrDash(child.review?.content)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    );
+  };
+
   const renderContent = () => {
     if (loading) {
       return <p className="bookmark-status">회고를 불러오는 중...</p>;
@@ -397,7 +546,12 @@ export function BookmarkJournalPanel() {
     }
     if (!tree) return null;
     if (level === "decade") {
-      return renderDecade();
+      return (
+        <>
+          {renderDecade()}
+          {renderChildTable("decade", periodStart, tree.years)}
+        </>
+      );
     }
     const targetNode =
       currentNode ?? emptyNode(level, periodStart);
@@ -416,12 +570,18 @@ export function BookmarkJournalPanel() {
           </button>
         </div>
         {renderRecord(targetNode) ??
-          (level !== "week" ? (
+          (level !== "week" && !hasAnyRecord(targetNode) ? (
             <p className="bookmark-empty-row">
               {EMPTY_LABELS[level]}
             </p>
           ) : null)}
-        {level === "week" ? renderWeekDays(targetNode) : null}
+        {level === "week"
+          ? renderWeekDays(targetNode)
+          : renderChildTable(
+              level,
+              periodStart,
+              targetNode.children,
+            )}
       </>
     );
   };

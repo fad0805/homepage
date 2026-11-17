@@ -241,8 +241,16 @@ export function periodLabel(value: string, type: BookmarkPeriodType) {
   }${endMonth}월 ${endDay}일`;
 }
 
+const WEEK_ORDINALS = ["첫", "둘", "셋", "넷", "다섯"];
+
 export function weekOfMonth(value: string) {
   return Math.floor((parseDateKey(value).getUTCDate() - 1) / 7) + 1;
+}
+
+export function weekOfMonthLabel(value: string) {
+  const week = weekOfMonth(value);
+  const ordinal = WEEK_ORDINALS[week - 1] ?? String(week);
+  return `${ordinal}째주`;
 }
 
 export function compactPeriodLabel(
@@ -269,9 +277,9 @@ export function compactPeriodLabel(
     const weekMonth = weekDate.getUTCMonth() + 1;
     const weekPrefix =
       weekYear === currentYear ? "" : `${weekYear}년 `;
-    return `${weekPrefix}${weekMonth}월 ${weekOfMonth(
+    return `${weekPrefix}${weekMonth}월 ${weekOfMonthLabel(
       weekStart,
-    )}째주`;
+    )}`;
   }
   if (type === "month") return `${prefix}${month}월`;
   if (type === "quarter") {
