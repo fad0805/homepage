@@ -4,14 +4,18 @@ from unittest.mock import patch
 
 from crud.bookmark.history import get_routine_history
 from crud.bookmark.periods import get_period
-from crud.bookmark.routines import update_routine
+from crud.bookmark.routines import set_routine_check, update_routine
 from crud.bookmark.schedule import _routine_monthly_due_date
 from crud.bookmark.statistics import (
     _routine_month_values,
     _upsert_routine_monthly_stat,
     get_statistics,
 )
-from schemas.bookmark import BookmarkRoutineUpdate
+from models.bookmark import BookmarkRoutineMonthlyStat
+from schemas.bookmark import (
+    BookmarkRoutineCheckUpdate,
+    BookmarkRoutineUpdate,
+)
 from tests.bookmark_test_base import BookmarkDatabaseTestCase
 
 
@@ -153,6 +157,46 @@ class BookmarkStatisticsTests(
             _routine_month_values(self.db, routine, date(2026, 3, 1)),
             (2, 15),
         )
+
+    def test_weekly_count_partial_checks_accumulate_monthly_stats(
+        self,
+    ) -> None:
+        routine = self.make_routine(
+            frequency="weekly",
+            tracking_mode="count",
+            target_count=3,
+            start_date=date(2026, 3, 4),
+        )
+        for count in (1, 2):
+            set_routine_check(
+                self.db,
+                routine.id,
+                BookmarkRoutineCheckUpdate(
+                    period_type="week",
+                    period_start=date(2026, 3, 2),
+                    count=count,
+                ),
+                routine.user_id,
+            )
+            self.assertEqual(
+                _routine_month_values(
+                    self.db,
+                    routine,
+                    date(2026, 3, 1),
+                ),
+                (count, 15),
+            )
+
+        stat = (
+            self.db.query(BookmarkRoutineMonthlyStat)
+            .filter(
+                BookmarkRoutineMonthlyStat.routine_id == routine.id,
+                BookmarkRoutineMonthlyStat.month_start == date(2026, 3, 1),
+            )
+            .one()
+        )
+        self.assertEqual(stat.completed_count, 2)
+        self.assertEqual(stat.expected_count, 15)
 
     def test_weekly_date_started_midweek_keeps_first_partial_week(
         self,
