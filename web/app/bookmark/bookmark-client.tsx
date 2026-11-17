@@ -46,6 +46,7 @@ import { apiFetch } from "@/lib/api";
 import { todayDateInputValue } from "@/lib/datetime";
 
 import { BookmarkCalendarModal } from "./bookmark-calendar-modal";
+import { BookmarkCategoryModal } from "./bookmark-category-modal";
 import { BookmarkMoodTagModal } from "./bookmark-mood-tag-modal";
 import { CloverRating } from "./clover-rating";
 import {
@@ -2519,114 +2520,21 @@ export default function BookmarkClient({ username }: { username: string }) {
         />
       ) : null}
       {categoryModalOpen ? (
-        <div
-          className="bookmark-modal-overlay"
-          role="presentation"
-          onClick={closeCategoryModal}
-        >
-          <div
-            className="bookmark-modal bookmark-category-modal"
-            role="dialog"
-            aria-modal="true"
-            aria-label="루틴 카테고리 관리"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <header className="bookmark-modal-header">
-              <div>
-                <p className="bookmark-panel-eyebrow">CATEGORY</p>
-                <h2>루틴 카테고리</h2>
-              </div>
-              <button
-                type="button"
-                className="bookmark-text-button"
-                onClick={closeCategoryModal}
-              >
-                닫기
-              </button>
-            </header>
-
-            {categoryError ? (
-              <p className="bookmark-error">{categoryError}</p>
-            ) : null}
-
-            {editingCategory ? (
-              <p className="bookmark-form-hint">
-                {editingCategory.name} 카테고리 수정 중
-              </p>
-            ) : null}
-            <form
-              className="bookmark-category-add"
-              onSubmit={(event) => {
-                event.preventDefault();
-                void handleAddCategory();
-              }}
-            >
-              <input
-                type="text"
-                value={newCategoryName}
-                maxLength={80}
-                placeholder={
-                  editingCategory ? "카테고리 이름" : "새 카테고리 이름"
-                }
-                onChange={(event) =>
-                  setNewCategoryName(event.target.value)
-                }
-              />
-              <button
-                type="submit"
-                className="bookmark-primary"
-                disabled={categorySaving || !newCategoryName.trim()}
-              >
-                {editingCategory ? "저장" : "추가"}
-              </button>
-              {editingCategory ? (
-                <button
-                  type="button"
-                  className="bookmark-text-button"
-                  disabled={categorySaving}
-                  onClick={cancelEditCategory}
-                >
-                  취소
-                </button>
-              ) : null}
-            </form>
-
-            {categories.length === 0 ? (
-              <p className="bookmark-empty-row">
-                아직 카테고리가 없습니다.
-              </p>
-            ) : (
-              <DndContext
-                sensors={dndSensors}
-                collisionDetection={closestCenter}
-                onDragEnd={handleCategoryDragEnd}
-              >
-                <SortableContext
-                  items={categories.map((category) => category.id)}
-                  strategy={verticalListSortingStrategy}
-                >
-                  <ul className="bookmark-category-list">
-                    {categories.map((category) => (
-                      <SortableCategoryItem
-                        key={category.id}
-                        category={category}
-                        saving={categorySaving}
-                        onEdit={startEditCategory}
-                        onDelete={(item) =>
-                          void handleDeleteCategory(item)
-                        }
-                      />
-                    ))}
-                  </ul>
-                </SortableContext>
-              </DndContext>
-            )}
-            <p className="bookmark-form-hint">
-              카테고리를 드래그해 순서를 바꿀 수 있습니다. 삭제하면
-              해당 루틴은 미분류로 이동합니다.
-            </p>
-          </div>
-        </div>
+        <BookmarkCategoryModal
+          error={categoryError}
+          editingCategory={editingCategory}
+          name={newCategoryName}
+          saving={categorySaving}
+          categories={categories}
+          sensors={dndSensors}
+          onNameChange={setNewCategoryName}
+          onClose={closeCategoryModal}
+          onSubmitCategory={() => void handleAddCategory()}
+          onCancelEdit={cancelEditCategory}
+          onDragEnd={handleCategoryDragEnd}
+          onEdit={startEditCategory}
+          onDelete={(category) => void handleDeleteCategory(category)}
+        />
       ) : null}
 
       {historyRoutine ? (
