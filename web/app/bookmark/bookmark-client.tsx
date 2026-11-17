@@ -51,6 +51,7 @@ import { BookmarkHistoryModal } from "./bookmark-history-modal";
 import { BookmarkMoodTagModal } from "./bookmark-mood-tag-modal";
 import { BookmarkRoutineModal } from "./bookmark-routine-modal";
 import { BookmarkStatisticsPanel } from "./bookmark-statistics-panel";
+import { useBookmarkData } from "./use-bookmark-data";
 import { CloverRating } from "./clover-rating";
 import {
   SortableCategoryItem,
@@ -102,13 +103,6 @@ export default function BookmarkClient({ username }: { username: string }) {
   const [view, setView] = useState<BookmarkView>("today");
   const collapseStorageKey = `bookmark-category-collapse:${username}:${view}`;
   const [periodStart, setPeriodStart] = useState(initialToday);
-  const [data, setData] = useState<BookmarkPeriod | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [statistics, setStatistics] =
-    useState<BookmarkStatistics | null>(null);
-  const [statsLoading, setStatsLoading] = useState(false);
-  const [statsError, setStatsError] = useState<string | null>(null);
   const [statsRange, setStatsRange] = useState<StatsRange>("month");
 
   const [goalContent, setGoalContent] = useState("");
@@ -120,7 +114,6 @@ export default function BookmarkClient({ username }: { username: string }) {
   const [goalSaved, setGoalSaved] = useState(false);
   const [dayMetaSaving, setDayMetaSaving] = useState(false);
   const [dayMetaSaved, setDayMetaSaved] = useState(false);
-  const [moodTags, setMoodTags] = useState<BookmarkMoodTag[]>([]);
   const [moodTagModalOpen, setMoodTagModalOpen] = useState(false);
   const [newMoodTagName, setNewMoodTagName] = useState("");
   const [editingMoodTag, setEditingMoodTag] =
@@ -158,9 +151,6 @@ export default function BookmarkClient({ username }: { username: string }) {
   const [itemNotes, setItemNotes] = useState("");
   const [itemSaving, setItemSaving] = useState(false);
 
-  const [categories, setCategories] = useState<
-    BookmarkRoutineCategory[]
-  >([]);
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [calendarMonth, setCalendarMonth] = useState(() =>
     startOfPeriod(initialToday, "month"),
@@ -196,6 +186,41 @@ export default function BookmarkClient({ username }: { username: string }) {
   const [routineMonth, setRoutineMonth] = useState(1);
   const [routineQuarter, setRoutineQuarter] = useState(0);
 
+  const handlePeriodLoaded = useCallback((next: BookmarkPeriod) => {
+    setGoalContent(next.goal?.content ?? "");
+    setGoalWakeTime(formatTime24h(next.goal?.wake_time));
+    setGoalMoodTagId(next.goal?.mood_tag_id ?? null);
+    setRating(next.rating?.rating ?? 0);
+    setRatingDraft(next.rating?.rating ?? 0);
+    setReviewContent(next.review?.content ?? "");
+    setGoalSaved(false);
+    setDayMetaSaved(false);
+    setReviewSaved(false);
+  }, []);
+
+  const {
+    data,
+    setData,
+    loading,
+    error,
+    setError,
+    statistics,
+    statsLoading,
+    statsError,
+    categories,
+    setCategories,
+    moodTags,
+    setMoodTags,
+    loadPeriod,
+    loadCategories,
+    loadMoodTags,
+    loadStatistics,
+  } = useBookmarkData({
+    view,
+    periodStart,
+    onPeriodLoaded: handlePeriodLoaded,
+  });
+
   useEffect(() => {
     let next: Record<string, boolean> = {};
     try {
@@ -230,104 +255,6 @@ export default function BookmarkClient({ username }: { username: string }) {
       return next;
     });
   };
-
-  const loadPeriod = useCallback(async () => {
-    if (view === "stats") {
-      setLoading(false);
-      return;
-    }
-    setLoading(true);
-    setError(null);
-    try {
-      const endpoint =
-        view === "today"
-          ? `/api/bookmark/today?period_start=${periodStart}`
-          : `/api/bookmark?period_type=${view}&period_start=${periodStart}`;
-      const next = await apiFetch<BookmarkPeriod>(endpoint, {
-        cache: "no-store",
-      });
-      setData(next);
-      setGoalContent(next.goal?.content ?? "");
-      setGoalWakeTime(formatTime24h(next.goal?.wake_time));
-      setGoalMoodTagId(next.goal?.mood_tag_id ?? null);
-      setRating(next.rating?.rating ?? 0);
-      setRatingDraft(next.rating?.rating ?? 0);
-      setReviewContent(next.review?.content ?? "");
-      setGoalSaved(false);
-      setDayMetaSaved(false);
-      setReviewSaved(false);
-    } catch (reason) {
-      setError(
-        reason instanceof Error
-          ? reason.message
-          : "책갈피를 불러오지 못했습니다.",
-      );
-    } finally {
-      setLoading(false);
-    }
-  }, [periodStart, view]);
-
-  const loadCategories = useCallback(async () => {
-    try {
-      const next = await apiFetch<BookmarkRoutineCategory[]>(
-        "/api/bookmark/categories",
-        { cache: "no-store" },
-      );
-      setCategories(next);
-    } catch {
-      // The routine list can still render uncategorized entries.
-    }
-  }, []);
-
-  useEffect(() => {
-    void loadPeriod();
-  }, [loadPeriod]);
-
-  const loadStatistics = useCallback(async () => {
-    setStatsLoading(true);
-    setStatsError(null);
-    try {
-      const next = await apiFetch<BookmarkStatistics>(
-        "/api/bookmark/statistics",
-        { cache: "no-store" },
-      );
-      setStatistics(next);
-    } catch (reason) {
-      setStatsError(
-        reason instanceof Error
-          ? reason.message
-          : "통계를 불러오지 못했습니다.",
-      );
-    } finally {
-      setStatsLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (view === "stats") {
-      void loadStatistics();
-    }
-  }, [loadStatistics, view]);
-
-  useEffect(() => {
-    void loadCategories();
-  }, [loadCategories]);
-
-  const loadMoodTags = useCallback(async () => {
-    try {
-      const next = await apiFetch<BookmarkMoodTag[]>(
-        "/api/bookmark/mood-tags",
-        { cache: "no-store" },
-      );
-      setMoodTags(next);
-    } catch {
-      // Mood can still be cleared if tags fail to load.
-    }
-  }, []);
-
-  useEffect(() => {
-    void loadMoodTags();
-  }, [loadMoodTags]);
 
   const changeView = (next: BookmarkView) => {
     setView(next);
