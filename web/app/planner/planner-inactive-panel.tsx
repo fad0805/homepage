@@ -19,6 +19,7 @@ interface PlannerInactivePanelProps {
   inactiveColorFilter: string | null;
   onToggleFilter: () => void;
   onColorFilterChange: (key: string | null) => void;
+  onAddTask: () => void;
   renderTaskCard: (task: PlannerTask) => ReactNode;
 }
 
@@ -33,6 +34,7 @@ export function PlannerInactivePanel({
   inactiveColorFilter,
   onToggleFilter,
   onColorFilterChange,
+  onAddTask,
   renderTaskCard,
 }: PlannerInactivePanelProps) {
   return (
@@ -44,10 +46,21 @@ export function PlannerInactivePanel({
             </h2>
             <p>
               {activeTab === "inactive"
-                ? "마감일이 지난 일정과 등록일 미지정 일정입니다. 등록일 미지정 일정은 수정해서 날짜를 지정할 수 있습니다."
+                ? "마감일이 지난 일정과 등록일 미지정 일정입니다. 여기서 추가한 일정은 비활성으로 저장됩니다."
                 : "휴지통에 있는 일정은 30일 뒤 영구 삭제됩니다."}
             </p>
           </div>
+          {activeTab === "inactive" ? (
+            <div className="planner-day-panel-actions">
+              <button
+                type="button"
+                className="planner-primary"
+                onClick={onAddTask}
+              >
+                추가
+              </button>
+            </div>
+          ) : null}
         </div>
         {activeTab === "inactive" ? (
           <>

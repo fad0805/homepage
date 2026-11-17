@@ -140,6 +140,10 @@ def create_task(
             pinned=pinned,
         )
 
+    if payload.inactive and task.status != "inactive":
+        task.status = "inactive"
+        task.inactive_at = _utc_naive_now()
+
     db.add(task)
     db.commit()
     db.refresh(task)

@@ -22,6 +22,7 @@ class PlannerTaskCreate(BaseModel):
     end_date: date | None = None
     deadline_days: int | None = Field(default=7, ge=1, le=365)
     pinned: bool = False
+    inactive: bool = False
 
 
 class PlannerTaskUpdate(BaseModel):

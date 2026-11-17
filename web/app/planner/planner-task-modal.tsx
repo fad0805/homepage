@@ -11,6 +11,7 @@ import { addDays } from "./planner-utils";
 interface PlannerTaskModalProps {
   editingId: number | null;
   recordCompleted: boolean;
+  createInactive: boolean;
   form: TaskFormState;
   setForm: Dispatch<SetStateAction<TaskFormState>>;
   error: string | null;
@@ -28,6 +29,7 @@ interface PlannerTaskModalProps {
 export function PlannerTaskModal({
   editingId,
   recordCompleted,
+  createInactive,
   form,
   setForm,
   error,
@@ -56,7 +58,9 @@ export function PlannerTaskModal({
               ? "일정 수정"
               : recordCompleted
                 ? "완료 일정 기록"
-                : "새 일정"
+                : createInactive
+                  ? "비활성 일정 추가"
+                  : "새 일정"
           }
           onClick={(event) => event.stopPropagation()}
         >
@@ -67,7 +71,9 @@ export function PlannerTaskModal({
                   ? "일정 수정"
                   : recordCompleted
                     ? "완료 일정 기록"
-                    : "새 일정"}
+                    : createInactive
+                      ? "비활성 일정 추가"
+                      : "새 일정"}
               </h2>
               <button
                 type="button"
@@ -78,6 +84,11 @@ export function PlannerTaskModal({
               </button>
             </div>
             {error ? <p className="planner-error">{error}</p> : null}
+            {createInactive ? (
+              <p className="planner-form-hint">
+                추가한 일정은 비활성 일정으로 저장됩니다.
+              </p>
+            ) : null}
             <label>
               <span>제목</span>
               <input

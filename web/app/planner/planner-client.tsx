@@ -239,6 +239,7 @@ export default function PlannerClient({ username }: { username: string }) {
   });
   const [recordCompleted, setRecordCompleted] = useState(false);
   const [taskModalOpen, setTaskModalOpen] = useState(false);
+  const [createInactive, setCreateInactive] = useState(false);
   const initializedToday = useRef(false);
   const eventsRequestRef = useRef(0);
 
@@ -333,6 +334,7 @@ export default function PlannerClient({ username }: { username: string }) {
       if (taskModalOpen) {
         setTaskModalOpen(false);
         setEditingId(null);
+        setCreateInactive(false);
         setForm(emptyForm(today));
         setError(null);
         return;
@@ -514,6 +516,7 @@ export default function PlannerClient({ username }: { username: string }) {
   const resetForm = () => {
     setEditingId(null);
     setRecordCompleted(false);
+    setCreateInactive(false);
     setForm(emptyForm(today));
     setShowChipCreator(false);
   };
@@ -527,6 +530,7 @@ export default function PlannerClient({ username }: { username: string }) {
   const startRestoringCompletedTask = (event: PlannerEvent) => {
     setEditingId(null);
     setRecordCompleted(false);
+    setCreateInactive(false);
     setForm({
       ...emptyForm(today),
       title: event.title || "완료한 일정",
@@ -571,6 +575,7 @@ export default function PlannerClient({ username }: { username: string }) {
   const openCompletedSingle = (date: string) => {
     setRecordCompleted(true);
     setEditingId(null);
+    setCreateInactive(false);
     setForm({
       ...emptyForm(date),
       scheduleType: "single",
@@ -592,9 +597,22 @@ export default function PlannerClient({ username }: { username: string }) {
       selectedDate && selectedDate >= today ? selectedDate : today;
     setEditingId(null);
     setRecordCompleted(false);
+    setCreateInactive(false);
     setForm(emptyForm(startDate));
     setShowChipCreator(false);
     setError(null);
+    setTaskModalOpen(true);
+  };
+
+  const openNewInactiveTask = () => {
+    setEditingId(null);
+    setRecordCompleted(false);
+    setCreateInactive(true);
+    setForm(emptyForm(today));
+    setShowChipCreator(false);
+    setError(null);
+    setInactiveColorFilter(null);
+    setInactiveFilterOpen(false);
     setTaskModalOpen(true);
   };
 
@@ -605,6 +623,7 @@ export default function PlannerClient({ username }: { username: string }) {
   ) => {
     setRecordCompleted(completed);
     setEditingId(null);
+    setCreateInactive(false);
     setForm({
       ...emptyForm(startDate),
       scheduleType: "range",
@@ -721,6 +740,7 @@ export default function PlannerClient({ username }: { username: string }) {
     setSelectedTask(null);
     setEditingId(task.id);
     setRecordCompleted(false);
+    setCreateInactive(false);
     setForm({
       title: task.title,
       notes: task.notes || "",
@@ -821,7 +841,10 @@ export default function PlannerClient({ username }: { username: string }) {
       } else {
         await apiFetch<PlannerTask>("/api/planner/tasks", {
           method: "POST",
-          body: JSON.stringify(payload),
+          body: JSON.stringify({
+            ...payload,
+            inactive: createInactive,
+          }),
         });
       }
       closeTaskModal();
@@ -1227,6 +1250,7 @@ export default function PlannerClient({ username }: { username: string }) {
                     setInactiveFilterOpen((previous) => !previous)
                   }
                   onColorFilterChange={setInactiveColorFilter}
+                  onAddTask={openNewInactiveTask}
                   renderTaskCard={renderTaskCard}
                 />
               )}
@@ -1239,6 +1263,7 @@ export default function PlannerClient({ username }: { username: string }) {
         <PlannerTaskModal
           editingId={editingId}
           recordCompleted={recordCompleted}
+          createInactive={createInactive}
           form={form}
           setForm={setForm}
           error={error}

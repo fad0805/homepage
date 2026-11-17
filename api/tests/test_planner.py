@@ -194,6 +194,21 @@ class PlannerCrudTests(
             self.assertEqual(ranged["schedule_type"], "range")
             self.assertEqual(ranged["end_date"], date(2026, 11, 20))
 
+            inactive = create_task(
+                self.db,
+                PlannerTaskCreate(
+                    title="비활성 추가",
+                    schedule_type="single",
+                    start_date=date(2026, 11, 17),
+                    deadline_days=3,
+                    inactive=True,
+                ),
+                1,
+            )
+            self.assertEqual(inactive["status"], "inactive")
+            self.assertIsNotNone(inactive["inactive_at"])
+            self.assertEqual(inactive["start_date"], date(2026, 11, 17))
+
             undated = create_task(
                 self.db,
                 PlannerTaskCreate(
