@@ -27,6 +27,7 @@ import {
 import "@/public/styles/planner.scss";
 
 import { PlannerCalendar } from "./planner-calendar";
+import { PlannerTaskCard } from "./planner-task-card";
 import { PlannerChipManager } from "./planner-chip-manager";
 import { PlannerColorPanel } from "./planner-color-panel";
 import { PlannerDatePanel } from "./planner-date-panel";
@@ -1830,47 +1831,12 @@ export default function PlannerClient({ username }: { username: string }) {
   };
 
   const renderTaskCard = (task: PlannerTask) => (
-    <li
-      className="planner-task-item planner-task-card"
-      key={task.id}
-      role="button"
-      tabIndex={0}
-      onClick={() => openTaskDetail(task)}
-      onKeyDown={(event) => {
-        if (event.target !== event.currentTarget) return;
-        if (event.key === "Enter" || event.key === " ") {
-          event.preventDefault();
-          openTaskDetail(task);
-        }
-      }}
-    >
-      <div className="planner-task-main">
-        <div className="planner-task-title-row">
-          <span
-            className="planner-task-color"
-            style={{ backgroundColor: taskColor(task) }}
-            aria-hidden="true"
-          />
-          <strong>{task.title}</strong>
-        </div>
-        <p className="planner-task-meta planner-task-deadline">
-          {task.end_date
-            ? `마감 ${formatDateOnly(task.end_date)}`
-            : "등록일 미지정"}
-        </p>
-        {task.notes ? (
-          <PlannerNoteContent
-            notes={task.notes}
-            disabled={
-              task.status === "trashed" || noteSavingId !== null
-            }
-            onToggle={(index) =>
-              void handleToggleTaskNote(task, index)
-            }
-          />
-        ) : null}
-      </div>
-    </li>
+    <PlannerTaskCard
+      task={task}
+      noteSavingId={noteSavingId}
+      onOpen={openTaskDetail}
+      onToggleNote={(index) => void handleToggleTaskNote(task, index)}
+    />
   );
 
   const renderDayTasks = (dateTasks: PlannerTask[]) =>

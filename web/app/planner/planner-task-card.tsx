@@ -1,0 +1,61 @@
+import type { PlannerTask } from "./planner-types";
+import { formatDateOnly, taskColor } from "./planner-utils";
+import { PlannerNoteContent } from "./planner-note-content";
+
+interface PlannerTaskCardProps {
+  task: PlannerTask;
+  noteSavingId: number | null;
+  onOpen: (task: PlannerTask) => void;
+  onToggleNote: (index: number) => void;
+}
+
+export function PlannerTaskCard({
+  task,
+  noteSavingId,
+  onOpen,
+  onToggleNote,
+}: PlannerTaskCardProps) {
+  return (
+      <li
+        className="planner-task-item planner-task-card"
+        key={task.id}
+        role="button"
+        tabIndex={0}
+        onClick={() => onOpen(task)}
+        onKeyDown={(event) => {
+          if (event.target !== event.currentTarget) return;
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            onOpen(task);
+          }
+        }}
+      >
+        <div className="planner-task-main">
+          <div className="planner-task-title-row">
+            <span
+              className="planner-task-color"
+              style={{ backgroundColor: taskColor(task) }}
+              aria-hidden="true"
+            />
+            <strong>{task.title}</strong>
+          </div>
+          <p className="planner-task-meta planner-task-deadline">
+            {task.end_date
+              ? `마감 ${formatDateOnly(task.end_date)}`
+              : "등록일 미지정"}
+          </p>
+          {task.notes ? (
+            <PlannerNoteContent
+              notes={task.notes}
+              disabled={
+                task.status === "trashed" || noteSavingId !== null
+              }
+              onToggle={(index) =>
+                void onToggleNote(index)
+              }
+            />
+          ) : null}
+        </div>
+      </li>
+  );
+}
