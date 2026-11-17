@@ -27,8 +27,16 @@ from fastapi.responses import FileResponse
 from sqlalchemy import and_, func
 from sqlalchemy.orm import Session, selectinload
 
-from core.archive_jobs import ArchiveJobBusy, ArchiveJobManager
-from core.config import ARCHIVE_DIR, ARCHIVE_THROTTLE_SECONDS
+from core.archive_jobs import (
+    ArchiveJobBusy,
+    ArchiveJobManager,
+    ArchiveJobThrottled,
+)
+from core.config import (
+    ARCHIVE_DIR,
+    ARCHIVE_REEXPORT_HOURS,
+    ARCHIVE_THROTTLE_SECONDS,
+)
 from core.uploads import get_upload_source, open_uploaded_file
 from db.session import SessionLocal, get_db
 from models.bookmark import (
@@ -1697,6 +1705,15 @@ def create_archive_job(
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="이미 내보내기가 진행 중입니다.",
+        ) from None
+    except ArchiveJobThrottled as exc:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=(
+                f"최근 {ARCHIVE_REEXPORT_HOURS}시간 이내에 생성된 "
+                "내보내기 파일이 있습니다. 잠시 후 다시 시도해주세요."
+            ),
+            headers={"Retry-After": str(exc.retry_after)},
         ) from None
 
 

@@ -169,6 +169,12 @@ a.admin-button.primary:visited {
   border-color: #f5c2be;
 }
 
+.admin-notice-info {
+  background: #fff4d6;
+  color: #7a5300;
+  border-color: #f0d38a;
+}
+
 [data-theme='dark'] .admin-notice-success {
   background: #173a22;
   color: #b9e4c5;
@@ -179,6 +185,12 @@ a.admin-button.primary:visited {
   background: #3a1d1c;
   color: #f2b8b4;
   border-color: #5c2b29;
+}
+
+[data-theme='dark'] .admin-notice-info {
+  background: #3b3218;
+  color: #f1d99a;
+  border-color: #5c4b24;
 }
 
 /* Categories */

@@ -13,7 +13,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Callable
 
-from core.config import ARCHIVE_RETENTION_HOURS
+from core.config import ARCHIVE_REEXPORT_HOURS, ARCHIVE_RETENTION_HOURS
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -27,6 +27,15 @@ class ArchiveJobBusy(Exception):
     def __init__(self, job: dict[str, Any]):
         super().__init__("Archive job already running")
         self.job = job
+
+
+class ArchiveJobThrottled(Exception):
+    """Raised when the owner already has a fresh archive file."""
+
+    def __init__(self, job: dict[str, Any], retry_after: int):
+        super().__init__("Archive export is cooling down")
+        self.job = job
+        self.retry_after = retry_after
 
 
 class ArchiveJobManager:
@@ -56,12 +65,29 @@ class ArchiveJobManager:
         scope_label: str = "전체",
     ) -> dict[str, Any]:
         with self._lock:
+            now = datetime.now(timezone.utc)
             active = self._find_active()
             if active is not None:
                 raise ArchiveJobBusy(self._public(active))
 
+            recent = self._find_recent_completed(owner, now)
+            if recent is not None:
+                completed = _parse_datetime(
+                    recent.get("completed_at")
+                ) or now
+                available_at = completed + timedelta(
+                    hours=ARCHIVE_REEXPORT_HOURS
+                )
+                retry_after = max(
+                    1,
+                    int((available_at - now).total_seconds() + 0.999),
+                )
+                raise ArchiveJobThrottled(
+                    self._public(recent),
+                    retry_after,
+                )
+
             job_id = uuid.uuid4().hex
-            now = datetime.now(timezone.utc)
             meta = {
                 "id": job_id,
                 "owner": owner,
@@ -226,6 +252,28 @@ class ArchiveJobManager:
             if meta.get("status") in ("queued", "running"):
                 return meta
         return None
+
+    def _find_recent_completed(
+        self,
+        owner: str,
+        now: datetime,
+    ) -> dict[str, Any] | None:
+        if ARCHIVE_REEXPORT_HOURS <= 0:
+            return None
+        cutoff = now - timedelta(hours=ARCHIVE_REEXPORT_HOURS)
+        recent: list[tuple[datetime, dict[str, Any]]] = []
+        for meta in self._load_all():
+            if (
+                meta.get("owner") != owner
+                or meta.get("status") != "completed"
+            ):
+                continue
+            completed = _parse_datetime(meta.get("completed_at"))
+            if completed is not None and completed >= cutoff:
+                recent.append((completed, meta))
+        if not recent:
+            return None
+        return max(recent, key=lambda item: item[0])[1]
 
     def _public(self, meta: dict[str, Any]) -> dict[str, Any]:
         job = {key: value for key, value in meta.items() if key != "owner"}

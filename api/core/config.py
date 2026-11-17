@@ -44,6 +44,9 @@ ARCHIVE_DIR = Path(
     os.getenv('ARCHIVE_DIR', '/tmp/missing-island-archives')
 )
 ARCHIVE_RETENTION_HOURS = int(os.getenv('ARCHIVE_RETENTION_HOURS', 72))
+# A newly created archive blocks another request from the same owner for this
+# long. Set to 0 to allow immediate re-exports.
+ARCHIVE_REEXPORT_HOURS = int(os.getenv('ARCHIVE_REEXPORT_HOURS', 24))
 # A small delay between items keeps a large export from monopolizing the
 # server. Set to 0 to disable throttling.
 ARCHIVE_THROTTLE_SECONDS = float(os.getenv('ARCHIVE_THROTTLE_SECONDS', 0.05))

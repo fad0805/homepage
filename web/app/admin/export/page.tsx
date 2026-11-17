@@ -105,6 +105,17 @@ const STAGE_LABELS: Record<string, string> = {
   failed: "실패",
 };
 
+const REEXPORT_COOLDOWN_MS = 24 * 60 * 60 * 1000;
+
+function isWithinReexportCooldown(job: ArchiveJob, now: number): boolean {
+  if (job.status !== "completed" || !job.completed_at) return false;
+  const completedAt = new Date(job.completed_at).getTime();
+  return (
+    Number.isFinite(completedAt) &&
+    now - completedAt < REEXPORT_COOLDOWN_MS
+  );
+}
+
 function formatBytes(bytes: number | null): string {
   if (bytes === null || bytes === undefined) return "-";
   const units = ["B", "KB", "MB", "GB"];
@@ -132,6 +143,7 @@ export default function AdminExportPage() {
   const [users, setUsers] = useState<ArchiveUser[]>([]);
   const [usersLoading, setUsersLoading] = useState(false);
   const [scope, setScope] = useState<string>("all");
+  const [clock, setClock] = useState(() => Date.now());
 
   const loadJobs = useCallback(async () => {
     try {
@@ -207,12 +219,34 @@ export default function AdminExportPage() {
     [jobs],
   );
   const hasActive = activeJob !== null;
+  const recentCompletedJob = useMemo(
+    () =>
+      jobs.find((job) => isWithinReexportCooldown(job, clock)) ?? null,
+    [clock, jobs],
+  );
+  const hasCooldown = recentCompletedJob !== null;
+  const cooldownAvailableAt = useMemo(() => {
+    if (!recentCompletedJob?.completed_at) return null;
+    const completedAt = new Date(
+      recentCompletedJob.completed_at,
+    ).getTime();
+    if (!Number.isFinite(completedAt)) return null;
+    return new Date(completedAt + REEXPORT_COOLDOWN_MS);
+  }, [recentCompletedJob]);
+  const startBlocked =
+    hasActive || hasCooldown || starting !== null || !scopeReady;
 
   useEffect(() => {
     if (!hasActive) return;
     const timer = setInterval(loadJobs, 2000);
     return () => clearInterval(timer);
   }, [hasActive, loadJobs]);
+
+  useEffect(() => {
+    if (!hasCooldown) return;
+    const timer = setInterval(() => setClock(Date.now()), 60_000);
+    return () => clearInterval(timer);
+  }, [hasCooldown]);
 
   const latestJob = jobs[0] ?? null;
   const featuredJob =
@@ -222,7 +256,7 @@ export default function AdminExportPage() {
     .slice(0, 5);
 
   const startJob = async (section: string) => {
-    if (hasActive || starting || !scopeReady) return;
+    if (startBlocked) return;
 
     const params = new URLSearchParams({ section });
     if (isAdmin && scope !== "all") {
@@ -274,6 +308,7 @@ export default function AdminExportPage() {
               onChange={(event) => setScope(event.target.value)}
               disabled={
                 hasActive ||
+                hasCooldown ||
                 starting !== null ||
                 usersLoading
               }
@@ -306,12 +341,26 @@ export default function AdminExportPage() {
         <div className="admin-notice admin-notice-error">{error}</div>
       ) : null}
 
+      {hasCooldown && recentCompletedJob ? (
+        <div className="admin-notice admin-notice-info">
+          {formatDateTime(recentCompletedJob.completed_at)}에 생성된
+          내보내기 파일이 있습니다. 파일 생성 후 24시간 동안은 새로
+          만들 수 없습니다.
+          {cooldownAvailableAt
+            ? ` ${formatDateTime(
+                cooldownAvailableAt.toISOString(),
+              )} 이후 다시 시도해주세요.`
+            : null}
+        </div>
+      ) : null}
+
       {featuredJob ? (
         <JobPanel
           job={featuredJob}
           onDismiss={() => setDismissedId(featuredJob.id)}
           onRetry={() => startJob(featuredJob.section)}
           retrying={starting === featuredJob.section}
+          startBlocked={startBlocked}
         />
       ) : loading ? (
         <p className="admin-dashboard-state">
@@ -339,9 +388,7 @@ export default function AdminExportPage() {
             type="button"
             className="admin-button primary"
             onClick={() => startJob("all")}
-            disabled={
-              hasActive || starting !== null || !scopeReady
-            }
+            disabled={startBlocked}
           >
             {starting === "all" ? "시작 중..." : "전체 ZIP 만들기"}
           </button>
@@ -366,9 +413,7 @@ export default function AdminExportPage() {
                 type="button"
                 className="admin-button"
                 onClick={() => startJob(item.section)}
-                disabled={
-                  hasActive || starting !== null || !scopeReady
-                }
+                disabled={startBlocked}
               >
                 {starting === item.section ? "시작 중..." : "만들기"}
               </button>
@@ -419,11 +464,13 @@ function JobPanel({
   onDismiss,
   onRetry,
   retrying,
+  startBlocked,
 }: {
   job: ArchiveJob;
   onDismiss: () => void;
   onRetry: () => void;
   retrying: boolean;
+  startBlocked: boolean;
 }) {
   const active = job.status === "queued" || job.status === "running";
   const percent = clampPercent(job.progress.percent);
@@ -521,7 +568,7 @@ function JobPanel({
           type="button"
           className="admin-button primary"
           onClick={onRetry}
-          disabled={retrying}
+          disabled={startBlocked || retrying}
         >
           {retrying ? "시작 중..." : "다시 시도"}
         </button>

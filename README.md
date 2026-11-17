@@ -164,6 +164,7 @@ python3 -m unittest discover -s tests -v
 | `S3_ADDRESSING_STYLE` / `S3_ACL` | 선택 | S3 호환 스토리지 옵션 |
 | `GALLERY_SESSION_DAYS` / `GALLERY_INVITE_HOURS` | 선택 | 갤러리 열람 유지/초대 코드 유효 시간 |
 | `ARCHIVE_DIR` / `ARCHIVE_RETENTION_HOURS` | 선택 | 내보내기 ZIP 저장 경로/보관 시간 |
+| `ARCHIVE_REEXPORT_HOURS` | 선택 | 생성된 ZIP 이후 재요청 제한 시간(기본 24) |
 | `ARCHIVE_THROTTLE_SECONDS` | 선택 | 내보내기 파일 생성 간 지연 |
 | `SITE_URL` / `API_INTERNAL_URL` / `PUBLIC_DATA_REVALIDATE` | 선택 | Web 컨테이너의 공개 URL, API 주소, 캐시 시간 |
 
