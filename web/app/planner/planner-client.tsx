@@ -363,14 +363,6 @@ export default function PlannerClient({ username }: { username: string }) {
     specialModalOpen,
     today,
   ]);
-  const colorViewTasks = useMemo(
-    () =>
-      tasks.filter(
-        (task) =>
-          task.status === "active" || task.status === "inactive",
-      ),
-    [tasks],
-  );
   const calendarTasks = useMemo(() => {
     if (
       activeTab !== "colors" ||
@@ -497,10 +489,6 @@ export default function PlannerClient({ username }: { username: string }) {
         specialDateAppearsOn(item, selectedDate),
       ),
     [specialDates, selectedDate],
-  );
-  const eventDates = useMemo(
-    () => new Set(events.map(eventDate)),
-    [events],
   );
   const completionCounts = useMemo(() => {
     const counts = new Map<string, number>();
@@ -1186,12 +1174,10 @@ export default function PlannerClient({ username }: { username: string }) {
               monthPickerOpen={monthPickerOpen}
               weeks={weeks}
               calendarTasks={calendarTasks}
-              colorViewTasks={colorViewTasks}
               specialDates={specialDates}
               today={today}
               selectedDate={selectedDate}
               dragBounds={dragBounds}
-              eventDates={eventDates}
               completionCounts={completionCounts}
               onChangeMonth={changeMonth}
               onOpenMonthPicker={openMonthPicker}

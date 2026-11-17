@@ -17,11 +17,6 @@
     var(--theme-main) 52%,
     var(--input-background)
   );
-  --planner-past-record-bg: color-mix(
-    in srgb,
-    var(--theme-main) 10%,
-    transparent
-  );
 }
 
 [data-theme='dark'] {
@@ -39,11 +34,6 @@
     in srgb,
     var(--theme-main) 30%,
     var(--input-background)
-  );
-  --planner-past-record-bg: color-mix(
-    in srgb,
-    var(--theme-main) 16%,
-    transparent
   );
 }
 
@@ -428,10 +418,6 @@
     background 0.16s ease,
     border-color 0.16s ease,
     opacity 0.16s ease;
-
-  &.has-past-records {
-    background: var(--planner-past-record-bg);
-  }
 
   &.completion-level-1:not(.is-selected):not(.is-drag-range):not(.is-drag-edge) {
     background: color-mix(

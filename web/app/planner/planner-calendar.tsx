@@ -18,12 +18,10 @@ interface PlannerCalendarProps {
   monthPickerOpen: boolean;
   weeks: CalendarWeek[];
   calendarTasks: PlannerTask[];
-  colorViewTasks: PlannerTask[];
   specialDates: PlannerSpecialDate[];
   today: string;
   selectedDate: string;
   dragBounds: [string, string] | null;
-  eventDates: Set<string>;
   completionCounts: Map<string, number>;
   onChangeMonth: (delta: number) => void;
   onOpenMonthPicker: () => void;
@@ -40,12 +38,10 @@ export function PlannerCalendar({
   monthPickerOpen,
   weeks,
   calendarTasks,
-  colorViewTasks,
   specialDates,
   today,
   selectedDate,
   dragBounds,
-  eventDates,
   completionCounts,
   onChangeMonth,
   onOpenMonthPicker,
@@ -114,17 +110,6 @@ export function PlannerCalendar({
                   (item) =>
                     specialDateAppearsOn(item, cell.date),
                 );
-                const hasTaskRecord = colorViewTasks.some(
-                  (task) =>
-                    task.start_date &&
-                    task.end_date &&
-                    task.start_date <= cell.date &&
-                    cell.date <= task.end_date,
-                );
-                const hasPastRecords =
-                  cell.date < today &&
-                  (hasTaskRecord ||
-                    eventDates.has(cell.date));
                 const completionCount =
                   completionCounts.get(cell.date) ?? 0;
                 const completionLevel =
@@ -155,7 +140,6 @@ export function PlannerCalendar({
                       cell.inMonth ? "" : "is-outside",
                       cell.date === today ? "is-today" : "",
                       cell.date === selectedDate ? "is-selected" : "",
-                      hasPastRecords ? "has-past-records" : "",
                       completionLevel > 0
                         ? `completion-level-${completionLevel}`
                         : "",
