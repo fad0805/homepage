@@ -410,10 +410,11 @@ export default function BookmarkClient({ username }: { username: string }) {
     onError: setError,
   });
 
+  const isCountRoutine = (routine: BookmarkRoutine) =>
+    routine.tracking_mode === "count" && routine.frequency !== "daily";
+
   const isRoutineDone = (routine: BookmarkRoutine) => {
-    const isDaily = routine.frequency === "daily";
-    const isCount =
-      routine.tracking_mode === "count" && !isDaily;
+    const isCount = isCountRoutine(routine);
     if (isCount || routine.frequency === "weekly") {
       return (
         routine.manual_done ||
@@ -444,7 +445,7 @@ export default function BookmarkClient({ username }: { username: string }) {
         <p className="bookmark-empty-row">
           {periodType === "day"
             ? isTodaySelected
-              ? "오늘 수행할 루틴이 없습니다. 상단에서 주·월·분기·연을 선택해 루틴을 추가할 수 있습니다."
+              ? "오늘 수행할 루틴이 없습니다. 추가 버튼으로 새 루틴을 만들 수 있습니다."
               : "이 날짜에 수행할 루틴이 없습니다."
             : "이 기간에 등록된 루틴이 없습니다."}
         </p>
@@ -481,34 +482,72 @@ export default function BookmarkClient({ username }: { username: string }) {
       };
     };
 
-    const sections: RoutineSection[] = categories
-      .map((category) =>
-        buildCategorySection(
-          `category-${category.id}`,
-          category.name,
-          category.id,
-          routines.filter(
-            (routine) => routine.category_id === category.id,
+    const buildCategorySections = (
+      items: BookmarkRoutine[],
+      keyPrefix = "",
+    ): RoutineSection[] => {
+      const sections = categories
+        .map((category) =>
+          buildCategorySection(
+            `${keyPrefix}category-${category.id}`,
+            category.name,
+            category.id,
+            items.filter(
+              (routine) => routine.category_id === category.id,
+            ),
           ),
-        ),
-      )
-      .filter((section): section is RoutineSection =>
-        Boolean(section),
+        )
+        .filter((section): section is RoutineSection =>
+          Boolean(section),
+        );
+      const uncategorized = items.filter(
+        (routine) =>
+          routine.category_id === null ||
+          !categoryById.has(routine.category_id),
       );
-    const uncategorized = routines.filter(
-      (routine) =>
-        routine.category_id === null ||
-        !categoryById.has(routine.category_id),
+      const uncategorizedSection = buildCategorySection(
+        `${keyPrefix}uncategorized`,
+        "미분류",
+        null,
+        uncategorized,
+      );
+      if (uncategorizedSection) {
+        sections.push(uncategorizedSection);
+      }
+      return sections;
+    };
+
+    const countRoutines = routines.filter(isCountRoutine);
+    const dateRoutines = routines.filter(
+      (routine) => !isCountRoutine(routine),
     );
-    const uncategorizedSection = buildCategorySection(
-      "uncategorized",
-      "미분류",
-      null,
-      uncategorized,
-    );
-    if (uncategorizedSection) {
-      sections.push(uncategorizedSection);
-    }
+    const showKindSections =
+      periodType === "day" &&
+      countRoutines.length > 0 &&
+      dateRoutines.length > 0;
+    const kindSections = showKindSections
+      ? [
+          {
+            key: "date",
+            label: `${MODE_LABELS.date} 루틴`,
+            routines: dateRoutines,
+          },
+          {
+            key: "count",
+            label: `${MODE_LABELS.count} 루틴`,
+            routines: countRoutines,
+          },
+        ].map((kind) => ({
+          ...kind,
+          sections: buildCategorySections(
+            kind.routines,
+            `${kind.key}:`,
+          ),
+        }))
+      : [];
+    const sections = showKindSections
+      ? []
+      : buildCategorySections(routines);
 
     const isSectionCollapsed = (section: RoutineSection) =>
       Boolean(collapsedSections[section.key]);
@@ -517,9 +556,7 @@ export default function BookmarkClient({ username }: { username: string }) {
     };
 
     const renderRoutineItem = (routine: BookmarkRoutine) => {
-      const isDaily = routine.frequency === "daily";
-      const isCount =
-        routine.tracking_mode === "count" && !isDaily;
+      const isCount = isCountRoutine(routine);
       const isStopped = Boolean(routine.end_date);
       const allDone = isRoutineDone(routine);
       return (
@@ -654,85 +691,135 @@ export default function BookmarkClient({ username }: { username: string }) {
       </DndContext>
     );
 
+    const renderCategorySection = (section: RoutineSection) => {
+      const collapsed = isSectionCollapsed(section);
+      const total = section.pending.length + section.done.length;
+      const panelId = `bookmark-routine-section-${section.key}`;
+      const doneKey = `${periodType}:${section.key}:done`;
+      const doneExpanded = expandedDoneSections.has(doneKey);
+      const donePanelId = `${panelId}-done`;
+
+      return (
+        <section
+          className={`bookmark-category-group${
+            collapsed ? " is-collapsed" : ""
+          }`}
+          key={section.key}
+        >
+          <header className="bookmark-category-group-header">
+            <h3>
+              <button
+                type="button"
+                className="bookmark-category-group-toggle"
+                aria-expanded={!collapsed}
+                aria-controls={panelId}
+                onClick={() => toggleSection(section)}
+              >
+                <span
+                  className="bookmark-category-group-arrow"
+                  aria-hidden="true"
+                >
+                  {collapsed ? "▸" : "▾"}
+                </span>
+                <span>{section.name}</span>
+              </button>
+            </h3>
+            <span>{total}</span>
+          </header>
+
+          <div id={panelId} hidden={collapsed}>
+            {section.pending.length > 0
+              ? renderRoutineList(
+                  `${section.key}-pending`,
+                  section.pending,
+                )
+              : null}
+            {section.done.length > 0 ? (
+              <div className="bookmark-routine-group is-done-group">
+                <header className="bookmark-routine-group-header">
+                  <h3>
+                    <button
+                      type="button"
+                      className="bookmark-routine-group-toggle"
+                      aria-expanded={doneExpanded}
+                      aria-controls={donePanelId}
+                      onClick={() => toggleDoneSection(doneKey)}
+                    >
+                      <span
+                        className="bookmark-category-group-arrow"
+                        aria-hidden="true"
+                      >
+                        {doneExpanded ? "▾" : "▸"}
+                      </span>
+                      완료
+                    </button>
+                  </h3>
+                  <span>{section.done.length}</span>
+                </header>
+                <div id={donePanelId} hidden={!doneExpanded}>
+                  {renderRoutineList(
+                    `${section.key}-done`,
+                    section.done,
+                  )}
+                </div>
+              </div>
+            ) : null}
+          </div>
+        </section>
+      );
+    };
+
     return (
       <div className="bookmark-routine-groups">
-        {sections.map((section) => {
-          const collapsed = isSectionCollapsed(section);
-          const total = section.pending.length + section.done.length;
-          const panelId = `bookmark-routine-section-${section.key}`;
-          const doneKey = `${periodType}:${section.key}:done`;
-          const doneExpanded = expandedDoneSections.has(doneKey);
-          const donePanelId = `${panelId}-done`;
+        {showKindSections
+          ? kindSections.map((kind) => {
+              const collapseKey = `kind:${kind.key}`;
+              const collapsed = Boolean(
+                collapsedSections[collapseKey],
+              );
+              const panelId = `bookmark-routine-kind-${kind.key}`;
 
-          return (
-            <section
-              className={`bookmark-category-group${
-                collapsed ? " is-collapsed" : ""
-              }`}
-              key={section.key}
-            >
-              <header className="bookmark-category-group-header">
-                <h3>
-                  <button
-                    type="button"
-                    className="bookmark-category-group-toggle"
-                    aria-expanded={!collapsed}
-                    aria-controls={panelId}
-                    onClick={() => toggleSection(section)}
-                  >
-                    <span
-                      className="bookmark-category-group-arrow"
-                      aria-hidden="true"
-                    >
-                      {collapsed ? "▸" : "▾"}
-                    </span>
-                    <span>{section.name}</span>
-                  </button>
-                </h3>
-                <span>{total}</span>
-              </header>
-
-              <div id={panelId} hidden={collapsed}>
-                {section.pending.length > 0
-                  ? renderRoutineList(
-                      `${section.key}-pending`,
-                      section.pending,
-                    )
-                  : null}
-                {section.done.length > 0 ? (
-                  <div className="bookmark-routine-group is-done-group">
-                    <header className="bookmark-routine-group-header">
-                      <h3>
-                        <button
-                          type="button"
-                          className="bookmark-routine-group-toggle"
-                          aria-expanded={doneExpanded}
-                          aria-controls={donePanelId}
-                          onClick={() => toggleDoneSection(doneKey)}
+              return (
+                <section
+                  className={`bookmark-routine-kind-group${
+                    collapsed ? " is-collapsed" : ""
+                  }`}
+                  key={kind.key}
+                >
+                  <header className="bookmark-routine-kind-header">
+                    <h3>
+                      <button
+                        type="button"
+                        className="bookmark-routine-kind-toggle"
+                        aria-expanded={!collapsed}
+                        aria-controls={panelId}
+                        onClick={() =>
+                          setSectionCollapsed(
+                            collapseKey,
+                            !collapsed,
+                          )
+                        }
+                      >
+                        <span
+                          className="bookmark-category-group-arrow"
+                          aria-hidden="true"
                         >
-                          <span
-                            className="bookmark-category-group-arrow"
-                            aria-hidden="true"
-                          >
-                            {doneExpanded ? "▾" : "▸"}
-                          </span>
-                          완료
-                        </button>
-                      </h3>
-                      <span>{section.done.length}</span>
-                    </header>
-                    <div id={donePanelId} hidden={!doneExpanded}>
-                      {renderRoutineList(
-                        `${section.key}-done`,
-                        section.done,
-                      )}
+                          {collapsed ? "▸" : "▾"}
+                        </span>
+                        <span>{kind.label}</span>
+                      </button>
+                    </h3>
+                    <span>{kind.routines.length}</span>
+                  </header>
+                  <div id={panelId} hidden={collapsed}>
+                    <div className="bookmark-routine-kind-body">
+                      {kind.sections.map(renderCategorySection)}
                     </div>
                   </div>
-                ) : null}
-              </div>
-            </section>
-          );
-        })}
+                </section>
+              );
+            })
+          : sections.map(renderCategorySection)}
       </div>
     );
   };
@@ -967,15 +1054,13 @@ export default function BookmarkClient({ username }: { username: string }) {
                     >
                       카테고리
                     </button>
-                    {periodType !== "day" ? (
-                      <button
-                        type="button"
-                        className="bookmark-primary"
-                        onClick={openCreateRoutine}
-                      >
-                        추가
-                      </button>
-                    ) : null}
+                    <button
+                      type="button"
+                      className="bookmark-primary"
+                      onClick={openCreateRoutine}
+                    >
+                      추가
+                    </button>
                   </div>
                 </header>
                 {renderRoutines()}
