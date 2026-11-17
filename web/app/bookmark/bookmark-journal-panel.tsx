@@ -15,7 +15,8 @@ import {
   periodLabel,
   shiftPeriod,
   startOfPeriod,
-  weekLabel,
+  weekPeriodLabel,
+  weekThursday,
 } from "./bookmark-utils";
 
 type JournalLevel = "week" | "month" | "quarter" | "year" | "decade";
@@ -149,10 +150,7 @@ function levelLabel(
   node: BookmarkJournalNode | null,
 ) {
   if (level === "week") {
-    const date = parseDateKey(value);
-    return `${date.getUTCFullYear()}년 ${
-      date.getUTCMonth() + 1
-    }월 ${weekLabel(value)}`;
+    return weekPeriodLabel(value);
   }
   if (node) return node.label;
   if (level === "decade") {
@@ -264,22 +262,22 @@ function childLevelFor(level: ParentLevel): BookmarkJournalNodeLevel {
 function monthWeekStarts(monthStart: string): string[] {
   const monthDate = parseDateKey(monthStart);
   let cursor = startOfPeriod(monthStart, "week");
-  let cursorDate = parseDateKey(cursor);
+  let thursday = parseDateKey(weekThursday(cursor));
   if (
-    cursorDate.getUTCFullYear() !== monthDate.getUTCFullYear() ||
-    cursorDate.getUTCMonth() !== monthDate.getUTCMonth()
+    thursday.getUTCFullYear() !== monthDate.getUTCFullYear() ||
+    thursday.getUTCMonth() !== monthDate.getUTCMonth()
   ) {
     cursor = shiftPeriod(cursor, "day", 7);
-    cursorDate = parseDateKey(cursor);
+    thursday = parseDateKey(weekThursday(cursor));
   }
   const starts: string[] = [];
   while (
-    cursorDate.getUTCFullYear() === monthDate.getUTCFullYear() &&
-    cursorDate.getUTCMonth() === monthDate.getUTCMonth()
+    thursday.getUTCFullYear() === monthDate.getUTCFullYear() &&
+    thursday.getUTCMonth() === monthDate.getUTCMonth()
   ) {
     starts.push(cursor);
     cursor = shiftPeriod(cursor, "day", 7);
-    cursorDate = parseDateKey(cursor);
+    thursday = parseDateKey(weekThursday(cursor));
   }
   return starts;
 }
@@ -343,10 +341,12 @@ export function BookmarkJournalPanel() {
   const currentNode = level === "decade" ? null : node;
 
   const weekStart = startOfPeriod(anchorDate, "week");
-  const monthStart = startOfPeriod(anchorDate, "month");
-  const quarterStart = startOfPeriod(anchorDate, "quarter");
-  const yearStart = startOfPeriod(anchorDate, "year");
-  const decadeStart = decadeStartForDate(anchorDate);
+  const groupingDate =
+    level === "week" ? weekThursday(weekStart) : anchorDate;
+  const monthStart = startOfPeriod(groupingDate, "month");
+  const quarterStart = startOfPeriod(groupingDate, "quarter");
+  const yearStart = startOfPeriod(groupingDate, "year");
+  const decadeStart = decadeStartForDate(groupingDate);
   const lookup = (target: JournalLevel, start: string) =>
     tree ? findNode(tree, target, start) : null;
 
@@ -400,22 +400,24 @@ export function BookmarkJournalPanel() {
     },
   ];
 
-  const selectLevel = (next: JournalLevel) => {
+  const selectLevel = (next: JournalLevel, start: string) => {
+    setAnchorDate(start);
     setLevel(next);
+    goToDate(next === "week" ? weekThursday(start) : start);
   };
 
   const moveWeek = (delta: number) => {
     const next = shiftPeriod(weekStart, "week", delta);
     setAnchorDate(next);
     setLevel("week");
-    goToDate(next);
+    goToDate(weekThursday(next));
   };
 
   const goToday = () => {
     const today = todayDateInputValue();
     setAnchorDate(today);
     setLevel("week");
-    goToDate(today);
+    goToDate(weekThursday(today));
   };
 
   const renderDecade = () => {
@@ -666,7 +668,7 @@ export function BookmarkJournalPanel() {
             ) : (
               <button
                 type="button"
-                onClick={() => selectLevel(item.level)}
+                onClick={() => selectLevel(item.level, item.start)}
               >
                 {item.label}
               </button>

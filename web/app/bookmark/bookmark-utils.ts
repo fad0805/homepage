@@ -243,8 +243,14 @@ export function periodLabel(value: string, type: BookmarkPeriodType) {
 
 const WEEK_ORDINALS = ["첫", "둘", "셋", "넷", "다섯"];
 
+// A week belongs to the month containing its Thursday.
+export function weekThursday(value: string) {
+  return shiftPeriod(startOfPeriod(value, "week"), "day", 3);
+}
+
 export function weekOfMonth(value: string) {
-  return Math.floor((parseDateKey(value).getUTCDate() - 1) / 7) + 1;
+  const thursday = parseDateKey(weekThursday(value));
+  return Math.floor((thursday.getUTCDate() - 1) / 7) + 1;
 }
 
 export function weekOfMonthLabel(value: string) {
@@ -253,53 +259,11 @@ export function weekOfMonthLabel(value: string) {
   return `${ordinal}째주`;
 }
 
-// ISO 8601: weeks start Monday and the week-year follows Thursday.
-export function isoWeekInfo(value: string) {
-  const date = parseDateKey(value);
-  const thursday = new Date(
-    Date.UTC(
-      date.getUTCFullYear(),
-      date.getUTCMonth(),
-      date.getUTCDate(),
-    ),
-  );
-  const offset = (thursday.getUTCDay() + 6) % 7;
-  thursday.setUTCDate(thursday.getUTCDate() - offset + 3);
-
-  const firstThursday = new Date(
-    Date.UTC(thursday.getUTCFullYear(), 0, 4),
-  );
-  const firstOffset = (firstThursday.getUTCDay() + 6) % 7;
-  firstThursday.setUTCDate(
-    firstThursday.getUTCDate() - firstOffset + 3,
-  );
-
-  const week =
-    1 +
-    Math.round(
-      (thursday.getTime() - firstThursday.getTime()) /
-        (7 * 24 * 60 * 60 * 1000),
-    );
-  return { weekYear: thursday.getUTCFullYear(), week };
-}
-
-export function isoWeekLabel(value: string) {
-  const { weekYear, week } = isoWeekInfo(value);
-  return `${weekYear}-W${pad2(week)}`;
-}
-
-export function weekLabel(value: string) {
-  const weekStart = startOfPeriod(value, "week");
-  return `${weekOfMonthLabel(weekStart)} (${isoWeekLabel(
-    weekStart,
-  )})`;
-}
-
 export function weekPeriodLabel(value: string) {
-  const weekStart = startOfPeriod(value, "week");
-  return `${periodLabel(weekStart, "month")} ${weekLabel(
-    weekStart,
-  )}`;
+  const thursday = parseDateKey(weekThursday(value));
+  return `${thursday.getUTCFullYear()}년 ${
+    thursday.getUTCMonth() + 1
+  }월 ${weekOfMonthLabel(value)}`;
 }
 
 export function compactPeriodLabel(
@@ -320,13 +284,14 @@ export function compactPeriodLabel(
     return `${prefix}${month}월 ${day}일 (${weekday})`;
   }
   if (type === "week") {
-    const weekStart = startOfPeriod(value, "week");
-    const weekDate = parseDateKey(weekStart);
-    const weekYear = weekDate.getUTCFullYear();
-    const weekMonth = weekDate.getUTCMonth() + 1;
+    const thursday = parseDateKey(weekThursday(value));
+    const weekYear = thursday.getUTCFullYear();
+    const weekMonth = thursday.getUTCMonth() + 1;
     const weekPrefix =
       weekYear === currentYear ? "" : `${weekYear}년 `;
-    return `${weekPrefix}${weekMonth}월 ${weekLabel(weekStart)}`;
+    return `${weekPrefix}${weekMonth}월 ${weekOfMonthLabel(
+      value,
+    )}`;
   }
   if (type === "month") return `${prefix}${month}월`;
   if (type === "quarter") {

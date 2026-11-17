@@ -122,6 +122,78 @@ class BookmarkJournalTreeTests(
         self.assertEqual(day["goal"].content, "3일 목표")
         self.assertEqual(day["rating"].rating, 2)
 
+    def test_week_is_grouped_by_its_thursday(self):
+        self.add_record(
+            "week",
+            date(2026, 11, 23),
+            goal="11월 넷째주 목표",
+        )
+        self.add_record(
+            "week",
+            date(2026, 11, 30),
+            goal="12월 첫째주 목표",
+        )
+        self.add_record(
+            "day",
+            date(2026, 12, 1),
+            goal="12월 1일 목표",
+        )
+
+        tree = get_journal_tree(
+            self.db,
+            self.user_id,
+            decade_start=date(2026, 1, 1),
+        )
+
+        year = tree["years"][0]
+        quarter = year["children"][0]
+        months = {
+            month["label"]: month for month in quarter["children"]
+        }
+        self.assertEqual(len(months["2026년 11월"]["children"]), 1)
+        self.assertEqual(len(months["2026년 12월"]["children"]), 1)
+
+        week = months["2026년 12월"]["children"][0]
+        self.assertEqual(week["period_start"], date(2026, 11, 30))
+        self.assertEqual(week["label"], "2026년 12월 첫째주")
+        self.assertEqual(week["goal"].content, "12월 첫째주 목표")
+        self.assertEqual(
+            week["children"][0]["period_start"],
+            date(2026, 12, 1),
+        )
+
+    def test_week_grouping_respects_decade_boundary(self):
+        self.add_record(
+            "week",
+            date(2019, 12, 30),
+            goal="2020년 1월 첫째주 목표",
+        )
+        self.add_record(
+            "week",
+            date(2029, 12, 31),
+            goal="2030년 1월 첫째주 목표",
+        )
+
+        tree = get_journal_tree(
+            self.db,
+            self.user_id,
+            decade_start=date(2020, 1, 1),
+        )
+
+        self.assertEqual(tree["label"], "2020년대")
+        self.assertEqual(len(tree["years"]), 1)
+        year = tree["years"][0]
+        self.assertEqual(year["label"], "2020년")
+        quarter = year["children"][0]
+        month = quarter["children"][0]
+        self.assertEqual(month["label"], "2020년 1월")
+        week = month["children"][0]
+        self.assertEqual(week["period_start"], date(2019, 12, 30))
+        self.assertEqual(
+            week["goal"].content,
+            "2020년 1월 첫째주 목표",
+        )
+
     def test_empty_records_are_pruned(self):
         self.add_record(
             "day",

@@ -4,23 +4,20 @@ from .common import *  # noqa: F401,F403
 
 JOURNAL_LEVELS = {"year", "quarter", "month", "week", "day"}
 WEEKDAYS = ("월", "화", "수", "목", "금", "토", "일")
+WEEK_ORDINALS = ("첫", "둘", "셋", "넷", "다섯")
 
 
-def _week_label(start: date, end: date) -> str:
-    if start.year == end.year and start.month == end.month:
-        return (
-            f"{start.year}년 {start.month}월 {start.day}일 ~ "
-            f"{end.day}일"
-        )
-    if start.year == end.year:
-        return (
-            f"{start.year}년 {start.month}월 {start.day}일 ~ "
-            f"{end.month}월 {end.day}일"
-        )
-    return (
-        f"{start.year}년 {start.month}월 {start.day}일 ~ "
-        f"{end.year}년 {end.month}월 {end.day}일"
-    )
+def _week_group_date(week_start: date) -> date:
+    """A week belongs to the month containing its Thursday."""
+    return week_start + timedelta(days=3)
+
+
+def _period_group_date(level: str, period_start: date) -> date:
+    if level == "day":
+        period_start -= timedelta(days=period_start.weekday())
+    if level in {"week", "day"}:
+        return _week_group_date(period_start)
+    return period_start
 
 
 def _journal_label(level: str, start: date) -> str:
@@ -31,7 +28,14 @@ def _journal_label(level: str, start: date) -> str:
     if level == "month":
         return f"{start.year}년 {start.month}월"
     if level == "week":
-        return _week_label(start, start + timedelta(days=6))
+        thursday = _week_group_date(start)
+        week = (thursday.day - 1) // 7 + 1
+        ordinal = (
+            WEEK_ORDINALS[week - 1]
+            if week <= len(WEEK_ORDINALS)
+            else str(week)
+        )
+        return f"{thursday.year}년 {thursday.month}월 {ordinal}째주"
     return (
         f"{start.year}년 {start.month}월 {start.day}일 "
         f"({WEEKDAYS[start.weekday()]})"
@@ -48,6 +52,8 @@ def get_journal_tree(
     decade = (anchor.year // 10) * 10
     start = date(decade, 1, 1)
     end = date(decade + 9, 12, 31)
+    query_start = start - timedelta(days=6)
+    query_end = end + timedelta(days=6)
 
     goals = (
         db.query(BookmarkGoal)
@@ -55,8 +61,8 @@ def get_journal_tree(
         .filter(
             BookmarkGoal.user_id == user_id,
             BookmarkGoal.period_type.in_(JOURNAL_LEVELS),
-            BookmarkGoal.period_start >= start,
-            BookmarkGoal.period_start <= end,
+            BookmarkGoal.period_start >= query_start,
+            BookmarkGoal.period_start <= query_end,
         )
         .all()
     )
@@ -65,8 +71,8 @@ def get_journal_tree(
         .filter(
             BookmarkRating.user_id == user_id,
             BookmarkRating.period_type.in_(JOURNAL_LEVELS),
-            BookmarkRating.period_start >= start,
-            BookmarkRating.period_start <= end,
+            BookmarkRating.period_start >= query_start,
+            BookmarkRating.period_start <= query_end,
         )
         .all()
     )
@@ -75,19 +81,29 @@ def get_journal_tree(
         .filter(
             BookmarkReview.user_id == user_id,
             BookmarkReview.period_type.in_(JOURNAL_LEVELS),
-            BookmarkReview.period_start >= start,
-            BookmarkReview.period_start <= end,
+            BookmarkReview.period_start >= query_start,
+            BookmarkReview.period_start <= query_end,
         )
         .all()
     )
+
+    def in_decade(level: str, period_start: date) -> bool:
+        return start <= _period_group_date(level, period_start) <= end
+
     goals_by_key = {
-        (item.period_type, item.period_start): item for item in goals
+        (item.period_type, item.period_start): item
+        for item in goals
+        if in_decade(item.period_type, item.period_start)
     }
     ratings_by_key = {
-        (item.period_type, item.period_start): item for item in ratings
+        (item.period_type, item.period_start): item
+        for item in ratings
+        if in_decade(item.period_type, item.period_start)
     }
     reviews_by_key = {
-        (item.period_type, item.period_start): item for item in reviews
+        (item.period_type, item.period_start): item
+        for item in reviews
+        if in_decade(item.period_type, item.period_start)
     }
 
     nodes: dict[tuple[str, date], dict[str, Any]] = {}
@@ -131,18 +147,22 @@ def get_journal_tree(
             return quarter
         if level == "week":
             week_start = period_start
+            group_date = _week_group_date(week_start)
             quarter_start = date(
-                week_start.year,
-                ((week_start.month - 1) // 3) * 3 + 1,
+                group_date.year,
+                ((group_date.month - 1) // 3) * 3 + 1,
                 1,
             )
             quarter = ensure("quarter", quarter_start)
             month = ensure(
                 "month",
-                date(week_start.year, week_start.month, 1),
+                date(group_date.year, group_date.month, 1),
             )
             week = ensure("week", week_start)
-            link(ensure("year", date(week_start.year, 1, 1)), quarter)
+            link(
+                ensure("year", date(group_date.year, 1, 1)),
+                quarter,
+            )
             link(quarter, month)
             link(month, week)
             return week
@@ -161,19 +181,23 @@ def get_journal_tree(
         week_start = period_start - timedelta(
             days=period_start.weekday()
         )
+        group_date = _week_group_date(week_start)
         quarter_start = date(
-            week_start.year,
-            ((week_start.month - 1) // 3) * 3 + 1,
+            group_date.year,
+            ((group_date.month - 1) // 3) * 3 + 1,
             1,
         )
         quarter = ensure("quarter", quarter_start)
         month = ensure(
             "month",
-            date(week_start.year, week_start.month, 1),
+            date(group_date.year, group_date.month, 1),
         )
         week = ensure("week", week_start)
         day = ensure("day", period_start)
-        link(ensure("year", date(week_start.year, 1, 1)), quarter)
+        link(
+            ensure("year", date(group_date.year, 1, 1)),
+            quarter,
+        )
         link(quarter, month)
         link(month, week)
         link(week, day)

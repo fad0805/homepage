@@ -4,7 +4,11 @@ import { apiFetch } from "@/lib/api";
 import type { BookmarkJournalTree } from "@/lib/bookmark";
 import { todayDateInputValue } from "@/lib/datetime";
 
-import { parseDateKey, shiftPeriod } from "./bookmark-utils";
+import {
+  parseDateKey,
+  shiftPeriod,
+  weekThursday,
+} from "./bookmark-utils";
 
 function currentDecadeStart(today: string) {
   const year = parseDateKey(today).getUTCFullYear();
@@ -13,7 +17,7 @@ function currentDecadeStart(today: string) {
 
 export function useBookmarkJournalTree() {
   const [decadeStart, setDecadeStart] = useState(() =>
-    currentDecadeStart(todayDateInputValue()),
+    currentDecadeStart(weekThursday(todayDateInputValue())),
   );
   const [tree, setTree] = useState<BookmarkJournalTree | null>(null);
   const [loading, setLoading] = useState(true);
@@ -58,7 +62,9 @@ export function useBookmarkJournalTree() {
   };
 
   const goToday = () => {
-    setDecadeStart(currentDecadeStart(todayDateInputValue()));
+    setDecadeStart(
+      currentDecadeStart(weekThursday(todayDateInputValue())),
+    );
   };
 
   const goToDate = (value: string) => {
