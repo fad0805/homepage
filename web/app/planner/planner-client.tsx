@@ -30,6 +30,7 @@ import { PlannerCalendar } from "./planner-calendar";
 import { PlannerDayDetail } from "./planner-day-detail";
 import { PlannerHistoryList } from "./planner-history-list";
 import { PlannerTabs } from "./planner-tabs";
+import { usePlannerEventPreview } from "./use-planner-event-preview";
 import { usePlannerMonthPicker } from "./use-planner-month-picker";
 import { usePlannerSearch } from "./use-planner-search";
 import { usePlannerSpecialDates } from "./use-planner-special-dates";
@@ -211,6 +212,13 @@ export default function PlannerClient({ username }: { username: string }) {
     onError: setError,
   });
   const {
+    selectedEvent,
+    preview,
+    previewLoading,
+    openEvent,
+    closeEvent,
+  } = usePlannerEventPreview();
+  const {
     monthPickerOpen,
     setMonthPickerOpen,
     monthPickerYear,
@@ -228,12 +236,9 @@ export default function PlannerClient({ username }: { username: string }) {
     setSelectedDate,
   });
   const [recordCompleted, setRecordCompleted] = useState(false);
-  const [selectedEvent, setSelectedEvent] = useState<PlannerEvent | null>(null);
   const [selectedTask, setSelectedTask] = useState<PlannerTask | null>(null);
   const [dayBookmark, setDayBookmark] =
     useState<BookmarkPeriod | null>(null);
-  const [preview, setPreview] = useState<PlannerEventPreview | null>(null);
-  const [previewLoading, setPreviewLoading] = useState(false);
   const [taskModalOpen, setTaskModalOpen] = useState(false);
   const initializedToday = useRef(false);
   const eventsRequestRef = useRef(0);
@@ -367,8 +372,7 @@ export default function PlannerClient({ username }: { username: string }) {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
       if (selectedEvent) {
-        setSelectedEvent(null);
-        setPreview(null);
+        closeEvent();
         return;
       }
       if (selectedTask) {
@@ -680,8 +684,7 @@ export default function PlannerClient({ username }: { username: string }) {
     setShowChipCreator(false);
     setError(null);
     setTaskModalOpen(true);
-    setSelectedEvent(null);
-    setPreview(null);
+    closeEvent();
     setActiveTab("active");
     setSelectedDate(today);
     setViewMonth(today.slice(0, 7));
@@ -1496,29 +1499,6 @@ export default function PlannerClient({ username }: { username: string }) {
     } finally {
       setDeletingColorId(null);
     }
-  };
-
-  const openEvent = async (event: PlannerEvent) => {
-    setSelectedEvent(event);
-    setPreview(null);
-    setPreviewLoading(true);
-    try {
-      const data = await apiFetch<PlannerEventPreview>(
-        `/api/planner/events/${event.id}/preview`,
-        { cache: "no-store" },
-      );
-      setPreview(data);
-    } catch {
-      setPreview(null);
-    } finally {
-      setPreviewLoading(false);
-    }
-  };
-
-  const closeEvent = () => {
-    setSelectedEvent(null);
-    setPreview(null);
-    setPreviewLoading(false);
   };
 
   const openTaskDetail = (task: PlannerTask) => {
