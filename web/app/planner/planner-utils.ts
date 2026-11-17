@@ -185,11 +185,25 @@ export function dateMarkerAppearsOn(
   marker: PlannerDateMarker,
   date: string,
 ) {
-  if (marker.interval_days && marker.interval_days > 0) {
-    if (date < marker.marker_date) return false;
-    return daysBetween(marker.marker_date, date) % marker.interval_days === 0;
-  }
-  return marker.marker_date === date;
+  if (date === marker.marker_date) return true;
+  if (date < marker.marker_date) return false;
+
+  return (marker.intervals ?? []).some((interval) => {
+    if (interval.value < 1) return false;
+    if (interval.unit === "year") {
+      if (
+        date.slice(5, 7) !== marker.marker_date.slice(5, 7) ||
+        date.slice(8, 10) !== marker.marker_date.slice(8, 10)
+      ) {
+        return false;
+      }
+      const yearDiff =
+        Number(date.slice(0, 4)) -
+        Number(marker.marker_date.slice(0, 4));
+      return yearDiff >= 0 && yearDiff % interval.value === 0;
+    }
+    return daysBetween(marker.marker_date, date) % interval.value === 0;
+  });
 }
 
 export function formatDayLabel(value: string) {

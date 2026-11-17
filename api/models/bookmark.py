@@ -309,7 +309,7 @@ class BookmarkDateMarker(Base):
         default=False,
         server_default="false",
     )
-    interval_days = Column(Integer, nullable=True)
+    intervals = Column(JSON, nullable=True)
     created_at = Column(DateTime, default=func.now(), nullable=False)
     updated_at = Column(
         DateTime,
@@ -321,10 +321,6 @@ class BookmarkDateMarker(Base):
     user = relationship("User")
 
     __table_args__ = (
-        CheckConstraint(
-            "interval_days IS NULL OR interval_days > 0",
-            name="ck_bookmark_date_markers_interval",
-        ),
         Index(
             "ix_bookmark_date_markers_user_date",
             "user_id",

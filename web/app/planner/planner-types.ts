@@ -92,6 +92,18 @@ export interface PlannerSpecialDatesResponse {
   special_dates: PlannerSpecialDate[];
 }
 
+export type PlannerDateMarkerIntervalUnit = "day" | "year";
+
+export interface PlannerDateMarkerInterval {
+  unit: PlannerDateMarkerIntervalUnit;
+  value: number;
+}
+
+export interface PlannerDateMarkerIntervalInput {
+  unit: PlannerDateMarkerIntervalUnit;
+  value: string;
+}
+
 export interface PlannerDateMarker {
   id: number;
   title: string;
@@ -99,7 +111,7 @@ export interface PlannerDateMarker {
   marker_date: string;
   is_dday: boolean;
   pinned: boolean;
-  interval_days: number | null;
+  intervals: PlannerDateMarkerInterval[];
   marker: string;
   created_at: string;
   updated_at: string;

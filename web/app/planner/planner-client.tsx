@@ -206,8 +206,7 @@ export default function PlannerClient({ username }: { username: string }) {
     setMarkerIsDday,
     markerPinned,
     setMarkerPinned,
-    markerIntervalDays,
-    setMarkerIntervalDays,
+    markerIntervals,
     markerSaving,
     ddayMarkers,
     pinnedDdays,
@@ -217,6 +216,9 @@ export default function PlannerClient({ username }: { username: string }) {
     loadDateMarkers,
     resetMarkerForm,
     startEditingMarker,
+    addMarkerInterval,
+    updateMarkerInterval,
+    removeMarkerInterval,
     handleSubmitMarker,
     handleDeleteMarker,
     handleToggleMarkerPin,
@@ -1463,7 +1465,7 @@ export default function PlannerClient({ username }: { username: string }) {
           markerDate={markerDate}
           markerIsDday={markerIsDday}
           markerPinned={markerPinned}
-          markerIntervalDays={markerIntervalDays}
+          markerIntervals={markerIntervals}
           editingMarker={editingMarker}
           editingMarkerId={editingMarkerId}
           markerSaving={markerSaving}
@@ -1473,7 +1475,9 @@ export default function PlannerClient({ username }: { username: string }) {
           onMarkerDateChange={setMarkerDate}
           onMarkerIsDdayChange={setMarkerIsDday}
           onMarkerPinnedChange={setMarkerPinned}
-          onMarkerIntervalDaysChange={setMarkerIntervalDays}
+          onAddMarkerInterval={addMarkerInterval}
+          onMarkerIntervalChange={updateMarkerInterval}
+          onRemoveMarkerInterval={removeMarkerInterval}
           onMarkerSearchChange={setMarkerSearch}
           onSubmitMarker={handleSubmitMarker}
           onDeleteMarker={(item) => void handleDeleteMarker(item)}

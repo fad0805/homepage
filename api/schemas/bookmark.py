@@ -54,13 +54,23 @@ class BookmarkSpecialDatesResponse(BaseModel):
     )
 
 
+BookmarkDateMarkerIntervalUnit = Literal["day", "year"]
+
+
+class BookmarkDateMarkerInterval(BaseModel):
+    unit: BookmarkDateMarkerIntervalUnit
+    value: int = Field(ge=1, le=3650)
+
+
 class BookmarkDateMarkerCreate(BaseModel):
     title: str = Field(min_length=1, max_length=255)
     memo: str | None = Field(default=None, max_length=4000)
     marker_date: date
     is_dday: bool = False
     pinned: bool = False
-    interval_days: int | None = Field(default=None, ge=1, le=3650)
+    intervals: list[BookmarkDateMarkerInterval] = Field(
+        default_factory=list
+    )
 
 
 class BookmarkDateMarkerUpdate(BaseModel):
@@ -69,7 +79,7 @@ class BookmarkDateMarkerUpdate(BaseModel):
     marker_date: date | None = None
     is_dday: bool | None = None
     pinned: bool | None = None
-    interval_days: int | None = Field(default=None, ge=1, le=3650)
+    intervals: list[BookmarkDateMarkerInterval] | None = None
 
 
 class BookmarkDateMarkerRead(BaseModel):
@@ -79,7 +89,9 @@ class BookmarkDateMarkerRead(BaseModel):
     marker_date: date
     is_dday: bool
     pinned: bool
-    interval_days: int | None = None
+    intervals: list[BookmarkDateMarkerInterval] = Field(
+        default_factory=list
+    )
     marker: str
     created_at: datetime
     updated_at: datetime

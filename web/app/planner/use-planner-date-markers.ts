@@ -10,6 +10,8 @@ import { apiFetch } from "@/lib/api";
 
 import type {
   PlannerDateMarker,
+  PlannerDateMarkerInterval,
+  PlannerDateMarkerIntervalInput,
   PlannerDateMarkersResponse,
 } from "./planner-types";
 import { dateMarkerAppearsOn } from "./planner-utils";
@@ -35,7 +37,9 @@ export function usePlannerDateMarkers({
   const [markerDate, setMarkerDate] = useState(today);
   const [markerIsDday, setMarkerIsDday] = useState(false);
   const [markerPinned, setMarkerPinned] = useState(false);
-  const [markerIntervalDays, setMarkerIntervalDays] = useState("");
+  const [markerIntervals, setMarkerIntervals] = useState<
+    PlannerDateMarkerIntervalInput[]
+  >([]);
   const [markerSaving, setMarkerSaving] = useState(false);
 
   const loadDateMarkers = useCallback(async () => {
@@ -95,7 +99,7 @@ export function usePlannerDateMarkers({
     setMarkerDate(date);
     setMarkerIsDday(false);
     setMarkerPinned(false);
-    setMarkerIntervalDays("");
+    setMarkerIntervals([]);
   };
 
   const startEditingMarker = (item: PlannerDateMarker) => {
@@ -105,10 +109,61 @@ export function usePlannerDateMarkers({
     setMarkerDate(item.marker_date);
     setMarkerIsDday(item.is_dday);
     setMarkerPinned(item.pinned);
-    setMarkerIntervalDays(
-      item.interval_days ? String(item.interval_days) : "",
+    setMarkerIntervals(
+      (item.intervals ?? []).map((interval) => ({
+        unit: interval.unit,
+        value: String(interval.value),
+      })),
     );
     onError(null);
+  };
+
+  const addMarkerInterval = () => {
+    setMarkerIntervals((previous) => [
+      ...previous,
+      { unit: "day", value: "" },
+    ]);
+  };
+
+  const updateMarkerInterval = (
+    index: number,
+    patch: Partial<PlannerDateMarkerIntervalInput>,
+  ) => {
+    setMarkerIntervals((previous) =>
+      previous.map((item, itemIndex) =>
+        itemIndex === index ? { ...item, ...patch } : item,
+      ),
+    );
+  };
+
+  const removeMarkerInterval = (index: number) => {
+    setMarkerIntervals((previous) =>
+      previous.filter((_, itemIndex) => itemIndex !== index),
+    );
+  };
+
+  const buildMarkerIntervals = ():
+    | PlannerDateMarkerInterval[]
+    | null => {
+    const intervals: PlannerDateMarkerInterval[] = [];
+    const seen = new Set<string>();
+    for (const item of markerIntervals) {
+      const raw = item.value.trim();
+      if (!raw) continue;
+      const value = Number(raw);
+      if (
+        !Number.isInteger(value) ||
+        value < 1 ||
+        value > 3650
+      ) {
+        return null;
+      }
+      const key = `${item.unit}:${value}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      intervals.push({ unit: item.unit, value });
+    }
+    return intervals;
   };
 
   const handleSubmitMarker = async (
@@ -119,14 +174,11 @@ export function usePlannerDateMarkers({
     setMarkerSaving(true);
     onError(null);
 
-    const intervalValue = markerIntervalDays.trim();
-    const intervalDays =
-      markerIsDday && intervalValue ? Number(intervalValue) : null;
-    if (
-      intervalDays !== null &&
-      (!Number.isFinite(intervalDays) || intervalDays < 1)
-    ) {
-      onError("마커 간격은 1일 이상으로 입력해주세요.");
+    const intervals = markerIsDday ? buildMarkerIntervals() : [];
+    if (intervals === null) {
+      onError(
+        "달력 표시 간격은 1 이상 3650 이하의 정수로 입력해주세요.",
+      );
       setMarkerSaving(false);
       return;
     }
@@ -137,7 +189,7 @@ export function usePlannerDateMarkers({
       marker_date: markerDate,
       is_dday: markerIsDday,
       pinned: markerIsDday ? markerPinned : false,
-      interval_days: markerIsDday ? intervalDays : null,
+      intervals,
     };
     try {
       if (editingMarkerId !== null) {
@@ -236,8 +288,7 @@ export function usePlannerDateMarkers({
     setMarkerIsDday,
     markerPinned,
     setMarkerPinned,
-    markerIntervalDays,
-    setMarkerIntervalDays,
+    markerIntervals,
     markerSaving,
     ddayMarkers,
     pinnedDdays,
@@ -247,6 +298,9 @@ export function usePlannerDateMarkers({
     loadDateMarkers,
     resetMarkerForm,
     startEditingMarker,
+    addMarkerInterval,
+    updateMarkerInterval,
+    removeMarkerInterval,
     handleSubmitMarker,
     handleDeleteMarker,
     handleToggleMarkerPin,

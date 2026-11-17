@@ -163,6 +163,49 @@
   color: #e0b27b;
 }
 
+.planner-marker-intervals {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.planner-marker-intervals-label {
+  color: var(--title-color);
+  font-size: 0.68rem;
+  opacity: 0.72;
+}
+
+.planner-marker-interval-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.planner-marker-interval-row {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+
+  .planner-text-button {
+    flex-shrink: 0;
+  }
+}
+
+.planner-form .planner-marker-interval-row input[type='number'] {
+  width: 5rem;
+  flex: 0 0 auto;
+}
+
+.planner-form .planner-marker-interval-row select {
+  width: auto;
+  min-width: 5rem;
+  flex: 0 0 auto;
+}
+
+.planner-marker-interval-add {
+  align-self: flex-start;
+}
+
 .planner-filter {
   display: flex;
   align-items: center;

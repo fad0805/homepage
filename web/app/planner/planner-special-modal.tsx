@@ -3,6 +3,8 @@ import type { FormEventHandler } from "react";
 import type {
   CalendarModalTab,
   PlannerDateMarker,
+  PlannerDateMarkerIntervalInput,
+  PlannerDateMarkerIntervalUnit,
   PlannerSpecialDate,
 } from "./planner-types";
 import { formatDateOnly, specialDdayLabel } from "./planner-utils";
@@ -31,7 +33,7 @@ interface PlannerSpecialModalProps {
   markerDate: string;
   markerIsDday: boolean;
   markerPinned: boolean;
-  markerIntervalDays: string;
+  markerIntervals: PlannerDateMarkerIntervalInput[];
   editingMarker: PlannerDateMarker | null;
   editingMarkerId: number | null;
   markerSaving: boolean;
@@ -41,7 +43,12 @@ interface PlannerSpecialModalProps {
   onMarkerDateChange: (date: string) => void;
   onMarkerIsDdayChange: (isDday: boolean) => void;
   onMarkerPinnedChange: (pinned: boolean) => void;
-  onMarkerIntervalDaysChange: (value: string) => void;
+  onAddMarkerInterval: () => void;
+  onMarkerIntervalChange: (
+    index: number,
+    patch: Partial<PlannerDateMarkerIntervalInput>,
+  ) => void;
+  onRemoveMarkerInterval: (index: number) => void;
   onMarkerSearchChange: (value: string) => void;
   onSubmitMarker: FormEventHandler<HTMLFormElement>;
   onDeleteMarker: (item: PlannerDateMarker) => void;
@@ -74,7 +81,7 @@ export function PlannerSpecialModal({
   markerDate,
   markerIsDday,
   markerPinned,
-  markerIntervalDays,
+  markerIntervals,
   editingMarker,
   editingMarkerId,
   markerSaving,
@@ -84,7 +91,9 @@ export function PlannerSpecialModal({
   onMarkerDateChange,
   onMarkerIsDdayChange,
   onMarkerPinnedChange,
-  onMarkerIntervalDaysChange,
+  onAddMarkerInterval,
+  onMarkerIntervalChange,
+  onRemoveMarkerInterval,
   onMarkerSearchChange,
   onSubmitMarker,
   onDeleteMarker,
@@ -288,19 +297,70 @@ export function PlannerSpecialModal({
                   />
                   <span>날짜 상세에 D+ 카운트로 고정 표시</span>
                 </label>
-                <label>
-                  <span>달력 표시 간격 (일)</span>
-                  <input
-                    type="number"
-                    min={1}
-                    max={3650}
-                    value={markerIntervalDays}
-                    placeholder="비우면 저장한 날짜에만 표시"
-                    onChange={(event) =>
-                      onMarkerIntervalDaysChange(event.target.value)
-                    }
-                  />
-                </label>
+                <div className="planner-marker-intervals">
+                  <span className="planner-marker-intervals-label">
+                    달력 표시 간격
+                  </span>
+                  {markerIntervals.length > 0 ? (
+                    <div className="planner-marker-interval-list">
+                      {markerIntervals.map((interval, index) => (
+                        <div
+                          className="planner-marker-interval-row"
+                          key={index}
+                        >
+                          <input
+                            type="number"
+                            min={1}
+                            max={3650}
+                            step={1}
+                            value={interval.value}
+                            placeholder={
+                              interval.unit === "year" ? "1" : "100"
+                            }
+                            aria-label="달력 표시 간격 값"
+                            onChange={(event) =>
+                              onMarkerIntervalChange(index, {
+                                value: event.target.value,
+                              })
+                            }
+                          />
+                          <select
+                            value={interval.unit}
+                            aria-label="달력 표시 간격 단위"
+                            onChange={(event) =>
+                              onMarkerIntervalChange(index, {
+                                unit: event.target
+                                  .value as PlannerDateMarkerIntervalUnit,
+                              })
+                            }
+                          >
+                            <option value="day">일마다</option>
+                            <option value="year">년마다</option>
+                          </select>
+                          <button
+                            type="button"
+                            className="planner-text-button is-danger"
+                            aria-label="달력 표시 간격 삭제"
+                            onClick={() => onRemoveMarkerInterval(index)}
+                          >
+                            삭제
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
+                  <button
+                    type="button"
+                    className="planner-text-button planner-marker-interval-add"
+                    onClick={onAddMarkerInterval}
+                  >
+                    + 간격 추가
+                  </button>
+                  <p className="planner-marker-hint">
+                    여러 간격을 추가하면 모두 달력에 표시됩니다. 비우면
+                    저장한 날짜에만 표시합니다.
+                  </p>
+                </div>
               </>
             ) : null}
             <div className="planner-form-actions">

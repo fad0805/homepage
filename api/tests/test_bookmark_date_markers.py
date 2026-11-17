@@ -11,6 +11,7 @@ from crud.bookmark.date_markers import (
 )
 from schemas.bookmark import (
     BookmarkDateMarkerCreate,
+    BookmarkDateMarkerInterval,
     BookmarkDateMarkerUpdate,
 )
 from tests.bookmark_test_base import BookmarkDatabaseTestCase
@@ -31,14 +32,14 @@ class BookmarkDateMarkerTests(BookmarkDatabaseTestCase, unittest.TestCase):
         self.assertEqual(created["marker"], "생")
         self.assertFalse(created["is_dday"])
         self.assertFalse(created["pinned"])
-        self.assertIsNone(created["interval_days"])
+        self.assertEqual(created["intervals"], [])
         self.assertEqual(created["memo"], "첫날")
 
         listed = list_date_markers(self.db, 1)
         self.assertEqual(len(listed["markers"]), 1)
         self.assertEqual(listed["markers"][0]["title"], "생리")
 
-    def test_dday_marker_keeps_interval_and_pin(self) -> None:
+    def test_dday_marker_keeps_intervals_and_pin(self) -> None:
         created = create_date_marker(
             self.db,
             BookmarkDateMarkerCreate(
@@ -46,7 +47,10 @@ class BookmarkDateMarkerTests(BookmarkDatabaseTestCase, unittest.TestCase):
                 marker_date=date(2026, 11, 1),
                 is_dday=True,
                 pinned=True,
-                interval_days=14,
+                intervals=[
+                    BookmarkDateMarkerInterval(unit="day", value=100),
+                    BookmarkDateMarkerInterval(unit="year", value=1),
+                ],
             ),
             1,
         )
@@ -54,7 +58,43 @@ class BookmarkDateMarkerTests(BookmarkDatabaseTestCase, unittest.TestCase):
         self.assertEqual(created["marker"], "성")
         self.assertTrue(created["is_dday"])
         self.assertTrue(created["pinned"])
-        self.assertEqual(created["interval_days"], 14)
+        self.assertEqual(
+            created["intervals"],
+            [
+                {"unit": "day", "value": 100},
+                {"unit": "year", "value": 1},
+            ],
+        )
+
+    def test_update_replaces_intervals(self) -> None:
+        created = create_date_marker(
+            self.db,
+            BookmarkDateMarkerCreate(
+                title="디데이",
+                marker_date=date(2026, 11, 1),
+                is_dday=True,
+                intervals=[
+                    BookmarkDateMarkerInterval(unit="day", value=100)
+                ],
+            ),
+            1,
+        )
+
+        updated = update_date_marker(
+            self.db,
+            created["id"],
+            BookmarkDateMarkerUpdate(
+                intervals=[
+                    BookmarkDateMarkerInterval(unit="year", value=1)
+                ]
+            ),
+            1,
+        )
+
+        self.assertEqual(
+            updated["intervals"],
+            [{"unit": "year", "value": 1}],
+        )
 
     def test_update_clears_dday_only_fields_when_disabled(self) -> None:
         created = create_date_marker(
@@ -64,7 +104,9 @@ class BookmarkDateMarkerTests(BookmarkDatabaseTestCase, unittest.TestCase):
                 marker_date=date(2026, 11, 1),
                 is_dday=True,
                 pinned=True,
-                interval_days=7,
+                intervals=[
+                    BookmarkDateMarkerInterval(unit="day", value=7)
+                ],
             ),
             1,
         )
@@ -78,7 +120,7 @@ class BookmarkDateMarkerTests(BookmarkDatabaseTestCase, unittest.TestCase):
 
         self.assertFalse(updated["is_dday"])
         self.assertFalse(updated["pinned"])
-        self.assertIsNone(updated["interval_days"])
+        self.assertEqual(updated["intervals"], [])
 
     def test_update_memo_and_delete(self) -> None:
         created = create_date_marker(
