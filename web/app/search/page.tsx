@@ -95,7 +95,9 @@ export default async function SearchPage({
 
   try {
     [books, chapters, illustrations] = await Promise.all([
-      serverApiFetch<Book[]>(`/books${searchSuffix}`, {
+      // Book metadata is needed to resolve every matching chapter's book.
+      // Fetch the full visible list, then filter books below.
+      serverApiFetch<Book[]>("/books", {
         tags: ["books"],
         auth: Boolean(currentUser),
       }),
