@@ -1318,10 +1318,6 @@
   margin-top: 0.3rem;
 }
 
-.planner-task-card .planner-note-list {
-  margin-left: 0.5rem;
-}
-
 .planner-task-main {
   min-width: 0;
 }
@@ -1406,12 +1402,12 @@
 
 .planner-note-list {
   margin: 0;
-  padding-left: 0.5rem;
+  padding-left: 0;
   list-style: disc;
+  list-style-position: inside;
 }
 
 .planner-note-list li {
-  margin-left: 0.5rem;
   overflow-wrap: anywhere;
 
   + li {
@@ -1419,7 +1415,7 @@
   }
 
   &.is-check {
-    margin-left: -0.5rem;
+    margin-left: 0;
     list-style: none;
   }
 }
