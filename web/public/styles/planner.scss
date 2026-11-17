@@ -1406,7 +1406,7 @@
 
 .planner-note-list {
   margin: 0;
-  padding-left: 1rem;
+  padding-left: 0.5rem;
   list-style: disc;
 }
 
@@ -1418,7 +1418,7 @@
   }
 
   &.is-check {
-    margin-left: -1rem;
+    margin-left: -0.5rem;
     list-style: none;
   }
 }
