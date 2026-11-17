@@ -2,7 +2,7 @@
 
 from .common import *  # noqa: F401,F403
 from .categories import list_routine_categories
-from .schedule import _quarter_matches, _routine_monthly_due
+from .schedule import _quarter_matches, _routine_monthly_due_date
 
 
 def _routine_month_values(
@@ -85,7 +85,12 @@ def _routine_month_values(
 
     if routine.frequency == "monthly":
         if routine.tracking_mode == "date":
-            if not _routine_monthly_due(routine, first):
+            due_date = _routine_monthly_due_date(routine, first)
+            if (
+                due_date is None
+                or due_date < active_start
+                or due_date > active_end
+            ):
                 return None
             return _period_check_count(db, routine, "month", first), 1
         return _period_check_count(db, routine, "month", first), target
