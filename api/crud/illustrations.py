@@ -9,6 +9,7 @@ from core.mastodon import maybe_notify_illustration
 from core.search import like_pattern, search_tokens
 from core.uploads import delete_replaced_upload, delete_uploaded_file
 from crud.tags import sync_illustration_tags
+from models.tags import IllustrationTag, Tag
 from models.illustrations import (
     Illustration,
     IllustrationImage,
@@ -135,13 +136,19 @@ def get_visible_illustrations(
     tokens = search_tokens(query)
     for token in tokens:
         pattern = like_pattern(token)
+        tag_match = (
+            db.query(IllustrationTag.illustration_id)
+            .join(Tag, Tag.id == IllustrationTag.tag_id)
+            .filter(
+                IllustrationTag.illustration_id == Illustration.id,
+                Tag.name.ilike(pattern, escape="\\"),
+            )
+            .exists()
+        )
         illustrations_query = illustrations_query.filter(
             or_(
                 Illustration.title.ilike(pattern, escape="\\"),
-                cast(Illustration.tags, Text).ilike(
-                    pattern,
-                    escape="\\",
-                ),
+                tag_match,
             )
         )
 

@@ -9,6 +9,7 @@ from core.mastodon import maybe_notify_chapter
 from core.search import like_pattern, search_tokens
 from crud.tags import sync_chapter_tags
 from models.books import Book, BookCategory, Chapter, ChapterView
+from models.tags import ChapterTag, Tag
 from schemas.books import (
     BookCategoryCreate,
     BookCategoryReorderRequest,
@@ -286,23 +287,31 @@ def get_all_books(
         )
 
     tokens = search_tokens(query)
+    books = books_query.order_by(Book.order, Book.id).all()
     if tokens:
-        books_query = books_query.outerjoin(
-            BookCategory,
-            Book.category_id == BookCategory.id,
-        )
-        for token in tokens:
-            pattern = like_pattern(token)
-            books_query = books_query.filter(
-                or_(
-                    Book.title.ilike(pattern, escape="\\"),
-                    Book.description.ilike(pattern, escape="\\"),
-                    cast(Book.tags, Text).ilike(pattern, escape="\\"),
-                    BookCategory.name.ilike(pattern, escape="\\"),
-                )
+        def matches(book: Book) -> bool:
+            category = (
+                book.category_relation.name
+                if book.category_relation is not None
+                else None
+            )
+            values = [
+                book.title,
+                book.description,
+                category,
+                *(book.tags or []),
+            ]
+            haystack = [
+                value.lower()
+                for value in values
+                if isinstance(value, str)
+            ]
+            return all(
+                any(token in value for value in haystack)
+                for token in tokens
             )
 
-    books = books_query.order_by(Book.order, Book.id).all()
+        books = [book for book in books if matches(book)]
     if not include_hidden:
         books = [
             book
@@ -478,11 +487,20 @@ def get_all_chapters(
     tokens = search_tokens(query)
     for token in tokens:
         pattern = like_pattern(token)
+        tag_match = (
+            db.query(ChapterTag.chapter_id)
+            .join(Tag, Tag.id == ChapterTag.tag_id)
+            .filter(
+                ChapterTag.chapter_id == Chapter.id,
+                Tag.name.ilike(pattern, escape="\\"),
+            )
+            .exists()
+        )
         chapters_query = chapters_query.filter(
             or_(
                 Chapter.title.ilike(pattern, escape="\\"),
                 Chapter.subtitle.ilike(pattern, escape="\\"),
-                cast(Chapter.tags, Text).ilike(pattern, escape="\\"),
+                tag_match,
             )
         )
 
