@@ -29,6 +29,7 @@ import "@/public/styles/planner.scss";
 import { PlannerCalendar } from "./planner-calendar";
 import { PlannerDayDetail } from "./planner-day-detail";
 import { PlannerHistoryList } from "./planner-history-list";
+import { PlannerTabs } from "./planner-tabs";
 import { PlannerTaskCard } from "./planner-task-card";
 import { PlannerChipCreator } from "./planner-chip-creator";
 import { PlannerChipManager } from "./planner-chip-manager";
@@ -1873,44 +1874,12 @@ export default function PlannerClient({ username }: { username: string }) {
             <p className="planner-eyebrow">{username}의 개인 달력</p>
             <h1>부록</h1>
           </div>
-          <div className="planner-tabs" role="tablist" aria-label="일정 보기">
-            <button
-              type="button"
-              role="tab"
-              aria-selected={activeTab === "active"}
-              className={activeTab === "active" ? "is-active" : ""}
-              onClick={() => selectTab("active")}
-            >
-              진행 중
-            </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={activeTab === "colors"}
-              className={activeTab === "colors" ? "is-active" : ""}
-              onClick={() => selectTab("colors")}
-            >
-              색상별
-            </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={activeTab === "inactive"}
-              className={activeTab === "inactive" ? "is-active" : ""}
-              onClick={() => selectTab("inactive")}
-            >
-              비활성 {inactiveTasks.length}
-            </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={activeTab === "trashed"}
-              className={activeTab === "trashed" ? "is-active" : ""}
-              onClick={() => selectTab("trashed")}
-            >
-              휴지통 {trashedTasks.length}
-            </button>
-          </div>
+          <PlannerTabs
+            activeTab={activeTab}
+            inactiveCount={inactiveTasks.length}
+            trashedCount={trashedTasks.length}
+            onSelect={selectTab}
+          />
         </header>
 
         {error ? <p className="planner-error">{error}</p> : null}
