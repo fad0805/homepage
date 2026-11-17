@@ -30,6 +30,7 @@ import { PlannerCalendar } from "./planner-calendar";
 import { PlannerChipManager } from "./planner-chip-manager";
 import { PlannerEventPreviewModal } from "./planner-event-preview-modal";
 import { PlannerMonthPicker } from "./planner-month-picker";
+import { PlannerSearchPanel } from "./planner-search-panel";
 import { PlannerSpecialModal } from "./planner-special-modal";
 import { PlannerTaskDetailModal } from "./planner-task-detail-modal";
 import { PlannerTaskModal } from "./planner-task-modal";
@@ -2253,60 +2254,16 @@ export default function PlannerClient({ username }: { username: string }) {
 
             <aside className="planner-side">
               {searchOpen ? (
-                <section className="planner-day-panel planner-search-panel">
-                  <div className="planner-day-panel-header">
-                    <div>
-                      <p className="planner-eyebrow">통합 검색</p>
-                      <h2>검색 결과</h2>
-                      <p>
-                        {formatDateOnly(searchFrom)} ~{" "}
-                        {formatDateOnly(searchTo)}
-                        {searchQuery.trim()
-                          ? ` · "${searchQuery.trim()}"`
-                          : ""}
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      className="planner-text-button"
-                      onClick={closeSearchResults}
-                    >
-                      닫기
-                    </button>
-                  </div>
-                  {searching ? (
-                    <p className="planner-status">검색 중...</p>
-                  ) : searchResults ? (
-                    <>
-                      <div className="planner-search-section">
-                        <h3>일정 {searchResults.tasks.length}</h3>
-                        {searchResults.tasks.length === 0 ? (
-                          <p className="planner-empty">
-                            검색된 일정이 없습니다.
-                          </p>
-                        ) : (
-                          <ul className="planner-task-list">
-                            {searchResults.tasks.map(renderTaskCard)}
-                          </ul>
-                        )}
-                      </div>
-                      <div className="planner-search-section">
-                        <h3>이력 {searchResults.events.length}</h3>
-                        {searchResults.events.length === 0 ? (
-                          <p className="planner-empty">
-                            검색된 이력이 없습니다.
-                          </p>
-                        ) : (
-                          renderHistoryItems(searchResults.events)
-                        )}
-                      </div>
-                    </>
-                  ) : (
-                    <p className="planner-empty">
-                      검색 결과가 없습니다.
-                    </p>
-                  )}
-                </section>
+                <PlannerSearchPanel
+                  searchFrom={searchFrom}
+                  searchTo={searchTo}
+                  searchQuery={searchQuery}
+                  searching={searching}
+                  searchResults={searchResults}
+                  onClose={closeSearchResults}
+                  renderTaskCard={renderTaskCard}
+                  renderHistoryItems={renderHistoryItems}
+                />
               ) : activeTab === "active" ? (
                 <section className="planner-day-panel planner-date-panel">
                   <div className="planner-day-panel-header">
