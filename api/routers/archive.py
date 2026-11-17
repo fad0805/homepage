@@ -884,6 +884,7 @@ def _planner_data(
             "action": event.action,
             "title": event.title,
             "notes": event.notes,
+            "color": event.color,
             "changes": event.changes,
             "occurred_at": _iso(event.occurred_at),
         }

@@ -267,7 +267,12 @@ class PlannerCrudTests(
         self.assertEqual(updated["end_date"], date(2026, 11, 18))
 
     def test_complete_task_writes_history_and_removes_task(self) -> None:
-        task = self.make_task(title="완료할 일정", notes="메모")
+        color = self.make_color(color="#b07a52")
+        task = self.make_task(
+            title="완료할 일정",
+            notes="메모",
+            color_id=color.id,
+        )
         with patch(
             "crud.planner.tasks._utc_naive_now",
             return_value=datetime(2026, 11, 17, 12, 0),
@@ -286,6 +291,7 @@ class PlannerCrudTests(
         self.assertEqual(events[0]["action"], "completed")
         self.assertEqual(events[0]["title"], "완료할 일정")
         self.assertEqual(events[0]["notes"], "메모")
+        self.assertEqual(events[0]["color"], "#b07a52")
 
     def test_trash_restore_and_permanent_delete(self) -> None:
         task = self.make_task(

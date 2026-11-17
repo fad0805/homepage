@@ -498,6 +498,20 @@ export default function PlannerClient({ username }: { username: string }) {
     }
     return counts;
   }, [events]);
+  const historyColors = useMemo(() => {
+    const colors = new Map<string, string[]>();
+    for (const event of events) {
+      if (event.action !== "completed") continue;
+      const date = eventDate(event);
+      const color = event.color ?? UNASSIGNED_TASK_COLOR;
+      const current = colors.get(date) ?? [];
+      if (!current.includes(color)) {
+        current.push(color);
+        colors.set(date, current);
+      }
+    }
+    return colors;
+  }, [events]);
   const selectedFormColor =
     savedColors.find((color) => color.id === form.colorId) ?? null;
   const selectedTaskColor = selectedTask
@@ -1178,6 +1192,7 @@ export default function PlannerClient({ username }: { username: string }) {
               selectedDate={selectedDate}
               dragBounds={dragBounds}
               historyCounts={historyCounts}
+              historyColors={historyColors}
               onChangeMonth={changeMonth}
               onOpenMonthPicker={openMonthPicker}
               onOpenSpecialManager={openSpecialManager}

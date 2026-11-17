@@ -538,6 +538,22 @@
   border-radius: 999px;
 }
 
+.planner-day-history-colors {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.12rem;
+}
+
+.planner-day-history-color {
+  width: 0.46rem;
+  height: 0.46rem;
+  flex-shrink: 0;
+  border: 1px solid color-mix(in srgb, var(--foreground) 24%, transparent);
+  border-radius: 999px;
+  opacity: 0.55;
+}
+
 .planner-day-specials {
   display: flex;
   flex-direction: column;

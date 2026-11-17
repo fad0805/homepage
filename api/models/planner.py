@@ -153,6 +153,7 @@ class PlannerEvent(Base):
     action = Column(String(16), nullable=False)
     title = Column(String(255), nullable=True)
     notes = Column(Text, nullable=True)
+    color = Column(String(7), nullable=True)
     changes = Column(JSON, nullable=True)
     occurred_at = Column(DateTime, default=func.now(), nullable=False)
 

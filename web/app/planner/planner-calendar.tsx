@@ -23,6 +23,7 @@ interface PlannerCalendarProps {
   selectedDate: string;
   dragBounds: [string, string] | null;
   historyCounts: Map<string, number>;
+  historyColors: Map<string, string[]>;
   onChangeMonth: (delta: number) => void;
   onOpenMonthPicker: () => void;
   onOpenSpecialManager: () => void;
@@ -43,6 +44,7 @@ export function PlannerCalendar({
   selectedDate,
   dragBounds,
   historyCounts,
+  historyColors,
   onChangeMonth,
   onOpenMonthPicker,
   onOpenSpecialManager,
@@ -105,6 +107,8 @@ export function PlannerCalendar({
                 const daySingleTasks = dayTasks.filter(
                   (task) => task.schedule_type === "single",
                 );
+                const dayHistoryColors =
+                  historyColors.get(cell.date) ?? [];
                 const dayTaskCount = dayTasks.length;
                 const daySpecialDates = specialDates.filter(
                   (item) =>
@@ -172,6 +176,10 @@ export function PlannerCalendar({
                       historyCount > 0
                         ? `, 변경 이력 ${historyCount}개`
                         : ""
+                    }${
+                      dayHistoryColors.length > 0
+                        ? `, 완료 태스크 흔적 ${dayHistoryColors.length}개`
+                        : ""
                     }`}
                   >
                     <span className="planner-day-number">
@@ -200,19 +208,37 @@ export function PlannerCalendar({
                         ) : null}
                       </span>
                     ) : null}
-                    {daySingleTasks.length > 0 ? (
+                    {daySingleTasks.length > 0 ||
+                    dayHistoryColors.length > 0 ? (
                       <span className="planner-day-marks">
-                        <span className="planner-day-task-colors">
-                          {daySingleTasks.map((task) => (
-                            <span
-                              key={task.id}
-                              className="planner-day-task-color"
-                              style={{
-                                backgroundColor: taskColor(task),
-                              }}
-                            />
-                          ))}
-                        </span>
+                        {daySingleTasks.length > 0 ? (
+                          <span className="planner-day-task-colors">
+                            {daySingleTasks.map((task) => (
+                              <span
+                                key={task.id}
+                                className="planner-day-task-color"
+                                style={{
+                                  backgroundColor: taskColor(task),
+                                }}
+                              />
+                            ))}
+                          </span>
+                        ) : null}
+                        {dayHistoryColors.length > 0 ? (
+                          <span className="planner-day-history-colors">
+                            {dayHistoryColors
+                              .slice(0, 4)
+                              .map((color) => (
+                                <span
+                                  key={color}
+                                  className="planner-day-history-color"
+                                  style={{
+                                    backgroundColor: color,
+                                  }}
+                                />
+                              ))}
+                          </span>
+                        ) : null}
                       </span>
                     ) : null}
                   </button>

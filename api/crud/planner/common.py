@@ -207,6 +207,7 @@ def _serialize_event(event: PlannerEvent) -> dict:
         "action": event.action,
         "title": event.title,
         "notes": event.notes,
+        "color": event.color,
         "changes": event.changes,
         "occurred_at": event.occurred_at,
     }
