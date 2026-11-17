@@ -433,6 +433,38 @@
     background: var(--planner-past-record-bg);
   }
 
+  &.completion-level-1:not(.is-selected):not(.is-drag-range):not(.is-drag-edge) {
+    background: color-mix(
+      in srgb,
+      var(--theme-main) 12%,
+      var(--input-background)
+    );
+  }
+
+  &.completion-level-2:not(.is-selected):not(.is-drag-range):not(.is-drag-edge) {
+    background: color-mix(
+      in srgb,
+      var(--theme-main) 24%,
+      var(--input-background)
+    );
+  }
+
+  &.completion-level-3:not(.is-selected):not(.is-drag-range):not(.is-drag-edge) {
+    background: color-mix(
+      in srgb,
+      var(--theme-main) 38%,
+      var(--input-background)
+    );
+  }
+
+  &.completion-level-4:not(.is-selected):not(.is-drag-range):not(.is-drag-edge) {
+    background: color-mix(
+      in srgb,
+      var(--theme-main) 56%,
+      var(--input-background)
+    );
+  }
+
   &:hover,
   &:focus-visible {
     border-color: color-mix(in srgb, var(--theme-main) 55%, transparent);
@@ -469,6 +501,22 @@
     );
     border-color: var(--title-color);
   }
+}
+
+[data-theme='dark'] .planner-calendar-day.completion-level-1:not(.is-selected):not(.is-drag-range):not(.is-drag-edge) {
+  background: color-mix(in srgb, #8fd39a 10%, var(--input-background));
+}
+
+[data-theme='dark'] .planner-calendar-day.completion-level-2:not(.is-selected):not(.is-drag-range):not(.is-drag-edge) {
+  background: color-mix(in srgb, #8fd39a 20%, var(--input-background));
+}
+
+[data-theme='dark'] .planner-calendar-day.completion-level-3:not(.is-selected):not(.is-drag-range):not(.is-drag-edge) {
+  background: color-mix(in srgb, #8fd39a 32%, var(--input-background));
+}
+
+[data-theme='dark'] .planner-calendar-day.completion-level-4:not(.is-selected):not(.is-drag-range):not(.is-drag-edge) {
+  background: color-mix(in srgb, #8fd39a 46%, var(--input-background));
 }
 
 .planner-day-number {

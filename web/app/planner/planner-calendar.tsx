@@ -24,6 +24,7 @@ interface PlannerCalendarProps {
   selectedDate: string;
   dragBounds: [string, string] | null;
   eventDates: Set<string>;
+  completionCounts: Map<string, number>;
   onChangeMonth: (delta: number) => void;
   onOpenMonthPicker: () => void;
   onOpenSpecialManager: () => void;
@@ -45,6 +46,7 @@ export function PlannerCalendar({
   selectedDate,
   dragBounds,
   eventDates,
+  completionCounts,
   onChangeMonth,
   onOpenMonthPicker,
   onOpenSpecialManager,
@@ -123,6 +125,18 @@ export function PlannerCalendar({
                   cell.date < today &&
                   (hasTaskRecord ||
                     eventDates.has(cell.date));
+                const completionCount =
+                  completionCounts.get(cell.date) ?? 0;
+                const completionLevel =
+                  completionCount >= 7
+                    ? 4
+                    : completionCount >= 4
+                      ? 3
+                      : completionCount >= 2
+                        ? 2
+                        : completionCount > 0
+                          ? 1
+                          : 0;
                 const inDragRange =
                   dragBounds !== null &&
                   dragBounds[0] <= cell.date &&
@@ -142,6 +156,9 @@ export function PlannerCalendar({
                       cell.date === today ? "is-today" : "",
                       cell.date === selectedDate ? "is-selected" : "",
                       hasPastRecords ? "has-past-records" : "",
+                      completionLevel > 0
+                        ? `completion-level-${completionLevel}`
+                        : "",
                       dayTaskCount > 0 ||
                       daySpecialDates.length > 0
                         ? "has-items"
@@ -166,6 +183,10 @@ export function PlannerCalendar({
                     }${
                       daySpecialDates.length > 0
                         ? `, 기념일 ${daySpecialDates.length}개`
+                        : ""
+                    }${
+                      completionCount > 0
+                        ? `, 완료 기록 ${completionCount}개`
                         : ""
                     }`}
                   >
