@@ -59,6 +59,11 @@ def update_routine(
     user_id: int,
 ) -> BookmarkRoutine:
     routine = _get_routine_or_404(db, routine_id, user_id)
+    if routine.end_date is not None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="중단된 루틴은 수정할 수 없습니다.",
+        )
     data = payload.model_dump(exclude_unset=True)
 
     if "title" in data:

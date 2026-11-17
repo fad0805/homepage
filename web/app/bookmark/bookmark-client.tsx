@@ -991,6 +991,7 @@ export default function BookmarkClient({ username }: { username: string }) {
           setRoutineCategoryId={setRoutineCategoryId}
           categories={categories}
           editingRoutine={editingRoutine}
+          readOnly={Boolean(editingRoutine?.end_date)}
           routineMode={routineMode}
           setRoutineMode={setRoutineMode}
           routineTarget={routineTarget}

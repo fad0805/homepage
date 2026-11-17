@@ -27,6 +27,7 @@ interface BookmarkRoutineModalProps {
   setRoutineCategoryId: (value: number | null) => void;
   categories: BookmarkRoutineCategory[];
   editingRoutine: BookmarkRoutine | null;
+  readOnly: boolean;
   routineMode: BookmarkTrackingMode;
   setRoutineMode: (mode: BookmarkTrackingMode) => void;
   routineTarget: string;
@@ -63,6 +64,7 @@ export function BookmarkRoutineModal({
   setRoutineCategoryId,
   categories,
   editingRoutine,
+  readOnly,
   routineMode,
   setRoutineMode,
   routineTarget,
@@ -117,6 +119,10 @@ export function BookmarkRoutineModal({
             {error ? (
               <p className="bookmark-error">{error}</p>
             ) : null}
+            <fieldset
+              className="bookmark-routine-fields"
+              disabled={readOnly}
+            >
             <label>
               <span>제목</span>
               <input
@@ -446,6 +452,12 @@ export function BookmarkRoutineModal({
                 </>
               )}
             </div>
+            </fieldset>
+            {readOnly ? (
+              <p className="bookmark-form-hint">
+                중단된 루틴은 수정할 수 없습니다.
+              </p>
+            ) : null}
 
             <div className="bookmark-modal-actions">
               {editingRoutine && !editingRoutine.end_date ? (
@@ -468,13 +480,15 @@ export function BookmarkRoutineModal({
                   완전 삭제
                 </button>
               ) : null}
-              <button
-                type="submit"
-                className="bookmark-primary"
-                disabled={itemSaving || !itemTitle.trim()}
-              >
-                {itemSaving ? "저장 중..." : "저장"}
-              </button>
+              {!readOnly ? (
+                <button
+                  type="submit"
+                  className="bookmark-primary"
+                  disabled={itemSaving || !itemTitle.trim()}
+                >
+                  {itemSaving ? "저장 중..." : "저장"}
+                </button>
+              ) : null}
             </div>
           </form>
         </div>

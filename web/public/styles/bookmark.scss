@@ -1392,7 +1392,8 @@
   flex-direction: column;
   gap: 0.7rem;
 
-  > label {
+  > label,
+  .bookmark-routine-fields > label {
     display: flex;
     flex-direction: column;
     gap: 0.28rem;
@@ -1423,6 +1424,20 @@
   textarea {
     min-height: 4.2rem;
     resize: vertical;
+  }
+}
+
+.bookmark-routine-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+
+  &[disabled] {
+    opacity: 0.62;
   }
 }
 
