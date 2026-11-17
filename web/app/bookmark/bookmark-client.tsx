@@ -54,6 +54,7 @@ import { BookmarkStatisticsPanel } from "./bookmark-statistics-panel";
 import { useBookmarkCalendar } from "./use-bookmark-calendar";
 import { useBookmarkCategories } from "./use-bookmark-categories";
 import { useBookmarkData } from "./use-bookmark-data";
+import { useBookmarkHistory } from "./use-bookmark-history";
 import { useBookmarkJournal } from "./use-bookmark-journal";
 import { useBookmarkMoodTags } from "./use-bookmark-mood-tags";
 import { CloverRating } from "./clover-rating";
@@ -137,12 +138,6 @@ export default function BookmarkClient({ username }: { username: string }) {
   const [routineModalOpen, setRoutineModalOpen] = useState(false);
   const [editingRoutine, setEditingRoutine] =
     useState<BookmarkRoutine | null>(null);
-  const [historyRoutine, setHistoryRoutine] =
-    useState<HistoryRoutine | null>(null);
-  const [historyData, setHistoryData] =
-    useState<BookmarkRoutineHistory | null>(null);
-  const [historyLoading, setHistoryLoading] = useState(false);
-  const [historyError, setHistoryError] = useState<string | null>(null);
   const [itemTitle, setItemTitle] = useState("");
   const [itemNotes, setItemNotes] = useState("");
   const [itemSaving, setItemSaving] = useState(false);
@@ -190,6 +185,14 @@ export default function BookmarkClient({ username }: { username: string }) {
     periodStart,
     onPeriodLoaded: (next) => applyPeriodRef.current(next),
   });
+  const {
+    historyRoutine,
+    historyData,
+    historyLoading,
+    historyError,
+    openHistory,
+    closeHistory,
+  } = useBookmarkHistory();
   const recordPeriodType: BookmarkPeriodType =
     view === "today" || view === "stats" ? "day" : view;
   const {
@@ -399,35 +402,6 @@ export default function BookmarkClient({ username }: { username: string }) {
         : 0,
     );
     setError(null);
-  };
-
-  const openHistory = async (routine: HistoryRoutine) => {
-    setHistoryRoutine(routine);
-    setHistoryData(null);
-    setHistoryLoading(true);
-    setHistoryError(null);
-    try {
-      const history = await apiFetch<BookmarkRoutineHistory>(
-        `/api/bookmark/routines/${routine.id}/history`,
-        { cache: "no-store" },
-      );
-      setHistoryData(history);
-    } catch (reason) {
-      setHistoryError(
-        reason instanceof Error
-          ? reason.message
-          : "달성 기록을 불러오지 못했습니다.",
-      );
-    } finally {
-      setHistoryLoading(false);
-    }
-  };
-
-  const closeHistory = () => {
-    setHistoryRoutine(null);
-    setHistoryData(null);
-    setHistoryError(null);
-    setHistoryLoading(false);
   };
 
   const closeRoutineModal = () => {
