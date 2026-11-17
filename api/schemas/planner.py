@@ -126,3 +126,4 @@ class PlannerEventPreview(BaseModel):
     content_html: str | None = None
     detail_url: str | None = None
     fields: dict[str, str | None] = Field(default_factory=dict)
+    tags: list[str] = Field(default_factory=list)

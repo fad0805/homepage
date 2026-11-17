@@ -21,6 +21,20 @@ export function PlannerEventPreviewModal({
   onClose,
   onRestoreCompleted,
 }: PlannerEventPreviewModalProps) {
+  const previewFields = preview?.fields ?? {};
+  const fieldEntries = Object.entries(previewFields).filter(
+    ([key, value]) => key !== "tags" && Boolean(value),
+  );
+  const rawTags = preview?.tags ?? [];
+  const tags =
+    rawTags.length > 0
+      ? rawTags
+      : (previewFields.tags ?? "")
+          .split(",")
+          .map((tag) => tag.trim())
+          .filter(Boolean);
+  const hasContent = Boolean(preview?.content_html);
+
   return (
     <div
       className="planner-modal-overlay is-event"
@@ -28,7 +42,7 @@ export function PlannerEventPreviewModal({
       onClick={onClose}
     >
       <div
-        className="planner-modal"
+        className={`planner-modal${hasContent ? " is-event-preview" : ""}`}
         role="dialog"
         aria-modal="true"
         aria-label="변경 이력 상세"
@@ -115,16 +129,14 @@ export function PlannerEventPreviewModal({
                   {preview.summary}
                 </p>
               ) : null}
-              {Object.keys(preview.fields || {}).length > 0 ? (
+              {fieldEntries.length > 0 ? (
                 <dl className="planner-preview-fields">
-                  {Object.entries(preview.fields).map(([key, value]) =>
-                    value ? (
-                      <div key={key}>
-                        <dt>{fieldLabel(key)}</dt>
-                        <dd>{value}</dd>
-                      </div>
-                    ) : null,
-                  )}
+                  {fieldEntries.map(([key, value]) => (
+                    <div key={key}>
+                      <dt>{fieldLabel(key)}</dt>
+                      <dd>{value}</dd>
+                    </div>
+                  ))}
                 </dl>
               ) : null}
               {preview.content_html ? (
@@ -134,6 +146,15 @@ export function PlannerEventPreviewModal({
                     __html: preview.content_html,
                   }}
                 />
+              ) : null}
+              {tags.length > 0 ? (
+                <div className="tag-list planner-preview-tags">
+                  {tags.map((tag, index) => (
+                    <span className="tag" key={`${tag}-${index}`}>
+                      {tag}
+                    </span>
+                  ))}
+                </div>
               ) : null}
               {preview.detail_url ? (
                 <Link
@@ -145,7 +166,8 @@ export function PlannerEventPreviewModal({
               ) : null}
               {!preview.summary &&
               !preview.content_html &&
-              Object.keys(preview.fields || {}).length === 0 ? (
+              fieldEntries.length === 0 &&
+              tags.length === 0 ? (
                 <p className="planner-empty">
                   표시할 현재 내용이 없습니다.
                 </p>

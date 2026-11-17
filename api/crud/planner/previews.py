@@ -11,6 +11,7 @@ def _preview(
     content_html: str | None = None,
     detail_url: str | None = None,
     fields: dict | None = None,
+    tags: list[str] | None = None,
 ) -> dict:
     return {
         "available": True,
@@ -20,6 +21,7 @@ def _preview(
         "content_html": content_html,
         "detail_url": detail_url,
         "fields": fields or {},
+        "tags": tags or [],
     }
 
 
@@ -66,13 +68,13 @@ def get_event_preview(
                 summary=obj.description,
                 detail_url=f"/books?book={obj.id}",
                 fields={
-                    "tags": ", ".join(obj.tags or []),
                     "category": (
                         obj.category_relation.name
                         if obj.category_relation
                         else None
                     ),
                 },
+                tags=obj.tags or [],
             )
     elif event.entity_type == "chapter":
         obj = (
@@ -91,8 +93,8 @@ def get_event_preview(
                 ),
                 fields={
                     "book": obj.book.title if obj.book else None,
-                    "tags": ", ".join(obj.tags or []),
                 },
+                tags=obj.tags or [],
             )
     elif event.entity_type == "illustration":
         obj = (
@@ -110,9 +112,9 @@ def get_event_preview(
                 summary=obj.description,
                 detail_url=f"/illustrations/{obj.id}",
                 fields={
-                    "tags": ", ".join(obj.tags or []),
                     "images": f"{len(obj.images)}장",
                 },
+                tags=obj.tags or [],
             )
     elif event.entity_type == "character":
         obj = (

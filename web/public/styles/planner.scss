@@ -1704,6 +1704,12 @@
   box-shadow: 0 1.2rem 3rem rgba(0, 0, 0, 0.25);
 }
 
+.planner-modal.is-event-preview {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
 .planner-task-modal {
   width: min(32rem, 100%);
 }
@@ -2207,6 +2213,13 @@
   }
 }
 
+.planner-modal.is-event-preview .planner-preview {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+}
+
 .planner-preview-summary {
   margin: 0.55rem 0 0;
   font-size: 0.72rem;
@@ -2270,6 +2283,18 @@
   a {
     overflow-wrap: anywhere;
   }
+}
+
+.planner-modal.is-event-preview .planner-preview-content {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+.planner-preview-tags {
+  margin-top: 0.7rem;
 }
 
 .planner-preview-detail-link {

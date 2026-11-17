@@ -101,6 +101,7 @@ export interface PlannerEventPreview {
   content_html: string | null;
   detail_url: string | null;
   fields: Record<string, string | null>;
+  tags: string[];
 }
 
 export interface CalendarCell {
