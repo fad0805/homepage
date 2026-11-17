@@ -77,17 +77,13 @@ export function PlannerNoteContent({
                     className={`planner-note-check${
                       item.checked ? " is-done" : ""
                     }`}
-                    onClick={(event) => {
-                      if (!disabled) {
-                        event.stopPropagation();
-                      }
-                    }}
                   >
                     <input
                       type="checkbox"
                       checked={item.checked}
                       disabled={disabled}
                       aria-label={item.text || "체크 항목"}
+                      onClick={(event) => event.stopPropagation()}
                       onChange={() => onToggle(item.index)}
                     />
                     <span>{item.text || "\u00A0"}</span>

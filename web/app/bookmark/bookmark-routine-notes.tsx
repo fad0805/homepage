@@ -69,13 +69,13 @@ export function BookmarkRoutineNotes({
                     className={`bookmark-note-check${
                       onToggle && !disabled ? " is-interactive" : ""
                     }`}
-                    onClick={(event) => event.stopPropagation()}
                   >
                     <input
                       type="checkbox"
                       checked={item.checked}
                       disabled={disabled || !onToggle}
                       aria-label={item.text || "체크 항목"}
+                      onClick={(event) => event.stopPropagation()}
                       onChange={() => onToggle?.(item.index)}
                     />
                     <span
