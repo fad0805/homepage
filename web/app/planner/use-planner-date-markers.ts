@@ -66,12 +66,15 @@ export function usePlannerDateMarkers({
     () => dateMarkers.filter((item) => item.is_dday),
     [dateMarkers],
   );
-  const pinnedDdays = useMemo(
+  const topDdays = useMemo(
     () =>
       ddayMarkers
-        .filter((item) => item.pinned)
+        .filter(
+          (item) =>
+            item.pinned || item.marker_date === selectedDate,
+        )
         .sort((a, b) => a.marker_date.localeCompare(b.marker_date)),
-    [ddayMarkers],
+    [ddayMarkers, selectedDate],
   );
   const editingMarker =
     editingMarkerId === null
@@ -168,9 +171,9 @@ export function usePlannerDateMarkers({
 
   const handleSubmitMarker = async (
     event: FormEvent<HTMLFormElement>,
-  ) => {
+  ): Promise<boolean> => {
     event.preventDefault();
-    if (!markerTitle.trim() || markerSaving) return;
+    if (!markerTitle.trim() || markerSaving) return false;
     setMarkerSaving(true);
     onError(null);
 
@@ -180,7 +183,7 @@ export function usePlannerDateMarkers({
         "달력 표시 간격은 1 이상 3650 이하의 정수로 입력해주세요.",
       );
       setMarkerSaving(false);
-      return;
+      return false;
     }
 
     const payload = {
@@ -208,12 +211,14 @@ export function usePlannerDateMarkers({
       }
       await loadDateMarkers();
       resetMarkerForm();
+      return true;
     } catch (reason) {
       onError(
         reason instanceof Error
           ? reason.message
           : "날짜 마커를 저장하지 못했습니다.",
       );
+      return false;
     } finally {
       setMarkerSaving(false);
     }
@@ -291,7 +296,7 @@ export function usePlannerDateMarkers({
     markerIntervals,
     markerSaving,
     ddayMarkers,
-    pinnedDdays,
+    topDdays,
     editingMarker,
     filteredDdayMarkers,
     selectedDateMarkers,

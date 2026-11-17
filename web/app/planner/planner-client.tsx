@@ -209,7 +209,7 @@ export default function PlannerClient({ username }: { username: string }) {
     markerIntervals,
     markerSaving,
     ddayMarkers,
-    pinnedDdays,
+    topDdays,
     editingMarker,
     filteredDdayMarkers,
     selectedDateMarkers,
@@ -590,14 +590,34 @@ export default function PlannerClient({ username }: { username: string }) {
     openCalendarModal("dday");
   };
 
-  const closeCalendarModal = () => {
-    if (specialSaving || markerSaving) return;
+  const finishCalendarSave = () => {
     setCalendarModalOpen(false);
     setCalendarModalTab("yearly");
     setMarkerSearch("");
     resetSpecialForm();
     resetMarkerForm();
     setError(null);
+  };
+
+  const closeCalendarModal = () => {
+    if (specialSaving || markerSaving) return;
+    finishCalendarSave();
+  };
+
+  const handleSpecialSubmit = async (
+    event: FormEvent<HTMLFormElement>,
+  ) => {
+    if (await handleSubmitSpecial(event)) {
+      finishCalendarSave();
+    }
+  };
+
+  const handleMarkerSubmit = async (
+    event: FormEvent<HTMLFormElement>,
+  ) => {
+    if (await handleSubmitMarker(event)) {
+      finishCalendarSave();
+    }
   };
 
   const startRestoringCompletedTask = (event: PlannerEvent) => {
@@ -1296,7 +1316,7 @@ export default function PlannerClient({ username }: { username: string }) {
                   onOpenMarker={openMarkerEditor}
                 >
                   <PlannerDayDetail
-                    pinnedDdays={pinnedDdays}
+                    topDdays={topDdays}
                     selectedDate={selectedDate}
                     specialDates={selectedSpecialDates}
                     dayBookmark={dayBookmark}
@@ -1455,7 +1475,7 @@ export default function PlannerClient({ username }: { username: string }) {
           onSpecialTitleChange={setSpecialTitle}
           onSpecialMonthChange={setSpecialMonth}
           onSpecialDayChange={setSpecialDay}
-          onSubmitSpecial={handleSubmitSpecial}
+          onSubmitSpecial={handleSpecialSubmit}
           onDeleteSpecial={(item) => void handleDeleteSpecial(item)}
           onResetSpecial={resetSpecialForm}
           ddayCount={ddayMarkers.length}
@@ -1479,7 +1499,7 @@ export default function PlannerClient({ username }: { username: string }) {
           onMarkerIntervalChange={updateMarkerInterval}
           onRemoveMarkerInterval={removeMarkerInterval}
           onMarkerSearchChange={setMarkerSearch}
-          onSubmitMarker={handleSubmitMarker}
+          onSubmitMarker={handleMarkerSubmit}
           onDeleteMarker={(item) => void handleDeleteMarker(item)}
           onResetMarker={() => resetMarkerForm()}
           onStartEditMarker={(item) => {

@@ -151,12 +151,14 @@ export function formatDateOnly(value: string | null) {
   return `${year}.${month}.${day}`;
 }
 
-export function specialDdayLabel(value: string) {
-  const today = todayDateInputValue();
+export function specialDdayLabel(
+  value: string,
+  baseDate = todayDateInputValue(),
+) {
   const target = dateInputValue(value);
   const diff = Math.round(
     (Date.parse(`${target}T00:00:00Z`) -
-      Date.parse(`${today}T00:00:00Z`)) /
+      Date.parse(`${baseDate}T00:00:00Z`)) /
       86400000,
   );
   if (diff === 0) return "D-Day";

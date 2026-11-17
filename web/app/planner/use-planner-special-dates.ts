@@ -75,9 +75,9 @@ export function usePlannerSpecialDates({
 
   const handleSubmitSpecial = async (
     event: FormEvent<HTMLFormElement>,
-  ) => {
+  ): Promise<boolean> => {
     event.preventDefault();
-    if (!specialTitle.trim() || specialSaving) return;
+    if (!specialTitle.trim() || specialSaving) return false;
     setSpecialSaving(true);
     onError(null);
     const payload = {
@@ -108,12 +108,14 @@ export function usePlannerSpecialDates({
       }
       await loadSpecialDates();
       resetSpecialForm();
+      return true;
     } catch (reason) {
       onError(
         reason instanceof Error
           ? reason.message
           : "기념일을 저장하지 못했습니다.",
       );
+      return false;
     } finally {
       setSpecialSaving(false);
     }

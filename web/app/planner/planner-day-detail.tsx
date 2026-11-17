@@ -13,7 +13,7 @@ import { formatDateOnly, specialDdayLabel } from "./planner-utils";
 import { PlannerHistoryList } from "./planner-history-list";
 
 interface PlannerDayDetailProps {
-  pinnedDdays: PlannerDateMarker[];
+  topDdays: PlannerDateMarker[];
   selectedDate: string;
   specialDates: PlannerSpecialDate[];
   dayBookmark: BookmarkPeriod | null;
@@ -28,7 +28,7 @@ interface PlannerDayDetailProps {
 }
 
 export function PlannerDayDetail({
-  pinnedDdays,
+  topDdays,
   selectedDate,
   specialDates,
   dayBookmark,
@@ -129,7 +129,7 @@ const renderDayBookmark = () => {
   );
 };
 
-const renderPinnedDdays = (items: PlannerDateMarker[]) => {
+const renderTopDdays = (items: PlannerDateMarker[]) => {
   if (items.length === 0) return null;
   return (
     <div className="planner-dday-section">
@@ -154,7 +154,7 @@ const renderPinnedDdays = (items: PlannerDateMarker[]) => {
               onClick={() => onOpenMarker(item)}
             >
               <span className="planner-dday-badge">
-                {specialDdayLabel(item.marker_date)}
+                {specialDdayLabel(item.marker_date, selectedDate)}
               </span>
               <strong className="planner-dday-title">
                 {item.title}
@@ -199,7 +199,10 @@ const renderDaySpecialDates = (items: PlannerSpecialDate[]) => {
               </strong>
               <span className="planner-special-day-meta">
                 {item.kind === "dday"
-                  ? specialDdayLabel(item.event_date ?? selectedDate)
+                  ? specialDdayLabel(
+                      item.event_date ?? selectedDate,
+                      selectedDate,
+                    )
                   : "매년"}
               </span>
             </button>
@@ -216,7 +219,7 @@ const renderDayDetail = (
   dateSpecialDates: PlannerSpecialDate[],
 ) => (
   <>
-    {renderPinnedDdays(pinnedDdays)}
+    {renderTopDdays(topDdays)}
     {renderDaySpecialDates(dateSpecialDates)}
     {renderDayBookmark()}
     {renderDayTasks(dateTasks)}
