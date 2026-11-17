@@ -50,6 +50,7 @@ import { BookmarkCategoryModal } from "./bookmark-category-modal";
 import { BookmarkHistoryModal } from "./bookmark-history-modal";
 import { BookmarkJournalPanel } from "./bookmark-journal-panel";
 import { BookmarkMoodTagModal } from "./bookmark-mood-tag-modal";
+import { BookmarkRoutineNotes } from "./bookmark-routine-notes";
 import { BookmarkRoutineModal } from "./bookmark-routine-modal";
 import { BookmarkStatisticsPanel } from "./bookmark-statistics-panel";
 import { useBookmarkCalendar } from "./use-bookmark-calendar";
@@ -538,7 +539,7 @@ export default function BookmarkClient({ username }: { username: string }) {
             ) : null}
 
             {routine.notes ? (
-              <p className="bookmark-item-notes">{routine.notes}</p>
+              <BookmarkRoutineNotes notes={routine.notes} />
             ) : null}
           </div>
         </SortableRoutineItem>

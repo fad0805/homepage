@@ -1153,8 +1153,58 @@
   color: var(--foreground);
   font-size: 0.68rem;
   line-height: 1.55;
-  white-space: pre-wrap;
   opacity: 0.7;
+}
+
+.bookmark-note-line {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.bookmark-note-line + .bookmark-note-line {
+  margin-top: 0.15rem;
+}
+
+.bookmark-note-list {
+  margin: 0;
+  padding-left: 1rem;
+  list-style: disc;
+}
+
+.bookmark-note-list li {
+  overflow-wrap: anywhere;
+
+  + li {
+    margin-top: 0.12rem;
+  }
+
+  &.is-check {
+    margin-left: -1rem;
+    list-style: none;
+  }
+}
+
+.bookmark-note-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.35rem;
+
+  input {
+    flex-shrink: 0;
+    margin: 0.16rem 0 0;
+    accent-color: var(--theme-main);
+  }
+
+  span {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+
+  span.is-done {
+    text-decoration: line-through;
+    opacity: 0.5;
+  }
 }
 
 .bookmark-empty-row {
