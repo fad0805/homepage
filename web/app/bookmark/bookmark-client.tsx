@@ -451,6 +451,73 @@ function SortableMoodTagItem({
   );
 }
 
+function SortableCategoryItem({
+  category,
+  saving,
+  onEdit,
+  onDelete,
+}: {
+  category: BookmarkRoutineCategory;
+  saving: boolean;
+  onEdit: (category: BookmarkRoutineCategory) => void;
+  onDelete: (category: BookmarkRoutineCategory) => void;
+}) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: category.id, disabled: saving });
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.45 : 1,
+    zIndex: isDragging ? 2 : undefined,
+  };
+
+  return (
+    <li
+      ref={setNodeRef}
+      style={style}
+      className={`bookmark-category-item${
+        isDragging ? " is-dragging" : ""
+      }`}
+    >
+      <span>{category.name}</span>
+      <div className="bookmark-category-actions">
+        <button
+          type="button"
+          className="bookmark-drag-handle"
+          aria-label={`${category.name} 순서 변경`}
+          disabled={saving}
+          {...attributes}
+          {...listeners}
+        >
+          ⠿
+        </button>
+        <button
+          type="button"
+          className="bookmark-text-button"
+          disabled={saving}
+          onClick={() => onEdit(category)}
+        >
+          수정
+        </button>
+        <button
+          type="button"
+          className="bookmark-text-button is-danger"
+          disabled={saving}
+          onClick={() => onDelete(category)}
+        >
+          삭제
+        </button>
+      </div>
+    </li>
+  );
+}
+
 export default function BookmarkClient({ username }: { username: string }) {
   const initialToday = todayDateInputValue();
   const [view, setView] = useState<BookmarkView>("today");
@@ -489,7 +556,7 @@ export default function BookmarkClient({ username }: { username: string }) {
   const [reviewSaving, setReviewSaving] = useState(false);
   const [reviewSaved, setReviewSaved] = useState(false);
 
-  const moodSensors = useSensors(
+  const dndSensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: { distance: 5 },
     }),
@@ -523,6 +590,8 @@ export default function BookmarkClient({ username }: { username: string }) {
   >(null);
   const [categoryModalOpen, setCategoryModalOpen] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState("");
+  const [editingCategory, setEditingCategory] =
+    useState<BookmarkRoutineCategory | null>(null);
   const [categorySaving, setCategorySaving] = useState(false);
   const [categoryError, setCategoryError] = useState<string | null>(
     null,
@@ -760,11 +829,25 @@ export default function BookmarkClient({ username }: { username: string }) {
   const openCategoryModal = () => {
     setCategoryModalOpen(true);
     setNewCategoryName("");
+    setEditingCategory(null);
     setCategoryError(null);
   };
 
   const closeCategoryModal = () => {
     setCategoryModalOpen(false);
+    setNewCategoryName("");
+    setEditingCategory(null);
+    setCategoryError(null);
+  };
+
+  const startEditCategory = (category: BookmarkRoutineCategory) => {
+    setEditingCategory(category);
+    setNewCategoryName(category.name);
+    setCategoryError(null);
+  };
+
+  const cancelEditCategory = () => {
+    setEditingCategory(null);
     setNewCategoryName("");
     setCategoryError(null);
   };
@@ -774,24 +857,83 @@ export default function BookmarkClient({ username }: { username: string }) {
     setCategorySaving(true);
     setCategoryError(null);
     try {
-      await apiFetch<BookmarkRoutineCategory>(
-        "/api/bookmark/categories",
-        {
-          method: "POST",
-          body: JSON.stringify({ name: newCategoryName }),
-        },
-      );
+      if (editingCategory) {
+        await apiFetch<BookmarkRoutineCategory>(
+          `/api/bookmark/categories/${editingCategory.id}`,
+          {
+            method: "PATCH",
+            body: JSON.stringify({ name: newCategoryName }),
+          },
+        );
+        setEditingCategory(null);
+      } else {
+        await apiFetch<BookmarkRoutineCategory>(
+          "/api/bookmark/categories",
+          {
+            method: "POST",
+            body: JSON.stringify({ name: newCategoryName }),
+          },
+        );
+      }
       setNewCategoryName("");
       await loadCategories();
+      await loadPeriod();
     } catch (reason) {
       setCategoryError(
         reason instanceof Error
           ? reason.message
-          : "카테고리를 추가하지 못했습니다.",
+          : editingCategory
+            ? "카테고리를 수정하지 못했습니다."
+            : "카테고리를 추가하지 못했습니다.",
       );
     } finally {
       setCategorySaving(false);
     }
+  };
+
+  const persistCategoryOrder = async (
+    next: BookmarkRoutineCategory[],
+  ) => {
+    if (categorySaving) return;
+    setCategories(next);
+    setCategorySaving(true);
+    setCategoryError(null);
+    try {
+      const saved = await apiFetch<BookmarkRoutineCategory[]>(
+        "/api/bookmark/categories/order",
+        {
+          method: "PUT",
+          body: JSON.stringify({
+            ids: next.map((category) => category.id),
+          }),
+        },
+      );
+      setCategories(saved);
+    } catch (reason) {
+      setCategoryError(
+        reason instanceof Error
+          ? reason.message
+          : "카테고리 순서를 변경하지 못했습니다.",
+      );
+      await loadCategories();
+    } finally {
+      setCategorySaving(false);
+    }
+  };
+
+  const handleCategoryDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id || categorySaving) return;
+    const oldIndex = categories.findIndex(
+      (category) => category.id === active.id,
+    );
+    const newIndex = categories.findIndex(
+      (category) => category.id === over.id,
+    );
+    if (oldIndex < 0 || newIndex < 0) return;
+    void persistCategoryOrder(
+      arrayMove(categories, oldIndex, newIndex),
+    );
   };
 
   const handleDeleteCategory = async (
@@ -811,6 +953,10 @@ export default function BookmarkClient({ username }: { username: string }) {
       await apiFetch(`/api/bookmark/categories/${category.id}`, {
         method: "DELETE",
       });
+      if (editingCategory?.id === category.id) {
+        setEditingCategory(null);
+        setNewCategoryName("");
+      }
       await loadCategories();
       await loadPeriod();
     } catch (reason) {
@@ -2870,7 +3016,7 @@ export default function BookmarkClient({ username }: { username: string }) {
               </p>
             ) : (
               <DndContext
-                sensors={moodSensors}
+                sensors={dndSensors}
                 collisionDetection={closestCenter}
                 onDragEnd={handleMoodDragEnd}
               >
@@ -2932,6 +3078,11 @@ export default function BookmarkClient({ username }: { username: string }) {
               <p className="bookmark-error">{categoryError}</p>
             ) : null}
 
+            {editingCategory ? (
+              <p className="bookmark-form-hint">
+                {editingCategory.name} 카테고리 수정 중
+              </p>
+            ) : null}
             <form
               className="bookmark-category-add"
               onSubmit={(event) => {
@@ -2943,7 +3094,9 @@ export default function BookmarkClient({ username }: { username: string }) {
                 type="text"
                 value={newCategoryName}
                 maxLength={80}
-                placeholder="새 카테고리 이름"
+                placeholder={
+                  editingCategory ? "카테고리 이름" : "새 카테고리 이름"
+                }
                 onChange={(event) =>
                   setNewCategoryName(event.target.value)
                 }
@@ -2953,8 +3106,18 @@ export default function BookmarkClient({ username }: { username: string }) {
                 className="bookmark-primary"
                 disabled={categorySaving || !newCategoryName.trim()}
               >
-                추가
+                {editingCategory ? "저장" : "추가"}
               </button>
+              {editingCategory ? (
+                <button
+                  type="button"
+                  className="bookmark-text-button"
+                  disabled={categorySaving}
+                  onClick={cancelEditCategory}
+                >
+                  취소
+                </button>
+              ) : null}
             </form>
 
             {categories.length === 0 ? (
@@ -2962,26 +3125,34 @@ export default function BookmarkClient({ username }: { username: string }) {
                 아직 카테고리가 없습니다.
               </p>
             ) : (
-              <ul className="bookmark-category-list">
-                {categories.map((category) => (
-                  <li key={category.id}>
-                    <span>{category.name}</span>
-                    <button
-                      type="button"
-                      className="bookmark-text-button is-danger"
-                      disabled={categorySaving}
-                      onClick={() =>
-                        void handleDeleteCategory(category)
-                      }
-                    >
-                      삭제
-                    </button>
-                  </li>
-                ))}
-              </ul>
+              <DndContext
+                sensors={dndSensors}
+                collisionDetection={closestCenter}
+                onDragEnd={handleCategoryDragEnd}
+              >
+                <SortableContext
+                  items={categories.map((category) => category.id)}
+                  strategy={verticalListSortingStrategy}
+                >
+                  <ul className="bookmark-category-list">
+                    {categories.map((category) => (
+                      <SortableCategoryItem
+                        key={category.id}
+                        category={category}
+                        saving={categorySaving}
+                        onEdit={startEditCategory}
+                        onDelete={(item) =>
+                          void handleDeleteCategory(item)
+                        }
+                      />
+                    ))}
+                  </ul>
+                </SortableContext>
+              </DndContext>
             )}
             <p className="bookmark-form-hint">
-              카테고리를 삭제하면 해당 루틴은 미분류로 이동합니다.
+              카테고리를 드래그해 순서를 바꿀 수 있습니다. 삭제하면
+              해당 루틴은 미분류로 이동합니다.
             </p>
           </div>
         </div>

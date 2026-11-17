@@ -62,6 +62,10 @@ class BookmarkRoutineCategoryUpdate(BaseModel):
     name: str = Field(min_length=1, max_length=80)
 
 
+class BookmarkRoutineCategoryReorder(BaseModel):
+    ids: list[int] = Field(min_length=1)
+
+
 class BookmarkRoutineCategoryRead(BaseModel):
     id: int
     name: str

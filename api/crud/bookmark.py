@@ -24,6 +24,7 @@ from schemas.bookmark import (
     BookmarkMoodTagReorder,
     BookmarkMoodTagUpdate,
     BookmarkRoutineCategoryCreate,
+    BookmarkRoutineCategoryReorder,
     BookmarkRoutineCategoryUpdate,
     BookmarkRatingUpdate,
     BookmarkReviewUpdate,
@@ -1931,6 +1932,39 @@ def update_routine_category(
     db.commit()
     db.refresh(category)
     return category
+
+
+def reorder_routine_categories(
+    db: Session,
+    payload: BookmarkRoutineCategoryReorder,
+    user_id: int,
+) -> list[BookmarkRoutineCategory]:
+    ids = list(dict.fromkeys(payload.ids))
+    if len(ids) != len(payload.ids):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="카테고리 순서가 올바르지 않습니다.",
+        )
+
+    categories = (
+        db.query(BookmarkRoutineCategory)
+        .filter(
+            BookmarkRoutineCategory.user_id == user_id,
+            BookmarkRoutineCategory.id.in_(ids),
+        )
+        .all()
+    )
+    if len(categories) != len(ids):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="루틴 카테고리를 찾을 수 없습니다.",
+        )
+
+    positions = {category_id: index for index, category_id in enumerate(ids)}
+    for category in categories:
+        category.position = positions[category.id]
+    db.commit()
+    return list_routine_categories(db, user_id)
 
 
 def delete_routine_category(

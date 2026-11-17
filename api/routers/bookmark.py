@@ -20,6 +20,7 @@ from crud.bookmark import (
     list_routine_categories,
     list_special_dates,
     reorder_mood_tags,
+    reorder_routine_categories,
     save_day_meta,
     save_goal,
     save_rating,
@@ -43,6 +44,7 @@ from schemas.bookmark import (
     BookmarkMoodTagUpdate,
     BookmarkRoutineCategoryCreate,
     BookmarkRoutineCategoryRead,
+    BookmarkRoutineCategoryReorder,
     BookmarkRoutineCategoryUpdate,
     BookmarkPeriodRead,
     BookmarkRatingRead,
@@ -182,6 +184,20 @@ def post_category(
 ):
     _no_store(response)
     return create_routine_category(db, payload, user.id)
+
+
+@router.put(
+    "/categories/order",
+    response_model=list[BookmarkRoutineCategoryRead],
+)
+def put_category_order(
+    payload: BookmarkRoutineCategoryReorder,
+    response: Response,
+    db: Session = Depends(get_db),
+    user=Depends(require_auth),
+):
+    _no_store(response)
+    return reorder_routine_categories(db, payload, user.id)
 
 
 @router.patch(
