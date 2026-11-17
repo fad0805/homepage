@@ -47,6 +47,7 @@ import { todayDateInputValue } from "@/lib/datetime";
 
 import { BookmarkCalendarModal } from "./bookmark-calendar-modal";
 import { BookmarkCategoryModal } from "./bookmark-category-modal";
+import { BookmarkHistoryModal } from "./bookmark-history-modal";
 import { BookmarkMoodTagModal } from "./bookmark-mood-tag-modal";
 import { CloverRating } from "./clover-rating";
 import {
@@ -2538,177 +2539,15 @@ export default function BookmarkClient({ username }: { username: string }) {
       ) : null}
 
       {historyRoutine ? (
-        <div
-          className="bookmark-modal-overlay"
-          role="presentation"
-          onClick={closeHistory}
-        >
-          <div
-            className="bookmark-modal bookmark-history-modal"
-            role="dialog"
-            aria-modal="true"
-            aria-label="루틴 달성 기록"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <header className="bookmark-modal-header">
-              <div>
-                <p className="bookmark-panel-eyebrow">
-                  {FREQUENCY_LABELS[historyRoutine.frequency]}
-                </p>
-                <h2>{historyRoutine.title} 달성 기록</h2>
-              </div>
-              <button
-                type="button"
-                className="bookmark-text-button"
-                onClick={closeHistory}
-              >
-                닫기
-              </button>
-            </header>
-
-            {historyLoading ? (
-              <p className="bookmark-status">불러오는 중...</p>
-            ) : null}
-            {historyError ? (
-              <p className="bookmark-error">{historyError}</p>
-            ) : null}
-
-            {historyData ? (
-              <>
-                {historyData.daily.length > 0 ? (
-                  <section className="bookmark-history-section">
-                    <div className="bookmark-history-heading">
-                      <h3>최근 3개월 · 일간</h3>
-                      <span>상세 기록 보관 범위</span>
-                    </div>
-                    <div className="bookmark-history-heatmap">
-                      <div className="bookmark-history-weekdays">
-                        {WEEKDAY_SHORT.map((day) => (
-                          <span key={day}>{day}</span>
-                        ))}
-                      </div>
-                      <div className="bookmark-history-days">
-                        {Array.from(
-                          {
-                            length:
-                              (parseDateKey(
-                                historyData.daily[0]?.date ?? "",
-                              ).getUTCDay() +
-                                6) %
-                              7,
-                          },
-                          (_, index) => (
-                            <span
-                              className="bookmark-history-day is-blank"
-                              key={`blank-${index}`}
-                            />
-                          ),
-                        )}
-                        {historyData.daily.map((day) => (
-                          <span
-                            className={`bookmark-history-day ${
-                              day.scheduled
-                                ? day.done
-                                  ? "is-done"
-                                  : "is-missed"
-                                : "is-off"
-                            }`}
-                            key={day.date}
-                            title={historyDayTitle(
-                              day.date,
-                              day.scheduled,
-                              day.done,
-                            )}
-                          />
-                        ))}
-                      </div>
-                    </div>
-                    <div className="bookmark-history-legend">
-                      <span>
-                        <i className="is-done" />
-                        완료
-                      </span>
-                      <span>
-                        <i className="is-missed" />
-                        미완료
-                      </span>
-                      <span>
-                        <i className="is-off" />
-                        예정 없음
-                      </span>
-                    </div>
-                  </section>
-                ) : (
-                  <p className="bookmark-history-note">
-                    일간 상세 그래프는 매일 또는 일자형 주간 루틴에서 제공됩니다.
-                  </p>
-                )}
-
-                <section className="bookmark-history-section">
-                  <div className="bookmark-history-heading">
-                    <h3>
-                      {isMonthlyHistory
-                        ? "분기 달성률"
-                        : "월간 달성률"}
-                    </h3>
-                    <span>
-                      {isMonthlyHistory
-                        ? "월간 기록을 분기 단위로 묶어 표시"
-                        : "3개월 이후는 월 단위 집계로 보관"}
-                    </span>
-                  </div>
-                  {historyBuckets.length === 0 ? (
-                    <p className="bookmark-empty-row">
-                      {isMonthlyHistory
-                        ? "아직 분기 집계가 없습니다."
-                        : "아직 월간 집계가 없습니다."}
-                    </p>
-                  ) : (
-                    <ul className="bookmark-history-months">
-                      {historyBuckets
-                        .slice()
-                        .reverse()
-                        .map((bucket) => {
-                          const rate =
-                            bucket.expected_count > 0
-                              ? Math.round(
-                                  (bucket.completed_count /
-                                    bucket.expected_count) *
-                                    100,
-                                )
-                              : 0;
-                          return (
-                            <li key={bucket.period_start}>
-                              <span className="bookmark-history-month-label">
-                                {isMonthlyHistory
-                                  ? historyQuarterLabel(
-                                      bucket.period_start,
-                                    )
-                                  : historyMonthLabel(
-                                      bucket.period_start,
-                                    )}
-                              </span>
-                              <div className="bookmark-history-bar">
-                                <span
-                                  style={{
-                                    width: `${Math.min(100, rate)}%`,
-                                  }}
-                                />
-                              </div>
-                              <span className="bookmark-history-rate">
-                                {bucket.completed_count}/
-                                {bucket.expected_count}
-                              </span>
-                            </li>
-                          );
-                        })}
-                    </ul>
-                  )}
-                </section>
-              </>
-            ) : null}
-          </div>
-        </div>
+        <BookmarkHistoryModal
+          routine={historyRoutine}
+          data={historyData}
+          loading={historyLoading}
+          error={historyError}
+          buckets={historyBuckets}
+          isMonthlyHistory={isMonthlyHistory}
+          onClose={closeHistory}
+        />
       ) : null}
     </div>
   );
