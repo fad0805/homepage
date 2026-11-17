@@ -21,6 +21,7 @@ from crud.bookmark import (
     list_special_dates,
     reorder_mood_tags,
     reorder_routine_categories,
+    reorder_routines,
     save_day_meta,
     save_goal,
     save_rating,
@@ -56,6 +57,7 @@ from schemas.bookmark import (
     BookmarkRoutineHistoryRead,
     BookmarkRoutinePeriodRead,
     BookmarkRoutineRead,
+    BookmarkRoutineReorder,
     BookmarkRoutineUpdate,
     BookmarkSpecialDateCreate,
     BookmarkSpecialDateRead,
@@ -296,6 +298,17 @@ def post_routine(
 ):
     _no_store(response)
     return create_routine(db, payload, user.id)
+
+
+@router.put("/routines/order")
+def put_routine_order(
+    payload: BookmarkRoutineReorder,
+    response: Response,
+    db: Session = Depends(get_db),
+    user=Depends(require_auth),
+):
+    _no_store(response)
+    return reorder_routines(db, payload, user.id)
 
 
 @router.patch("/routines/{routine_id}", response_model=BookmarkRoutineRead)

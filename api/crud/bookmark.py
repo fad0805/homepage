@@ -30,6 +30,7 @@ from schemas.bookmark import (
     BookmarkReviewUpdate,
     BookmarkRoutineCheckUpdate,
     BookmarkRoutineCreate,
+    BookmarkRoutineReorder,
     BookmarkRoutineUpdate,
     BookmarkSpecialDateCreate,
     BookmarkSpecialDateUpdate,
@@ -1615,6 +1616,57 @@ def delete_routine(db: Session, routine_id: int, user_id: int) -> dict:
         BookmarkRoutineCheck.routine_id == routine.id
     ).delete(synchronize_session=False)
     db.delete(routine)
+    db.commit()
+    return {"success": True}
+
+
+def reorder_routines(
+    db: Session,
+    payload: BookmarkRoutineReorder,
+    user_id: int,
+) -> dict:
+    ids = list(dict.fromkeys(payload.ids))
+    if len(ids) != len(payload.ids):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="루틴 순서가 올바르지 않습니다.",
+        )
+
+    routines = (
+        db.query(BookmarkRoutine)
+        .filter(
+            BookmarkRoutine.user_id == user_id,
+            BookmarkRoutine.calendar_only.is_(False),
+            BookmarkRoutine.id.in_(ids),
+        )
+        .all()
+    )
+    if len(routines) != len(ids):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="루틴을 찾을 수 없습니다.",
+        )
+
+    # Reuse the position slots the visible routines already occupy. Positions
+    # are tracked per frequency, so keep each frequency's slots separate.
+    positions_by_frequency: dict[str, list[int]] = {}
+    for routine in routines:
+        positions_by_frequency.setdefault(
+            routine.frequency, []
+        ).append(routine.position)
+    for positions in positions_by_frequency.values():
+        positions.sort()
+
+    by_id = {routine.id: routine for routine in routines}
+    next_slot = {frequency: 0 for frequency in positions_by_frequency}
+    for routine_id in ids:
+        routine = by_id[routine_id]
+        frequency = routine.frequency
+        routine.position = positions_by_frequency[frequency][
+            next_slot[frequency]
+        ]
+        next_slot[frequency] += 1
+
     db.commit()
     return {"success": True}
 

@@ -1,6 +1,13 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useState } from "react";
+import {
+  FormEvent,
+  useCallback,
+  useEffect,
+  useState,
+  type KeyboardEvent,
+  type ReactNode,
+} from "react";
 import {
   DndContext,
   KeyboardSensor,
@@ -518,6 +525,79 @@ function SortableCategoryItem({
   );
 }
 
+function SortableRoutineItem({
+  id,
+  title,
+  disabled,
+  className,
+  onClick,
+  onKeyDown,
+  children,
+}: {
+  id: number;
+  title: string;
+  disabled: boolean;
+  className: string;
+  onClick: () => void;
+  onKeyDown: (event: KeyboardEvent<HTMLLIElement>) => void;
+  children: ReactNode;
+}) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id, disabled });
+  const { onPointerDown } = listeners ?? {};
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.45 : 1,
+    zIndex: isDragging ? 2 : undefined,
+  };
+
+  return (
+    <li
+      ref={setNodeRef}
+      style={style}
+      className={`${className}${isDragging ? " is-dragging" : ""}`}
+      role="button"
+      tabIndex={0}
+      aria-label={`${title} 수정`}
+      onClick={onClick}
+      onKeyDown={onKeyDown}
+      onPointerDown={(event) => {
+        if (event.pointerType === "touch") return;
+        const target = event.target;
+        if (
+          target instanceof Element &&
+          target.closest(
+            "button, input, label, a, select, textarea, summary",
+          )
+        ) {
+          return;
+        }
+        onPointerDown?.(event);
+      }}
+    >
+      {children}
+      <button
+        type="button"
+        className="bookmark-drag-handle bookmark-routine-drag"
+        aria-label={`${title} 순서 변경`}
+        disabled={disabled}
+        {...attributes}
+        {...listeners}
+        onClick={(event) => event.stopPropagation()}
+      >
+        ⠿
+      </button>
+    </li>
+  );
+}
+
 export default function BookmarkClient({ username }: { username: string }) {
   const initialToday = todayDateInputValue();
   const [view, setView] = useState<BookmarkView>("today");
@@ -596,6 +676,7 @@ export default function BookmarkClient({ username }: { username: string }) {
   const [categoryError, setCategoryError] = useState<string | null>(
     null,
   );
+  const [routineOrderSaving, setRoutineOrderSaving] = useState(false);
   const [routineCategoryId, setRoutineCategoryId] = useState<
     number | null
   >(null);
@@ -754,6 +835,70 @@ export default function BookmarkClient({ username }: { username: string }) {
   const unitView: BookmarkPeriodType =
     view === "today" || view === "stats" ? "day" : view;
   const isTodaySelected = periodStart === todayDateInputValue();
+
+  const persistRoutineOrder = async (next: BookmarkRoutine[]) => {
+    if (routineOrderSaving) return;
+    setRoutineOrderSaving(true);
+    setError(null);
+    setData((previous) =>
+      previous ? { ...previous, routines: next } : previous,
+    );
+    try {
+      await apiFetch<{ success: boolean }>("/api/bookmark/routines/order", {
+        method: "PUT",
+        body: JSON.stringify({
+          ids: next.map((routine) => routine.id),
+        }),
+      });
+    } catch (reason) {
+      setError(
+        reason instanceof Error
+          ? reason.message
+          : "루틴 순서를 변경하지 못했습니다.",
+      );
+      await loadPeriod();
+    } finally {
+      setRoutineOrderSaving(false);
+    }
+  };
+
+  const handleRoutineDragEnd = (
+    groupRoutines: BookmarkRoutine[],
+    event: DragEndEvent,
+  ) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id || routineOrderSaving) return;
+    const activeRoutine = groupRoutines.find(
+      (routine) => routine.id === active.id,
+    );
+    const overRoutine = groupRoutines.find(
+      (routine) => routine.id === over.id,
+    );
+    if (
+      !activeRoutine ||
+      !overRoutine ||
+      activeRoutine.frequency !== overRoutine.frequency
+    ) {
+      return;
+    }
+    const oldIndex = groupRoutines.findIndex(
+      (routine) => routine.id === active.id,
+    );
+    const newIndex = groupRoutines.findIndex(
+      (routine) => routine.id === over.id,
+    );
+    if (oldIndex < 0 || newIndex < 0) return;
+    const oldGlobalIndex = routines.findIndex(
+      (routine) => routine.id === active.id,
+    );
+    const newGlobalIndex = routines.findIndex(
+      (routine) => routine.id === over.id,
+    );
+    if (oldGlobalIndex < 0 || newGlobalIndex < 0) return;
+    void persistRoutineOrder(
+      arrayMove(routines, oldGlobalIndex, newGlobalIndex),
+    );
+  };
 
   const openCreateRoutine = () => {
     setRoutineModalOpen(true);
@@ -1639,14 +1784,14 @@ export default function BookmarkClient({ username }: { username: string }) {
       const isStopped = Boolean(routine.end_date);
       const allDone = isRoutineDone(routine);
       return (
-        <li
+        <SortableRoutineItem
+          key={routine.id}
+          id={routine.id}
+          title={routine.title}
+          disabled={routineOrderSaving}
           className={`bookmark-item is-clickable${
             allDone ? " is-done" : ""
           }`}
-          key={routine.id}
-          role="button"
-          tabIndex={0}
-          aria-label={`${routine.title} 수정`}
           onClick={() => openEditRoutine(routine)}
           onKeyDown={(event) => {
             if (
@@ -1760,7 +1905,7 @@ export default function BookmarkClient({ username }: { username: string }) {
               <p className="bookmark-item-notes">{routine.notes}</p>
             ) : null}
           </div>
-        </li>
+        </SortableRoutineItem>
       );
     };
 
@@ -1789,9 +1934,23 @@ export default function BookmarkClient({ username }: { username: string }) {
                 </h3>
                 <span>{group.routines.length}</span>
               </header>
-              <ul className="bookmark-item-list">
-                {group.routines.map(renderRoutineItem)}
-              </ul>
+              <DndContext
+                key={group.key}
+                sensors={dndSensors}
+                collisionDetection={closestCenter}
+                onDragEnd={(event) =>
+                  handleRoutineDragEnd(group.routines, event)
+                }
+              >
+                <SortableContext
+                  items={group.routines.map((routine) => routine.id)}
+                  strategy={verticalListSortingStrategy}
+                >
+                  <ul className="bookmark-item-list">
+                    {group.routines.map(renderRoutineItem)}
+                  </ul>
+                </SortableContext>
+              </DndContext>
             </section>
           ))}
       </div>

@@ -105,6 +105,10 @@ class BookmarkRoutineUpdate(BaseModel):
     active: bool | None = None
 
 
+class BookmarkRoutineReorder(BaseModel):
+    ids: list[int] = Field(min_length=1)
+
+
 class BookmarkRoutineRead(BaseModel):
     id: int
     title: str
