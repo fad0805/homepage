@@ -25,6 +25,7 @@ export function PlannerTaskCard({
         key={task.id}
         role="button"
         tabIndex={0}
+        style={{ borderLeftColor: taskColor(task) }}
         onClick={() => onOpen(task)}
         onKeyDown={(event) => {
           if (event.target !== event.currentTarget) return;
@@ -47,11 +48,6 @@ export function PlannerTaskCard({
                 onChange={() => onComplete(task)}
               />
             ) : null}
-            <span
-              className="planner-task-color"
-              style={{ backgroundColor: taskColor(task) }}
-              aria-hidden="true"
-            />
             <strong>{task.title}</strong>
           </div>
           <p className="planner-task-meta planner-task-deadline">
