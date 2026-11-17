@@ -4,9 +4,8 @@ import {
   FormEvent,
   useCallback,
   useEffect,
+  useRef,
   useState,
-  type KeyboardEvent,
-  type ReactNode,
 } from "react";
 import {
   DndContext,
@@ -21,10 +20,8 @@ import {
   SortableContext,
   arrayMove,
   sortableKeyboardCoordinates,
-  useSortable,
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
-import { CSS } from "@dnd-kit/utilities";
 
 import {
   WEEKDAY_SHORT,
@@ -49,562 +46,50 @@ import { apiFetch } from "@/lib/api";
 import { todayDateInputValue } from "@/lib/datetime";
 
 import { CloverRating } from "./clover-rating";
+import {
+  SortableCategoryItem,
+  SortableMoodTagItem,
+  SortableRoutineItem,
+} from "./bookmark-sortable-items";
+import {
+  FREQUENCY_LABELS,
+  MODE_LABELS,
+  PERIOD_FREQUENCY,
+  PERIOD_LABELS,
+  PERIOD_TYPES,
+  ROUTINE_SECTION_LABELS,
+  STATS_COLORS,
+  STATS_RANGES,
+  STATS_RANGE_LABELS,
+  TARGET_LABELS,
+  VIEWS,
+  VIEW_LABELS,
+  type BookmarkView,
+  type HistoryRoutine,
+  type MonthlyMode,
+  type StatsRange,
+} from "./bookmark-types";
+import {
+  dateKey,
+  historyDayTitle,
+  historyMonthLabel,
+  historyQuarterLabel,
+  monthCalendarDays,
+  monthLabel,
+  occurrenceLabel,
+  pad2,
+  parseDateKey,
+  periodLabel,
+  quarterFromMonth,
+  quarterStartMonth,
+  shiftPeriod,
+  startOfPeriod,
+  statBucketEnd,
+  statBucketLabel,
+  statRangeBounds,
+} from "./bookmark-utils";
 
 import "@/public/styles/bookmark.scss";
-
-type BookmarkView = "today" | BookmarkPeriodType | "stats";
-type MonthlyMode = "day" | "nth";
-type HistoryRoutine = Pick<
-  BookmarkRoutine,
-  "id" | "title" | "frequency"
->;
-type StatsRange = "week" | "month" | "quarter" | "year" | "3years";
-
-const PERIOD_TYPES: BookmarkPeriodType[] = [
-  "day",
-  "week",
-  "month",
-  "quarter",
-  "year",
-];
-const PERIOD_LABELS: Record<BookmarkPeriodType, string> = {
-  year: "연",
-  quarter: "분기",
-  month: "월",
-  week: "주",
-  day: "일",
-};
-const STATS_RANGES: StatsRange[] = [
-  "week",
-  "month",
-  "quarter",
-  "year",
-  "3years",
-];
-const STATS_RANGE_LABELS: Record<StatsRange, string> = {
-  week: "이번 주",
-  month: "이번 달",
-  quarter: "이번 분기",
-  year: "이번 해",
-  "3years": "최근 3년",
-};
-const STATS_COLORS = [
-  "#4f8f5b",
-  "#5b7fb3",
-  "#b07a4a",
-  "#9a5b8f",
-  "#a89a45",
-  "#4f9a9a",
-  "#8264b0",
-  "#b35b5b",
-  "#6f8f4f",
-  "#4f6b8f",
-];
-const VIEWS: BookmarkView[] = ["today", ...PERIOD_TYPES, "stats"];
-const VIEW_LABELS: Record<BookmarkView, string> = {
-  today: "오늘",
-  ...PERIOD_LABELS,
-  stats: "통계",
-};
-const PERIOD_FREQUENCY: Record<
-  BookmarkPeriodType,
-  BookmarkRoutineFrequency
-> = {
-  year: "yearly",
-  quarter: "quarterly",
-  month: "monthly",
-  week: "weekly",
-  day: "daily",
-};
-const FREQUENCY_LABELS: Record<BookmarkRoutineFrequency, string> = {
-  daily: "매일",
-  weekly: "매주",
-  monthly: "매월",
-  quarterly: "매분기",
-  yearly: "매년",
-};
-const ROUTINE_SECTION_LABELS: Record<BookmarkPeriodType, string> = {
-  day: "매일",
-  week: "매주",
-  month: "매월",
-  quarter: "매분기",
-  year: "매년",
-};
-const TARGET_LABELS: Record<BookmarkRoutineFrequency, string> = {
-  daily: "매일",
-  weekly: "주간 목표 횟수",
-  monthly: "월간 목표 횟수",
-  quarterly: "분기 목표 횟수",
-  yearly: "연간 목표 횟수",
-};
-const MODE_LABELS: Record<BookmarkTrackingMode, string> = {
-  count: "횟수",
-  date: "일자",
-};
-
-function pad2(value: number) {
-  return String(value).padStart(2, "0");
-}
-
-function quarterStartMonth(quarter: number) {
-  return quarter > 0 ? (quarter - 1) * 3 + 1 : null;
-}
-
-function quarterFromMonth(month: number | null) {
-  return month ? Math.floor((month - 1) / 3) + 1 : 0;
-}
-
-function dateKey(date: Date) {
-  return `${date.getUTCFullYear()}-${pad2(
-    date.getUTCMonth() + 1,
-  )}-${pad2(date.getUTCDate())}`;
-}
-
-function parseDateKey(value: string) {
-  const [year, month, day] = value.split("-").map(Number);
-  return new Date(Date.UTC(year, month - 1, day));
-}
-
-function startOfPeriod(value: string, type: BookmarkPeriodType) {
-  const date = parseDateKey(value);
-  const year = date.getUTCFullYear();
-  const month = date.getUTCMonth();
-  const day = date.getUTCDate();
-
-  if (type === "year") {
-    return dateKey(new Date(Date.UTC(year, 0, 1)));
-  }
-  if (type === "quarter") {
-    return dateKey(new Date(Date.UTC(year, Math.floor(month / 3) * 3, 1)));
-  }
-  if (type === "month") {
-    return dateKey(new Date(Date.UTC(year, month, 1)));
-  }
-  if (type === "week") {
-    const offset = (date.getUTCDay() + 6) % 7;
-    return dateKey(new Date(Date.UTC(year, month, day - offset)));
-  }
-  return dateKey(date);
-}
-
-function shiftPeriod(
-  value: string,
-  type: BookmarkPeriodType,
-  delta: number,
-) {
-  const date = parseDateKey(value);
-  if (type === "year") {
-    return dateKey(
-      new Date(Date.UTC(date.getUTCFullYear() + delta, 0, 1)),
-    );
-  }
-  if (type === "quarter") {
-    return dateKey(
-      new Date(
-        Date.UTC(
-          date.getUTCFullYear(),
-          date.getUTCMonth() + delta * 3,
-          1,
-        ),
-      ),
-    );
-  }
-  if (type === "month") {
-    return dateKey(
-      new Date(
-        Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + delta, 1),
-      ),
-    );
-  }
-  const days = type === "week" ? delta * 7 : delta;
-  return dateKey(
-    new Date(
-      Date.UTC(
-        date.getUTCFullYear(),
-        date.getUTCMonth(),
-        date.getUTCDate() + days,
-      ),
-    ),
-  );
-}
-
-function occurrenceLabel(
-  value: string,
-  view: BookmarkView,
-  frequency: BookmarkRoutineFrequency,
-) {
-  const date = parseDateKey(value);
-  if (view === "week") {
-    const weekday = (date.getUTCDay() + 6) % 7;
-    return `${WEEKDAY_SHORT[weekday]} ${date.getUTCDate()}`;
-  }
-  if (view === "today") {
-    if (frequency === "monthly") return "이번 달";
-    if (frequency === "quarterly") return "이번 분기";
-    if (frequency === "yearly") return "올해";
-    return "오늘";
-  }
-  if (view === "day") return "완료";
-  if (view === "month") return "이번 달";
-  if (view === "quarter") return "이번 분기";
-  return "올해";
-}
-
-function historyDayTitle(
-  value: string,
-  scheduled: boolean,
-  done: boolean,
-) {
-  const date = parseDateKey(value);
-  const label = `${date.getUTCFullYear()}.${pad2(
-    date.getUTCMonth() + 1,
-  )}.${pad2(date.getUTCDate())}`;
-  return `${label} · ${
-    done ? "완료" : scheduled ? "미완료" : "예정 없음"
-  }`;
-}
-
-function statBucketLabel(
-  value: string,
-  aggregation: "week" | "month" | "quarter" | "year",
-) {
-  const date = parseDateKey(value);
-  const year = date.getUTCFullYear();
-  const month = date.getUTCMonth() + 1;
-  if (aggregation === "year") return `${year}년`;
-  if (aggregation === "quarter") {
-    return `${year}년 ${Math.floor((month - 1) / 3) + 1}분기`;
-  }
-  if (aggregation === "month") {
-    return `${year}.${pad2(month)}`;
-  }
-  const end = parseDateKey(shiftPeriod(value, "day", 6));
-  return `${month}/${date.getUTCDate()} ~ ${
-    end.getUTCMonth() + 1
-  }/${end.getUTCDate()}`;
-}
-
-function statBucketEnd(
-  value: string,
-  aggregation: "week" | "month" | "quarter" | "year",
-) {
-  if (aggregation === "week") return shiftPeriod(value, "day", 6);
-  if (aggregation === "month") {
-    const date = parseDateKey(value);
-    return dateKey(
-      new Date(
-        Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + 1, 0),
-      ),
-    );
-  }
-  if (aggregation === "quarter") {
-    return shiftPeriod(
-      shiftPeriod(value, "month", 3),
-      "day",
-      -1,
-    );
-  }
-  return `${parseDateKey(value).getUTCFullYear()}-12-31`;
-}
-
-function statRangeBounds(range: StatsRange) {
-  const today = todayDateInputValue();
-  const date = parseDateKey(today);
-  const year = date.getUTCFullYear();
-  if (range === "week") {
-    const start = startOfPeriod(today, "week");
-    return { start, end: shiftPeriod(start, "day", 6) };
-  }
-  if (range === "month") {
-    const start = startOfPeriod(today, "month");
-    return {
-      start,
-      end: statBucketEnd(start, "month"),
-    };
-  }
-  if (range === "quarter") {
-    const start = startOfPeriod(today, "quarter");
-    return {
-      start,
-      end: statBucketEnd(start, "quarter"),
-    };
-  }
-  if (range === "year") {
-    return { start: `${year}-01-01`, end: `${year}-12-31` };
-  }
-  return {
-    start: `${year - 2}-01-01`,
-    end: `${year}-12-31`,
-  };
-}
-
-function historyMonthLabel(value: string) {
-  const date = parseDateKey(value);
-  return `${date.getUTCFullYear()}.${pad2(date.getUTCMonth() + 1)}`;
-}
-
-function historyQuarterLabel(value: string) {
-  const date = parseDateKey(value);
-  return `${date.getUTCFullYear()}.Q${
-    Math.floor(date.getUTCMonth() / 3) + 1
-  }`;
-}
-
-function periodLabel(value: string, type: BookmarkPeriodType) {
-  const date = parseDateKey(value);
-  const year = date.getUTCFullYear();
-  const month = date.getUTCMonth() + 1;
-  const day = date.getUTCDate();
-
-  if (type === "year") return `${year}년`;
-  if (type === "quarter") {
-    return `${year}년 ${Math.floor((month - 1) / 3) + 1}분기`;
-  }
-  if (type === "month") return `${year}년 ${month}월`;
-  if (type === "day") {
-    return `${year}년 ${month}월 ${day}일 (${
-      ["일", "월", "화", "수", "목", "금", "토"][date.getUTCDay()]
-    })`;
-  }
-
-  const end = parseDateKey(shiftPeriod(value, "day", 6));
-  const endYear = end.getUTCFullYear();
-  const endMonth = end.getUTCMonth() + 1;
-  const endDay = end.getUTCDate();
-  return `${year}년 ${month}월 ${day}일 ~ ${
-    endYear !== year ? `${endYear}년 ` : ""
-  }${endMonth}월 ${endDay}일`;
-}
-
-function monthCalendarDays(monthStart: string) {
-  const date = parseDateKey(monthStart);
-  const year = date.getUTCFullYear();
-  const month = date.getUTCMonth();
-  const first = new Date(Date.UTC(year, month, 1));
-  const offset = (first.getUTCDay() + 6) % 7;
-  return Array.from({ length: 42 }, (_, index) => {
-    const day = new Date(
-      Date.UTC(year, month, 1 - offset + index),
-    );
-    return {
-      key: dateKey(day),
-      day: day.getUTCDate(),
-      inMonth: day.getUTCMonth() === month,
-    };
-  });
-}
-
-function monthLabel(value: string) {
-  const date = parseDateKey(value);
-  return `${date.getUTCFullYear()}년 ${date.getUTCMonth() + 1}월`;
-}
-
-function SortableMoodTagItem({
-  tag,
-  saving,
-  onEdit,
-  onDelete,
-}: {
-  tag: BookmarkMoodTag;
-  saving: boolean;
-  onEdit: (tag: BookmarkMoodTag) => void;
-  onDelete: (tag: BookmarkMoodTag) => void;
-}) {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({ id: tag.id, disabled: saving });
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.45 : 1,
-    zIndex: isDragging ? 2 : undefined,
-  };
-
-  return (
-    <li
-      ref={setNodeRef}
-      style={style}
-      className={`bookmark-category-item${
-        isDragging ? " is-dragging" : ""
-      }`}
-    >
-      <span>{tag.name}</span>
-      <div className="bookmark-category-actions">
-        <button
-          type="button"
-          className="bookmark-drag-handle"
-          aria-label={`${tag.name} 순서 변경`}
-          disabled={saving}
-          {...attributes}
-          {...listeners}
-        >
-          ⠿
-        </button>
-        <button
-          type="button"
-          className="bookmark-text-button"
-          disabled={saving}
-          onClick={() => onEdit(tag)}
-        >
-          수정
-        </button>
-        <button
-          type="button"
-          className="bookmark-text-button is-danger"
-          disabled={saving}
-          onClick={() => onDelete(tag)}
-        >
-          삭제
-        </button>
-      </div>
-    </li>
-  );
-}
-
-function SortableCategoryItem({
-  category,
-  saving,
-  onEdit,
-  onDelete,
-}: {
-  category: BookmarkRoutineCategory;
-  saving: boolean;
-  onEdit: (category: BookmarkRoutineCategory) => void;
-  onDelete: (category: BookmarkRoutineCategory) => void;
-}) {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({ id: category.id, disabled: saving });
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.45 : 1,
-    zIndex: isDragging ? 2 : undefined,
-  };
-
-  return (
-    <li
-      ref={setNodeRef}
-      style={style}
-      className={`bookmark-category-item${
-        isDragging ? " is-dragging" : ""
-      }`}
-    >
-      <span>{category.name}</span>
-      <div className="bookmark-category-actions">
-        <button
-          type="button"
-          className="bookmark-drag-handle"
-          aria-label={`${category.name} 순서 변경`}
-          disabled={saving}
-          {...attributes}
-          {...listeners}
-        >
-          ⠿
-        </button>
-        <button
-          type="button"
-          className="bookmark-text-button"
-          disabled={saving}
-          onClick={() => onEdit(category)}
-        >
-          수정
-        </button>
-        <button
-          type="button"
-          className="bookmark-text-button is-danger"
-          disabled={saving}
-          onClick={() => onDelete(category)}
-        >
-          삭제
-        </button>
-      </div>
-    </li>
-  );
-}
-
-function SortableRoutineItem({
-  id,
-  title,
-  disabled,
-  className,
-  onClick,
-  onKeyDown,
-  children,
-}: {
-  id: number;
-  title: string;
-  disabled: boolean;
-  className: string;
-  onClick: () => void;
-  onKeyDown: (event: KeyboardEvent<HTMLLIElement>) => void;
-  children: ReactNode;
-}) {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({ id, disabled });
-  const { onPointerDown } = listeners ?? {};
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.45 : 1,
-    zIndex: isDragging ? 2 : undefined,
-  };
-
-  return (
-    <li
-      ref={setNodeRef}
-      style={style}
-      className={`${className}${isDragging ? " is-dragging" : ""}`}
-      role="button"
-      tabIndex={0}
-      aria-label={`${title} 수정`}
-      onClick={onClick}
-      onKeyDown={onKeyDown}
-      onPointerDown={(event) => {
-        if (event.pointerType === "touch") return;
-        const target = event.target;
-        if (
-          target instanceof Element &&
-          target.closest(
-            "button, input, label, a, select, textarea, summary",
-          )
-        ) {
-          return;
-        }
-        onPointerDown?.(event);
-      }}
-    >
-      {children}
-      <button
-        type="button"
-        className="bookmark-drag-handle bookmark-routine-drag"
-        aria-label={`${title} 순서 변경`}
-        disabled={disabled}
-        {...attributes}
-        {...listeners}
-        onClick={(event) => event.stopPropagation()}
-      >
-        ⠿
-      </button>
-    </li>
-  );
-}
 
 export default function BookmarkClient({ username }: { username: string }) {
   const initialToday = todayDateInputValue();
