@@ -1190,14 +1190,15 @@
   align-items: flex-start;
   gap: 0.35rem;
 
-  &.is-interactive {
-    cursor: pointer;
-  }
-
   input {
     flex-shrink: 0;
     margin: 0.16rem 0 0;
     accent-color: var(--theme-main);
+    cursor: pointer;
+
+    &:disabled {
+      cursor: default;
+    }
   }
 
   span {

@@ -65,7 +65,7 @@ export function BookmarkRoutineNotes({
                 className={item.checkbox ? "is-check" : undefined}
               >
                 {item.checkbox ? (
-                  <label
+                  <span
                     className={`bookmark-note-check${
                       onToggle && !disabled ? " is-interactive" : ""
                     }`}
@@ -75,6 +75,7 @@ export function BookmarkRoutineNotes({
                       type="checkbox"
                       checked={item.checked}
                       disabled={disabled || !onToggle}
+                      aria-label={item.text || "체크 항목"}
                       onChange={() => onToggle?.(item.index)}
                     />
                     <span
@@ -84,7 +85,7 @@ export function BookmarkRoutineNotes({
                     >
                       {item.text || "\u00A0"}
                     </span>
-                  </label>
+                  </span>
                 ) : (
                   <span>{item.text || "\u00A0"}</span>
                 )}

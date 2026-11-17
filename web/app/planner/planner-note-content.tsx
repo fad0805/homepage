@@ -73,7 +73,7 @@ export function PlannerNoteContent({
                 className={item.checkbox ? "is-check" : undefined}
               >
                 {item.checkbox ? (
-                  <label
+                  <span
                     className={`planner-note-check${
                       item.checked ? " is-done" : ""
                     }`}
@@ -87,10 +87,11 @@ export function PlannerNoteContent({
                       type="checkbox"
                       checked={item.checked}
                       disabled={disabled}
+                      aria-label={item.text || "체크 항목"}
                       onChange={() => onToggle(item.index)}
                     />
                     <span>{item.text || "\u00A0"}</span>
-                  </label>
+                  </span>
                 ) : (
                   <span>{item.text || "\u00A0"}</span>
                 )}
