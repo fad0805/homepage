@@ -233,6 +233,11 @@ class BookmarkStatisticsRead(BaseModel):
     )
 
 
+BookmarkJournalNodeLevel = Literal[
+    "year", "quarter", "month", "week", "day"
+]
+
+
 class BookmarkGoalUpdate(BaseModel):
     period_type: BookmarkPeriodType
     period_start: date
@@ -294,6 +299,30 @@ class BookmarkReviewRead(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class BookmarkJournalNodeRead(BaseModel):
+    level: BookmarkJournalNodeLevel
+    period_start: date
+    period_end: date
+    label: str
+    goal: BookmarkGoalRead | None = None
+    rating: BookmarkRatingRead | None = None
+    review: BookmarkReviewRead | None = None
+    goal_count: int = 0
+    review_count: int = 0
+    rating_count: int = 0
+    average_rating: float | None = None
+    children: list["BookmarkJournalNodeRead"] = Field(
+        default_factory=list
+    )
+
+
+class BookmarkJournalTreeRead(BaseModel):
+    decade_start: date
+    decade_end: date
+    label: str
+    years: list[BookmarkJournalNodeRead] = Field(default_factory=list)
 
 
 class BookmarkPeriodRead(BaseModel):

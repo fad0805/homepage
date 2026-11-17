@@ -12,6 +12,7 @@ from .history import (
     prune_old_routine_checks,
 )
 from .journal import (
+    get_journal_tree,
     save_day_meta,
     save_goal,
     save_rating,
@@ -50,6 +51,7 @@ __all__ = [
     "delete_routine",
     "delete_routine_category",
     "delete_special_date",
+    "get_journal_tree",
     "get_period",
     "get_routine_history",
     "get_statistics",

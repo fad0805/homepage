@@ -140,6 +140,35 @@ export interface BookmarkPeriod {
   review: BookmarkReview | null;
 }
 
+export type BookmarkJournalNodeLevel =
+  | "year"
+  | "quarter"
+  | "month"
+  | "week"
+  | "day";
+
+export interface BookmarkJournalNode {
+  level: BookmarkJournalNodeLevel;
+  period_start: string;
+  period_end: string;
+  label: string;
+  goal: BookmarkGoal | null;
+  rating: BookmarkRating | null;
+  review: BookmarkReview | null;
+  goal_count: number;
+  review_count: number;
+  rating_count: number;
+  average_rating: number | null;
+  children: BookmarkJournalNode[];
+}
+
+export interface BookmarkJournalTree {
+  decade_start: string;
+  decade_end: string;
+  label: string;
+  years: BookmarkJournalNode[];
+}
+
 export const WEEKDAY_SHORT = ["월", "화", "수", "목", "금", "토", "일"];
 
 export function formatTime24h(value: string | null | undefined) {

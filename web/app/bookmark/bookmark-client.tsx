@@ -48,6 +48,7 @@ import { todayDateInputValue } from "@/lib/datetime";
 import { BookmarkCalendarModal } from "./bookmark-calendar-modal";
 import { BookmarkCategoryModal } from "./bookmark-category-modal";
 import { BookmarkHistoryModal } from "./bookmark-history-modal";
+import { BookmarkJournalPanel } from "./bookmark-journal-panel";
 import { BookmarkMoodTagModal } from "./bookmark-mood-tag-modal";
 import { BookmarkRoutineModal } from "./bookmark-routine-modal";
 import { BookmarkStatisticsPanel } from "./bookmark-statistics-panel";
@@ -81,6 +82,7 @@ import {
   type HistoryRoutine,
   type MonthlyMode,
   type StatsRange,
+  type StatsSection,
 } from "./bookmark-types";
 import {
   dateKey,
@@ -124,6 +126,8 @@ export default function BookmarkClient({ username }: { username: string }) {
     setPeriodStart,
   });
   const [statsRange, setStatsRange] = useState<StatsRange>("month");
+  const [statsSection, setStatsSection] =
+    useState<StatsSection>("routines");
   const [expandedDoneSections, setExpandedDoneSections] = useState<
     Set<string>
   >(() => new Set());
@@ -643,14 +647,40 @@ export default function BookmarkClient({ username }: { username: string }) {
   };
 
   const renderStatistics = () => (
-    <BookmarkStatisticsPanel
-      statistics={statistics}
-      statsLoading={statsLoading}
-      statsError={statsError}
-      statsRange={statsRange}
-      onRangeChange={setStatsRange}
-      onOpenHistory={openHistory}
-    />
+    <div className="bookmark-stats-view">
+      <div className="bookmark-stats-sections" role="tablist">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={statsSection === "routines"}
+          className={statsSection === "routines" ? "is-active" : ""}
+          onClick={() => setStatsSection("routines")}
+        >
+          루틴 통계
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={statsSection === "journal"}
+          className={statsSection === "journal" ? "is-active" : ""}
+          onClick={() => setStatsSection("journal")}
+        >
+          회고 모아보기
+        </button>
+      </div>
+      {statsSection === "routines" ? (
+        <BookmarkStatisticsPanel
+          statistics={statistics}
+          statsLoading={statsLoading}
+          statsError={statsError}
+          statsRange={statsRange}
+          onRangeChange={setStatsRange}
+          onOpenHistory={openHistory}
+        />
+      ) : (
+        <BookmarkJournalPanel />
+      )}
+    </div>
   );
 
   const isMonthlyHistory = historyRoutine?.frequency === "monthly";
@@ -730,7 +760,7 @@ export default function BookmarkClient({ username }: { username: string }) {
               {periodLabel(periodStart, "day")}
             </button>
           ) : view === "stats" ? (
-            <span className="bookmark-today-date">루틴 통계</span>
+            <span className="bookmark-today-date">통계</span>
           ) : (
             <span className="bookmark-today-date">
               {periodLabel(periodStart, unitView)}

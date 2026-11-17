@@ -6,6 +6,7 @@ import type {
 } from "@/lib/bookmark";
 
 export type BookmarkView = "today" | BookmarkPeriodType | "stats";
+export type StatsSection = "routines" | "journal";
 export type MonthlyMode = "day" | "nth";
 export type HistoryRoutine = Pick<
   BookmarkRoutine,

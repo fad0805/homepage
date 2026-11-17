@@ -12,6 +12,7 @@ from crud.bookmark import (
     delete_routine,
     delete_routine_category,
     delete_special_date,
+    get_journal_tree,
     get_period,
     get_routine_history,
     get_statistics,
@@ -39,6 +40,7 @@ from schemas.bookmark import (
     BookmarkDayMetaUpdate,
     BookmarkGoalRead,
     BookmarkGoalUpdate,
+    BookmarkJournalTreeRead,
     BookmarkMoodTagCreate,
     BookmarkMoodTagRead,
     BookmarkMoodTagReorder,
@@ -98,6 +100,24 @@ def read_statistics(
 ):
     _no_store(response)
     return get_statistics(db, user.id)
+
+
+@router.get(
+    "/journal/tree",
+    response_model=BookmarkJournalTreeRead,
+)
+def read_journal_tree(
+    response: Response,
+    decade_start: date | None = None,
+    db: Session = Depends(get_db),
+    user=Depends(require_auth),
+):
+    _no_store(response)
+    return get_journal_tree(
+        db,
+        user.id,
+        decade_start=decade_start,
+    )
 
 
 @router.get("/mood-tags", response_model=list[BookmarkMoodTagRead])

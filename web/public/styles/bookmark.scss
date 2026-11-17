@@ -1857,3 +1857,274 @@
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+.bookmark-stats-view {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  min-width: 0;
+}
+
+.bookmark-stats-sections {
+  display: inline-flex;
+  align-self: flex-start;
+  gap: 0.2rem;
+  padding: 0.18rem;
+  border: 1px solid
+    color-mix(in srgb, var(--theme-main) 28%, transparent);
+  border-radius: 999px;
+
+  button {
+    padding: 0.28rem 0.6rem;
+    border: 0;
+    border-radius: 999px;
+    background: transparent;
+    color: var(--foreground);
+    font-family: inherit;
+    font-size: 0.66rem;
+    cursor: pointer;
+    opacity: 0.68;
+
+    &:hover,
+    &:focus-visible {
+      background: var(--bookmark-soft-bg);
+      opacity: 0.9;
+    }
+
+    &.is-active {
+      background: var(--bookmark-selected-bg);
+      color: var(--title-color);
+      font-weight: 600;
+      opacity: 1;
+    }
+  }
+}
+
+ .bookmark-journal-header {
+  flex-wrap: wrap;
+  align-items: flex-end;
+}
+
+.bookmark-journal-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+.bookmark-journal-nav {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+
+  strong {
+    min-width: 5.5rem;
+    color: var(--title-color);
+    font-family: Eulyoo1945-SemiBold, GowunDodum, sans-serif;
+    font-size: 0.9rem;
+    font-weight: normal;
+    text-align: center;
+  }
+}
+
+.bookmark-journal-hint {
+  margin: 0.45rem 0 0;
+  color: var(--foreground);
+  font-size: 0.62rem;
+  opacity: 0.5;
+}
+
+.bookmark-journal-breadcrumb {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem;
+  margin-top: 0.35rem;
+  color: var(--title-color);
+  font-size: 0.64rem;
+  opacity: 0.68;
+
+  button {
+    padding: 0.1rem 0.2rem;
+    border: 0;
+    border-radius: 0.3rem;
+    background: transparent;
+    color: inherit;
+    font-family: inherit;
+    font-size: inherit;
+    cursor: pointer;
+
+    &:hover,
+    &:focus-visible {
+      background: var(--bookmark-soft-bg);
+    }
+  }
+
+  strong {
+    padding: 0.1rem 0.2rem;
+    font-weight: 600;
+  }
+}
+
+.bookmark-journal-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(8.5rem, 1fr));
+  gap: 0.45rem;
+  margin-top: 0.7rem;
+
+  &.is-months {
+    grid-template-columns: repeat(auto-fit, minmax(6.8rem, 1fr));
+  }
+
+  &.is-weeks {
+    grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+  }
+}
+
+.bookmark-journal-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.18rem;
+  min-width: 0;
+  padding: 0.55rem 0.6rem;
+  border: 1px solid
+    color-mix(in srgb, var(--theme-main) 28%, transparent);
+  border-radius: 0.7rem;
+  background: color-mix(
+    in srgb,
+    var(--input-background) 52%,
+    transparent
+  );
+  color: var(--foreground);
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color 0.16s ease,
+    background 0.16s ease;
+
+  &:hover:not(:disabled),
+  &:focus-visible:not(:disabled) {
+    border-color: color-mix(
+      in srgb,
+      var(--theme-main) 52%,
+      transparent
+    );
+    background: var(--bookmark-soft-bg);
+  }
+
+  &:disabled {
+    cursor: default;
+    opacity: 0.4;
+  }
+
+  strong {
+    color: var(--title-color);
+    font-size: 0.74rem;
+    font-weight: normal;
+    overflow-wrap: anywhere;
+  }
+
+  span {
+    color: var(--title-color);
+    font-size: 0.58rem;
+    line-height: 1.35;
+    opacity: 0.58;
+  }
+}
+
+.bookmark-journal-section {
+  margin-top: 0.85rem;
+  padding-top: 0.7rem;
+  border-top: 1px solid
+    color-mix(in srgb, var(--theme-main) 20%, transparent);
+
+  h3 {
+    margin: 0;
+    color: var(--title-color);
+    font-size: 0.66rem;
+    font-weight: normal;
+    letter-spacing: 0.03em;
+    opacity: 0.72;
+  }
+}
+
+.bookmark-journal-record-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  margin-top: 0.55rem;
+}
+
+.bookmark-journal-record-card,
+.bookmark-journal-day {
+  padding: 0.55rem 0.65rem;
+  border: 1px solid
+    color-mix(in srgb, var(--theme-main) 24%, transparent);
+  border-radius: 0.7rem;
+  background: color-mix(
+    in srgb,
+    var(--input-background) 45%,
+    transparent
+  );
+
+  > strong {
+    color: var(--title-color);
+    font-size: 0.7rem;
+    font-weight: normal;
+  }
+}
+
+.bookmark-journal-record {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  margin-top: 0.55rem;
+}
+
+.bookmark-journal-rating {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.08rem;
+  color: color-mix(in srgb, var(--foreground) 28%, transparent);
+
+  .bookmark-journal-clover {
+    display: block;
+    width: 0.85rem;
+    height: 0.85rem;
+  }
+
+  .is-filled {
+    color: var(--title-color);
+  }
+}
+
+.bookmark-journal-block {
+  margin-top: 0.3rem;
+
+  p {
+    margin: 0.15rem 0 0;
+    color: var(--foreground);
+    font-size: 0.72rem;
+    line-height: 1.5;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+}
+
+.bookmark-journal-label {
+  color: var(--title-color);
+  font-size: 0.58rem;
+  letter-spacing: 0.04em;
+  opacity: 0.58;
+}
+
+[data-theme='dark'] .bookmark-journal-rating {
+  color: color-mix(in srgb, var(--foreground) 24%, transparent);
+}
+
+[data-theme='dark'] .bookmark-journal-rating .is-filled {
+  color: #8fd39a;
+}
