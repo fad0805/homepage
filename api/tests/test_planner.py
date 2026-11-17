@@ -158,6 +158,9 @@ class PlannerCrudTests(
             "crud.planner.common.kst_today",
             return_value=now.date(),
         ), patch(
+            "crud.planner.common.kst_now",
+            return_value=now,
+        ), patch(
             "crud.planner.tasks.kst_today",
             return_value=now.date(),
         ), patch(
@@ -226,6 +229,9 @@ class PlannerCrudTests(
             "crud.planner.common.kst_today",
             return_value=date(2026, 11, 17),
         ), patch(
+            "crud.planner.common.kst_now",
+            return_value=datetime(2026, 11, 17, 9, tzinfo=KST),
+        ), patch(
             "crud.planner.tasks.kst_today",
             return_value=date(2026, 11, 17),
         ), patch(
@@ -274,6 +280,9 @@ class PlannerCrudTests(
         with patch(
             "crud.planner.common.kst_today",
             return_value=date(2026, 11, 17),
+        ), patch(
+            "crud.planner.common.kst_now",
+            return_value=datetime(2026, 11, 17, 9, tzinfo=KST),
         ), patch(
             "crud.planner.tasks.kst_today",
             return_value=date(2026, 11, 17),
