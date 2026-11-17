@@ -436,7 +436,7 @@
   &.completion-level-1:not(.is-selected):not(.is-drag-range):not(.is-drag-edge) {
     background: color-mix(
       in srgb,
-      var(--theme-main) 12%,
+      var(--theme-main) 20%,
       var(--input-background)
     );
   }
@@ -444,7 +444,7 @@
   &.completion-level-2:not(.is-selected):not(.is-drag-range):not(.is-drag-edge) {
     background: color-mix(
       in srgb,
-      var(--theme-main) 24%,
+      var(--theme-main) 45%,
       var(--input-background)
     );
   }
@@ -452,16 +452,16 @@
   &.completion-level-3:not(.is-selected):not(.is-drag-range):not(.is-drag-edge) {
     background: color-mix(
       in srgb,
-      var(--theme-main) 38%,
-      var(--input-background)
+      var(--theme-main) 70%,
+      var(--title-color)
     );
   }
 
   &.completion-level-4:not(.is-selected):not(.is-drag-range):not(.is-drag-edge) {
     background: color-mix(
       in srgb,
-      var(--theme-main) 56%,
-      var(--input-background)
+      var(--theme-main) 35%,
+      var(--title-color)
     );
   }
 
@@ -504,19 +504,19 @@
 }
 
 [data-theme='dark'] .planner-calendar-day.completion-level-1:not(.is-selected):not(.is-drag-range):not(.is-drag-edge) {
-  background: color-mix(in srgb, #8fd39a 10%, var(--input-background));
+  background: color-mix(in srgb, #8fd39a 14%, var(--input-background));
 }
 
 [data-theme='dark'] .planner-calendar-day.completion-level-2:not(.is-selected):not(.is-drag-range):not(.is-drag-edge) {
-  background: color-mix(in srgb, #8fd39a 20%, var(--input-background));
+  background: color-mix(in srgb, #8fd39a 30%, var(--input-background));
 }
 
 [data-theme='dark'] .planner-calendar-day.completion-level-3:not(.is-selected):not(.is-drag-range):not(.is-drag-edge) {
-  background: color-mix(in srgb, #8fd39a 32%, var(--input-background));
+  background: color-mix(in srgb, #8fd39a 48%, var(--input-background));
 }
 
 [data-theme='dark'] .planner-calendar-day.completion-level-4:not(.is-selected):not(.is-drag-range):not(.is-drag-edge) {
-  background: color-mix(in srgb, #8fd39a 46%, var(--input-background));
+  background: color-mix(in srgb, #8fd39a 68%, var(--input-background));
 }
 
 .planner-day-number {
