@@ -622,12 +622,6 @@ export default function BookmarkClient({ username }: { username: string }) {
                             {doneExpanded ? "▾" : "▸"}
                           </span>
                           완료
-                          <span
-                            className="bookmark-routine-group-check"
-                            aria-label="완료"
-                          >
-                            ✓
-                          </span>
                         </button>
                       </h3>
                       <span>{section.done.length}</span>
