@@ -45,6 +45,7 @@ import {
 import { apiFetch } from "@/lib/api";
 import { todayDateInputValue } from "@/lib/datetime";
 
+import { BookmarkCalendarModal } from "./bookmark-calendar-modal";
 import { CloverRating } from "./clover-rating";
 import {
   SortableCategoryItem,
@@ -2094,107 +2095,17 @@ export default function BookmarkClient({ username }: { username: string }) {
       </main>
 
       {calendarOpen ? (
-        <div
-          className="bookmark-modal-overlay"
-          role="presentation"
-          onClick={() => setCalendarOpen(false)}
-        >
-          <div
-            className="bookmark-modal bookmark-calendar-modal"
-            role="dialog"
-            aria-modal="true"
-            aria-label="날짜 선택"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <header className="bookmark-modal-header">
-              <div>
-                <p className="bookmark-panel-eyebrow">DATE</p>
-                <h2>날짜 선택</h2>
-              </div>
-              <button
-                type="button"
-                className="bookmark-text-button"
-                onClick={() => setCalendarOpen(false)}
-              >
-                닫기
-              </button>
-            </header>
-            <div className="bookmark-calendar-header">
-              <button
-                type="button"
-                className="bookmark-icon-button"
-                aria-label="이전 달"
-                onClick={() =>
-                  setCalendarMonth((previous) =>
-                    shiftPeriod(previous, "month", -1),
-                  )
-                }
-              >
-                ‹
-              </button>
-              <strong>{monthLabel(calendarMonth)}</strong>
-              <button
-                type="button"
-                className="bookmark-icon-button"
-                aria-label="다음 달"
-                onClick={() =>
-                  setCalendarMonth((previous) =>
-                    shiftPeriod(previous, "month", 1),
-                  )
-                }
-              >
-                ›
-              </button>
-            </div>
-            <div className="bookmark-calendar-weekdays">
-              {WEEKDAY_SHORT.map((day) => (
-                <span key={day}>{day}</span>
-              ))}
-            </div>
-            <div
-              className="bookmark-calendar-grid"
-              onMouseLeave={() => setCalendarHoverDate(null)}
-            >
-              {monthCalendarDays(calendarMonth).map((day) => {
-                const selectedRange = calendarRange(periodStart);
-                const hoverRange = calendarHoverDate
-                  ? calendarRange(calendarHoverDate)
-                  : null;
-                const inSelected =
-                  day.key >= selectedRange.start &&
-                  day.key <= selectedRange.end;
-                const inHover = hoverRange
-                  ? day.key >= hoverRange.start &&
-                    day.key <= hoverRange.end
-                  : false;
-                return (
-                  <button
-                    type="button"
-                    className={`bookmark-calendar-day${
-                      day.inMonth ? "" : " is-outside"
-                    }${inSelected ? " is-period" : ""}${
-                      inHover ? " is-hovered" : ""
-                    }${day.key === periodStart ? " is-selected" : ""}${
-                      day.key === todayDateInputValue()
-                        ? " is-today"
-                        : ""
-                    }`}
-                    key={day.key}
-                    onMouseEnter={() =>
-                      setCalendarHoverDate(day.key)
-                    }
-                    onFocus={() => setCalendarHoverDate(day.key)}
-                    onClick={() => selectCalendarDate(day.key)}
-                  >
-                    {day.day}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        </div>
+        <BookmarkCalendarModal
+          month={calendarMonth}
+          hoverDate={calendarHoverDate}
+          periodStart={periodStart}
+          onMonthChange={setCalendarMonth}
+          onHoverDateChange={setCalendarHoverDate}
+          onSelectDate={selectCalendarDate}
+          onClose={() => setCalendarOpen(false)}
+          calendarRange={calendarRange}
+        />
       ) : null}
-
       {routineModalOpen ? (
         <div
           className="bookmark-modal-overlay"
