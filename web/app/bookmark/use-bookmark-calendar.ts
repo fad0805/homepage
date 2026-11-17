@@ -2,30 +2,29 @@ import { useState, type Dispatch, type SetStateAction } from "react";
 
 import type { BookmarkPeriodType } from "@/lib/bookmark";
 
-import type { BookmarkView } from "./bookmark-types";
 import { shiftPeriod, startOfPeriod } from "./bookmark-utils";
 
 interface UseBookmarkCalendarOptions {
-  view: BookmarkView;
-  periodStart: string;
-  setPeriodStart: Dispatch<SetStateAction<string>>;
+  periodType: BookmarkPeriodType;
+  anchorDate: string;
+  setAnchorDate: Dispatch<SetStateAction<string>>;
 }
 
 export function useBookmarkCalendar({
-  view,
-  periodStart,
-  setPeriodStart,
+  periodType,
+  anchorDate,
+  setAnchorDate,
 }: UseBookmarkCalendarOptions) {
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [calendarMonth, setCalendarMonth] = useState(() =>
-    startOfPeriod(periodStart, "month"),
+    startOfPeriod(anchorDate, "month"),
   );
   const [calendarHoverDate, setCalendarHoverDate] = useState<
     string | null
   >(null);
 
   const openCalendar = () => {
-    setCalendarMonth(startOfPeriod(periodStart, "month"));
+    setCalendarMonth(startOfPeriod(anchorDate, "month"));
     setCalendarHoverDate(null);
     setCalendarOpen(true);
   };
@@ -35,14 +34,12 @@ export function useBookmarkCalendar({
   };
 
   const selectCalendarDate = (value: string) => {
-    const nextType: BookmarkPeriodType =
-      view === "today" || view === "stats" ? "day" : view;
-    setPeriodStart(startOfPeriod(value, nextType));
+    setAnchorDate(value);
     setCalendarOpen(false);
   };
 
   const calendarRange = (value: string) => {
-    if (view === "week") {
+    if (periodType === "week") {
       const start = startOfPeriod(value, "week");
       return {
         start,

@@ -87,15 +87,73 @@
   border: 1px solid
     color-mix(in srgb, var(--theme-main) 28%, transparent);
   border-radius: 999px;
+}
+
+.bookmark-period-tab-wrap {
+  position: relative;
+  display: inline-flex;
+}
+
+.bookmark-period-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.18rem;
+  padding: 0.32rem 0.65rem;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--foreground);
+  font-family: inherit;
+  font-size: 0.7rem;
+  cursor: pointer;
+
+  &:hover,
+  &:focus-visible {
+    background: var(--bookmark-soft-bg);
+  }
+
+  &.is-active {
+    background: var(--bookmark-selected-bg);
+    color: var(--foreground);
+  }
+}
+
+.bookmark-period-tab-chevron {
+  font-size: 0.55rem;
+  opacity: 0.6;
+}
+
+.bookmark-period-menu {
+  position: absolute;
+  top: calc(100% + 0.45rem);
+  left: 0;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  min-width: 11rem;
+  max-width: calc(100vw - 2rem);
+  padding: 0.3rem;
+  border: 1px solid
+    color-mix(in srgb, var(--theme-main) 38%, transparent);
+  border-radius: 0.8rem;
+  background: var(--input-background);
+  box-shadow: 0 12px 30px
+    color-mix(in srgb, var(--foreground) 16%, transparent);
 
   button {
-    padding: 0.32rem 0.65rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    padding: 0.4rem 0.55rem;
     border: 0;
-    border-radius: 999px;
+    border-radius: 0.5rem;
     background: transparent;
     color: var(--foreground);
     font-family: inherit;
-    font-size: 0.7rem;
+    font-size: 0.72rem;
+    text-align: left;
+    white-space: normal;
     cursor: pointer;
 
     &:hover,
@@ -105,7 +163,6 @@
 
     &.is-active {
       background: var(--bookmark-selected-bg);
-      color: var(--foreground);
     }
   }
 }
@@ -126,6 +183,14 @@
     background: var(--bookmark-soft-bg);
     opacity: 1;
   }
+}
+
+.bookmark-view-label {
+  padding: 0.2rem 0.45rem;
+  color: var(--title-color);
+  font-family: inherit;
+  font-size: 0.72rem;
+  opacity: 0.72;
 }
 
 .bookmark-period-nav {
@@ -2180,10 +2245,6 @@
     width: auto;
   }
 
-  col.is-action {
-    width: 3.2rem;
-  }
-
   th,
   td {
     padding: 0.45rem 0.5rem;
@@ -2226,10 +2287,20 @@
   margin-left: auto;
 }
 
-.bookmark-journal-row-edit {
-  padding: 0.1rem 0.2rem;
-  font-size: 0.62rem;
-  white-space: nowrap;
+.bookmark-journal-table tbody tr.is-editable {
+  cursor: pointer;
+  transition: background 120ms ease;
+
+  &:hover,
+  &:focus-visible {
+    background: var(--bookmark-soft-bg);
+  }
+
+  &:focus-visible {
+    outline: 2px solid
+      color-mix(in srgb, var(--theme-main) 55%, transparent);
+    outline-offset: -2px;
+  }
 }
 
 .bookmark-journal-edit-modal {

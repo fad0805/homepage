@@ -70,22 +70,20 @@ import {
   FREQUENCY_LABELS,
   MODE_LABELS,
   PERIOD_FREQUENCY,
-  PERIOD_LABELS,
   PERIOD_TYPES,
   ROUTINE_SECTION_LABELS,
   STATS_COLORS,
   STATS_RANGES,
   STATS_RANGE_LABELS,
+  TAB_LABELS,
   TARGET_LABELS,
-  VIEWS,
-  VIEW_LABELS,
-  type BookmarkView,
+  type BookmarkTab,
   type HistoryRoutine,
   type MonthlyMode,
   type StatsRange,
-  type StatsSection,
 } from "./bookmark-types";
 import {
+  compactPeriodLabel,
   dateKey,
   historyDayTitle,
   historyMonthLabel,
@@ -108,9 +106,16 @@ import "@/public/styles/bookmark.scss";
 
 export default function BookmarkClient({ username }: { username: string }) {
   const initialToday = todayDateInputValue();
-  const [view, setView] = useState<BookmarkView>("today");
-  const collapseStorageKey = `bookmark-category-collapse:${username}:${view}`;
-  const [periodStart, setPeriodStart] = useState(initialToday);
+  const [tab, setTab] = useState<BookmarkTab>("today");
+  const [periodType, setPeriodType] =
+    useState<BookmarkPeriodType>("day");
+  const [anchorDate, setAnchorDate] = useState(initialToday);
+  const periodStart = startOfPeriod(anchorDate, periodType);
+  const collapseStorageKey = `bookmark-category-collapse:${username}:${
+    tab === "today" ? periodType : tab
+  }`;
+  const [periodMenuOpen, setPeriodMenuOpen] = useState(false);
+  const periodMenuRef = useRef<HTMLDivElement>(null);
   const {
     calendarOpen,
     calendarMonth,
@@ -122,13 +127,11 @@ export default function BookmarkClient({ username }: { username: string }) {
     selectCalendarDate,
     calendarRange,
   } = useBookmarkCalendar({
-    view,
-    periodStart,
-    setPeriodStart,
+    periodType,
+    anchorDate,
+    setAnchorDate,
   });
   const [statsRange, setStatsRange] = useState<StatsRange>("month");
-  const [statsSection, setStatsSection] =
-    useState<StatsSection>("journal");
   const [expandedDoneSections, setExpandedDoneSections] = useState<
     Set<string>
   >(() => new Set());
@@ -150,6 +153,12 @@ export default function BookmarkClient({ username }: { username: string }) {
     applyPeriodRef.current(next);
   }, []);
 
+  const dataView =
+    tab === "today"
+      ? periodType === "day"
+        ? "today"
+        : periodType
+      : tab;
   const {
     data,
     setData,
@@ -168,7 +177,7 @@ export default function BookmarkClient({ username }: { username: string }) {
     loadMoodTags,
     loadStatistics,
   } = useBookmarkData({
-    view,
+    view: dataView,
     periodStart,
     onPeriodLoaded: handlePeriodLoaded,
   });
@@ -180,8 +189,7 @@ export default function BookmarkClient({ username }: { username: string }) {
     openHistory,
     closeHistory,
   } = useBookmarkHistory();
-  const recordPeriodType: BookmarkPeriodType =
-    view === "today" || view === "stats" ? "day" : view;
+  const recordPeriodType: BookmarkPeriodType = periodType;
   const {
     goalContent,
     setGoalContent,
@@ -261,23 +269,70 @@ export default function BookmarkClient({ username }: { username: string }) {
     collapseStorageKey,
   });
 
-  const changeView = (next: BookmarkView) => {
-    setView(next);
-    if (next === "today") {
-      setPeriodStart(todayDateInputValue());
-    } else if (next !== "stats") {
-      setPeriodStart(
-        startOfPeriod(todayDateInputValue(), next),
-      );
-    }
+  const changeTab = (next: BookmarkTab) => {
+    setTab(next);
+    setPeriodMenuOpen(false);
     closeCalendar();
     closeRoutineModal();
   };
 
+  const handleTodayTabClick = () => {
+    if (tab !== "today") {
+      setTab("today");
+      closeCalendar();
+      closeRoutineModal();
+    }
+    setPeriodMenuOpen((previous) => !previous);
+  };
+
+  const selectPeriodType = (next: BookmarkPeriodType) => {
+    setPeriodType(next);
+    setTab("today");
+    setPeriodMenuOpen(false);
+    closeCalendar();
+    closeRoutineModal();
+  };
+
+  const movePeriod = (delta: number) => {
+    setAnchorDate((previous) =>
+      shiftPeriod(previous, periodType, delta),
+    );
+    setPeriodMenuOpen(false);
+    closeCalendar();
+    closeRoutineModal();
+  };
+
+  const handleOpenCalendar = () => {
+    setPeriodMenuOpen(false);
+    openCalendar();
+  };
+
+  useEffect(() => {
+    if (!periodMenuOpen) return;
+    const handlePointerDown = (event: MouseEvent) => {
+      if (!periodMenuRef.current?.contains(event.target as Node)) {
+        setPeriodMenuOpen(false);
+      }
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setPeriodMenuOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [periodMenuOpen]);
+
   const routines = data?.routines ?? [];
-  const unitView: BookmarkPeriodType =
-    view === "today" || view === "stats" ? "day" : view;
-  const isTodaySelected = periodStart === todayDateInputValue();
+  const isTodaySelected = anchorDate === todayDateInputValue();
+  const periodOptions = PERIOD_TYPES.map((type) => ({
+    type,
+    label: compactPeriodLabel(anchorDate, type),
+  }));
   const {
     routineModalOpen,
     editingRoutine,
@@ -320,7 +375,7 @@ export default function BookmarkClient({ username }: { username: string }) {
     toggleRoutineNote,
   } = useBookmarkRoutines({
     routines,
-    unitView,
+    unitView: periodType,
     setData,
     loadPeriod,
     onError: setError,
@@ -358,8 +413,10 @@ export default function BookmarkClient({ username }: { username: string }) {
     if (routines.length === 0) {
       return (
         <p className="bookmark-empty-row">
-          {view === "today"
-            ? "오늘 수행할 루틴이 없습니다. 일·주·월·분기·연 탭에서 루틴을 추가할 수 있습니다."
+          {periodType === "day"
+            ? isTodaySelected
+              ? "오늘 수행할 루틴이 없습니다. 상단에서 주·월·분기·연을 선택해 루틴을 추가할 수 있습니다."
+              : "이 날짜에 수행할 루틴이 없습니다."
             : "이 기간에 등록된 루틴이 없습니다."}
         </p>
       );
@@ -574,7 +631,7 @@ export default function BookmarkClient({ username }: { username: string }) {
           const collapsed = isSectionCollapsed(section);
           const total = section.pending.length + section.done.length;
           const panelId = `bookmark-routine-section-${section.key}`;
-          const doneKey = `${view}:${section.key}:done`;
+          const doneKey = `${periodType}:${section.key}:done`;
           const doneExpanded = expandedDoneSections.has(doneKey);
           const donePanelId = `${panelId}-done`;
 
@@ -651,40 +708,22 @@ export default function BookmarkClient({ username }: { username: string }) {
     );
   };
 
+  const renderJournal = () => (
+    <div className="bookmark-stats-view">
+      <BookmarkJournalPanel />
+    </div>
+  );
+
   const renderStatistics = () => (
     <div className="bookmark-stats-view">
-      <div className="bookmark-stats-sections" role="tablist">
-        <button
-          type="button"
-          role="tab"
-          aria-selected={statsSection === "journal"}
-          className={statsSection === "journal" ? "is-active" : ""}
-          onClick={() => setStatsSection("journal")}
-        >
-          회고 모아보기
-        </button>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={statsSection === "routines"}
-          className={statsSection === "routines" ? "is-active" : ""}
-          onClick={() => setStatsSection("routines")}
-        >
-          루틴 통계
-        </button>
-      </div>
-      {statsSection === "routines" ? (
-        <BookmarkStatisticsPanel
-          statistics={statistics}
-          statsLoading={statsLoading}
-          statsError={statsError}
-          statsRange={statsRange}
-          onRangeChange={setStatsRange}
-          onOpenHistory={openHistory}
-        />
-      ) : (
-        <BookmarkJournalPanel />
-      )}
+      <BookmarkStatisticsPanel
+        statistics={statistics}
+        statsLoading={statsLoading}
+        statsError={statsError}
+        statsRange={statsRange}
+        onRangeChange={setStatsRange}
+        onOpenHistory={openHistory}
+      />
     </div>
   );
 
@@ -741,44 +780,126 @@ export default function BookmarkClient({ username }: { username: string }) {
         </header>
 
         <div className="bookmark-period-bar">
-          <div className="bookmark-period-tabs" role="tablist">
-            {VIEWS.map((type) => (
+          <div
+            className="bookmark-period-tabs"
+            role="tablist"
+            aria-label="책갈피 보기"
+          >
+            <div className="bookmark-period-tab-wrap" ref={periodMenuRef}>
               <button
                 type="button"
                 role="tab"
-                key={type}
-                aria-selected={view === type}
-                className={view === type ? "is-active" : ""}
-                onClick={() => changeView(type)}
+                aria-selected={tab === "today"}
+                aria-haspopup="menu"
+                aria-expanded={periodMenuOpen}
+                className={`bookmark-period-tab${
+                  tab === "today" ? " is-active" : ""
+                }`}
+                onClick={handleTodayTabClick}
               >
-                {VIEW_LABELS[type]}
+                {TAB_LABELS.today}
+                <span
+                  className="bookmark-period-tab-chevron"
+                  aria-hidden="true"
+                >
+                  ▾
+                </span>
               </button>
-            ))}
-          </div>
-          {view === "today" ? (
+              {periodMenuOpen ? (
+                <div
+                  className="bookmark-period-menu"
+                  role="menu"
+                  aria-label="기간 선택"
+                >
+                  {periodOptions.map((option) => (
+                    <button
+                      type="button"
+                      role="menuitemradio"
+                      aria-checked={periodType === option.type}
+                      className={
+                        periodType === option.type ? "is-active" : ""
+                      }
+                      key={option.type}
+                      onClick={() => selectPeriodType(option.type)}
+                    >
+                      <span>{option.label}</span>
+                      {periodType === option.type ? (
+                        <span aria-hidden="true">✓</span>
+                      ) : null}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+            </div>
             <button
               type="button"
-              className="bookmark-today-date"
-              title="달력에서 날짜 선택"
-              onClick={openCalendar}
+              role="tab"
+              aria-selected={tab === "journal"}
+              className={`bookmark-period-tab${
+                tab === "journal" ? " is-active" : ""
+              }`}
+              onClick={() => changeTab("journal")}
             >
-              {periodLabel(periodStart, "day")}
+              {TAB_LABELS.journal}
             </button>
-          ) : view === "stats" ? (
-            <span className="bookmark-today-date">통계</span>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={tab === "stats"}
+              className={`bookmark-period-tab${
+                tab === "stats" ? " is-active" : ""
+              }`}
+              onClick={() => changeTab("stats")}
+            >
+              {TAB_LABELS.stats}
+            </button>
+          </div>
+          {tab === "today" ? (
+            <div className="bookmark-period-nav">
+              <button
+                type="button"
+                className="bookmark-icon-button"
+                aria-label="이전 기간"
+                onClick={() => movePeriod(-1)}
+              >
+                ‹
+              </button>
+              <button
+                type="button"
+                className="bookmark-period-label"
+                title="달력에서 날짜 선택"
+                onClick={handleOpenCalendar}
+              >
+                {periodLabel(periodStart, periodType)}
+              </button>
+              <button
+                type="button"
+                className="bookmark-icon-button"
+                aria-label="다음 기간"
+                onClick={() => movePeriod(1)}
+              >
+                ›
+              </button>
+            </div>
           ) : (
-            <span className="bookmark-today-date">
-              {periodLabel(periodStart, unitView)}
+            <span className="bookmark-view-label">
+              {tab === "journal"
+                ? TAB_LABELS.journal
+                : TAB_LABELS.stats}
             </span>
           )}
         </div>
 
-        {error ? <p className="bookmark-error">{error}</p> : null}
+        {tab === "today" && error ? (
+          <p className="bookmark-error">{error}</p>
+        ) : null}
 
-        {loading ? (
-          <p className="bookmark-status">불러오는 중...</p>
-        ) : view === "stats" ? (
+        {tab === "journal" ? (
+          renderJournal()
+        ) : tab === "stats" ? (
           renderStatistics()
+        ) : loading ? (
+          <p className="bookmark-status">불러오는 중...</p>
         ) : (
           <div className="bookmark-layout">
             <div className="bookmark-main-column">
@@ -786,14 +907,14 @@ export default function BookmarkClient({ username }: { username: string }) {
                 <header className="bookmark-panel-header">
                   <div>
                     <p className="bookmark-panel-eyebrow">
-                      {view === "today"
+                      {periodType === "day"
                         ? isTodaySelected
                           ? "오늘 수행 가능"
                           : "선택일 기준"
-                        : ROUTINE_SECTION_LABELS[unitView]}
+                        : ROUTINE_SECTION_LABELS[periodType]}
                     </p>
                     <h2>
-                      {view === "today"
+                      {periodType === "day"
                         ? isTodaySelected
                           ? "오늘의 루틴"
                           : "선택일의 루틴"
@@ -808,7 +929,7 @@ export default function BookmarkClient({ username }: { username: string }) {
                     >
                       카테고리
                     </button>
-                    {view !== "today" ? (
+                    {periodType !== "day" ? (
                       <button
                         type="button"
                         className="bookmark-primary"
@@ -976,7 +1097,7 @@ export default function BookmarkClient({ username }: { username: string }) {
         <BookmarkCalendarModal
           month={calendarMonth}
           hoverDate={calendarHoverDate}
-          periodStart={periodStart}
+          periodStart={anchorDate}
           onMonthChange={setCalendarMonth}
           onHoverDateChange={setCalendarHoverDate}
           onSelectDate={selectCalendarDate}

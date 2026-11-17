@@ -41,7 +41,7 @@ export function useBookmarkData({
   }, [onPeriodLoaded]);
 
   const loadPeriod = useCallback(async () => {
-    if (view === "stats") {
+    if (view === "stats" || view === "journal") {
       setLoading(false);
       return;
     }

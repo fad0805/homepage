@@ -6,6 +6,7 @@ import type {
 } from "@/lib/bookmark";
 
 export type BookmarkView = "today" | BookmarkPeriodType | "stats";
+export type BookmarkTab = "today" | "journal" | "stats";
 export type StatsSection = "routines" | "journal";
 export type MonthlyMode = "day" | "nth";
 export type HistoryRoutine = Pick<
@@ -58,6 +59,11 @@ export const VIEWS: BookmarkView[] = ["today", ...PERIOD_TYPES, "stats"];
 export const VIEW_LABELS: Record<BookmarkView, string> = {
   today: "오늘",
   ...PERIOD_LABELS,
+  stats: "통계",
+};
+export const TAB_LABELS: Record<BookmarkTab, string> = {
+  today: "오늘",
+  journal: "모아보기",
   stats: "통계",
 };
 export const PERIOD_FREQUENCY: Record<

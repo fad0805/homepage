@@ -241,6 +241,45 @@ export function periodLabel(value: string, type: BookmarkPeriodType) {
   }${endMonth}월 ${endDay}일`;
 }
 
+export function weekOfMonth(value: string) {
+  return Math.floor((parseDateKey(value).getUTCDate() - 1) / 7) + 1;
+}
+
+export function compactPeriodLabel(
+  value: string,
+  type: BookmarkPeriodType,
+) {
+  const date = parseDateKey(value);
+  const today = todayDateInputValue();
+  const currentYear = parseDateKey(today).getUTCFullYear();
+  const year = date.getUTCFullYear();
+  const month = date.getUTCMonth() + 1;
+  const day = date.getUTCDate();
+  const prefix = year === currentYear ? "" : `${year}년 `;
+
+  if (type === "day") {
+    if (value === today) return "오늘";
+    const weekday = WEEKDAY_SHORT[(date.getUTCDay() + 6) % 7];
+    return `${prefix}${month}월 ${day}일 (${weekday})`;
+  }
+  if (type === "week") {
+    const weekStart = startOfPeriod(value, "week");
+    const weekDate = parseDateKey(weekStart);
+    const weekYear = weekDate.getUTCFullYear();
+    const weekMonth = weekDate.getUTCMonth() + 1;
+    const weekPrefix =
+      weekYear === currentYear ? "" : `${weekYear}년 `;
+    return `${weekPrefix}${weekMonth}월 ${weekOfMonth(
+      weekStart,
+    )}째주`;
+  }
+  if (type === "month") return `${prefix}${month}월`;
+  if (type === "quarter") {
+    return `${prefix}${Math.floor((month - 1) / 3) + 1}분기`;
+  }
+  return `${year}년`;
+}
+
 export function monthCalendarDays(monthStart: string) {
   const date = parseDateKey(monthStart);
   const year = date.getUTCFullYear();

@@ -3,6 +3,7 @@ import { useState } from "react";
 import { CloverIcon } from "@/app/bookmark/clover-rating";
 import type {
   BookmarkJournalNode,
+  BookmarkJournalNodeLevel,
   BookmarkJournalTree,
 } from "@/lib/bookmark";
 import { todayDateInputValue } from "@/lib/datetime";
@@ -106,7 +107,7 @@ function levelStart(value: string, level: JournalLevel) {
 
 function levelLabel(
   value: string,
-  level: JournalLevel,
+  level: JournalLevel | "day",
   node: BookmarkJournalNode | null,
 ) {
   if (level === "week") {
@@ -165,6 +166,43 @@ function findNode(
       .flatMap((month) => month.children)
       .find((week) => week.period_start === periodStart) ?? null
   );
+}
+
+function emptyNode(
+  level: BookmarkJournalNodeLevel,
+  periodStart: string,
+): BookmarkJournalNode {
+  return {
+    level,
+    period_start: periodStart,
+    period_end:
+      level === "week"
+        ? shiftPeriod(periodStart, "day", 6)
+        : periodStart,
+    label: levelLabel(periodStart, level, null),
+    goal: null,
+    rating: null,
+    review: null,
+    goal_count: 0,
+    review_count: 0,
+    rating_count: 0,
+    average_rating: null,
+    children: [],
+  };
+}
+
+function weekDayNodes(
+  node: BookmarkJournalNode,
+): BookmarkJournalNode[] {
+  const existing = new Map(
+    node.children
+      .filter((child) => child.level === "day")
+      .map((child) => [child.period_start, child]),
+  );
+  return Array.from({ length: 7 }, (_, index) => {
+    const start = shiftPeriod(node.period_start, "day", index);
+    return existing.get(start) ?? emptyNode("day", start);
+  });
 }
 
 export function BookmarkJournalPanel() {
@@ -303,53 +341,50 @@ export function BookmarkJournalPanel() {
   const renderWeekDays = (node: BookmarkJournalNode) => (
     <div className="bookmark-journal-section">
       <h3>일간 기록</h3>
-      {node.children.length === 0 ? (
-        <p className="bookmark-empty-row">
-          이 주에 기록된 일간 회고가 없습니다.
-        </p>
-      ) : (
-        <div className="bookmark-journal-table-wrap">
-          <table className="bookmark-journal-table">
-            <colgroup>
-              <col className="is-date" />
-              <col className="is-goal" />
-              <col className="is-rating" />
-              <col className="is-review" />
-              <col className="is-action" />
-            </colgroup>
-            <thead>
-              <tr>
-                <th scope="col">날짜</th>
-                <th scope="col">목표</th>
-                <th scope="col">별점</th>
-                <th scope="col">회고</th>
-                <th scope="col">수정</th>
+      <div className="bookmark-journal-table-wrap">
+        <table className="bookmark-journal-table">
+          <colgroup>
+            <col className="is-date" />
+            <col className="is-goal" />
+            <col className="is-rating" />
+            <col className="is-review" />
+          </colgroup>
+          <thead>
+            <tr>
+              <th scope="col">날짜</th>
+              <th scope="col">목표</th>
+              <th scope="col">별점</th>
+              <th scope="col">회고</th>
+            </tr>
+          </thead>
+          <tbody>
+            {weekDayNodes(node).map((day) => (
+              <tr
+                key={day.period_start}
+                className="is-editable"
+                tabIndex={0}
+                title="클릭해서 수정"
+                aria-label={`${day.label} 기록 수정`}
+                onClick={() => setEditingNode(day)}
+                onKeyDown={(event) => {
+                  if (
+                    event.target === event.currentTarget &&
+                    (event.key === "Enter" || event.key === " ")
+                  ) {
+                    event.preventDefault();
+                    setEditingNode(day);
+                  }
+                }}
+              >
+                <th scope="row">{withoutYear(day.label)}</th>
+                <td>{textOrDash(day.goal?.content)}</td>
+                <td>{renderRating(day) ?? "-"}</td>
+                <td>{textOrDash(day.review?.content)}</td>
               </tr>
-            </thead>
-            <tbody>
-              {node.children.map((day) => (
-                <tr key={day.period_start}>
-                  <th scope="row">
-                    {withoutYear(day.label)}
-                  </th>
-                  <td>{textOrDash(day.goal?.content)}</td>
-                  <td>{renderRating(day) ?? "-"}</td>
-                  <td>{textOrDash(day.review?.content)}</td>
-                  <td>
-                    <button
-                      type="button"
-                      className="bookmark-text-button bookmark-journal-row-edit"
-                      onClick={() => setEditingNode(day)}
-                    >
-                      수정
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 
@@ -362,37 +397,31 @@ export function BookmarkJournalPanel() {
     }
     if (!tree) return null;
     if (level === "decade") {
-      return tree.years.length > 0 ? (
-        renderDecade()
-      ) : (
-        <p className="bookmark-empty-row">
-          {EMPTY_LABELS.decade}
-        </p>
-      );
+      return renderDecade();
     }
-    if (!currentNode) {
-      return (
-        <p className="bookmark-empty-row">
-          {EMPTY_LABELS[level]}
-        </p>
-      );
-    }
+    const targetNode =
+      currentNode ?? emptyNode(level, periodStart);
     return (
       <>
         <div className="bookmark-journal-summary">
           <p className="bookmark-journal-hint">
-            {countText(currentNode)}
+            {countText(targetNode)}
           </p>
           <button
             type="button"
             className="bookmark-text-button bookmark-journal-edit-button"
-            onClick={() => setEditingNode(currentNode)}
+            onClick={() => setEditingNode(targetNode)}
           >
             수정
           </button>
         </div>
-        {renderRecord(currentNode)}
-        {level === "week" ? renderWeekDays(currentNode) : null}
+        {renderRecord(targetNode) ??
+          (level !== "week" ? (
+            <p className="bookmark-empty-row">
+              {EMPTY_LABELS[level]}
+            </p>
+          ) : null)}
+        {level === "week" ? renderWeekDays(targetNode) : null}
       </>
     );
   };
