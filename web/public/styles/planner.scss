@@ -1918,8 +1918,7 @@
   }
 }
 
-.planner-task-detail-actions,
-.planner-task-modal-actions {
+.planner-task-detail-actions {
   display: flex;
   flex-wrap: wrap;
   gap: 0.35rem;
@@ -1927,6 +1926,25 @@
   padding-top: 0.85rem;
   border-top: 1px solid
     color-mix(in srgb, var(--theme-main) 24%, transparent);
+}
+
+.planner-task-modal-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 1rem;
+  padding-top: 0.85rem;
+  border-top: 1px solid
+    color-mix(in srgb, var(--theme-main) 24%, transparent);
+}
+
+.planner-task-modal-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-right: auto;
 }
 
 .planner-chip-modal {

@@ -362,51 +362,53 @@ export function PlannerTaskModal({
                 <span>고정 (비활성화되어도 자동 휴지통 이동 방지)</span>
               </label>
             )}
-            <button
-              type="submit"
-              className="planner-primary"
-              disabled={busyKey !== null || !form.title.trim()}
-            >
-              {busyKey === "create"
-                ? recordCompleted
-                  ? "기록 중..."
-                  : "추가 중..."
-                : busyKey === `update-${editingId}`
-                  ? "저장 중..."
-                  : editingId
-                    ? "저장"
-                    : recordCompleted
-                      ? "완료로 기록"
-                      : "추가"}
-            </button>
-            {editingTask?.status === "active" ? (
-              <div className="planner-task-modal-actions">
-                <button
-                  type="button"
-                  className="planner-text-button is-danger"
-                  disabled={busyKey !== null}
-                  onClick={() => onTrashTask(editingTask)}
-                >
-                  삭제
-                </button>
-                <button
-                  type="button"
-                  className="planner-text-button"
-                  disabled={busyKey !== null}
-                  onClick={() => onDeactivateTask(editingTask)}
-                >
-                  비활성화
-                </button>
-                <button
-                  type="button"
-                  className="planner-text-button is-accent"
-                  disabled={busyKey !== null}
-                  onClick={() => onCompleteTask(editingTask)}
-                >
-                  완료
-                </button>
-              </div>
-            ) : null}
+            <div className="planner-task-modal-footer">
+              {editingTask?.status === "active" ? (
+                <div className="planner-task-modal-actions">
+                  <button
+                    type="button"
+                    className="planner-text-button is-danger"
+                    disabled={busyKey !== null}
+                    onClick={() => onTrashTask(editingTask)}
+                  >
+                    삭제
+                  </button>
+                  <button
+                    type="button"
+                    className="planner-text-button"
+                    disabled={busyKey !== null}
+                    onClick={() => onDeactivateTask(editingTask)}
+                  >
+                    비활성화
+                  </button>
+                  <button
+                    type="button"
+                    className="planner-text-button is-accent"
+                    disabled={busyKey !== null}
+                    onClick={() => onCompleteTask(editingTask)}
+                  >
+                    완료
+                  </button>
+                </div>
+              ) : null}
+              <button
+                type="submit"
+                className="planner-primary"
+                disabled={busyKey !== null || !form.title.trim()}
+              >
+                {busyKey === "create"
+                  ? recordCompleted
+                    ? "기록 중..."
+                    : "추가 중..."
+                  : busyKey === `update-${editingId}`
+                    ? "저장 중..."
+                    : editingId
+                      ? "저장"
+                      : recordCompleted
+                        ? "완료로 기록"
+                        : "추가"}
+              </button>
+            </div>
           </form>
         </div>
       </div>
