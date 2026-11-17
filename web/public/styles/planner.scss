@@ -1318,10 +1318,6 @@
   margin-top: 0.3rem;
 }
 
-.planner-task-card .planner-note-content {
-  margin-left: 0.9rem;
-}
-
 .planner-task-main {
   min-width: 0;
 }
@@ -1332,10 +1328,22 @@
   gap: 0.4rem;
 
   strong {
+    flex: 1 1 auto;
+    min-width: 0;
     overflow-wrap: anywhere;
     font-size: 0.84rem;
     font-weight: normal;
   }
+}
+
+.planner-task-deadline {
+  flex: 0 0 auto;
+  margin-left: auto;
+  color: var(--foreground);
+  font-size: 0.58rem;
+  line-height: 1.35;
+  white-space: nowrap;
+  opacity: 0.55;
 }
 
 .planner-task-check {

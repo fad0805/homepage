@@ -52,12 +52,12 @@ export function PlannerTaskCard({
               />
             ) : null}
             <strong>{task.title}</strong>
+            <span className="planner-task-deadline">
+              {task.end_date
+                ? `마감 ${formatDateOnly(task.end_date)}`
+                : "등록일 미지정"}
+            </span>
           </div>
-          <p className="planner-task-meta planner-task-deadline">
-            {task.end_date
-              ? `마감 ${formatDateOnly(task.end_date)}`
-              : "등록일 미지정"}
-          </p>
           {task.notes ? (
             <PlannerNoteContent
               notes={task.notes}
