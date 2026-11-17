@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { apiFetch } from "@/lib/api";
 
@@ -31,6 +31,14 @@ export function useBookmarkData({
     BookmarkRoutineCategory[]
   >([]);
   const [moodTags, setMoodTags] = useState<BookmarkMoodTag[]>([]);
+  // Keep the latest callback without making loadPeriod depend on its
+  // identity. An inline callback would otherwise trigger the load effect on
+  // every render and create an endless request loop.
+  const onPeriodLoadedRef = useRef(onPeriodLoaded);
+
+  useEffect(() => {
+    onPeriodLoadedRef.current = onPeriodLoaded;
+  }, [onPeriodLoaded]);
 
   const loadPeriod = useCallback(async () => {
     if (view === "stats") {
@@ -48,7 +56,7 @@ export function useBookmarkData({
         cache: "no-store",
       });
       setData(next);
-      onPeriodLoaded(next);
+      onPeriodLoadedRef.current(next);
     } catch (reason) {
       setError(
         reason instanceof Error
@@ -58,7 +66,7 @@ export function useBookmarkData({
     } finally {
       setLoading(false);
     }
-  }, [onPeriodLoaded, periodStart, view]);
+  }, [periodStart, view]);
 
   const loadCategories = useCallback(async () => {
     try {

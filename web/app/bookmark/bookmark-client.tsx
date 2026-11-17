@@ -140,6 +140,9 @@ export default function BookmarkClient({ username }: { username: string }) {
   const applyPeriodRef = useRef<(data: BookmarkPeriod) => void>(
     () => {},
   );
+  const handlePeriodLoaded = useCallback((next: BookmarkPeriod) => {
+    applyPeriodRef.current(next);
+  }, []);
 
   const {
     data,
@@ -161,7 +164,7 @@ export default function BookmarkClient({ username }: { username: string }) {
   } = useBookmarkData({
     view,
     periodStart,
-    onPeriodLoaded: (next) => applyPeriodRef.current(next),
+    onPeriodLoaded: handlePeriodLoaded,
   });
   const {
     historyRoutine,
