@@ -458,7 +458,12 @@
   }
 
   &.is-outside {
-    opacity: 0.34;
+    background: color-mix(
+      in srgb,
+      var(--foreground) 4%,
+      transparent
+    );
+    opacity: 0.55;
   }
 
   &.is-today {
