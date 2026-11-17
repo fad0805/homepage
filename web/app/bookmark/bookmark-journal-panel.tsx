@@ -8,7 +8,9 @@ import type {
 } from "@/lib/bookmark";
 import { todayDateInputValue } from "@/lib/datetime";
 
+import { BookmarkCalendarModal } from "./bookmark-calendar-modal";
 import { BookmarkJournalEditModal } from "./bookmark-journal-edit-modal";
+import { BookmarkPeriodPickerModal } from "./bookmark-period-picker-modal";
 import { useBookmarkJournalTree } from "./use-bookmark-journal-tree";
 import {
   parseDateKey,
@@ -142,6 +144,24 @@ function levelStart(value: string, level: JournalLevel) {
     return decadeStartForDate(value);
   }
   return startOfPeriod(value, level);
+}
+
+function journalPeriodRange(
+  value: string,
+  level: JournalLevel,
+): { start: string; end: string } {
+  const start = levelStart(value, level);
+  if (level === "week") {
+    return { start, end: shiftPeriod(start, "day", 6) };
+  }
+  if (level === "decade") {
+    return {
+      start,
+      end: shiftPeriod(shiftPeriod(start, "year", 10), "day", -1),
+    };
+  }
+  const next = shiftPeriod(start, level, 1);
+  return { start, end: shiftPeriod(next, "day", -1) };
 }
 
 function levelLabel(
@@ -332,8 +352,17 @@ export function BookmarkJournalPanel() {
   const [level, setLevel] = useState<JournalLevel>("week");
   const [editingNode, setEditingNode] =
     useState<BookmarkJournalNode | null>(null);
+  const [calendarOpen, setCalendarOpen] = useState(false);
+  const [periodPickerOpen, setPeriodPickerOpen] = useState(false);
+  const [calendarMonth, setCalendarMonth] = useState(() =>
+    startOfPeriod(todayDateInputValue(), "month"),
+  );
+  const [calendarHoverDate, setCalendarHoverDate] = useState<
+    string | null
+  >(null);
 
   const periodStart = levelStart(anchorDate, level);
+  const pickerLevel = level === "week" ? null : level;
   const node = tree
     ? findNode(tree, level, periodStart)
     : null;
@@ -400,23 +429,64 @@ export function BookmarkJournalPanel() {
     },
   ];
 
+  const closeSelectors = () => {
+    setCalendarOpen(false);
+    setPeriodPickerOpen(false);
+  };
+
   const selectLevel = (next: JournalLevel, start: string) => {
     setAnchorDate(start);
     setLevel(next);
+    closeSelectors();
     goToDate(next === "week" ? weekThursday(start) : start);
   };
 
-  const moveWeek = (delta: number) => {
-    const next = shiftPeriod(weekStart, "week", delta);
+  const movePeriod = (delta: number) => {
+    const next =
+      level === "decade"
+        ? shiftPeriod(periodStart, "year", delta * 10)
+        : shiftPeriod(anchorDate, level, delta);
     setAnchorDate(next);
-    setLevel("week");
-    goToDate(weekThursday(next));
+    closeSelectors();
+    goToDate(level === "week" ? weekThursday(next) : next);
   };
+
+  const openPeriodSelector = () => {
+    if (level === "week") {
+      setPeriodPickerOpen(false);
+      setCalendarMonth(startOfPeriod(anchorDate, "month"));
+      setCalendarHoverDate(null);
+      setCalendarOpen(true);
+      return;
+    }
+    setCalendarOpen(false);
+    setPeriodPickerOpen(true);
+  };
+
+  const closeCalendar = () => {
+    setCalendarOpen(false);
+  };
+
+  const selectCalendarDate = (value: string) => {
+    setAnchorDate(value);
+    setCalendarOpen(false);
+    goToDate(level === "week" ? weekThursday(value) : value);
+  };
+
+  const selectPeriodPickerValue = (value: string) => {
+    setAnchorDate(value);
+    setPeriodPickerOpen(false);
+    goToDate(value);
+  };
+
+  const calendarRange = (value: string) =>
+    journalPeriodRange(value, level);
 
   const goToday = () => {
     const today = todayDateInputValue();
     setAnchorDate(today);
     setLevel("week");
+    closeSelectors();
     goToDate(weekThursday(today));
   };
 
@@ -635,27 +705,36 @@ export function BookmarkJournalPanel() {
 
       <div className="bookmark-journal-toolbar">
         <div className="bookmark-journal-nav">
-          {level === "week" ? (
-            <button
-              type="button"
-              className="bookmark-icon-button"
-              aria-label="이전 주"
-              onClick={() => moveWeek(-1)}
-            >
-              ‹
-            </button>
-          ) : null}
-          <strong>{title}</strong>
-          {level === "week" ? (
-            <button
-              type="button"
-              className="bookmark-icon-button"
-              aria-label="다음 주"
-              onClick={() => moveWeek(1)}
-            >
-              ›
-            </button>
-          ) : null}
+          <button
+            type="button"
+            className="bookmark-icon-button"
+            aria-label="이전 기간"
+            onClick={() => movePeriod(-1)}
+          >
+            ‹
+          </button>
+          <button
+            type="button"
+            className="bookmark-period-label bookmark-journal-period-label"
+            title={
+              level === "week"
+                ? "달력에서 날짜 선택"
+                : "기간 선택"
+            }
+            aria-haspopup="dialog"
+            aria-expanded={calendarOpen || periodPickerOpen}
+            onClick={openPeriodSelector}
+          >
+            {title}
+          </button>
+          <button
+            type="button"
+            className="bookmark-icon-button"
+            aria-label="다음 기간"
+            onClick={() => movePeriod(1)}
+          >
+            ›
+          </button>
         </div>
       </div>
 
@@ -687,6 +766,28 @@ export function BookmarkJournalPanel() {
             setEditingNode(null);
             void reload();
           }}
+        />
+      ) : null}
+
+      {calendarOpen ? (
+        <BookmarkCalendarModal
+          month={calendarMonth}
+          hoverDate={calendarHoverDate}
+          periodStart={anchorDate}
+          onMonthChange={setCalendarMonth}
+          onHoverDateChange={setCalendarHoverDate}
+          onSelectDate={selectCalendarDate}
+          onClose={closeCalendar}
+          calendarRange={calendarRange}
+        />
+      ) : null}
+
+      {periodPickerOpen && pickerLevel ? (
+        <BookmarkPeriodPickerModal
+          level={pickerLevel}
+          value={periodStart}
+          onSelect={selectPeriodPickerValue}
+          onClose={() => setPeriodPickerOpen(false)}
         />
       ) : null}
     </section>

@@ -50,6 +50,7 @@ import { BookmarkCategoryModal } from "./bookmark-category-modal";
 import { BookmarkHistoryModal } from "./bookmark-history-modal";
 import { BookmarkJournalPanel } from "./bookmark-journal-panel";
 import { BookmarkMoodTagModal } from "./bookmark-mood-tag-modal";
+import { BookmarkPeriodPickerModal } from "./bookmark-period-picker-modal";
 import { BookmarkRoutineNotes } from "./bookmark-routine-notes";
 import { BookmarkRoutineModal } from "./bookmark-routine-modal";
 import { BookmarkStatisticsPanel } from "./bookmark-statistics-panel";
@@ -116,6 +117,7 @@ export default function BookmarkClient({ username }: { username: string }) {
     tab === "today" ? periodType : tab
   }`;
   const [periodMenuOpen, setPeriodMenuOpen] = useState(false);
+  const [periodPickerOpen, setPeriodPickerOpen] = useState(false);
   const periodMenuRef = useRef<HTMLDivElement>(null);
   const {
     calendarOpen,
@@ -273,6 +275,7 @@ export default function BookmarkClient({ username }: { username: string }) {
   const changeTab = (next: BookmarkTab) => {
     setTab(next);
     setPeriodMenuOpen(false);
+    setPeriodPickerOpen(false);
     closeCalendar();
     closeRoutineModal();
   };
@@ -280,6 +283,7 @@ export default function BookmarkClient({ username }: { username: string }) {
   const handleTodayTabClick = () => {
     if (tab !== "today") {
       setTab("today");
+      setPeriodPickerOpen(false);
       closeCalendar();
       closeRoutineModal();
     }
@@ -290,6 +294,7 @@ export default function BookmarkClient({ username }: { username: string }) {
     setPeriodType(next);
     setTab("today");
     setPeriodMenuOpen(false);
+    setPeriodPickerOpen(false);
     closeCalendar();
     closeRoutineModal();
   };
@@ -299,13 +304,25 @@ export default function BookmarkClient({ username }: { username: string }) {
       shiftPeriod(previous, periodType, delta),
     );
     setPeriodMenuOpen(false);
+    setPeriodPickerOpen(false);
     closeCalendar();
     closeRoutineModal();
   };
 
-  const handleOpenCalendar = () => {
+  const handleOpenPeriodSelector = () => {
     setPeriodMenuOpen(false);
-    openCalendar();
+    if (periodType === "day" || periodType === "week") {
+      setPeriodPickerOpen(false);
+      openCalendar();
+      return;
+    }
+    closeCalendar();
+    setPeriodPickerOpen(true);
+  };
+
+  const selectPeriodPickerValue = (value: string) => {
+    setAnchorDate(value);
+    setPeriodPickerOpen(false);
   };
 
   useEffect(() => {
@@ -868,8 +885,12 @@ export default function BookmarkClient({ username }: { username: string }) {
               <button
                 type="button"
                 className="bookmark-period-label"
-                title="달력에서 날짜 선택"
-                onClick={handleOpenCalendar}
+                title={
+                  periodType === "day" || periodType === "week"
+                    ? "달력에서 날짜 선택"
+                    : "기간 선택"
+                }
+                onClick={handleOpenPeriodSelector}
               >
                 {periodType === "week"
                   ? weekPeriodLabel(periodStart)
@@ -1106,6 +1127,16 @@ export default function BookmarkClient({ username }: { username: string }) {
           onSelectDate={selectCalendarDate}
           onClose={closeCalendar}
           calendarRange={calendarRange}
+        />
+      ) : null}
+      {periodPickerOpen &&
+      periodType !== "day" &&
+      periodType !== "week" ? (
+        <BookmarkPeriodPickerModal
+          level={periodType}
+          value={periodStart}
+          onSelect={selectPeriodPickerValue}
+          onClose={() => setPeriodPickerOpen(false)}
         />
       ) : null}
       {routineModalOpen ? (
