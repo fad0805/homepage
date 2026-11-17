@@ -1987,18 +1987,16 @@
 
 .bookmark-journal-nav {
   display: flex;
-  width: 100%;
   align-items: center;
   gap: 0.35rem;
 
   strong {
     min-width: 5.5rem;
-    margin-left: auto;
     color: var(--title-color);
     font-family: Eulyoo1945-SemiBold, GowunDodum, sans-serif;
     font-size: 0.9rem;
     font-weight: normal;
-    text-align: right;
+    text-align: left;
   }
 }
 
@@ -2012,7 +2010,7 @@
 .bookmark-journal-summary {
   display: flex;
   align-items: baseline;
-  justify-content: space-between;
+  justify-content: flex-start;
   gap: 0.75rem;
   margin-top: 0.45rem;
 
@@ -2025,7 +2023,7 @@
   color: var(--title-color);
   font-size: 0.62rem;
   opacity: 0.62;
-  text-align: right;
+  text-align: left;
   white-space: nowrap;
 }
 
