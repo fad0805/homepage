@@ -422,27 +422,32 @@ export function useBookmarkRoutines({
     }
   };
 
-  const toggleOccurrence = async (
+  const setRoutineDone = async (
     routine: BookmarkRoutine,
-    occurrenceDate: string,
     done: boolean,
   ) => {
-    const nextDone = !done;
+    const isDaily = routine.frequency === "daily";
+    const isCount = routine.tracking_mode === "count" && !isDaily;
+    if (isCount) {
+      await setRoutineCount(
+        routine,
+        done ? routine.target_count : 0,
+      );
+      return;
+    }
+
+    const targets = routine.occurrences.filter(
+      (occurrence) => occurrence.done !== done,
+    );
+    if (targets.length === 0) return;
+
     const nextCompleted = Math.max(
       0,
       Math.min(
         routine.target_count,
-        routine.completed_count + (nextDone ? 1 : -1),
+        routine.completed_count + (done ? targets.length : -targets.length),
       ),
     );
-    const periodType =
-      routine.frequency === "daily" || routine.frequency === "weekly"
-        ? "day"
-        : routine.period_type;
-    const periodStart =
-      routine.frequency === "daily" || routine.frequency === "weekly"
-        ? occurrenceDate
-        : routine.period_start;
     onError(null);
     setData((previous) =>
       previous
@@ -454,8 +459,10 @@ export function useBookmarkRoutines({
                     ...current,
                     completed_count: nextCompleted,
                     occurrences: current.occurrences.map((occurrence) =>
-                      occurrence.date === occurrenceDate
-                        ? { ...occurrence, done: nextDone }
+                      targets.some(
+                        (target) => target.date === occurrence.date,
+                      )
+                        ? { ...occurrence, done }
                         : occurrence,
                     ),
                   }
@@ -464,18 +471,31 @@ export function useBookmarkRoutines({
           }
         : previous,
     );
+
     try {
-      await apiFetch<BookmarkRoutine>(
-        `/api/bookmark/routines/${routine.id}/check`,
-        {
-          method: "PUT",
-          body: JSON.stringify({
-            period_type: periodType,
-            period_start: periodStart,
-            count: nextDone ? 1 : 0,
-          }),
-        },
-      );
+      for (const occurrence of targets) {
+        const periodType =
+          routine.frequency === "daily" ||
+          routine.frequency === "weekly"
+            ? "day"
+            : routine.period_type;
+        const periodStart =
+          routine.frequency === "daily" ||
+          routine.frequency === "weekly"
+            ? occurrence.date
+            : routine.period_start;
+        await apiFetch<BookmarkRoutine>(
+          `/api/bookmark/routines/${routine.id}/check`,
+          {
+            method: "PUT",
+            body: JSON.stringify({
+              period_type: periodType,
+              period_start: periodStart,
+              count: done ? 1 : 0,
+            }),
+          },
+        );
+      }
     } catch (reason) {
       onError(
         reason instanceof Error
@@ -485,7 +505,6 @@ export function useBookmarkRoutines({
       await loadPeriod();
     }
   };
-
 
   return {
     routineModalOpen,
@@ -525,6 +544,6 @@ export function useBookmarkRoutines({
     handleDeleteRoutine,
     handleRoutineDragEnd,
     setRoutineCount,
-    toggleOccurrence,
+    setRoutineDone,
   };
 }

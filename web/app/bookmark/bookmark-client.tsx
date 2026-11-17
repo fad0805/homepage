@@ -89,7 +89,6 @@ import {
   historyQuarterLabel,
   monthCalendarDays,
   monthLabel,
-  occurrenceLabel,
   pad2,
   parseDateKey,
   periodLabel,
@@ -310,7 +309,7 @@ export default function BookmarkClient({ username }: { username: string }) {
     handleDeleteRoutine,
     handleRoutineDragEnd,
     setRoutineCount,
-    toggleOccurrence,
+    setRoutineDone,
   } = useBookmarkRoutines({
     routines,
     unitView,
@@ -436,6 +435,20 @@ export default function BookmarkClient({ username }: { username: string }) {
         >
           <div className="bookmark-item-main">
             <div className="bookmark-routine-heading">
+              <input
+                type="checkbox"
+                className="bookmark-routine-check"
+                checked={allDone}
+                disabled={
+                  isStopped ||
+                  (!isCount && routine.occurrences.length === 0)
+                }
+                aria-label={`${routine.title} 완료`}
+                onClick={(event) => event.stopPropagation()}
+                onChange={() =>
+                  void setRoutineDone(routine, !allDone)
+                }
+              />
               <span className="bookmark-routine-title">
                 {routine.title}
               </span>
@@ -495,47 +508,13 @@ export default function BookmarkClient({ username }: { username: string }) {
                   </button>
                 ) : null}
               </div>
-            ) : (
-              <>
-                <div className="bookmark-occurrence-list">
-                  {routine.occurrences.map((occurrence) => (
-                    <label
-                      className={`bookmark-occurrence${
-                        occurrence.done ? " is-done" : ""
-                      }`}
-                      key={occurrence.date}
-                      onClick={(event) => event.stopPropagation()}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={occurrence.done}
-                        onChange={() =>
-                          void toggleOccurrence(
-                            routine,
-                            occurrence.date,
-                            occurrence.done,
-                          )
-                        }
-                      />
-                      <span>
-                        {occurrenceLabel(
-                          occurrence.date,
-                          view,
-                          routine.frequency,
-                        )}
-                      </span>
-                    </label>
-                  ))}
-                </div>
-                {routine.frequency === "weekly" &&
-                routine.target_count > 1 ? (
-                  <p className="bookmark-routine-week-progress">
-                    이번 주 {routine.completed_count}/
-                    {routine.target_count}회
-                  </p>
-                ) : null}
-              </>
-            )}
+            ) : routine.frequency === "weekly" &&
+              routine.target_count > 1 ? (
+              <p className="bookmark-routine-week-progress">
+                이번 주 {routine.completed_count}/
+                {routine.target_count}회
+              </p>
+            ) : null}
 
             {routine.notes ? (
               <p className="bookmark-item-notes">{routine.notes}</p>
