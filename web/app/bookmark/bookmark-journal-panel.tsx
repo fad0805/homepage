@@ -69,13 +69,13 @@ function renderRecord(node: BookmarkJournalNode) {
   }
   return (
     <div className="bookmark-journal-record">
-      {renderRating(node)}
       {node.goal?.content ? (
         <div className="bookmark-journal-block">
           <span className="bookmark-journal-label">목표</span>
           <p>{node.goal.content}</p>
         </div>
       ) : null}
+      {renderRating(node)}
       {node.review?.content ? (
         <div className="bookmark-journal-block">
           <span className="bookmark-journal-label">후기</span>
@@ -84,6 +84,11 @@ function renderRecord(node: BookmarkJournalNode) {
       ) : null}
     </div>
   );
+}
+
+function textOrDash(value: string | null | undefined) {
+  const text = value?.trim();
+  return text ? text : "-";
 }
 
 function decadeStartForDate(value: string) {
@@ -300,16 +305,35 @@ export function BookmarkJournalPanel() {
           이 주에 기록된 일간 회고가 없습니다.
         </p>
       ) : (
-        <div className="bookmark-journal-record-list">
-          {node.children.map((day) => (
-            <article
-              className="bookmark-journal-day"
-              key={day.period_start}
-            >
-              <strong>{day.label}</strong>
-              {renderRecord(day)}
-            </article>
-          ))}
+        <div className="bookmark-journal-table-wrap">
+          <table className="bookmark-journal-table">
+            <colgroup>
+              <col className="is-date" />
+              <col className="is-goal" />
+              <col className="is-rating" />
+              <col className="is-review" />
+            </colgroup>
+            <thead>
+              <tr>
+                <th scope="col">날짜</th>
+                <th scope="col">목표</th>
+                <th scope="col">별점</th>
+                <th scope="col">회고</th>
+              </tr>
+            </thead>
+            <tbody>
+              {node.children.map((day) => (
+                <tr key={day.period_start}>
+                  <th scope="row">
+                    {withoutYear(day.label)}
+                  </th>
+                  <td>{textOrDash(day.goal?.content)}</td>
+                  <td>{renderRating(day) ?? "-"}</td>
+                  <td>{textOrDash(day.review?.content)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
     </div>
@@ -345,11 +369,6 @@ export function BookmarkJournalPanel() {
           <p className="bookmark-journal-hint">
             {countText(currentNode)}
           </p>
-          {level !== "year" ? (
-            <span className="bookmark-journal-range">
-              {withoutYear(title)}
-            </span>
-          ) : null}
         </div>
         {renderRecord(currentNode)}
         {level === "week" ? renderWeekDays(currentNode) : null}

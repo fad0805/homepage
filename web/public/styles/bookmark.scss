@@ -2019,14 +2019,6 @@
   }
 }
 
-.bookmark-journal-range {
-  color: var(--title-color);
-  font-size: 0.62rem;
-  opacity: 0.62;
-  text-align: left;
-  white-space: nowrap;
-}
-
 .bookmark-journal-breadcrumb {
   display: flex;
   flex-wrap: wrap;
@@ -2159,51 +2151,70 @@
   }
 }
 
-.bookmark-journal-record-list {
-  display: flex;
-  flex-direction: column;
-  gap: 0.45rem;
+.bookmark-journal-table-wrap {
   margin-top: 0.55rem;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
-.bookmark-journal-record-card,
-.bookmark-journal-day {
-  padding: 0.55rem 0.65rem;
-  border: 1px solid
-    color-mix(in srgb, var(--theme-main) 24%, transparent);
-  border-radius: 0.7rem;
-  background: color-mix(
-    in srgb,
-    var(--input-background) 45%,
-    transparent
-  );
-
-  > strong {
-    color: var(--title-color);
-    font-size: 0.7rem;
-    font-weight: normal;
-  }
-}
-
-button.bookmark-journal-record-card,
-button.bookmark-journal-day {
+.bookmark-journal-table {
   width: 100%;
-  color: var(--foreground);
-  font-family: inherit;
-  text-align: left;
-  cursor: pointer;
-  transition:
-    border-color 0.16s ease,
-    background 0.16s ease;
+  min-width: 36rem;
+  border-collapse: collapse;
+  table-layout: fixed;
+  font-size: 0.7rem;
 
-  &:hover,
-  &:focus-visible {
-    border-color: color-mix(
-      in srgb,
-      var(--theme-main) 52%,
-      transparent
-    );
-    background: var(--bookmark-soft-bg);
+  col.is-date {
+    width: 7.5rem;
+  }
+
+  col.is-goal {
+    width: 26%;
+  }
+
+  col.is-rating {
+    width: 6.5rem;
+  }
+
+  col.is-review {
+    width: auto;
+  }
+
+  th,
+  td {
+    padding: 0.45rem 0.5rem;
+    border-bottom: 1px solid
+      color-mix(in srgb, var(--theme-main) 18%, transparent);
+    text-align: left;
+    vertical-align: top;
+  }
+
+  thead th {
+    color: var(--title-color);
+    font-size: 0.58rem;
+    font-weight: normal;
+    letter-spacing: 0.04em;
+    opacity: 0.58;
+    white-space: nowrap;
+  }
+
+  tbody th {
+    color: var(--title-color);
+    font-size: 0.66rem;
+    font-weight: normal;
+    white-space: nowrap;
+  }
+
+  tbody td {
+    color: var(--foreground);
+    line-height: 1.5;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+
+  tbody tr:last-child th,
+  tbody tr:last-child td {
+    border-bottom: 0;
   }
 }
 
