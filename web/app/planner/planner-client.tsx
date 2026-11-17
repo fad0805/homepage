@@ -518,6 +518,10 @@ export default function PlannerClient({ username }: { username: string }) {
     }
     return colors;
   }, [events, savedColors]);
+  const editingTask =
+    editingId === null
+      ? null
+      : tasks.find((task) => task.id === editingId) ?? null;
   const selectedFormColor =
     savedColors.find((color) => color.id === form.colorId) ?? null;
   const selectedTaskColor = selectedTask
@@ -899,7 +903,7 @@ export default function PlannerClient({ username }: { username: string }) {
       setSelectedTask((previous) =>
         previous?.id === task.id ? null : previous,
       );
-      if (editingId === task.id) resetForm();
+      if (editingId === task.id) closeTaskModal();
       await refresh();
     } catch (reason) {
       setError(
@@ -962,7 +966,7 @@ export default function PlannerClient({ username }: { username: string }) {
       setSelectedTask((previous) =>
         previous?.id === task.id ? null : previous,
       );
-      if (editingId === task.id) resetForm();
+      if (editingId === task.id) closeTaskModal();
       await refresh();
     } catch (reason) {
       setError(
@@ -1124,7 +1128,9 @@ export default function PlannerClient({ username }: { username: string }) {
       task={task}
       noteSavingId={noteSavingId}
       busy={busyKey !== null}
-      onOpen={openTaskDetail}
+      onOpen={
+        task.status === "active" ? startEditing : openTaskDetail
+      }
       onComplete={(item) => void handleComplete(item)}
       onToggleNote={(index) => void handleToggleTaskNote(task, index)}
     />
@@ -1287,6 +1293,7 @@ export default function PlannerClient({ username }: { username: string }) {
           error={error}
           busyKey={busyKey}
           today={today}
+          editingTask={editingTask}
           savedColors={savedColors}
           selectedFormColor={selectedFormColor}
           showChipCreator={showChipCreator}
@@ -1294,6 +1301,9 @@ export default function PlannerClient({ username }: { username: string }) {
           renderChipCreator={renderChipCreator}
           onClose={closeTaskModal}
           onSubmit={handleSubmit}
+          onTrashTask={(task) => void handleTrash(task)}
+          onDeactivateTask={(task) => void handleDeactivate(task)}
+          onCompleteTask={(task) => void handleComplete(task)}
         />
       ) : null}
 

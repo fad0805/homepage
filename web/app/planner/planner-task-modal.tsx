@@ -5,7 +5,11 @@ import type {
   SetStateAction,
 } from "react";
 
-import type { PlannerColor, TaskFormState } from "./planner-types";
+import type {
+  PlannerColor,
+  PlannerTask,
+  TaskFormState,
+} from "./planner-types";
 import { addDays } from "./planner-utils";
 
 interface PlannerTaskModalProps {
@@ -17,6 +21,7 @@ interface PlannerTaskModalProps {
   error: string | null;
   busyKey: string | null;
   today: string;
+  editingTask: PlannerTask | null;
   savedColors: PlannerColor[];
   selectedFormColor: PlannerColor | null;
   showChipCreator: boolean;
@@ -24,6 +29,9 @@ interface PlannerTaskModalProps {
   renderChipCreator: (selectForForm: boolean) => ReactNode;
   onClose: () => void;
   onSubmit: FormEventHandler<HTMLFormElement>;
+  onTrashTask: (task: PlannerTask) => void;
+  onDeactivateTask: (task: PlannerTask) => void;
+  onCompleteTask: (task: PlannerTask) => void;
 }
 
 export function PlannerTaskModal({
@@ -35,6 +43,7 @@ export function PlannerTaskModal({
   error,
   busyKey,
   today,
+  editingTask,
   savedColors,
   selectedFormColor,
   showChipCreator,
@@ -42,6 +51,9 @@ export function PlannerTaskModal({
   renderChipCreator,
   onClose,
   onSubmit,
+  onTrashTask,
+  onDeactivateTask,
+  onCompleteTask,
 }: PlannerTaskModalProps) {
   return (
       <div
@@ -367,6 +379,34 @@ export function PlannerTaskModal({
                       ? "완료로 기록"
                       : "추가"}
             </button>
+            {editingTask?.status === "active" ? (
+              <div className="planner-task-modal-actions">
+                <button
+                  type="button"
+                  className="planner-text-button is-danger"
+                  disabled={busyKey !== null}
+                  onClick={() => onTrashTask(editingTask)}
+                >
+                  삭제
+                </button>
+                <button
+                  type="button"
+                  className="planner-text-button"
+                  disabled={busyKey !== null}
+                  onClick={() => onDeactivateTask(editingTask)}
+                >
+                  비활성화
+                </button>
+                <button
+                  type="button"
+                  className="planner-text-button is-accent"
+                  disabled={busyKey !== null}
+                  onClick={() => onCompleteTask(editingTask)}
+                >
+                  완료
+                </button>
+              </div>
+            ) : null}
           </form>
         </div>
       </div>

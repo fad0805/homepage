@@ -1918,7 +1918,8 @@
   }
 }
 
-.planner-task-detail-actions {
+.planner-task-detail-actions,
+.planner-task-modal-actions {
   display: flex;
   flex-wrap: wrap;
   gap: 0.35rem;
