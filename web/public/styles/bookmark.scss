@@ -435,6 +435,30 @@
   opacity: 0.5;
 }
 
+.bookmark-routine-group-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  cursor: pointer;
+
+  &:hover {
+    opacity: 1;
+  }
+
+  &:focus-visible {
+    outline: 2px solid
+      color-mix(in srgb, var(--theme-main) 55%, transparent);
+    outline-offset: 3px;
+    opacity: 1;
+  }
+}
+
 .bookmark-routine-group-header h3 .bookmark-routine-group-check {
   margin-left: 0.3rem;
   color: #4f8f5b;

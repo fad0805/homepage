@@ -124,7 +124,9 @@ export default function BookmarkClient({ username }: { username: string }) {
     setPeriodStart,
   });
   const [statsRange, setStatsRange] = useState<StatsRange>("month");
-
+  const [expandedDoneSections, setExpandedDoneSections] = useState<
+    Set<string>
+  >(() => new Set());
 
   const dndSensors = useSensors(
     useSensor(PointerSensor, {
@@ -329,6 +331,18 @@ export default function BookmarkClient({ username }: { username: string }) {
       routine.occurrences.length > 0 &&
       routine.occurrences.every((occurrence) => occurrence.done)
     );
+  };
+
+  const toggleDoneSection = (key: string) => {
+    setExpandedDoneSections((previous) => {
+      const next = new Set(previous);
+      if (next.has(key)) {
+        next.delete(key);
+      } else {
+        next.add(key);
+      }
+      return next;
+    });
   };
 
   const renderRoutines = () => {
@@ -551,6 +565,9 @@ export default function BookmarkClient({ username }: { username: string }) {
           const collapsed = isSectionCollapsed(section);
           const total = section.pending.length + section.done.length;
           const panelId = `bookmark-routine-section-${section.key}`;
+          const doneKey = `${view}:${section.key}:done`;
+          const doneExpanded = expandedDoneSections.has(doneKey);
+          const donePanelId = `${panelId}-done`;
 
           return (
             <section
@@ -591,20 +608,36 @@ export default function BookmarkClient({ username }: { username: string }) {
                   <div className="bookmark-routine-group is-done-group">
                     <header className="bookmark-routine-group-header">
                       <h3>
-                        완료
-                        <span
-                          className="bookmark-routine-group-check"
-                          aria-label="완료"
+                        <button
+                          type="button"
+                          className="bookmark-routine-group-toggle"
+                          aria-expanded={doneExpanded}
+                          aria-controls={donePanelId}
+                          onClick={() => toggleDoneSection(doneKey)}
                         >
-                          ✓
-                        </span>
+                          <span
+                            className="bookmark-category-group-arrow"
+                            aria-hidden="true"
+                          >
+                            {doneExpanded ? "▾" : "▸"}
+                          </span>
+                          완료
+                          <span
+                            className="bookmark-routine-group-check"
+                            aria-label="완료"
+                          >
+                            ✓
+                          </span>
+                        </button>
                       </h3>
                       <span>{section.done.length}</span>
                     </header>
-                    {renderRoutineList(
-                      `${section.key}-done`,
-                      section.done,
-                    )}
+                    <div id={donePanelId} hidden={!doneExpanded}>
+                      {renderRoutineList(
+                        `${section.key}-done`,
+                        section.done,
+                      )}
+                    </div>
                   </div>
                 ) : null}
               </div>
