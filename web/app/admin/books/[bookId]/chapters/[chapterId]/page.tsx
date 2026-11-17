@@ -146,6 +146,8 @@ export default function AdminChapterEdit() {
   );
   const [draftPromptOpen, setDraftPromptOpen] = useState(false);
   const [draftPreviewOpen, setDraftPreviewOpen] = useState(false);
+  const [savedDraft, setSavedDraft] = useState<ChapterDraft | null>(null);
+  const [draftViewOpen, setDraftViewOpen] = useState(false);
   const [autosaveReady, setAutosaveReady] = useState(false);
   const [notice, setNotice] = useState<Notice | null>(null);
 
@@ -212,8 +214,10 @@ export default function AdminChapterEdit() {
     setLoading(true);
     setDraftSavedAt(null);
     setAvailableDraft(null);
+    setSavedDraft(null);
     setDraftPromptOpen(false);
     setDraftPreviewOpen(false);
+    setDraftViewOpen(false);
     setAutosaveReady(false);
     lastSavedSignatureRef.current = null;
     try {
@@ -324,11 +328,12 @@ export default function AdminChapterEdit() {
   }, [load]);
 
   useEffect(() => {
-    if (!draftPreviewOpen) return;
+    if (!draftPreviewOpen && !draftViewOpen) return;
 
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         setDraftPreviewOpen(false);
+        setDraftViewOpen(false);
       }
     };
     const previousOverflow = document.body.style.overflow;
@@ -339,7 +344,7 @@ export default function AdminChapterEdit() {
       window.removeEventListener("keydown", handleKeyDown);
       document.body.style.overflow = previousOverflow;
     };
-  }, [draftPreviewOpen]);
+  }, [draftPreviewOpen, draftViewOpen]);
 
   const handleOpenDraftPreview = useCallback(() => {
     if (!availableDraft) return;
@@ -380,6 +385,7 @@ export default function AdminChapterEdit() {
     setPinned(availableDraft.pinned === true);
     setPublishedAt(nextPublishedAt);
     setTargetBookId(nextTargetBookId);
+    setSavedDraft(availableDraft);
     setDraftSavedAt(availableDraft.updated_at);
     setAvailableDraft(null);
     setDraftPromptOpen(false);
@@ -402,8 +408,10 @@ export default function AdminChapterEdit() {
     try {
       await requestDeleteDraft();
       setAvailableDraft(null);
+      setSavedDraft(null);
       setDraftPromptOpen(false);
       setDraftPreviewOpen(false);
+      setDraftViewOpen(false);
       setDraftSavedAt(null);
       setAutosaveReady(true);
       // Keep the current editor content as the autosave baseline so the
@@ -489,6 +497,7 @@ export default function AdminChapterEdit() {
             },
           );
           lastSavedSignatureRef.current = signature;
+          setSavedDraft(draft);
           setDraftSavedAt(draft.updated_at);
           setAvailableDraft(null);
           setDraftPromptOpen(false);
@@ -770,6 +779,10 @@ export default function AdminChapterEdit() {
     );
   }
 
+  const draftModalData = draftViewOpen ? savedDraft : availableDraft;
+  const draftModalOpen =
+    draftModalData !== null && (draftViewOpen || draftPreviewOpen);
+
   return (
     <div id="admin-books">
       <Link className="admin-books-back" href={`/admin/books/${bookId}`}>
@@ -845,6 +858,19 @@ export default function AdminChapterEdit() {
                   <p className="admin-books-hint">
                     임시저장 {formatDateTime(draftSavedAt)}
                   </p>
+                  <button
+                    type="button"
+                    className="admin-button"
+                    onClick={() => setDraftViewOpen(true)}
+                    disabled={
+                      !savedDraft ||
+                      draftDeleting ||
+                      draftSaving ||
+                      saving
+                    }
+                  >
+                    내용 보기
+                  </button>
                   <button
                     type="button"
                     className="admin-button danger"
@@ -1034,12 +1060,13 @@ export default function AdminChapterEdit() {
         </>
       )}
 
-      {draftPreviewOpen && availableDraft ? (
+      {draftModalOpen ? (
         <div
           className="admin-modal-backdrop"
           onMouseDown={(event) => {
             if (event.target === event.currentTarget) {
               setDraftPreviewOpen(false);
+              setDraftViewOpen(false);
             }
           }}
         >
@@ -1050,11 +1077,18 @@ export default function AdminChapterEdit() {
             aria-labelledby="chapter-draft-preview-title"
           >
             <header className="admin-modal-header">
-              <h2 id="chapter-draft-preview-title">임시저장본 확인</h2>
+              <h2 id="chapter-draft-preview-title">
+                {draftViewOpen
+                  ? "임시저장본 내용"
+                  : "임시저장본 확인"}
+              </h2>
               <button
                 type="button"
                 className="admin-modal-close"
-                onClick={() => setDraftPreviewOpen(false)}
+                onClick={() => {
+                  setDraftPreviewOpen(false);
+                  setDraftViewOpen(false);
+                }}
                 aria-label="닫기"
               >
                 ×
@@ -1062,21 +1096,27 @@ export default function AdminChapterEdit() {
             </header>
             <div className="admin-modal-body">
               <div className="admin-books-draft-preview-heading">
-                <strong>{availableDraft.title || "제목 없음"}</strong>
+                <strong>
+                  {draftModalData?.title || "제목 없음"}
+                </strong>
                 <p>
-                  {formatDateTime(availableDraft.updated_at)}에 저장된
-                  임시저장본
+                  {draftModalData
+                    ? `${formatDateTime(
+                        draftModalData.updated_at,
+                      )}에 저장된 임시저장본`
+                    : ""}
                 </p>
               </div>
               <p className="admin-books-hint">
-                불러오면 현재 작성 중인 내용이 아래 임시저장본으로
-                덮어써집니다.
+                {draftViewOpen
+                  ? "현재 편집 중인 내용과 별개로 저장된 임시저장본입니다."
+                  : "불러오면 현재 작성 중인 내용이 아래 임시저장본으로 덮어써집니다."}
               </p>
               <div className="admin-books-draft-preview">
-                {availableDraft.body ? (
+                {draftModalData?.body ? (
                   <div
                     dangerouslySetInnerHTML={{
-                      __html: availableDraft.body,
+                      __html: draftModalData.body,
                     }}
                   />
                 ) : (
@@ -1090,9 +1130,12 @@ export default function AdminChapterEdit() {
               <button
                 type="button"
                 className="admin-button"
-                onClick={() => setDraftPreviewOpen(false)}
+                onClick={() => {
+                  setDraftPreviewOpen(false);
+                  setDraftViewOpen(false);
+                }}
               >
-                취소
+                {draftViewOpen ? "닫기" : "취소"}
               </button>
               <button
                 type="button"
@@ -1102,13 +1145,15 @@ export default function AdminChapterEdit() {
               >
                 {draftDeleting ? "삭제 중..." : "삭제"}
               </button>
-              <button
-                type="button"
-                className="admin-button primary"
-                onClick={handleApplyDraft}
-              >
-                이 내용 불러오기
-              </button>
+              {!draftViewOpen ? (
+                <button
+                  type="button"
+                  className="admin-button primary"
+                  onClick={handleApplyDraft}
+                >
+                  이 내용 불러오기
+                </button>
+              ) : null}
             </footer>
           </div>
         </div>
