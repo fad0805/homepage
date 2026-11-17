@@ -101,7 +101,7 @@ class PlannerEventRead(BaseModel):
     action: str
     title: str | None = None
     notes: str | None = None
-    color: str | None = None
+    color_id: int | None = None
     changes: list[dict] | None = None
     occurred_at: datetime
 

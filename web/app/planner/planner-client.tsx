@@ -500,10 +500,16 @@ export default function PlannerClient({ username }: { username: string }) {
   }, [events]);
   const historyColors = useMemo(() => {
     const colors = new Map<string, string[]>();
+    const colorById = new Map(
+      savedColors.map((color) => [color.id, color.color]),
+    );
     for (const event of events) {
       if (event.action !== "completed") continue;
       const date = eventDate(event);
-      const color = event.color ?? UNASSIGNED_TASK_COLOR;
+      const color =
+        (event.color_id !== null
+          ? colorById.get(event.color_id)
+          : null) ?? UNASSIGNED_TASK_COLOR;
       const current = colors.get(date) ?? [];
       if (!current.includes(color)) {
         current.push(color);
@@ -511,7 +517,7 @@ export default function PlannerClient({ username }: { username: string }) {
       }
     }
     return colors;
-  }, [events]);
+  }, [events, savedColors]);
   const selectedFormColor =
     savedColors.find((color) => color.id === form.colorId) ?? null;
   const selectedTaskColor = selectedTask

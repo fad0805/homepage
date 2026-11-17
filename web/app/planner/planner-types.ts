@@ -44,7 +44,7 @@ export interface PlannerEvent {
   action: string;
   title: string | null;
   notes: string | null;
-  color: string | null;
+  color_id: number | null;
   changes: PlannerEventChange[] | null;
   occurred_at: string;
 }

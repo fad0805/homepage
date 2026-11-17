@@ -300,11 +300,7 @@ def complete_task(db: Session, task_id: int, user_id: int) -> dict:
         action="completed",
         title=task.title,
         notes=task.notes,
-        color=(
-            task.color_relation.color
-            if task.color_relation is not None
-            else None
-        ),
+        color_id=task.color_id,
         changes=None,
         occurred_at=_utc_naive_now(),
     )

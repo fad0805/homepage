@@ -291,7 +291,7 @@ class PlannerCrudTests(
         self.assertEqual(events[0]["action"], "completed")
         self.assertEqual(events[0]["title"], "완료할 일정")
         self.assertEqual(events[0]["notes"], "메모")
-        self.assertEqual(events[0]["color"], "#b07a52")
+        self.assertEqual(events[0]["color_id"], color.id)
 
     def test_trash_restore_and_permanent_delete(self) -> None:
         task = self.make_task(
