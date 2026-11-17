@@ -163,6 +163,7 @@ export function RichTextEditor({
   const onChangeRef = useRef(onChange);
   const onNoticeRef = useRef(onNotice);
   const imageInputRef = useRef<HTMLInputElement | null>(null);
+  const pasteImageRef = useRef<(file: File) => void>(() => {});
   const [uploadingImage, setUploadingImage] = useState(false);
   const [loadingPagePreview, setLoadingPagePreview] = useState(false);
   const [htmlMode, setHtmlMode] = useState(false);
@@ -208,6 +209,31 @@ export function RichTextEditor({
     content: value || "<p></p>",
     immediatelyRender: false,
     shouldRerenderOnTransaction: true,
+    editorProps: {
+      handlePaste: (_view, event) => {
+        const clipboard = event.clipboardData;
+        if (!clipboard) return false;
+        const files = Array.from(clipboard.files ?? []);
+        let image = files.find((file) =>
+          file.type.startsWith("image/"),
+        );
+        if (!image) {
+          for (const item of Array.from(clipboard.items ?? [])) {
+            if (
+              item.kind === "file" &&
+              item.type.startsWith("image/")
+            ) {
+              image = item.getAsFile() ?? undefined;
+              if (image) break;
+            }
+          }
+        }
+        if (!image) return false;
+        event.preventDefault();
+        pasteImageRef.current(image);
+        return true;
+      },
+    },
     onUpdate: ({ editor: current }) => {
       onChangeRef.current(current.getHTML());
     },
@@ -349,11 +375,9 @@ export function RichTextEditor({
     }
   }, [editor, notify]);
 
-  const handleImageFile = useCallback(
-    async (event: ChangeEvent<HTMLInputElement>) => {
-      const file = event.target.files?.[0];
-      event.target.value = "";
-      if (!file || !editor) return;
+  const uploadAndInsertImage = useCallback(
+    async (file: File) => {
+      if (!editor) return;
 
       if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
         notify({
@@ -412,7 +436,7 @@ export function RichTextEditor({
             type: "image",
             attrs: {
               src: uploaded.url,
-              alt: file.name,
+              alt: file.name || "붙여넣은 이미지",
               width: Math.round(width),
               align: "center",
               wrap: false,
@@ -434,6 +458,22 @@ export function RichTextEditor({
       }
     },
     [editor, notify, uploadUrl],
+  );
+
+  useEffect(() => {
+    pasteImageRef.current = (file) => {
+      void uploadAndInsertImage(file);
+    };
+  }, [uploadAndInsertImage]);
+
+  const handleImageFile = useCallback(
+    async (event: ChangeEvent<HTMLInputElement>) => {
+      const file = event.target.files?.[0];
+      event.target.value = "";
+      if (!file) return;
+      await uploadAndInsertImage(file);
+    },
+    [uploadAndInsertImage],
   );
 
   const activeColor = editor?.getAttributes("textStyle").color;
