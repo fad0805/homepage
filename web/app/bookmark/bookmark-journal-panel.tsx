@@ -1,9 +1,37 @@
 import { useEffect, useState } from "react";
 
 import { CloverIcon } from "@/app/bookmark/clover-rating";
-import type { BookmarkJournalNode } from "@/lib/bookmark";
+import type {
+  BookmarkJournalNode,
+  BookmarkJournalTree,
+} from "@/lib/bookmark";
+import { todayDateInputValue } from "@/lib/datetime";
 
 import { useBookmarkJournalTree } from "./use-bookmark-journal-tree";
+import { parseDateKey } from "./bookmark-utils";
+
+function decadeStartForDate(value: string) {
+  const year = parseDateKey(value).getUTCFullYear();
+  return `${Math.floor(year / 10) * 10}-01-01`;
+}
+
+function findDayPath(tree: BookmarkJournalTree, target: string) {
+  for (const year of tree.years) {
+    for (const quarter of year.children) {
+      for (const month of quarter.children) {
+        for (const week of month.children) {
+          const day = week.children.find(
+            (item) => item.period_start === target,
+          );
+          if (day) {
+            return { year, quarter, month, week, day };
+          }
+        }
+      }
+    }
+  }
+  return null;
+}
 
 function formatAverage(value: number | null) {
   if (value === null) return "-";
@@ -67,7 +95,7 @@ function renderRecord(node: BookmarkJournalNode) {
 }
 
 export function BookmarkJournalPanel() {
-  const { tree, loading, error, moveDecade, goToday } =
+  const { tree, loading, error, moveDecade, goToday, goToDate } =
     useBookmarkJournalTree();
   const [yearStart, setYearStart] = useState<string | null>(null);
   const [quarterStart, setQuarterStart] = useState<string | null>(
@@ -76,6 +104,13 @@ export function BookmarkJournalPanel() {
   const [monthStart, setMonthStart] = useState<string | null>(null);
   const [weekStart, setWeekStart] = useState<string | null>(null);
   const [dayStart, setDayStart] = useState<string | null>(null);
+  const [dayPicker, setDayPicker] = useState(() =>
+    todayDateInputValue(),
+  );
+  const [pendingDay, setPendingDay] = useState<string | null>(null);
+  const [dayJumpMessage, setDayJumpMessage] = useState<string | null>(
+    null,
+  );
 
   useEffect(() => {
     setYearStart(null);
@@ -84,6 +119,34 @@ export function BookmarkJournalPanel() {
     setWeekStart(null);
     setDayStart(null);
   }, [tree?.decade_start]);
+
+  useEffect(() => {
+    if (!pendingDay || !tree) return;
+    if (tree.decade_start !== decadeStartForDate(pendingDay)) {
+      return;
+    }
+    const path = findDayPath(tree, pendingDay);
+    setPendingDay(null);
+    if (!path) {
+      setDayJumpMessage(
+        "해당 날짜에 기록된 일간 회고가 없습니다.",
+      );
+      return;
+    }
+    setDayJumpMessage(null);
+    setYearStart(path.year.period_start);
+    setQuarterStart(path.quarter.period_start);
+    setMonthStart(path.month.period_start);
+    setWeekStart(path.week.period_start);
+    setDayStart(path.day.period_start);
+  }, [pendingDay, tree]);
+
+  const jumpToDay = () => {
+    if (!dayPicker) return;
+    setDayJumpMessage(null);
+    setPendingDay(dayPicker);
+    goToDate(dayPicker);
+  };
 
   const yearNode =
     yearStart === null
@@ -366,7 +429,16 @@ export function BookmarkJournalPanel() {
         <button
           type="button"
           className="bookmark-text-button"
-          onClick={goToday}
+          onClick={() => {
+            setYearStart(null);
+            setQuarterStart(null);
+            setMonthStart(null);
+            setWeekStart(null);
+            setDayStart(null);
+            setPendingDay(null);
+            setDayJumpMessage(null);
+            goToday();
+          }}
         >
           이번 10년
         </button>
@@ -392,6 +464,28 @@ export function BookmarkJournalPanel() {
             ›
           </button>
         </div>
+        <div className="bookmark-journal-jump">
+          <label htmlFor="bookmark-journal-day">
+            일간부터 보기
+          </label>
+          <input
+            id="bookmark-journal-day"
+            type="date"
+            value={dayPicker}
+            onChange={(event) => {
+              setDayPicker(event.target.value);
+              setDayJumpMessage(null);
+            }}
+          />
+          <button
+            type="button"
+            className="bookmark-text-button"
+            disabled={!dayPicker}
+            onClick={jumpToDay}
+          >
+            열기
+          </button>
+        </div>
         {yearStart ? (
           <button
             type="button"
@@ -406,6 +500,11 @@ export function BookmarkJournalPanel() {
       <p className="bookmark-journal-hint">
         주간·일간 기록은 주 시작일(월요일) 기준으로 묶입니다.
       </p>
+      {dayJumpMessage ? (
+        <p className="bookmark-journal-jump-message">
+          {dayJumpMessage}
+        </p>
+      ) : null}
 
       <div className="bookmark-journal-breadcrumb">
         <button

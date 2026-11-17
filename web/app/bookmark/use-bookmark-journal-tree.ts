@@ -61,6 +61,10 @@ export function useBookmarkJournalTree() {
     setDecadeStart(currentDecadeStart(todayDateInputValue()));
   };
 
+  const goToDate = (value: string) => {
+    setDecadeStart(currentDecadeStart(value));
+  };
+
   return {
     decadeStart,
     tree,
@@ -68,5 +72,6 @@ export function useBookmarkJournalTree() {
     error,
     moveDecade,
     goToday,
+    goToDate,
   };
 }
