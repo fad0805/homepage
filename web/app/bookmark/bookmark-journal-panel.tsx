@@ -117,6 +117,10 @@ function levelLabel(
   return periodLabel(value, level);
 }
 
+function withoutYear(label: string) {
+  return label.replace(/^\d{4}년\s*/, "");
+}
+
 function findNode(
   tree: BookmarkJournalTree,
   level: JournalLevel,
@@ -184,28 +188,34 @@ export function BookmarkJournalPanel() {
     {
       level: "week" as const,
       start: weekStart,
-      label: levelLabel(
-        weekStart,
-        "week",
-        lookup("week", weekStart),
+      label: withoutYear(
+        levelLabel(
+          weekStart,
+          "week",
+          lookup("week", weekStart),
+        ),
       ),
     },
     {
       level: "month" as const,
       start: monthStart,
-      label: levelLabel(
-        monthStart,
-        "month",
-        lookup("month", monthStart),
+      label: withoutYear(
+        levelLabel(
+          monthStart,
+          "month",
+          lookup("month", monthStart),
+        ),
       ),
     },
     {
       level: "quarter" as const,
       start: quarterStart,
-      label: levelLabel(
-        quarterStart,
-        "quarter",
-        lookup("quarter", quarterStart),
+      label: withoutYear(
+        levelLabel(
+          quarterStart,
+          "quarter",
+          lookup("quarter", quarterStart),
+        ),
       ),
     },
     {
@@ -277,7 +287,6 @@ export function BookmarkJournalPanel() {
             목표 {goalCount} · 후기 {reviewCount} · 평균 평점{" "}
             {formatAverage(average)}
           </p>
-          <span className="bookmark-journal-range">{title}</span>
         </div>
       </div>
     );
@@ -336,7 +345,11 @@ export function BookmarkJournalPanel() {
           <p className="bookmark-journal-hint">
             {countText(currentNode)}
           </p>
-          <span className="bookmark-journal-range">{title}</span>
+          {level !== "year" ? (
+            <span className="bookmark-journal-range">
+              {withoutYear(title)}
+            </span>
+          ) : null}
         </div>
         {renderRecord(currentNode)}
         {level === "week" ? renderWeekDays(currentNode) : null}
