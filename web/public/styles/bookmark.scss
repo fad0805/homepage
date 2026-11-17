@@ -1694,6 +1694,32 @@
   }
 }
 
+.bookmark-period-modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 0.65rem;
+  padding-top: 0.55rem;
+  border-top: 1px solid
+    color-mix(in srgb, var(--theme-main) 24%, transparent);
+}
+
+.bookmark-period-modal-today {
+  padding: 0.3rem 0.65rem;
+  border: 1px solid
+    color-mix(in srgb, var(--theme-main) 38%, transparent);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--title-color);
+  font-family: inherit;
+  font-size: 0.68rem;
+  cursor: pointer;
+
+  &:hover,
+  &:focus-visible {
+    background: var(--bookmark-soft-bg);
+  }
+}
+
 .bookmark-calendar-header {
   display: flex;
   align-items: center;

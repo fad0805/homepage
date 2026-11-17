@@ -1,9 +1,12 @@
 import { useState } from "react";
 
+import { todayDateInputValue } from "@/lib/datetime";
+
 import {
   dateKey,
   parseDateKey,
   shiftPeriod,
+  startOfPeriod,
 } from "./bookmark-utils";
 
 type PeriodPickerLevel = "month" | "quarter" | "year" | "decade";
@@ -102,6 +105,17 @@ function periodOptions(
   });
 }
 
+function todayPeriodStart(level: PeriodPickerLevel) {
+  const today = todayDateInputValue();
+  if (level === "decade") {
+    const year = parseDateKey(today).getUTCFullYear();
+    return dateKey(
+      new Date(Date.UTC(decadeStartYear(year), 0, 1)),
+    );
+  }
+  return startOfPeriod(today, level);
+}
+
 export function BookmarkPeriodPickerModal({
   level,
   value,
@@ -188,6 +202,15 @@ export function BookmarkPeriodPickerModal({
               {option.label}
             </button>
           ))}
+        </div>
+        <div className="bookmark-period-modal-footer">
+          <button
+            type="button"
+            className="bookmark-period-modal-today"
+            onClick={() => onSelect(todayPeriodStart(level))}
+          >
+            오늘
+          </button>
         </div>
       </div>
     </div>

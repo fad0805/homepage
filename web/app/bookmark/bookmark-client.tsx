@@ -283,9 +283,12 @@ export default function BookmarkClient({ username }: { username: string }) {
   const handleTodayTabClick = () => {
     if (tab !== "today") {
       setTab("today");
+      setAnchorDate(todayDateInputValue());
+      setPeriodMenuOpen(false);
       setPeriodPickerOpen(false);
       closeCalendar();
       closeRoutineModal();
+      return;
     }
     setPeriodMenuOpen((previous) => !previous);
   };
@@ -351,6 +354,10 @@ export default function BookmarkClient({ username }: { username: string }) {
     type,
     label: compactPeriodLabel(anchorDate, type),
   }));
+  const todayTabLabel =
+    tab === "today"
+      ? compactPeriodLabel(anchorDate, periodType)
+      : TAB_LABELS.today;
   const {
     routineModalOpen,
     editingRoutine,
@@ -810,12 +817,15 @@ export default function BookmarkClient({ username }: { username: string }) {
                 aria-selected={tab === "today"}
                 aria-haspopup="menu"
                 aria-expanded={periodMenuOpen}
+                title={
+                  tab === "today" ? "기간 선택" : "오늘로 이동"
+                }
                 className={`bookmark-period-tab${
                   tab === "today" ? " is-active" : ""
                 }`}
                 onClick={handleTodayTabClick}
               >
-                {TAB_LABELS.today}
+                {todayTabLabel}
                 <span
                   className="bookmark-period-tab-chevron"
                   aria-hidden="true"

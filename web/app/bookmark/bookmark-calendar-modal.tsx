@@ -122,6 +122,15 @@ export function BookmarkCalendarModal({
               );
             })}
           </div>
+          <div className="bookmark-period-modal-footer">
+            <button
+              type="button"
+              className="bookmark-period-modal-today"
+              onClick={() => onSelectDate(todayDateInputValue())}
+            >
+              오늘
+            </button>
+          </div>
         </div>
       </div>
   );
