@@ -52,6 +52,7 @@ import { BookmarkMoodTagModal } from "./bookmark-mood-tag-modal";
 import { BookmarkRoutineModal } from "./bookmark-routine-modal";
 import { BookmarkStatisticsPanel } from "./bookmark-statistics-panel";
 import { useBookmarkData } from "./use-bookmark-data";
+import { useBookmarkMoodTags } from "./use-bookmark-mood-tags";
 import { CloverRating } from "./clover-rating";
 import {
   SortableCategoryItem,
@@ -114,14 +115,6 @@ export default function BookmarkClient({ username }: { username: string }) {
   const [goalSaved, setGoalSaved] = useState(false);
   const [dayMetaSaving, setDayMetaSaving] = useState(false);
   const [dayMetaSaved, setDayMetaSaved] = useState(false);
-  const [moodTagModalOpen, setMoodTagModalOpen] = useState(false);
-  const [newMoodTagName, setNewMoodTagName] = useState("");
-  const [editingMoodTag, setEditingMoodTag] =
-    useState<BookmarkMoodTag | null>(null);
-  const [moodTagSaving, setMoodTagSaving] = useState(false);
-  const [moodTagError, setMoodTagError] = useState<string | null>(
-    null,
-  );
   const [rating, setRating] = useState(0);
   const [ratingDraft, setRatingDraft] = useState(0);
   const [ratingSaving, setRatingSaving] = useState(false);
@@ -219,6 +212,26 @@ export default function BookmarkClient({ username }: { username: string }) {
     view,
     periodStart,
     onPeriodLoaded: handlePeriodLoaded,
+  });
+  const {
+    moodTagModalOpen,
+    newMoodTagName,
+    setNewMoodTagName,
+    editingMoodTag,
+    moodTagSaving,
+    moodTagError,
+    openMoodTagModal,
+    startEditMoodTag,
+    cancelEditMoodTag,
+    closeMoodTagModal,
+    handleAddMoodTag,
+    handleMoodDragEnd,
+    handleDeleteMoodTag,
+  } = useBookmarkMoodTags({
+    moodTags,
+    setMoodTags,
+    loadMoodTags,
+    loadPeriod,
   });
 
   useEffect(() => {
@@ -881,136 +894,6 @@ export default function BookmarkClient({ username }: { username: string }) {
           : "루틴 체크 상태를 변경하지 못했습니다.",
       );
       await loadPeriod();
-    }
-  };
-
-  const openMoodTagModal = () => {
-    setMoodTagModalOpen(true);
-    setNewMoodTagName("");
-    setEditingMoodTag(null);
-    setMoodTagError(null);
-  };
-
-  const startEditMoodTag = (tag: BookmarkMoodTag) => {
-    setEditingMoodTag(tag);
-    setNewMoodTagName(tag.name);
-    setMoodTagError(null);
-  };
-
-  const cancelEditMoodTag = () => {
-    setEditingMoodTag(null);
-    setNewMoodTagName("");
-    setMoodTagError(null);
-  };
-
-  const closeMoodTagModal = () => {
-    setMoodTagModalOpen(false);
-    setNewMoodTagName("");
-    setEditingMoodTag(null);
-    setMoodTagError(null);
-  };
-
-  const handleAddMoodTag = async () => {
-    if (!newMoodTagName.trim() || moodTagSaving) return;
-    setMoodTagSaving(true);
-    setMoodTagError(null);
-    try {
-      if (editingMoodTag) {
-        await apiFetch<BookmarkMoodTag>(
-          `/api/bookmark/mood-tags/${editingMoodTag.id}`,
-          {
-            method: "PATCH",
-            body: JSON.stringify({ name: newMoodTagName }),
-          },
-        );
-        setEditingMoodTag(null);
-      } else {
-        await apiFetch<BookmarkMoodTag>("/api/bookmark/mood-tags", {
-          method: "POST",
-          body: JSON.stringify({ name: newMoodTagName }),
-        });
-      }
-      setNewMoodTagName("");
-      await loadMoodTags();
-    } catch (reason) {
-      setMoodTagError(
-        reason instanceof Error
-          ? reason.message
-          : editingMoodTag
-            ? "기분 태그를 수정하지 못했습니다."
-            : "기분 태그를 추가하지 못했습니다.",
-      );
-    } finally {
-      setMoodTagSaving(false);
-    }
-  };
-
-  const persistMoodTagOrder = async (next: BookmarkMoodTag[]) => {
-    if (moodTagSaving) return;
-    setMoodTags(next);
-    setMoodTagSaving(true);
-    setMoodTagError(null);
-    try {
-      const saved = await apiFetch<BookmarkMoodTag[]>(
-        "/api/bookmark/mood-tags/order",
-        {
-          method: "PUT",
-          body: JSON.stringify({
-            ids: next.map((tag) => tag.id),
-          }),
-        },
-      );
-      setMoodTags(saved);
-    } catch (reason) {
-      setMoodTagError(
-        reason instanceof Error
-          ? reason.message
-          : "기분 태그 순서를 변경하지 못했습니다.",
-      );
-      await loadMoodTags();
-    } finally {
-      setMoodTagSaving(false);
-    }
-  };
-
-  const handleMoodDragEnd = (event: DragEndEvent) => {
-    const { active, over } = event;
-    if (!over || active.id === over.id || moodTagSaving) return;
-    const oldIndex = moodTags.findIndex(
-      (tag) => tag.id === active.id,
-    );
-    const newIndex = moodTags.findIndex(
-      (tag) => tag.id === over.id,
-    );
-    if (oldIndex < 0 || newIndex < 0) return;
-    void persistMoodTagOrder(arrayMove(moodTags, oldIndex, newIndex));
-  };
-
-  const handleDeleteMoodTag = async (tag: BookmarkMoodTag) => {
-    if (moodTagSaving) return;
-    if (!window.confirm(`"${tag.name}" 기분 태그를 삭제할까요?`)) {
-      return;
-    }
-    setMoodTagSaving(true);
-    setMoodTagError(null);
-    try {
-      await apiFetch(`/api/bookmark/mood-tags/${tag.id}`, {
-        method: "DELETE",
-      });
-      if (editingMoodTag?.id === tag.id) {
-        setEditingMoodTag(null);
-        setNewMoodTagName("");
-      }
-      await loadMoodTags();
-      await loadPeriod();
-    } catch (reason) {
-      setMoodTagError(
-        reason instanceof Error
-          ? reason.message
-          : "기분 태그를 삭제하지 못했습니다.",
-      );
-    } finally {
-      setMoodTagSaving(false);
     }
   };
 
