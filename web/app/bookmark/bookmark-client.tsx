@@ -57,6 +57,7 @@ import { useBookmarkData } from "./use-bookmark-data";
 import { useBookmarkHistory } from "./use-bookmark-history";
 import { useBookmarkJournal } from "./use-bookmark-journal";
 import { useBookmarkMoodTags } from "./use-bookmark-mood-tags";
+import { useBookmarkRoutines } from "./use-bookmark-routines";
 import { CloverRating } from "./clover-rating";
 import {
   SortableCategoryItem,
@@ -135,29 +136,6 @@ export default function BookmarkClient({ username }: { username: string }) {
     }),
   );
 
-  const [routineModalOpen, setRoutineModalOpen] = useState(false);
-  const [editingRoutine, setEditingRoutine] =
-    useState<BookmarkRoutine | null>(null);
-  const [itemTitle, setItemTitle] = useState("");
-  const [itemNotes, setItemNotes] = useState("");
-  const [itemSaving, setItemSaving] = useState(false);
-
-  const [routineOrderSaving, setRoutineOrderSaving] = useState(false);
-  const [routineCategoryId, setRoutineCategoryId] = useState<
-    number | null
-  >(null);
-  const [routineMode, setRoutineMode] =
-    useState<BookmarkTrackingMode>("count");
-  const [routineTarget, setRoutineTarget] = useState("1");
-  const [routineWeekday, setRoutineWeekday] = useState(0);
-  const [routineWeekdaySelection, setRoutineWeekdaySelection] = useState<
-    number[]
-  >([0]);
-  const [monthlyMode, setMonthlyMode] = useState<MonthlyMode>("day");
-  const [routineDayOfMonth, setRoutineDayOfMonth] = useState("1");
-  const [routineNthWeek, setRoutineNthWeek] = useState(1);
-  const [routineMonth, setRoutineMonth] = useState(1);
-  const [routineQuarter, setRoutineQuarter] = useState(0);
 
   const applyPeriodRef = useRef<(data: BookmarkPeriod) => void>(
     () => {},
@@ -291,428 +269,52 @@ export default function BookmarkClient({ username }: { username: string }) {
   const unitView: BookmarkPeriodType =
     view === "today" || view === "stats" ? "day" : view;
   const isTodaySelected = periodStart === todayDateInputValue();
-
-  const persistRoutineOrder = async (next: BookmarkRoutine[]) => {
-    if (routineOrderSaving) return;
-    setRoutineOrderSaving(true);
-    setError(null);
-    setData((previous) =>
-      previous ? { ...previous, routines: next } : previous,
-    );
-    try {
-      await apiFetch<{ success: boolean }>("/api/bookmark/routines/order", {
-        method: "PUT",
-        body: JSON.stringify({
-          ids: next.map((routine) => routine.id),
-        }),
-      });
-    } catch (reason) {
-      setError(
-        reason instanceof Error
-          ? reason.message
-          : "루틴 순서를 변경하지 못했습니다.",
-      );
-      await loadPeriod();
-    } finally {
-      setRoutineOrderSaving(false);
-    }
-  };
-
-  const handleRoutineDragEnd = (
-    groupRoutines: BookmarkRoutine[],
-    event: DragEndEvent,
-  ) => {
-    const { active, over } = event;
-    if (!over || active.id === over.id || routineOrderSaving) return;
-    const activeRoutine = groupRoutines.find(
-      (routine) => routine.id === active.id,
-    );
-    const overRoutine = groupRoutines.find(
-      (routine) => routine.id === over.id,
-    );
-    if (
-      !activeRoutine ||
-      !overRoutine ||
-      activeRoutine.frequency !== overRoutine.frequency
-    ) {
-      return;
-    }
-    const oldIndex = groupRoutines.findIndex(
-      (routine) => routine.id === active.id,
-    );
-    const newIndex = groupRoutines.findIndex(
-      (routine) => routine.id === over.id,
-    );
-    if (oldIndex < 0 || newIndex < 0) return;
-    const oldGlobalIndex = routines.findIndex(
-      (routine) => routine.id === active.id,
-    );
-    const newGlobalIndex = routines.findIndex(
-      (routine) => routine.id === over.id,
-    );
-    if (oldGlobalIndex < 0 || newGlobalIndex < 0) return;
-    void persistRoutineOrder(
-      arrayMove(routines, oldGlobalIndex, newGlobalIndex),
-    );
-  };
-
-  const openCreateRoutine = () => {
-    setRoutineModalOpen(true);
-    setEditingRoutine(null);
-    setItemTitle("");
-    setItemNotes("");
-    setRoutineCategoryId(null);
-    setRoutineMode("count");
-    setRoutineTarget("1");
-    setRoutineWeekday(0);
-    setRoutineWeekdaySelection([0]);
-    setMonthlyMode("day");
-    setRoutineDayOfMonth("1");
-    setRoutineNthWeek(1);
-    setRoutineMonth(1);
-    setRoutineQuarter(0);
-    setError(null);
-  };
-
-  const openEditRoutine = (routine: BookmarkRoutine) => {
-    setRoutineModalOpen(true);
-    setEditingRoutine(routine);
-    setItemTitle(routine.title);
-    setItemNotes(routine.notes ?? "");
-    setRoutineCategoryId(routine.category_id);
-    setRoutineMode(routine.tracking_mode);
-    setRoutineTarget(String(routine.target_count));
-    setRoutineWeekday(routine.weekday ?? 0);
-    setRoutineWeekdaySelection(
-      routineWeekdays(routine).length > 0
-        ? routineWeekdays(routine)
-        : [0],
-    );
-    setMonthlyMode(routine.day_of_month !== null ? "day" : "nth");
-    setRoutineDayOfMonth(
-      routine.day_of_month !== null
-        ? String(routine.day_of_month)
-        : "1",
-    );
-    setRoutineNthWeek(routine.nth_week ?? 1);
-    setRoutineMonth(routine.month ?? 1);
-    setRoutineQuarter(
-      routine.frequency === "quarterly"
-        ? quarterFromMonth(routine.month)
-        : 0,
-    );
-    setError(null);
-  };
-
-  const closeRoutineModal = () => {
-    setRoutineModalOpen(false);
-    setEditingRoutine(null);
-    setItemTitle("");
-    setItemNotes("");
-  };
-
-  const modalFrequency =
-    editingRoutine?.frequency ?? PERIOD_FREQUENCY[unitView];
-
-  const handleSaveRoutine = async (
-    event: FormEvent<HTMLFormElement>,
-  ) => {
-    event.preventDefault();
-    if (!itemTitle.trim() || itemSaving) return;
-    const mode: BookmarkTrackingMode =
-      modalFrequency === "daily" ? "date" : routineMode;
-    if (
-      mode === "date" &&
-      modalFrequency === "weekly" &&
-      routineWeekdaySelection.length === 0
-    ) {
-      setError("매주 반복할 요일을 하나 이상 선택해주세요.");
-      return;
-    }
-    const targetCount =
-      mode === "count"
-        ? Math.max(1, Number(routineTarget) || 1)
-        : modalFrequency === "weekly"
-          ? routineWeekdaySelection.length
-          : 1;
-    const schedule =
-      mode === "date"
-        ? modalFrequency === "weekly"
-          ? {
-              weekday: null,
-              weekdays: routineWeekdaySelection,
-              day_of_month: null,
-              nth_week: null,
-              month: null,
-            }
-          : modalFrequency === "monthly"
-            ? monthlyMode === "day"
-              ? {
-                  weekday: null,
-                  weekdays: null,
-                  day_of_month: Number(routineDayOfMonth),
-                  nth_week: null,
-                  month: null,
-                }
-              : {
-                  weekday: routineWeekday,
-                  weekdays: null,
-                  day_of_month: null,
-                  nth_week: routineNthWeek,
-                  month: null,
-                }
-            : modalFrequency === "yearly"
-              ? {
-                  weekday: null,
-                  weekdays: null,
-                  day_of_month: Number(routineDayOfMonth),
-                  nth_week: null,
-                  month: routineMonth,
-                }
-              : {
-                  weekday: null,
-                  weekdays: null,
-                  day_of_month: null,
-                  nth_week: null,
-                  month: quarterStartMonth(routineQuarter),
-                }
-        : {
-            weekday: null,
-            weekdays: null,
-            day_of_month: null,
-            nth_week: null,
-            month:
-              modalFrequency === "quarterly"
-                ? quarterStartMonth(routineQuarter)
-                : null,
-          };
-
-    setItemSaving(true);
-    setError(null);
-    try {
-      if (editingRoutine) {
-        await apiFetch<BookmarkRoutine>(
-          `/api/bookmark/routines/${editingRoutine.id}`,
-          {
-            method: "PATCH",
-            body: JSON.stringify({
-              title: itemTitle,
-              notes: itemNotes || null,
-              category_id: routineCategoryId,
-              tracking_mode: mode,
-              target_count: targetCount,
-              ...schedule,
-            }),
-          },
-        );
-      } else {
-        await apiFetch<BookmarkRoutine>("/api/bookmark/routines", {
-          method: "POST",
-          body: JSON.stringify({
-            frequency: modalFrequency,
-            title: itemTitle,
-            notes: itemNotes || null,
-            category_id: routineCategoryId,
-            tracking_mode: mode,
-            target_count: targetCount,
-            ...schedule,
-          }),
-        });
-      }
-      closeRoutineModal();
-      await loadPeriod();
-    } catch (reason) {
-      setError(
-        reason instanceof Error
-          ? reason.message
-          : "루틴을 저장하지 못했습니다.",
-      );
-    } finally {
-      setItemSaving(false);
-    }
-  };
-
-  const toggleRoutineWeekday = (weekday: number) => {
-    setRoutineWeekdaySelection((previous) =>
-      previous.includes(weekday)
-        ? previous.filter((value) => value !== weekday)
-        : [...previous, weekday].sort((a, b) => a - b),
-    );
-  };
-
-  const handleStopRoutine = async () => {
-    if (!editingRoutine || itemSaving) return;
-    if (
-      !window.confirm(
-        `"${editingRoutine.title}" 루틴을 중단할까요? 기존 기록은 유지됩니다.`,
-      )
-    ) {
-      return;
-    }
-    setItemSaving(true);
-    setError(null);
-    try {
-      await apiFetch<BookmarkRoutine>(
-        `/api/bookmark/routines/${editingRoutine.id}/stop`,
-        { method: "POST" },
-      );
-      closeRoutineModal();
-      await loadPeriod();
-    } catch (reason) {
-      setError(
-        reason instanceof Error
-          ? reason.message
-          : "루틴을 중단하지 못했습니다.",
-      );
-    } finally {
-      setItemSaving(false);
-    }
-  };
-
-  const handleDeleteRoutine = async () => {
-    if (!editingRoutine) return;
-    if (
-      !window.confirm(
-        `"${editingRoutine.title}" 루틴과 모든 기록을 완전히 삭제할까요?`,
-      )
-    ) {
-      return;
-    }
-    setItemSaving(true);
-    setError(null);
-    try {
-      await apiFetch(`/api/bookmark/routines/${editingRoutine.id}`, {
-        method: "DELETE",
-      });
-      closeRoutineModal();
-      await loadPeriod();
-    } catch (reason) {
-      setError(
-        reason instanceof Error
-          ? reason.message
-          : "루틴을 삭제하지 못했습니다.",
-      );
-    } finally {
-      setItemSaving(false);
-    }
-  };
-
-  const setRoutineCount = async (
-    routine: BookmarkRoutine,
-    nextCount: number,
-  ) => {
-    const count = Math.max(
-      0,
-      Math.min(routine.target_count, nextCount),
-    );
-    if (count === routine.completed_count) return;
-    setError(null);
-    setData((previous) =>
-      previous
-        ? {
-            ...previous,
-            routines: previous.routines.map((current) =>
-              current.id === routine.id
-                ? {
-                    ...current,
-                    completed_count: count,
-                    occurrences: current.occurrences.map(
-                      (occurrence, index) =>
-                        index === 0
-                          ? { ...occurrence, done: count > 0 }
-                          : occurrence,
-                    ),
-                  }
-                : current,
-            ),
-          }
-        : previous,
-    );
-    try {
-      await apiFetch<BookmarkRoutine>(
-        `/api/bookmark/routines/${routine.id}/check`,
-        {
-          method: "PUT",
-          body: JSON.stringify({
-            period_type: routine.period_type,
-            period_start: routine.period_start,
-            count,
-          }),
-        },
-      );
-    } catch (reason) {
-      setError(
-        reason instanceof Error
-          ? reason.message
-          : "루틴 달성 횟수를 변경하지 못했습니다.",
-      );
-      await loadPeriod();
-    }
-  };
-
-  const toggleOccurrence = async (
-    routine: BookmarkRoutine,
-    occurrenceDate: string,
-    done: boolean,
-  ) => {
-    const nextDone = !done;
-    const nextCompleted = Math.max(
-      0,
-      Math.min(
-        routine.target_count,
-        routine.completed_count + (nextDone ? 1 : -1),
-      ),
-    );
-    const periodType =
-      routine.frequency === "daily" || routine.frequency === "weekly"
-        ? "day"
-        : routine.period_type;
-    const periodStart =
-      routine.frequency === "daily" || routine.frequency === "weekly"
-        ? occurrenceDate
-        : routine.period_start;
-    setError(null);
-    setData((previous) =>
-      previous
-        ? {
-            ...previous,
-            routines: previous.routines.map((current) =>
-              current.id === routine.id
-                ? {
-                    ...current,
-                    completed_count: nextCompleted,
-                    occurrences: current.occurrences.map((occurrence) =>
-                      occurrence.date === occurrenceDate
-                        ? { ...occurrence, done: nextDone }
-                        : occurrence,
-                    ),
-                  }
-                : current,
-            ),
-          }
-        : previous,
-    );
-    try {
-      await apiFetch<BookmarkRoutine>(
-        `/api/bookmark/routines/${routine.id}/check`,
-        {
-          method: "PUT",
-          body: JSON.stringify({
-            period_type: periodType,
-            period_start: periodStart,
-            count: nextDone ? 1 : 0,
-          }),
-        },
-      );
-    } catch (reason) {
-      setError(
-        reason instanceof Error
-          ? reason.message
-          : "루틴 체크 상태를 변경하지 못했습니다.",
-      );
-      await loadPeriod();
-    }
-  };
+  const {
+    routineModalOpen,
+    editingRoutine,
+    itemTitle,
+    setItemTitle,
+    itemNotes,
+    setItemNotes,
+    itemSaving,
+    routineOrderSaving,
+    routineCategoryId,
+    setRoutineCategoryId,
+    routineMode,
+    setRoutineMode,
+    routineTarget,
+    setRoutineTarget,
+    routineWeekday,
+    setRoutineWeekday,
+    routineWeekdaySelection,
+    monthlyMode,
+    setMonthlyMode,
+    routineDayOfMonth,
+    setRoutineDayOfMonth,
+    routineNthWeek,
+    setRoutineNthWeek,
+    routineMonth,
+    setRoutineMonth,
+    routineQuarter,
+    setRoutineQuarter,
+    modalFrequency,
+    openCreateRoutine,
+    openEditRoutine,
+    closeRoutineModal,
+    handleSaveRoutine,
+    toggleRoutineWeekday,
+    handleStopRoutine,
+    handleDeleteRoutine,
+    handleRoutineDragEnd,
+    setRoutineCount,
+    toggleOccurrence,
+  } = useBookmarkRoutines({
+    routines,
+    unitView,
+    setData,
+    loadPeriod,
+    onError: setError,
+  });
 
   const isRoutineDone = (routine: BookmarkRoutine) => {
     const isDaily = routine.frequency === "daily";
