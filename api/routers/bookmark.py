@@ -4,10 +4,12 @@ from fastapi import APIRouter, Depends, Response
 from sqlalchemy.orm import Session
 
 from crud.bookmark import (
+    create_date_marker,
     create_mood_tag,
     create_routine,
     create_routine_category,
     create_special_date,
+    delete_date_marker,
     delete_mood_tag,
     delete_routine,
     delete_routine_category,
@@ -17,6 +19,7 @@ from crud.bookmark import (
     get_routine_history,
     get_statistics,
     get_today,
+    list_date_markers,
     list_mood_tags,
     list_routine_categories,
     list_special_dates,
@@ -29,6 +32,7 @@ from crud.bookmark import (
     save_review,
     set_routine_check,
     stop_routine,
+    update_date_marker,
     update_mood_tag,
     update_routine,
     update_routine_category,
@@ -37,6 +41,10 @@ from crud.bookmark import (
 from db.session import get_db
 from routers.utils import require_auth
 from schemas.bookmark import (
+    BookmarkDateMarkerCreate,
+    BookmarkDateMarkerRead,
+    BookmarkDateMarkersResponse,
+    BookmarkDateMarkerUpdate,
     BookmarkDayMetaUpdate,
     BookmarkGoalRead,
     BookmarkGoalUpdate,
@@ -307,6 +315,56 @@ def remove_special_date(
 ):
     _no_store(response)
     return delete_special_date(db, routine_id, user.id)
+
+
+@router.get(
+    "/date-markers",
+    response_model=BookmarkDateMarkersResponse,
+)
+def read_date_markers(
+    response: Response,
+    db: Session = Depends(get_db),
+    user=Depends(require_auth),
+):
+    _no_store(response)
+    return list_date_markers(db, user.id)
+
+
+@router.post("/date-markers", response_model=BookmarkDateMarkerRead)
+def post_date_marker(
+    payload: BookmarkDateMarkerCreate,
+    response: Response,
+    db: Session = Depends(get_db),
+    user=Depends(require_auth),
+):
+    _no_store(response)
+    return create_date_marker(db, payload, user.id)
+
+
+@router.patch(
+    "/date-markers/{marker_id}",
+    response_model=BookmarkDateMarkerRead,
+)
+def patch_date_marker(
+    marker_id: int,
+    payload: BookmarkDateMarkerUpdate,
+    response: Response,
+    db: Session = Depends(get_db),
+    user=Depends(require_auth),
+):
+    _no_store(response)
+    return update_date_marker(db, marker_id, payload, user.id)
+
+
+@router.delete("/date-markers/{marker_id}")
+def remove_date_marker(
+    marker_id: int,
+    response: Response,
+    db: Session = Depends(get_db),
+    user=Depends(require_auth),
+):
+    _no_store(response)
+    return delete_date_marker(db, marker_id, user.id)
 
 
 @router.post("/routines", response_model=BookmarkRoutineRead)

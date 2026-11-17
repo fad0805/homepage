@@ -1,70 +1,97 @@
 import type { FormEventHandler } from "react";
 
 import type {
+  CalendarModalTab,
+  PlannerDateMarker,
   PlannerSpecialDate,
-  SpecialDateKind,
-  SpecialModalTab,
 } from "./planner-types";
-import { specialDdayLabel } from "./planner-utils";
+import { formatDateOnly, specialDdayLabel } from "./planner-utils";
 
 interface PlannerSpecialModalProps {
-  tab: SpecialModalTab;
-  ddayCount: number;
-  filtered: PlannerSpecialDate[];
-  kind: SpecialDateKind;
-  title: string;
-  month: number;
-  day: number;
-  eventDate: string;
-  pinned: boolean;
+  tab: CalendarModalTab;
+  onTabChange: (tab: CalendarModalTab) => void;
+
+  specialTitle: string;
+  specialMonth: number;
+  specialDay: number;
   editingSpecial: PlannerSpecialDate | null;
-  editingId: number | null;
-  saving: boolean;
-  search: string;
+  editingSpecialId: number | null;
+  specialSaving: boolean;
+  onSpecialTitleChange: (title: string) => void;
+  onSpecialMonthChange: (month: number) => void;
+  onSpecialDayChange: (day: number) => void;
+  onSubmitSpecial: FormEventHandler<HTMLFormElement>;
+  onDeleteSpecial: (item: PlannerSpecialDate) => void;
+  onResetSpecial: () => void;
+
+  ddayCount: number;
+  filteredDdays: PlannerDateMarker[];
+  markerTitle: string;
+  markerMemo: string;
+  markerDate: string;
+  markerIsDday: boolean;
+  markerPinned: boolean;
+  markerIntervalDays: string;
+  editingMarker: PlannerDateMarker | null;
+  editingMarkerId: number | null;
+  markerSaving: boolean;
+  markerSearch: string;
+  onMarkerTitleChange: (title: string) => void;
+  onMarkerMemoChange: (memo: string) => void;
+  onMarkerDateChange: (date: string) => void;
+  onMarkerIsDdayChange: (isDday: boolean) => void;
+  onMarkerPinnedChange: (pinned: boolean) => void;
+  onMarkerIntervalDaysChange: (value: string) => void;
+  onMarkerSearchChange: (value: string) => void;
+  onSubmitMarker: FormEventHandler<HTMLFormElement>;
+  onDeleteMarker: (item: PlannerDateMarker) => void;
+  onResetMarker: () => void;
+  onStartEditMarker: (item: PlannerDateMarker) => void;
+  onToggleMarkerPin: (item: PlannerDateMarker) => void;
+
   onClose: () => void;
-  onTabChange: (tab: SpecialModalTab) => void;
-  onKindChange: (kind: SpecialDateKind) => void;
-  onTitleChange: (title: string) => void;
-  onMonthChange: (month: number) => void;
-  onDayChange: (day: number) => void;
-  onEventDateChange: (value: string) => void;
-  onPinnedChange: (pinned: boolean) => void;
-  onSearchChange: (value: string) => void;
-  onSubmit: FormEventHandler<HTMLFormElement>;
-  onDelete: (item: PlannerSpecialDate) => void;
-  onReset: () => void;
-  onStartEdit: (item: PlannerSpecialDate) => void;
-  onTogglePin: (item: PlannerSpecialDate) => void;
 }
 
 export function PlannerSpecialModal({
   tab,
-  ddayCount,
-  filtered,
-  kind,
-  title,
-  month,
-  day,
-  eventDate,
-  pinned,
-  editingSpecial,
-  editingId,
-  saving,
-  search,
-  onClose,
   onTabChange,
-  onKindChange,
-  onTitleChange,
-  onMonthChange,
-  onDayChange,
-  onEventDateChange,
-  onPinnedChange,
-  onSearchChange,
-  onSubmit,
-  onDelete,
-  onReset,
-  onStartEdit,
-  onTogglePin,
+  specialTitle,
+  specialMonth,
+  specialDay,
+  editingSpecial,
+  editingSpecialId,
+  specialSaving,
+  onSpecialTitleChange,
+  onSpecialMonthChange,
+  onSpecialDayChange,
+  onSubmitSpecial,
+  onDeleteSpecial,
+  onResetSpecial,
+  ddayCount,
+  filteredDdays,
+  markerTitle,
+  markerMemo,
+  markerDate,
+  markerIsDday,
+  markerPinned,
+  markerIntervalDays,
+  editingMarker,
+  editingMarkerId,
+  markerSaving,
+  markerSearch,
+  onMarkerTitleChange,
+  onMarkerMemoChange,
+  onMarkerDateChange,
+  onMarkerIsDdayChange,
+  onMarkerPinnedChange,
+  onMarkerIntervalDaysChange,
+  onMarkerSearchChange,
+  onSubmitMarker,
+  onDeleteMarker,
+  onResetMarker,
+  onStartEditMarker,
+  onToggleMarkerPin,
+  onClose,
 }: PlannerSpecialModalProps) {
   return (
     <div
@@ -73,10 +100,10 @@ export function PlannerSpecialModal({
       onClick={onClose}
     >
       <div
-        className="planner-modal planner-task-modal planner-special-modal"
+        className="planner-modal planner-task-modal planner-special-modal planner-date-marker-modal"
         role="dialog"
         aria-modal="true"
-        aria-label="기념일 관리"
+        aria-label="기념일과 마커 관리"
         onClick={(event) => event.stopPropagation()}
       >
         <div className="planner-special-modal-top">
@@ -93,69 +120,54 @@ export function PlannerSpecialModal({
           <button
             type="button"
             role="tab"
-            aria-selected={tab === "form"}
-            className={tab === "form" ? "is-active" : ""}
-            onClick={() => onTabChange("form")}
+            aria-selected={tab === "yearly"}
+            className={tab === "yearly" ? "is-active" : ""}
+            onClick={() => onTabChange("yearly")}
           >
-            등록
+            기념일
           </button>
           <button
             type="button"
             role="tab"
-            aria-selected={tab === "list"}
-            className={tab === "list" ? "is-active" : ""}
-            onClick={() => onTabChange("list")}
+            aria-selected={tab === "marker"}
+            className={tab === "marker" ? "is-active" : ""}
+            onClick={() => onTabChange("marker")}
           >
-            디데이 목록 {ddayCount}
+            마커
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={tab === "dday"}
+            className={tab === "dday" ? "is-active" : ""}
+            onClick={() => onTabChange("dday")}
+          >
+            디데이 {ddayCount}
           </button>
         </div>
 
-        {tab === "form" ? (
-          <form
-            className="planner-form is-modal"
-            onSubmit={onSubmit}
-          >
-          <div className="planner-segmented" role="group">
-            <button
-              type="button"
-              className={kind === "yearly" ? "is-active" : ""}
-              onClick={() => onKindChange("yearly")}
-            >
-              기념일
-            </button>
-            <button
-              type="button"
-              className={kind === "dday" ? "is-active" : ""}
-              onClick={() => onKindChange("dday")}
-            >
-              디데이
-            </button>
-          </div>
-          <label>
-            <span>이름</span>
-            <input
-              type="text"
-              value={title}
-              maxLength={255}
-              required
-              placeholder={
-                kind === "yearly"
-                  ? "생일, 기념일"
-                  : "디데이 이름"
-              }
-              onChange={(event) =>
-                onTitleChange(event.target.value)
-              }
-            />
-          </label>
-          {kind === "yearly" ? (
+        {tab === "yearly" ? (
+          <form className="planner-form is-modal" onSubmit={onSubmitSpecial}>
+            <label>
+              <span>이름</span>
+              <input
+                type="text"
+                value={specialTitle}
+                maxLength={255}
+                required
+                placeholder="생일, 기념일"
+                onChange={(event) =>
+                  onSpecialTitleChange(event.target.value)
+                }
+              />
+            </label>
             <div className="planner-date-row">
               <label>
                 <span>월</span>
                 <select
-                  value={month}
+                  value={specialMonth}
                   onChange={(event) =>
-                    onMonthChange(Number(event.target.value))
+                    onSpecialMonthChange(Number(event.target.value))
                   }
                 >
                   {Array.from({ length: 12 }, (_, index) => (
@@ -171,107 +183,199 @@ export function PlannerSpecialModal({
                   type="number"
                   min={1}
                   max={31}
-                  value={day}
+                  value={specialDay}
                   onChange={(event) =>
-                    onDayChange(Number(event.target.value))
+                    onSpecialDayChange(Number(event.target.value))
                   }
                 />
               </label>
             </div>
-          ) : (
+            <div className="planner-form-actions">
+              {editingSpecial !== null ? (
+                <button
+                  type="button"
+                  className="planner-text-button is-danger planner-special-delete"
+                  disabled={specialSaving}
+                  onClick={() => void onDeleteSpecial(editingSpecial)}
+                >
+                  삭제
+                </button>
+              ) : null}
+              {editingSpecialId !== null ? (
+                <button
+                  type="button"
+                  className="planner-text-button"
+                  onClick={onResetSpecial}
+                >
+                  새로 등록
+                </button>
+              ) : null}
+              <button
+                type="submit"
+                className="planner-primary"
+                disabled={specialSaving || !specialTitle.trim()}
+              >
+                {specialSaving
+                  ? "저장 중..."
+                  : editingSpecialId !== null
+                    ? "수정 저장"
+                    : "등록"}
+              </button>
+            </div>
+          </form>
+        ) : tab === "marker" ? (
+          <form className="planner-form is-modal" onSubmit={onSubmitMarker}>
+            <label>
+              <span>이름</span>
+              <input
+                type="text"
+                value={markerTitle}
+                maxLength={255}
+                required
+                placeholder="첫 글자는 마커로 캘린더에 표시됩니다"
+                onChange={(event) =>
+                  onMarkerTitleChange(event.target.value)
+                }
+              />
+            </label>
             <label>
               <span>날짜</span>
               <input
                 type="date"
-                value={eventDate}
+                value={markerDate}
                 required
                 onChange={(event) =>
-                  onEventDateChange(event.target.value)
+                  onMarkerDateChange(event.target.value)
                 }
               />
             </label>
-          )}
-          {kind === "dday" ? (
+            {markerIsDday && markerDate ? (
+              <p className="planner-marker-dday-preview">
+                저장한 날짜 기준 {specialDdayLabel(markerDate)}
+              </p>
+            ) : null}
+            <label>
+              <span>메모</span>
+              <textarea
+                value={markerMemo}
+                rows={3}
+                maxLength={4000}
+                placeholder="메모를 남겨두세요."
+                onChange={(event) =>
+                  onMarkerMemoChange(event.target.value)
+                }
+              />
+            </label>
             <label className="planner-checkbox planner-special-pin">
               <input
                 type="checkbox"
-                checked={pinned}
+                checked={markerIsDday}
                 onChange={(event) =>
-                  onPinnedChange(event.target.checked)
+                  onMarkerIsDdayChange(event.target.checked)
                 }
               />
-              <span>
-                날짜가 지나도 D+ 카운트로 계속 표시
-              </span>
+              <span>디데이로 설정</span>
             </label>
-          ) : null}
-          <div className="planner-form-actions">
-            {editingSpecial !== null ? (
-              <button
-                type="button"
-                className="planner-text-button is-danger planner-special-delete"
-                disabled={saving}
-                onClick={() => void onDelete(editingSpecial)}
-              >
-                삭제
-              </button>
+            {markerIsDday ? (
+              <>
+                <label className="planner-checkbox planner-special-pin">
+                  <input
+                    type="checkbox"
+                    checked={markerPinned}
+                    onChange={(event) =>
+                      onMarkerPinnedChange(event.target.checked)
+                    }
+                  />
+                  <span>날짜 상세에 D+ 카운트로 고정 표시</span>
+                </label>
+                <label>
+                  <span>달력 표시 간격 (일)</span>
+                  <input
+                    type="number"
+                    min={1}
+                    max={3650}
+                    value={markerIntervalDays}
+                    placeholder="비우면 저장한 날짜에만 표시"
+                    onChange={(event) =>
+                      onMarkerIntervalDaysChange(event.target.value)
+                    }
+                  />
+                </label>
+              </>
             ) : null}
-            {editingId !== null ? (
+            <div className="planner-form-actions">
+              {editingMarker !== null ? (
+                <button
+                  type="button"
+                  className="planner-text-button is-danger planner-special-delete"
+                  disabled={markerSaving}
+                  onClick={() => void onDeleteMarker(editingMarker)}
+                >
+                  삭제
+                </button>
+              ) : null}
+              {editingMarkerId !== null ? (
+                <button
+                  type="button"
+                  className="planner-text-button"
+                  onClick={onResetMarker}
+                >
+                  새로 등록
+                </button>
+              ) : null}
               <button
-                type="button"
-                className="planner-text-button"
-                onClick={onReset}
+                type="submit"
+                className="planner-primary"
+                disabled={markerSaving || !markerTitle.trim()}
               >
-                새로 등록
+                {markerSaving
+                  ? "저장 중..."
+                  : editingMarkerId !== null
+                    ? "수정 저장"
+                    : "등록"}
               </button>
-            ) : null}
-            <button
-              type="submit"
-              className="planner-primary"
-              disabled={saving || !title.trim()}
-            >
-              {saving
-                ? "저장 중..."
-                : editingId !== null
-                  ? "수정 저장"
-                  : "등록"}
-            </button>
-          </div>
+            </div>
           </form>
         ) : (
           <div className="planner-special-manager">
             <input
               type="search"
               className="planner-special-search"
-              value={search}
+              value={markerSearch}
               placeholder="이름으로 디데이 검색"
               aria-label="디데이 검색"
               onChange={(event) =>
-                onSearchChange(event.target.value)
+                onMarkerSearchChange(event.target.value)
               }
             />
+            <p className="planner-marker-hint">
+              단순 마커는 목록에 표시하지 않습니다. 달력이나 날짜
+              상세에서 마커를 눌러 내용을 확인하세요.
+            </p>
             <div className="planner-special-list">
-              {filtered.length === 0 ? (
+              {filteredDdays.length === 0 ? (
                 <p className="planner-empty">
                   {ddayCount === 0
                     ? "아직 등록된 디데이가 없습니다."
                     : "검색 결과가 없습니다."}
                 </p>
               ) : (
-                filtered.map((item) => (
+                filteredDdays.map((item) => (
                   <div className="planner-special-item" key={item.id}>
                     <button
                       type="button"
                       className="planner-special-main"
-                      onClick={() => onStartEdit(item)}
+                      onClick={() => onStartEditMarker(item)}
                     >
-                      <strong>{item.title}</strong>
+                      <span className="planner-special-title-row">
+                        <span className="planner-special-marker">
+                          {item.marker}
+                        </span>
+                        <strong>{item.title}</strong>
+                      </span>
                       <span>
-                        {item.kind === "yearly"
-                          ? `매년 ${item.month}월 ${item.day}일`
-                          : `${item.event_date} · ${specialDdayLabel(
-                              item.event_date ?? "",
-                            )}`}
+                        {formatDateOnly(item.marker_date)} ·{" "}
+                        {specialDdayLabel(item.marker_date)}
                       </span>
                     </button>
                     <button
@@ -280,16 +384,16 @@ export function PlannerSpecialModal({
                         item.pinned ? " is-active" : ""
                       }`}
                       aria-pressed={item.pinned}
-                      disabled={saving}
-                      onClick={() => void onTogglePin(item)}
+                      disabled={markerSaving}
+                      onClick={() => void onToggleMarkerPin(item)}
                     >
                       {item.pinned ? "고정 해제" : "고정"}
                     </button>
                     <button
                       type="button"
                       className="planner-text-button is-danger"
-                      disabled={saving}
-                      onClick={() => void onDelete(item)}
+                      disabled={markerSaving}
+                      onClick={() => void onDeleteMarker(item)}
                     >
                       삭제
                     </button>

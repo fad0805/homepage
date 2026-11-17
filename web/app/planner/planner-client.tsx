@@ -36,6 +36,7 @@ import { usePlannerEventPreview } from "./use-planner-event-preview";
 import { usePlannerMonthPicker } from "./use-planner-month-picker";
 import { usePlannerSearch } from "./use-planner-search";
 import { usePlannerTaskDetail } from "./use-planner-task-detail";
+import { usePlannerDateMarkers } from "./use-planner-date-markers";
 import { usePlannerSpecialDates } from "./use-planner-special-dates";
 import { PlannerTaskCard } from "./planner-task-card";
 import { PlannerChipCreator } from "./planner-chip-creator";
@@ -62,9 +63,11 @@ import {
   FIELD_LABELS,
   UNASSIGNED_TASK_COLOR,
   type CalendarCell,
+  type CalendarModalTab,
   type CalendarWeek,
   type PlannerColor,
   type PlannerColorsResponse,
+  type PlannerDateMarker,
   type PlannerEvent,
   type PlannerEventChange,
   type PlannerEventPreview,
@@ -77,8 +80,6 @@ import {
   type PlannerTasksResponse,
   type RangeSegment,
   type ScheduleType,
-  type SpecialDateKind,
-  type SpecialModalTab,
   type TaskFormState,
   type TaskScheduleType,
   type TaskStatus,
@@ -91,7 +92,6 @@ import {
   emptyForm,
   eventDate,
   fieldLabel,
-  formatDateOnly,
   formatDayLabel,
   monthBounds,
   monthCells,
@@ -101,7 +101,6 @@ import {
   sortColorGroupTasks,
   sortTasks,
   specialDateAppearsOn,
-  specialDdayLabel,
   taskAppearsOn,
   taskColor,
 } from "./planner-utils";
@@ -175,40 +174,53 @@ export default function PlannerClient({ username }: { username: string }) {
   } = usePlannerTaskDetail({ onError: setError });
   const {
     specialDates,
-    specialTab,
-    setSpecialTab,
-    specialSearch,
-    setSpecialSearch,
-    specialModalOpen,
     editingSpecialId,
-    specialKind,
-    setSpecialKind,
     specialTitle,
     setSpecialTitle,
-    specialEventDate,
     specialMonth,
     setSpecialMonth,
     specialDay,
     setSpecialDay,
-    specialPinned,
-    setSpecialPinned,
     specialSaving,
-    ddaySpecialDates,
     editingSpecial,
-    filteredSpecialDates,
-    upcomingDdays,
     loadSpecialDates,
     resetSpecialForm,
-    openSpecialManager,
-    closeSpecialManager,
     startEditingSpecial,
-    openSpecialEditor,
-    openSpecialList,
-    handleSpecialEventDateChange,
     handleSubmitSpecial,
     handleDeleteSpecial,
-    handleToggleSpecialPin,
   } = usePlannerSpecialDates({
+    onError: setError,
+  });
+  const {
+    dateMarkers,
+    markerSearch,
+    setMarkerSearch,
+    editingMarkerId,
+    markerTitle,
+    setMarkerTitle,
+    markerMemo,
+    setMarkerMemo,
+    markerDate,
+    setMarkerDate,
+    markerIsDday,
+    setMarkerIsDday,
+    markerPinned,
+    setMarkerPinned,
+    markerIntervalDays,
+    setMarkerIntervalDays,
+    markerSaving,
+    ddayMarkers,
+    pinnedDdays,
+    editingMarker,
+    filteredDdayMarkers,
+    selectedDateMarkers,
+    loadDateMarkers,
+    resetMarkerForm,
+    startEditingMarker,
+    handleSubmitMarker,
+    handleDeleteMarker,
+    handleToggleMarkerPin,
+  } = usePlannerDateMarkers({
     today,
     selectedDate,
     onError: setError,
@@ -240,6 +252,9 @@ export default function PlannerClient({ username }: { username: string }) {
   const [recordCompleted, setRecordCompleted] = useState(false);
   const [taskModalOpen, setTaskModalOpen] = useState(false);
   const [createInactive, setCreateInactive] = useState(false);
+  const [calendarModalOpen, setCalendarModalOpen] = useState(false);
+  const [calendarModalTab, setCalendarModalTab] =
+    useState<CalendarModalTab>("yearly");
   const initializedToday = useRef(false);
   const eventsRequestRef = useRef(0);
 
@@ -316,7 +331,7 @@ export default function PlannerClient({ username }: { username: string }) {
       !taskModalOpen &&
       !chipManagerOpen &&
       !monthPickerOpen &&
-      !specialModalOpen
+      !calendarModalOpen
     ) {
       return;
     }
@@ -347,9 +362,8 @@ export default function PlannerClient({ username }: { username: string }) {
         setMonthPickerOpen(false);
         return;
       }
-      if (specialModalOpen) {
-        closeSpecialManager();
-        setError(null);
+      if (calendarModalOpen) {
+        closeCalendarModal();
       }
     };
     window.addEventListener("keydown", handleKeyDown);
@@ -360,7 +374,7 @@ export default function PlannerClient({ username }: { username: string }) {
     taskModalOpen,
     chipManagerOpen,
     monthPickerOpen,
-    specialModalOpen,
+    calendarModalOpen,
     today,
   ]);
   const calendarTasks = useMemo(() => {
@@ -547,6 +561,43 @@ export default function PlannerClient({ username }: { username: string }) {
     setError(null);
   };
 
+  const openCalendarModal = (tab: CalendarModalTab) => {
+    setCalendarModalTab(tab);
+    setCalendarModalOpen(true);
+  };
+
+  const openSpecialManager = () => {
+    resetSpecialForm();
+    resetMarkerForm(selectedDate || today);
+    setMarkerSearch("");
+    openCalendarModal("yearly");
+  };
+
+  const openSpecialEditor = (item: PlannerSpecialDate) => {
+    startEditingSpecial(item);
+    openCalendarModal("yearly");
+  };
+
+  const openMarkerEditor = (item: PlannerDateMarker) => {
+    startEditingMarker(item);
+    openCalendarModal("marker");
+  };
+
+  const openMarkerList = () => {
+    setMarkerSearch("");
+    openCalendarModal("dday");
+  };
+
+  const closeCalendarModal = () => {
+    if (specialSaving || markerSaving) return;
+    setCalendarModalOpen(false);
+    setCalendarModalTab("yearly");
+    setMarkerSearch("");
+    resetSpecialForm();
+    resetMarkerForm();
+    setError(null);
+  };
+
   const startRestoringCompletedTask = (event: PlannerEvent) => {
     setEditingId(null);
     setRecordCompleted(false);
@@ -574,7 +625,11 @@ export default function PlannerClient({ username }: { username: string }) {
     if (searchOpen) {
       closeSearchResults();
     }
-    await Promise.all([refreshData(), loadSpecialDates()]);
+    await Promise.all([
+      refreshData(),
+      loadSpecialDates(),
+      loadDateMarkers(),
+    ]);
   };
 
   const changeMonth = (delta: number) => {
@@ -1201,6 +1256,7 @@ export default function PlannerClient({ username }: { username: string }) {
               weeks={weeks}
               calendarTasks={calendarTasks}
               specialDates={specialDates}
+              dateMarkers={dateMarkers}
               today={today}
               selectedDate={selectedDate}
               dragBounds={dragBounds}
@@ -1232,11 +1288,13 @@ export default function PlannerClient({ username }: { username: string }) {
                   taskCount={selectedTasks.length}
                   specialCount={selectedSpecialDates.length}
                   eventCount={selectedEvents.length}
+                  markers={selectedDateMarkers}
                   onSelectToday={() => selectDate(today)}
                   onOpenNewTask={openNewTask}
+                  onOpenMarker={openMarkerEditor}
                 >
                   <PlannerDayDetail
-                    upcomingDdays={upcomingDdays}
+                    pinnedDdays={pinnedDdays}
                     selectedDate={selectedDate}
                     specialDates={selectedSpecialDates}
                     dayBookmark={dayBookmark}
@@ -1244,7 +1302,8 @@ export default function PlannerClient({ username }: { username: string }) {
                     tasks={selectedTasks}
                     events={selectedEvents}
                     renderTaskCard={renderTaskCard}
-                    onOpenSpecialList={openSpecialList}
+                    onOpenMarker={openMarkerEditor}
+                    onOpenMarkerList={openMarkerList}
                     onOpenSpecialEditor={openSpecialEditor}
                     onOpenEvent={openEvent}
                   />
@@ -1381,38 +1440,50 @@ export default function PlannerClient({ username }: { username: string }) {
           onApply={applyMonthPicker}
         />
       ) : null}
-      {specialModalOpen ? (
+      {calendarModalOpen ? (
         <PlannerSpecialModal
-          tab={specialTab}
-          ddayCount={ddaySpecialDates.length}
-          filtered={filteredSpecialDates}
-          kind={specialKind}
-          title={specialTitle}
-          month={specialMonth}
-          day={specialDay}
-          eventDate={specialEventDate}
-          pinned={specialPinned}
+          tab={calendarModalTab}
+          onTabChange={setCalendarModalTab}
+          specialTitle={specialTitle}
+          specialMonth={specialMonth}
+          specialDay={specialDay}
           editingSpecial={editingSpecial}
-          editingId={editingSpecialId}
-          saving={specialSaving}
-          search={specialSearch}
-          onClose={closeSpecialManager}
-          onTabChange={setSpecialTab}
-          onKindChange={setSpecialKind}
-          onTitleChange={setSpecialTitle}
-          onMonthChange={setSpecialMonth}
-          onDayChange={setSpecialDay}
-          onEventDateChange={handleSpecialEventDateChange}
-          onPinnedChange={setSpecialPinned}
-          onSearchChange={setSpecialSearch}
-          onSubmit={handleSubmitSpecial}
-          onDelete={(item) => void handleDeleteSpecial(item)}
-          onReset={resetSpecialForm}
-          onStartEdit={(item) => {
-            startEditingSpecial(item);
-            setSpecialTab("form");
+          editingSpecialId={editingSpecialId}
+          specialSaving={specialSaving}
+          onSpecialTitleChange={setSpecialTitle}
+          onSpecialMonthChange={setSpecialMonth}
+          onSpecialDayChange={setSpecialDay}
+          onSubmitSpecial={handleSubmitSpecial}
+          onDeleteSpecial={(item) => void handleDeleteSpecial(item)}
+          onResetSpecial={resetSpecialForm}
+          ddayCount={ddayMarkers.length}
+          filteredDdays={filteredDdayMarkers}
+          markerTitle={markerTitle}
+          markerMemo={markerMemo}
+          markerDate={markerDate}
+          markerIsDday={markerIsDday}
+          markerPinned={markerPinned}
+          markerIntervalDays={markerIntervalDays}
+          editingMarker={editingMarker}
+          editingMarkerId={editingMarkerId}
+          markerSaving={markerSaving}
+          markerSearch={markerSearch}
+          onMarkerTitleChange={setMarkerTitle}
+          onMarkerMemoChange={setMarkerMemo}
+          onMarkerDateChange={setMarkerDate}
+          onMarkerIsDdayChange={setMarkerIsDday}
+          onMarkerPinnedChange={setMarkerPinned}
+          onMarkerIntervalDaysChange={setMarkerIntervalDays}
+          onMarkerSearchChange={setMarkerSearch}
+          onSubmitMarker={handleSubmitMarker}
+          onDeleteMarker={(item) => void handleDeleteMarker(item)}
+          onResetMarker={() => resetMarkerForm()}
+          onStartEditMarker={(item) => {
+            startEditingMarker(item);
+            setCalendarModalTab("marker");
           }}
-          onTogglePin={(item) => void handleToggleSpecialPin(item)}
+          onToggleMarkerPin={(item) => void handleToggleMarkerPin(item)}
+          onClose={closeCalendarModal}
         />
       ) : null}
     </div>

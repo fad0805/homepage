@@ -54,6 +54,44 @@ class BookmarkSpecialDatesResponse(BaseModel):
     )
 
 
+class BookmarkDateMarkerCreate(BaseModel):
+    title: str = Field(min_length=1, max_length=255)
+    memo: str | None = Field(default=None, max_length=4000)
+    marker_date: date
+    is_dday: bool = False
+    pinned: bool = False
+    interval_days: int | None = Field(default=None, ge=1, le=3650)
+
+
+class BookmarkDateMarkerUpdate(BaseModel):
+    title: str | None = Field(default=None, min_length=1, max_length=255)
+    memo: str | None = Field(default=None, max_length=4000)
+    marker_date: date | None = None
+    is_dday: bool | None = None
+    pinned: bool | None = None
+    interval_days: int | None = Field(default=None, ge=1, le=3650)
+
+
+class BookmarkDateMarkerRead(BaseModel):
+    id: int
+    title: str
+    memo: str | None = None
+    marker_date: date
+    is_dday: bool
+    pinned: bool
+    interval_days: int | None = None
+    marker: str
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class BookmarkDateMarkersResponse(BaseModel):
+    markers: list[BookmarkDateMarkerRead] = Field(default_factory=list)
+
+
 class BookmarkRoutineCategoryCreate(BaseModel):
     name: str = Field(min_length=1, max_length=80)
 

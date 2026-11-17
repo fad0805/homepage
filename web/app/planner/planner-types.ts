@@ -5,7 +5,6 @@ export type TaskScheduleType = ScheduleType | "undated";
 export type TaskStatus = "active" | "inactive" | "trashed";
 export type PlannerTab = "active" | "colors" | "inactive" | "trashed";
 export type SpecialDateKind = "yearly" | "dday";
-export type SpecialModalTab = "form" | "list";
 
 export interface PlannerTask {
   id: number;
@@ -92,6 +91,25 @@ export interface PlannerSpecialDate {
 export interface PlannerSpecialDatesResponse {
   special_dates: PlannerSpecialDate[];
 }
+
+export interface PlannerDateMarker {
+  id: number;
+  title: string;
+  memo: string | null;
+  marker_date: string;
+  is_dday: boolean;
+  pinned: boolean;
+  interval_days: number | null;
+  marker: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PlannerDateMarkersResponse {
+  markers: PlannerDateMarker[];
+}
+
+export type CalendarModalTab = "yearly" | "marker" | "dday";
 
 export interface PlannerEventPreview {
   available: boolean;

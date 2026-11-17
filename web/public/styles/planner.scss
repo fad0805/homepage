@@ -84,6 +84,85 @@
   opacity: 0.65;
 }
 
+.planner-day-label-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+
+  .planner-eyebrow {
+    display: flex;
+    align-items: center;
+    min-height: 1.15rem;
+    line-height: 1;
+  }
+}
+
+.planner-day-inline-markers {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.18rem;
+}
+
+.planner-day-inline-marker {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.15rem;
+  height: 1.15rem;
+  padding: 0;
+  border: 1px solid
+    color-mix(in srgb, var(--theme-main) 34%, transparent);
+  border-radius: 0.38rem;
+  background: color-mix(
+    in srgb,
+    var(--theme-main) 14%,
+    var(--input-background)
+  );
+  color: var(--title-color);
+  font-family: inherit;
+  font-size: 0.6rem;
+  line-height: 1;
+  cursor: pointer;
+
+  &:hover,
+  &:focus-visible {
+    border-color: color-mix(
+      in srgb,
+      var(--theme-main) 58%,
+      transparent
+    );
+    background: var(--planner-soft-bg);
+  }
+
+  &.is-dday {
+    border-color: color-mix(in srgb, #b07a4a 48%, transparent);
+    color: #b07a4a;
+  }
+}
+
+[data-theme='dark'] .planner-day-inline-marker.is-dday {
+  color: #e0b27b;
+}
+
+.planner-marker-hint {
+  margin: 0;
+  color: var(--title-color);
+  font-size: 0.62rem;
+  line-height: 1.4;
+  opacity: 0.58;
+}
+
+.planner-marker-dday-preview {
+  margin: 0;
+  color: #b07a4a;
+  font-size: 0.68rem;
+}
+
+[data-theme='dark'] .planner-marker-dday-preview {
+  color: #e0b27b;
+}
+
 .planner-filter {
   display: flex;
   align-items: center;
@@ -515,6 +594,63 @@
   line-height: 1;
 }
 
+.planner-day-head {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.18rem;
+}
+
+.planner-day-marker-badges {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 0.07rem;
+  overflow: hidden;
+}
+
+.planner-day-marker {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0.6rem;
+  height: 0.6rem;
+  flex-shrink: 0;
+  padding: 0 0.08rem;
+  border-radius: 0.2rem;
+  background: color-mix(
+    in srgb,
+    var(--theme-main) 18%,
+    var(--input-background)
+  );
+  color: var(--title-color);
+  font-size: 0.35rem;
+  font-weight: 600;
+  line-height: 1;
+
+  &.is-dday {
+    background: color-mix(
+      in srgb,
+      #b07a4a 20%,
+      var(--input-background)
+    );
+    color: #b07a4a;
+  }
+}
+
+.planner-day-marker-more {
+  flex-shrink: 0;
+  color: var(--title-color);
+  font-size: 0.46rem;
+  opacity: 0.62;
+}
+
+[data-theme='dark'] .planner-day-marker.is-dday {
+  color: #e0b27b;
+}
+
 .planner-day-marks {
   display: flex;
   width: 100%;
@@ -805,12 +941,19 @@
   color: #e0b27b;
 }
 
-.planner-special-open {
+.planner-calendar-actions {
   position: absolute;
   top: 50%;
   right: 0.2rem;
+  display: flex;
+  align-items: center;
+  gap: 0.15rem;
   transform: translateY(-50%);
   white-space: nowrap;
+
+  .planner-text-button {
+    font-size: 0.62rem;
+  }
 }
 
 .planner-side {
@@ -1854,6 +1997,34 @@
     font-size: 0.6rem;
     opacity: 0.58;
   }
+}
+
+.planner-special-main .planner-special-title-row {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: var(--foreground);
+  font-size: inherit;
+  opacity: 1;
+}
+
+.planner-special-main .planner-special-marker {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1rem;
+  height: 1rem;
+  flex-shrink: 0;
+  border-radius: 0.3rem;
+  background: color-mix(
+    in srgb,
+    var(--theme-main) 18%,
+    var(--input-background)
+  );
+  color: var(--title-color);
+  font-size: 0.54rem;
+  line-height: 1;
+  opacity: 1;
 }
 
 .planner-special-pin-toggle.is-active {

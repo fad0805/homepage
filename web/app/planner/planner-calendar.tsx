@@ -2,10 +2,12 @@ import type { PointerEvent as ReactPointerEvent } from "react";
 
 import type {
   CalendarWeek,
+  PlannerDateMarker,
   PlannerSpecialDate,
   PlannerTask,
 } from "./planner-types";
 import {
+  dateMarkerAppearsOn,
   formatDayLabel,
   monthLabel,
   specialDateAppearsOn,
@@ -19,6 +21,7 @@ interface PlannerCalendarProps {
   weeks: CalendarWeek[];
   calendarTasks: PlannerTask[];
   specialDates: PlannerSpecialDate[];
+  dateMarkers: PlannerDateMarker[];
   today: string;
   selectedDate: string;
   dragBounds: [string, string] | null;
@@ -40,6 +43,7 @@ export function PlannerCalendar({
   weeks,
   calendarTasks,
   specialDates,
+  dateMarkers,
   today,
   selectedDate,
   dragBounds,
@@ -80,13 +84,15 @@ export function PlannerCalendar({
         >
           ›
         </button>
-        <button
-          type="button"
-          className="planner-text-button planner-special-open"
-          onClick={onOpenSpecialManager}
-        >
-          기념일
-        </button>
+        <div className="planner-calendar-actions">
+          <button
+            type="button"
+            className="planner-text-button"
+            onClick={onOpenSpecialManager}
+          >
+            기념일
+          </button>
+        </div>
       </div>
       <p className="planner-calendar-hint">
         날짜를 드래그하면 범위 일정을 만들 수 있습니다.
@@ -113,6 +119,9 @@ export function PlannerCalendar({
                 const daySpecialDates = specialDates.filter(
                   (item) =>
                     specialDateAppearsOn(item, cell.date),
+                );
+                const dayMarkers = dateMarkers.filter((marker) =>
+                  dateMarkerAppearsOn(marker, cell.date),
                 );
                 const historyCount =
                   historyCounts.get(cell.date) ?? 0;
@@ -148,7 +157,8 @@ export function PlannerCalendar({
                         ? `history-level-${historyLevel}`
                         : "",
                       dayTaskCount > 0 ||
-                      daySpecialDates.length > 0
+                      daySpecialDates.length > 0 ||
+                      dayMarkers.length > 0
                         ? "has-items"
                         : "",
                       inDragRange ? "is-drag-range" : "",
@@ -173,6 +183,10 @@ export function PlannerCalendar({
                         ? `, 기념일 ${daySpecialDates.length}개`
                         : ""
                     }${
+                      dayMarkers.length > 0
+                        ? `, 마커 ${dayMarkers.length}개`
+                        : ""
+                    }${
                       historyCount > 0
                         ? `, 변경 이력 ${historyCount}개`
                         : ""
@@ -182,8 +196,30 @@ export function PlannerCalendar({
                         : ""
                     }`}
                   >
-                    <span className="planner-day-number">
-                      {cell.day}
+                    <span className="planner-day-head">
+                      <span className="planner-day-number">
+                        {cell.day}
+                      </span>
+                      {dayMarkers.length > 0 ? (
+                        <span className="planner-day-marker-badges">
+                          {dayMarkers.slice(0, 3).map((marker) => (
+                            <span
+                              className={`planner-day-marker${
+                                marker.is_dday ? " is-dday" : ""
+                              }`}
+                              key={marker.id}
+                              title={marker.title}
+                            >
+                              {marker.marker}
+                            </span>
+                          ))}
+                          {dayMarkers.length > 3 ? (
+                            <span className="planner-day-marker-more">
+                              +{dayMarkers.length - 3}
+                            </span>
+                          ) : null}
+                        </span>
+                      ) : null}
                     </span>
                     {daySpecialDates.length > 0 ? (
                       <span className="planner-day-specials">

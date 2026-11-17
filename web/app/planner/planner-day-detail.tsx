@@ -4,6 +4,7 @@ import { CloverIcon } from "@/app/bookmark/clover-rating";
 import { formatTime24h, type BookmarkPeriod } from "@/lib/bookmark";
 
 import type {
+  PlannerDateMarker,
   PlannerEvent,
   PlannerSpecialDate,
   PlannerTask,
@@ -12,7 +13,7 @@ import { formatDateOnly, specialDdayLabel } from "./planner-utils";
 import { PlannerHistoryList } from "./planner-history-list";
 
 interface PlannerDayDetailProps {
-  upcomingDdays: PlannerSpecialDate[];
+  pinnedDdays: PlannerDateMarker[];
   selectedDate: string;
   specialDates: PlannerSpecialDate[];
   dayBookmark: BookmarkPeriod | null;
@@ -20,13 +21,14 @@ interface PlannerDayDetailProps {
   tasks: PlannerTask[];
   events: PlannerEvent[];
   renderTaskCard: (task: PlannerTask) => ReactNode;
-  onOpenSpecialList: () => void;
+  onOpenMarker: (item: PlannerDateMarker) => void;
+  onOpenMarkerList: () => void;
   onOpenSpecialEditor: (item: PlannerSpecialDate) => void;
   onOpenEvent: (event: PlannerEvent) => void;
 }
 
 export function PlannerDayDetail({
-  upcomingDdays,
+  pinnedDdays,
   selectedDate,
   specialDates,
   dayBookmark,
@@ -34,7 +36,8 @@ export function PlannerDayDetail({
   tasks,
   events,
   renderTaskCard,
-  onOpenSpecialList,
+  onOpenMarker,
+  onOpenMarkerList,
   onOpenSpecialEditor,
   onOpenEvent,
 }: PlannerDayDetailProps) {
@@ -126,7 +129,7 @@ const renderDayBookmark = () => {
   );
 };
 
-const renderUpcomingDdays = (items: PlannerSpecialDate[]) => {
+const renderPinnedDdays = (items: PlannerDateMarker[]) => {
   if (items.length === 0) return null;
   return (
     <div className="planner-dday-section">
@@ -135,7 +138,7 @@ const renderUpcomingDdays = (items: PlannerSpecialDate[]) => {
         <button
           type="button"
           className="planner-text-button"
-          onClick={onOpenSpecialList}
+          onClick={onOpenMarkerList}
         >
           전체
         </button>
@@ -146,18 +149,18 @@ const renderUpcomingDdays = (items: PlannerSpecialDate[]) => {
             <button
               type="button"
               className="planner-dday-item"
-              title={`${item.title} 수정`}
-              aria-label={`${item.title} 수정`}
-              onClick={() => onOpenSpecialEditor(item)}
+              title={`${item.title} 내용 보기`}
+              aria-label={`${item.title} 내용 보기`}
+              onClick={() => onOpenMarker(item)}
             >
               <span className="planner-dday-badge">
-                {specialDdayLabel(item.event_date ?? "")}
+                {specialDdayLabel(item.marker_date)}
               </span>
               <strong className="planner-dday-title">
                 {item.title}
               </strong>
               <span className="planner-dday-date">
-                {formatDateOnly(item.event_date)}
+                {formatDateOnly(item.marker_date)}
               </span>
             </button>
           </li>
@@ -213,7 +216,7 @@ const renderDayDetail = (
   dateSpecialDates: PlannerSpecialDate[],
 ) => (
   <>
-    {renderUpcomingDdays(upcomingDdays)}
+    {renderPinnedDdays(pinnedDdays)}
     {renderDaySpecialDates(dateSpecialDates)}
     {renderDayBookmark()}
     {renderDayTasks(dateTasks)}

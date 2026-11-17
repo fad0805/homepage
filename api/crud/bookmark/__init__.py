@@ -7,6 +7,12 @@ from .categories import (
     reorder_routine_categories,
     update_routine_category,
 )
+from .date_markers import (
+    create_date_marker,
+    delete_date_marker,
+    list_date_markers,
+    update_date_marker,
+)
 from .history import (
     get_routine_history,
     prune_old_routine_checks,
@@ -43,10 +49,12 @@ from .special_dates import (
 from .statistics import get_statistics
 
 __all__ = [
+    "create_date_marker",
     "create_mood_tag",
     "create_routine",
     "create_routine_category",
     "create_special_date",
+    "delete_date_marker",
     "delete_mood_tag",
     "delete_routine",
     "delete_routine_category",
@@ -56,6 +64,7 @@ __all__ = [
     "get_routine_history",
     "get_statistics",
     "get_today",
+    "list_date_markers",
     "list_mood_tags",
     "list_routine_categories",
     "list_special_dates",
@@ -68,6 +77,7 @@ __all__ = [
     "save_review",
     "set_routine_check",
     "stop_routine",
+    "update_date_marker",
     "update_mood_tag",
     "update_routine",
     "update_routine_category",

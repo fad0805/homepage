@@ -3,6 +3,7 @@ import { dateInputValue, todayDateInputValue } from "@/lib/datetime";
 import type {
   CalendarCell,
   CalendarWeek,
+  PlannerDateMarker,
   PlannerEvent,
   PlannerSpecialDate,
   PlannerTask,
@@ -170,6 +171,25 @@ export function specialDateAppearsOn(item: PlannerSpecialDate, date: string) {
     );
   }
   return item.event_date === date;
+}
+
+export function daysBetween(from: string, to: string) {
+  return Math.round(
+    (Date.parse(`${to}T00:00:00Z`) -
+      Date.parse(`${from}T00:00:00Z`)) /
+      86400000,
+  );
+}
+
+export function dateMarkerAppearsOn(
+  marker: PlannerDateMarker,
+  date: string,
+) {
+  if (marker.interval_days && marker.interval_days > 0) {
+    if (date < marker.marker_date) return false;
+    return daysBetween(marker.marker_date, date) % marker.interval_days === 0;
+  }
+  return marker.marker_date === date;
 }
 
 export function formatDayLabel(value: string) {

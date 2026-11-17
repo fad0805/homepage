@@ -282,6 +282,57 @@ class BookmarkRoutineMonthlyStat(Base):
     )
 
 
+class BookmarkDateMarker(Base):
+    """A simple date marker or D-day shown on the planner calendar."""
+
+    __tablename__ = "bookmark_date_markers"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(
+        Integer,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    title = Column(String(255), nullable=False)
+    memo = Column(Text, nullable=True)
+    marker_date = Column(Date, nullable=False, index=True)
+    is_dday = Column(
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default="false",
+    )
+    pinned = Column(
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default="false",
+    )
+    interval_days = Column(Integer, nullable=True)
+    created_at = Column(DateTime, default=func.now(), nullable=False)
+    updated_at = Column(
+        DateTime,
+        default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+    user = relationship("User")
+
+    __table_args__ = (
+        CheckConstraint(
+            "interval_days IS NULL OR interval_days > 0",
+            name="ck_bookmark_date_markers_interval",
+        ),
+        Index(
+            "ix_bookmark_date_markers_user_date",
+            "user_id",
+            "marker_date",
+        ),
+    )
+
+
 class BookmarkMoodTag(Base):
     """A user-defined mood tag available on daily records."""
 

@@ -10,6 +10,7 @@ from sqlalchemy import func, or_
 from sqlalchemy.orm import Session, selectinload
 
 from models.bookmark import (
+    BookmarkDateMarker,
     BookmarkGoal,
     BookmarkMoodTag,
     BookmarkRating,
@@ -20,6 +21,8 @@ from models.bookmark import (
     BookmarkRoutineMonthlyStat,
 )
 from schemas.bookmark import (
+    BookmarkDateMarkerCreate,
+    BookmarkDateMarkerUpdate,
     BookmarkDayMetaUpdate,
     BookmarkGoalUpdate,
     BookmarkMoodTagCreate,
