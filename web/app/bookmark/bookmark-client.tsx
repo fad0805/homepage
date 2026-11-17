@@ -283,6 +283,7 @@ export default function BookmarkClient({ username }: { username: string }) {
   const handleTodayTabClick = () => {
     if (tab !== "today") {
       setTab("today");
+      setPeriodType("day");
       setAnchorDate(todayDateInputValue());
       setPeriodMenuOpen(false);
       setPeriodPickerOpen(false);
