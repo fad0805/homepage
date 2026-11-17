@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type Dispatch,
+  type SetStateAction,
+} from "react";
 
 import { apiFetch } from "@/lib/api";
 
@@ -13,6 +20,19 @@ interface UseBookmarkDataOptions {
   view: string;
   periodStart: string;
   onPeriodLoaded: (data: BookmarkPeriod) => void;
+}
+
+function sameRecordData(
+  previous: BookmarkPeriod,
+  next: BookmarkPeriod,
+) {
+  return (
+    previous.goal?.content === next.goal?.content &&
+    previous.goal?.wake_time === next.goal?.wake_time &&
+    previous.goal?.mood_tag_id === next.goal?.mood_tag_id &&
+    previous.rating?.rating === next.rating?.rating &&
+    previous.review?.content === next.review?.content
+  );
 }
 
 export function useBookmarkData({
@@ -31,6 +51,13 @@ export function useBookmarkData({
     BookmarkRoutineCategory[]
   >([]);
   const [moodTags, setMoodTags] = useState<BookmarkMoodTag[]>([]);
+  const [dataKey, setDataKey] = useState<string | null>(null);
+  const [settledKey, setSettledKey] = useState<string | null>(
+    null,
+  );
+  const cacheRef = useRef(new Map<string, BookmarkPeriod>());
+  const dataKeyRef = useRef<string | null>(null);
+  const requestIdRef = useRef(0);
   // Keep the latest callback without making loadPeriod depend on its
   // identity. An inline callback would otherwise trigger the load effect on
   // every render and create an endless request loop.
@@ -40,12 +67,67 @@ export function useBookmarkData({
     onPeriodLoadedRef.current = onPeriodLoaded;
   }, [onPeriodLoaded]);
 
+  const setDataAndCache: Dispatch<
+    SetStateAction<BookmarkPeriod | null>
+  > = useCallback((updater) => {
+    setData((previous) => {
+      const next =
+        typeof updater === "function"
+          ? (
+              updater as (
+                value: BookmarkPeriod | null,
+              ) => BookmarkPeriod | null
+            )(previous)
+          : updater;
+      const key = dataKeyRef.current;
+      if (key) {
+        if (next) {
+          cacheRef.current.set(key, next);
+        } else {
+          cacheRef.current.delete(key);
+        }
+      }
+      return next;
+    });
+  }, []);
+
+  const applyCachedPeriod = useCallback(
+    (targetView: string, targetStart: string) => {
+      const key = `${targetView}:${targetStart}`;
+      const cached = cacheRef.current.get(key);
+      if (!cached) return false;
+      dataKeyRef.current = key;
+      setData(cached);
+      setDataKey(key);
+      setSettledKey(key);
+      onPeriodLoadedRef.current(cached);
+      return true;
+    },
+    [],
+  );
+
   const loadPeriod = useCallback(async () => {
+    const key = `${view}:${periodStart}`;
     if (view === "stats" || view === "journal") {
       setLoading(false);
+      setSettledKey(null);
       return;
     }
-    setLoading(true);
+    const cached = cacheRef.current.get(key) ?? null;
+    const requestId = ++requestIdRef.current;
+    const alreadyCurrent = dataKeyRef.current === key;
+    if (cached) {
+      if (!alreadyCurrent) {
+        dataKeyRef.current = key;
+        setData(cached);
+        setDataKey(key);
+        setSettledKey(key);
+        onPeriodLoadedRef.current(cached);
+      }
+      setLoading(false);
+    } else {
+      setLoading(true);
+    }
     setError(null);
     try {
       const endpoint =
@@ -55,16 +137,29 @@ export function useBookmarkData({
       const next = await apiFetch<BookmarkPeriod>(endpoint, {
         cache: "no-store",
       });
+      cacheRef.current.set(key, next);
+      if (requestId !== requestIdRef.current) return;
+      dataKeyRef.current = key;
       setData(next);
-      onPeriodLoadedRef.current(next);
+      setDataKey(key);
+      setSettledKey(key);
+      if (!cached || !sameRecordData(cached, next)) {
+        onPeriodLoadedRef.current(next);
+      }
     } catch (reason) {
-      setError(
-        reason instanceof Error
-          ? reason.message
-          : "책갈피를 불러오지 못했습니다.",
-      );
+      if (requestId !== requestIdRef.current) return;
+      setSettledKey(key);
+      if (!cached) {
+        setError(
+          reason instanceof Error
+            ? reason.message
+            : "책갈피를 불러오지 못했습니다.",
+        );
+      }
     } finally {
-      setLoading(false);
+      if (requestId === requestIdRef.current) {
+        setLoading(false);
+      }
     }
   }, [periodStart, view]);
 
@@ -130,11 +225,24 @@ export function useBookmarkData({
     void loadMoodTags();
   }, [loadMoodTags]);
 
+  const targetKey = `${view}:${periodStart}`;
+  const cached = cacheRef.current.get(targetKey) ?? null;
+  const currentData = dataKey === targetKey ? data : cached;
+  const isLoading =
+    view === "journal" || view === "stats"
+      ? false
+      : currentData === null &&
+        (loading || settledKey !== targetKey);
+  const currentError =
+    dataKey === targetKey || cached || settledKey === targetKey
+      ? error
+      : null;
+
   return {
-    data,
-    setData,
-    loading,
-    error,
+    data: currentData,
+    setData: setDataAndCache,
+    loading: isLoading,
+    error: currentError,
     setError,
     statistics,
     statsLoading,
@@ -143,6 +251,7 @@ export function useBookmarkData({
     setCategories,
     moodTags,
     setMoodTags,
+    applyCachedPeriod,
     loadPeriod,
     loadCategories,
     loadMoodTags,

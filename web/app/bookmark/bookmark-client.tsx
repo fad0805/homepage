@@ -175,6 +175,7 @@ export default function BookmarkClient({ username }: { username: string }) {
     setCategories,
     moodTags,
     setMoodTags,
+    applyCachedPeriod,
     loadPeriod,
     loadCategories,
     loadMoodTags,
@@ -282,9 +283,11 @@ export default function BookmarkClient({ username }: { username: string }) {
 
   const handleTodayTabClick = () => {
     if (tab !== "today") {
+      const today = todayDateInputValue();
+      applyCachedPeriod("today", today);
       setTab("today");
       setPeriodType("day");
-      setAnchorDate(todayDateInputValue());
+      setAnchorDate(today);
       setPeriodMenuOpen(false);
       setPeriodPickerOpen(false);
       closeCalendar();
