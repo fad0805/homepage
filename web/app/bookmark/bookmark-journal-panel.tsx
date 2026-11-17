@@ -62,16 +62,45 @@ function renderRating(node: BookmarkJournalNode) {
   );
 }
 
-function renderRecord(node: BookmarkJournalNode) {
-  if (
-    !node.rating &&
-    !node.goal?.content &&
-    !node.review?.content
-  ) {
+function hasOwnRecord(node: BookmarkJournalNode) {
+  return (
+    Boolean(node.goal?.content) ||
+    Boolean(node.review?.content) ||
+    (node.rating?.rating ?? 0) > 0
+  );
+}
+
+function renderRecord(
+  node: BookmarkJournalNode,
+  onEdit?: () => void,
+) {
+  if (!hasOwnRecord(node)) {
     return null;
   }
   return (
-    <div className="bookmark-journal-record">
+    <div
+      className={`bookmark-journal-record${
+        onEdit ? " is-editable" : ""
+      }`}
+      role={onEdit ? "button" : undefined}
+      tabIndex={onEdit ? 0 : undefined}
+      title={onEdit ? "클릭해서 수정" : undefined}
+      aria-label={onEdit ? `${node.label} 기록 수정` : undefined}
+      onClick={onEdit}
+      onKeyDown={
+        onEdit
+          ? (event) => {
+              if (
+                event.target === event.currentTarget &&
+                (event.key === "Enter" || event.key === " ")
+              ) {
+                event.preventDefault();
+                onEdit();
+              }
+            }
+          : undefined
+      }
+    >
       {node.goal?.content ? (
         <div className="bookmark-journal-block">
           <span className="bookmark-journal-label">목표</span>
@@ -561,20 +590,20 @@ export function BookmarkJournalPanel() {
           <p className="bookmark-journal-hint">
             {countText(targetNode)}
           </p>
+        </div>
+        {renderRecord(targetNode, () => {
+          setEditingNode(targetNode);
+        }) ?? (
           <button
             type="button"
-            className="bookmark-text-button bookmark-journal-edit-button"
+            className="bookmark-journal-empty-edit"
             onClick={() => setEditingNode(targetNode)}
           >
-            수정
+            {hasAnyRecord(targetNode)
+              ? "이 기간에 직접 작성한 목표·별점·후기가 없습니다. 클릭해서 기록하기"
+              : `${EMPTY_LABELS[level]} 클릭해서 기록하기`}
           </button>
-        </div>
-        {renderRecord(targetNode) ??
-          (level !== "week" && !hasAnyRecord(targetNode) ? (
-            <p className="bookmark-empty-row">
-              {EMPTY_LABELS[level]}
-            </p>
-          ) : null)}
+        )}
         {level === "week"
           ? renderWeekDays(targetNode)
           : renderChildTable(
