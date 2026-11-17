@@ -49,6 +49,7 @@ import { BookmarkCalendarModal } from "./bookmark-calendar-modal";
 import { BookmarkCategoryModal } from "./bookmark-category-modal";
 import { BookmarkHistoryModal } from "./bookmark-history-modal";
 import { BookmarkMoodTagModal } from "./bookmark-mood-tag-modal";
+import { BookmarkRoutineModal } from "./bookmark-routine-modal";
 import { CloverRating } from "./clover-rating";
 import {
   SortableCategoryItem,
@@ -2110,399 +2111,42 @@ export default function BookmarkClient({ username }: { username: string }) {
         />
       ) : null}
       {routineModalOpen ? (
-        <div
-          className="bookmark-modal-overlay"
-          role="presentation"
-          onClick={closeRoutineModal}
-        >
-          <div
-            className="bookmark-modal"
-            role="dialog"
-            aria-modal="true"
-            aria-label="루틴 관리"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <form
-              className="bookmark-item-form"
-              onSubmit={handleSaveRoutine}
-            >
-              <header className="bookmark-modal-header">
-                <h2>{FREQUENCY_LABELS[modalFrequency]} 루틴</h2>
-                <button
-                  type="button"
-                  className="bookmark-text-button"
-                  onClick={closeRoutineModal}
-                >
-                  닫기
-                </button>
-              </header>
-              {error ? (
-                <p className="bookmark-error">{error}</p>
-              ) : null}
-              <label>
-                <span>제목</span>
-                <input
-                  type="text"
-                  value={itemTitle}
-                  maxLength={255}
-                  required
-                  placeholder="반복할 루틴"
-                  onChange={(event) =>
-                    setItemTitle(event.target.value)
-                  }
-                />
-              </label>
-              <label>
-                <span>메모</span>
-                <textarea
-                  rows={4}
-                  value={itemNotes}
-                  maxLength={4000}
-                  placeholder="선택 사항"
-                  onChange={(event) =>
-                    setItemNotes(event.target.value)
-                  }
-                />
-              </label>
-              <label>
-                <span>카테고리</span>
-                <select
-                  value={routineCategoryId ?? ""}
-                  onChange={(event) =>
-                    setRoutineCategoryId(
-                      event.target.value
-                        ? Number(event.target.value)
-                        : null,
-                    )
-                  }
-                >
-                  <option value="">미분류</option>
-                  {categories.map((category) => (
-                    <option value={category.id} key={category.id}>
-                      {category.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              {editingRoutine ? (
-                <p className="bookmark-form-hint">
-                  시작일: {periodLabel(editingRoutine.start_date, "day")}
-                  {editingRoutine.end_date ? " · 중단됨" : ""}
-                </p>
-              ) : null}
-
-              <div className="bookmark-schedule">
-                <span className="bookmark-field-label">기록 방식</span>
-                {modalFrequency === "daily" ? (
-                  <p className="bookmark-form-hint">
-                    매일 1회 체크하는 루틴입니다.
-                  </p>
-                ) : (
-                  <>
-                    <div className="bookmark-mode-toggle">
-                      {(["count", "date"] as BookmarkTrackingMode[]).map(
-                        (mode) => (
-                          <button
-                            type="button"
-                            key={mode}
-                            className={
-                              routineMode === mode ? "is-active" : ""
-                            }
-                            onClick={() => setRoutineMode(mode)}
-                          >
-                            {MODE_LABELS[mode]}
-                          </button>
-                        ),
-                      )}
-                    </div>
-
-                    {routineMode === "count" ? (
-                      <>
-                        {modalFrequency === "quarterly" ? (
-                          <div className="bookmark-schedule-row">
-                            <label>
-                              <span>분기</span>
-                              <select
-                                value={routineQuarter}
-                                onChange={(event) =>
-                                  setRoutineQuarter(
-                                    Number(event.target.value),
-                                  )
-                                }
-                              >
-                                <option value={0}>매분기</option>
-                                {[1, 2, 3, 4].map((quarter) => (
-                                  <option
-                                    value={quarter}
-                                    key={quarter}
-                                  >
-                                    {quarter}분기
-                                  </option>
-                                ))}
-                              </select>
-                            </label>
-                            <label>
-                              <span>{TARGET_LABELS[modalFrequency]}</span>
-                              <input
-                                type="number"
-                                min={1}
-                                max={1000}
-                                value={routineTarget}
-                                onChange={(event) =>
-                                  setRoutineTarget(event.target.value)
-                                }
-                              />
-                            </label>
-                          </div>
-                        ) : (
-                          <label>
-                            <span>{TARGET_LABELS[modalFrequency]}</span>
-                            <input
-                              type="number"
-                              min={1}
-                              max={1000}
-                              value={routineTarget}
-                              onChange={(event) =>
-                                setRoutineTarget(event.target.value)
-                              }
-                            />
-                          </label>
-                        )}
-                        <p className="bookmark-form-hint">
-                          {modalFrequency === "weekly"
-                            ? "이번 주에 몇 회 수행할지 정합니다."
-                            : modalFrequency === "monthly"
-                              ? "이번 달에 몇 회 수행할지 정합니다."
-                              : modalFrequency === "quarterly"
-                                ? routineQuarter > 0
-                                  ? `${routineQuarter}분기에 몇 회 수행할지 정합니다.`
-                                  : "매분기 몇 회 수행할지 정합니다."
-                                : "올해 몇 회 수행할지 정합니다."}
-                        </p>
-                      </>
-                    ) : (
-                      <>
-                        {modalFrequency === "weekly" ? (
-                          <div className="bookmark-weekday-field">
-                            <span>요일</span>
-                            <div className="bookmark-weekday-picker">
-                              {WEEKDAY_SHORT.map((label, index) => {
-                                const selected =
-                                  routineWeekdaySelection.includes(index);
-                                return (
-                                  <label
-                                    className={
-                                      selected ? "is-selected" : ""
-                                    }
-                                    key={label}
-                                  >
-                                    <input
-                                      type="checkbox"
-                                      checked={selected}
-                                      onChange={() =>
-                                        toggleRoutineWeekday(index)
-                                      }
-                                    />
-                                    <span>{label}</span>
-                                  </label>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        ) : null}
-
-                        {modalFrequency === "monthly" ? (
-                          <>
-                            <label>
-                              <span>방식</span>
-                              <select
-                                value={monthlyMode}
-                                onChange={(event) =>
-                                  setMonthlyMode(
-                                    event.target.value as MonthlyMode,
-                                  )
-                                }
-                              >
-                                <option value="day">날짜</option>
-                                <option value="nth">
-                                  몇 번째 요일
-                                </option>
-                              </select>
-                            </label>
-                            {monthlyMode === "day" ? (
-                              <label>
-                                <span>일</span>
-                                <input
-                                  type="number"
-                                  min={1}
-                                  max={31}
-                                  value={routineDayOfMonth}
-                                  onChange={(event) =>
-                                    setRoutineDayOfMonth(
-                                      event.target.value,
-                                    )
-                                  }
-                                />
-                              </label>
-                            ) : (
-                              <div className="bookmark-schedule-row">
-                                <label>
-                                  <span>번째</span>
-                                  <select
-                                    value={routineNthWeek}
-                                    onChange={(event) =>
-                                      setRoutineNthWeek(
-                                        Number(event.target.value),
-                                      )
-                                    }
-                                  >
-                                    {[1, 2, 3, 4, 5].map((value) => (
-                                      <option value={value} key={value}>
-                                        {value}번째
-                                      </option>
-                                    ))}
-                                  </select>
-                                </label>
-                                <label>
-                                  <span>요일</span>
-                                  <select
-                                    value={routineWeekday}
-                                    onChange={(event) =>
-                                      setRoutineWeekday(
-                                        Number(event.target.value),
-                                      )
-                                    }
-                                  >
-                                    {WEEKDAY_SHORT.map(
-                                      (label, index) => (
-                                        <option
-                                          value={index}
-                                          key={label}
-                                        >
-                                          {label}요일
-                                        </option>
-                                      ),
-                                    )}
-                                  </select>
-                                </label>
-                              </div>
-                            )}
-                          </>
-                        ) : null}
-
-                        {modalFrequency === "yearly" ? (
-                          <div className="bookmark-schedule-row">
-                            <label>
-                              <span>월</span>
-                              <select
-                                value={routineMonth}
-                                onChange={(event) =>
-                                  setRoutineMonth(
-                                    Number(event.target.value),
-                                  )
-                                }
-                              >
-                                {Array.from(
-                                  { length: 12 },
-                                  (_, index) => (
-                                    <option
-                                      value={index + 1}
-                                      key={index + 1}
-                                    >
-                                      {index + 1}월
-                                    </option>
-                                  ),
-                                )}
-                              </select>
-                            </label>
-                            <label>
-                              <span>일</span>
-                              <input
-                                type="number"
-                                min={1}
-                                max={31}
-                                value={routineDayOfMonth}
-                                onChange={(event) =>
-                                  setRoutineDayOfMonth(
-                                    event.target.value,
-                                  )
-                                }
-                              />
-                            </label>
-                          </div>
-                        ) : null}
-
-                        {modalFrequency === "quarterly" ? (
-                          <>
-                            <label>
-                              <span>분기</span>
-                              <select
-                                value={routineQuarter}
-                                onChange={(event) =>
-                                  setRoutineQuarter(
-                                    Number(event.target.value),
-                                  )
-                                }
-                              >
-                                <option value={0}>매분기</option>
-                                {[1, 2, 3, 4].map((quarter) => (
-                                  <option
-                                    value={quarter}
-                                    key={quarter}
-                                  >
-                                    {quarter}분기
-                                  </option>
-                                ))}
-                              </select>
-                            </label>
-                            <p className="bookmark-form-hint">
-                              {routineQuarter > 0
-                                ? `${routineQuarter}분기에 1회 체크하는 루틴입니다.`
-                                : "매분기 1회 체크하는 루틴입니다."}
-                            </p>
-                          </>
-                        ) : null}
-                      </>
-                    )}
-                  </>
-                )}
-              </div>
-
-              <div className="bookmark-modal-actions">
-                {editingRoutine && !editingRoutine.end_date ? (
-                  <button
-                    type="button"
-                    className="bookmark-text-button"
-                    disabled={itemSaving}
-                    onClick={() => void handleStopRoutine()}
-                  >
-                    중단
-                  </button>
-                ) : null}
-                {editingRoutine ? (
-                  <button
-                    type="button"
-                    className="bookmark-text-button is-danger"
-                    disabled={itemSaving}
-                    onClick={() => void handleDeleteRoutine()}
-                  >
-                    완전 삭제
-                  </button>
-                ) : null}
-                <button
-                  type="submit"
-                  className="bookmark-primary"
-                  disabled={itemSaving || !itemTitle.trim()}
-                >
-                  {itemSaving ? "저장 중..." : "저장"}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
+        <BookmarkRoutineModal
+          modalFrequency={modalFrequency}
+          error={error}
+          itemTitle={itemTitle}
+          setItemTitle={setItemTitle}
+          itemNotes={itemNotes}
+          setItemNotes={setItemNotes}
+          routineCategoryId={routineCategoryId}
+          setRoutineCategoryId={setRoutineCategoryId}
+          categories={categories}
+          editingRoutine={editingRoutine}
+          routineMode={routineMode}
+          setRoutineMode={setRoutineMode}
+          routineTarget={routineTarget}
+          setRoutineTarget={setRoutineTarget}
+          routineQuarter={routineQuarter}
+          setRoutineQuarter={setRoutineQuarter}
+          routineWeekdaySelection={routineWeekdaySelection}
+          onToggleWeekday={toggleRoutineWeekday}
+          monthlyMode={monthlyMode}
+          setMonthlyMode={setMonthlyMode}
+          routineDayOfMonth={routineDayOfMonth}
+          setRoutineDayOfMonth={setRoutineDayOfMonth}
+          routineNthWeek={routineNthWeek}
+          setRoutineNthWeek={setRoutineNthWeek}
+          routineWeekday={routineWeekday}
+          setRoutineWeekday={setRoutineWeekday}
+          routineMonth={routineMonth}
+          setRoutineMonth={setRoutineMonth}
+          itemSaving={itemSaving}
+          onClose={closeRoutineModal}
+          onSubmit={handleSaveRoutine}
+          onStop={() => void handleStopRoutine()}
+          onDelete={() => void handleDeleteRoutine()}
+        />
       ) : null}
-
       {moodTagModalOpen ? (
         <BookmarkMoodTagModal
           error={moodTagError}
