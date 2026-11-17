@@ -148,26 +148,44 @@ export function BookmarkRoutineModal({
                 }
               />
             </label>
-            <label>
-              <span>카테고리</span>
-              <select
-                value={routineCategoryId ?? ""}
-                onChange={(event) =>
-                  setRoutineCategoryId(
-                    event.target.value
-                      ? Number(event.target.value)
-                      : null,
-                  )
-                }
-              >
-                <option value="">미분류</option>
-                {categories.map((category) => (
-                  <option value={category.id} key={category.id}>
-                    {category.name}
-                  </option>
-                ))}
-              </select>
-            </label>
+            <div className="bookmark-category-field">
+              <span className="bookmark-field-label">카테고리</span>
+              <div className="bookmark-category-picker">
+                <label
+                  className={
+                    routineCategoryId === null ? "is-selected" : ""
+                  }
+                >
+                  <input
+                    type="checkbox"
+                    checked={routineCategoryId === null}
+                    onChange={() => setRoutineCategoryId(null)}
+                  />
+                  <span>미분류</span>
+                </label>
+                {categories.map((category) => {
+                  const selected =
+                    routineCategoryId === category.id;
+                  return (
+                    <label
+                      className={selected ? "is-selected" : ""}
+                      key={category.id}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selected}
+                        onChange={() =>
+                          setRoutineCategoryId(
+                            selected ? null : category.id,
+                          )
+                        }
+                      />
+                      <span>{category.name}</span>
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
 
             {editingRoutine ? (
               <p className="bookmark-form-hint">

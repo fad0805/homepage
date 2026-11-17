@@ -1112,7 +1112,8 @@
   }
 }
 
-.bookmark-weekday-picker {
+.bookmark-weekday-picker,
+.bookmark-category-picker {
   display: flex;
   flex-wrap: wrap;
   gap: 0.3rem;
@@ -1559,6 +1560,12 @@
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 0.5rem;
+}
+
+.bookmark-category-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
 }
 
 .bookmark-field-label {
