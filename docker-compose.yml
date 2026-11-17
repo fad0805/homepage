@@ -1,6 +1,13 @@
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 services:
   db:
     restart: always
+    logging: *default-logging
     image: postgres:14-alpine
     env_file: .env.production
     healthcheck:
@@ -12,6 +19,7 @@ services:
 
   api:
     restart: always
+    logging: *default-logging
     build: ./api
     networks:
       - external_network
@@ -25,6 +33,7 @@ services:
 
   web:
     restart: always
+    logging: *default-logging
     build: ./web
     networks:
       - external_network
