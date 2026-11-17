@@ -15,7 +15,7 @@ import {
   periodLabel,
   shiftPeriod,
   startOfPeriod,
-  weekOfMonthLabel,
+  weekLabel,
 } from "./bookmark-utils";
 
 type JournalLevel = "week" | "month" | "quarter" | "year" | "decade";
@@ -152,7 +152,7 @@ function levelLabel(
     const date = parseDateKey(value);
     return `${date.getUTCFullYear()}년 ${
       date.getUTCMonth() + 1
-    }월 ${weekOfMonthLabel(value)}`;
+    }월 ${weekLabel(value)}`;
   }
   if (node) return node.label;
   if (level === "decade") {

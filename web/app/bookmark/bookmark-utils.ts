@@ -253,6 +253,55 @@ export function weekOfMonthLabel(value: string) {
   return `${ordinal}째주`;
 }
 
+// ISO 8601: weeks start Monday and the week-year follows Thursday.
+export function isoWeekInfo(value: string) {
+  const date = parseDateKey(value);
+  const thursday = new Date(
+    Date.UTC(
+      date.getUTCFullYear(),
+      date.getUTCMonth(),
+      date.getUTCDate(),
+    ),
+  );
+  const offset = (thursday.getUTCDay() + 6) % 7;
+  thursday.setUTCDate(thursday.getUTCDate() - offset + 3);
+
+  const firstThursday = new Date(
+    Date.UTC(thursday.getUTCFullYear(), 0, 4),
+  );
+  const firstOffset = (firstThursday.getUTCDay() + 6) % 7;
+  firstThursday.setUTCDate(
+    firstThursday.getUTCDate() - firstOffset + 3,
+  );
+
+  const week =
+    1 +
+    Math.round(
+      (thursday.getTime() - firstThursday.getTime()) /
+        (7 * 24 * 60 * 60 * 1000),
+    );
+  return { weekYear: thursday.getUTCFullYear(), week };
+}
+
+export function isoWeekLabel(value: string) {
+  const { weekYear, week } = isoWeekInfo(value);
+  return `${weekYear}-W${pad2(week)}`;
+}
+
+export function weekLabel(value: string) {
+  const weekStart = startOfPeriod(value, "week");
+  return `${weekOfMonthLabel(weekStart)} (${isoWeekLabel(
+    weekStart,
+  )})`;
+}
+
+export function weekPeriodLabel(value: string) {
+  const weekStart = startOfPeriod(value, "week");
+  return `${periodLabel(weekStart, "month")} ${weekLabel(
+    weekStart,
+  )}`;
+}
+
 export function compactPeriodLabel(
   value: string,
   type: BookmarkPeriodType,
@@ -277,9 +326,7 @@ export function compactPeriodLabel(
     const weekMonth = weekDate.getUTCMonth() + 1;
     const weekPrefix =
       weekYear === currentYear ? "" : `${weekYear}년 `;
-    return `${weekPrefix}${weekMonth}월 ${weekOfMonthLabel(
-      weekStart,
-    )}`;
+    return `${weekPrefix}${weekMonth}월 ${weekLabel(weekStart)}`;
   }
   if (type === "month") return `${prefix}${month}월`;
   if (type === "quarter") {

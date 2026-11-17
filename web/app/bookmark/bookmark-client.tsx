@@ -100,6 +100,7 @@ import {
   statBucketEnd,
   statBucketLabel,
   statRangeBounds,
+  weekPeriodLabel,
 } from "./bookmark-utils";
 
 import "@/public/styles/bookmark.scss";
@@ -870,7 +871,9 @@ export default function BookmarkClient({ username }: { username: string }) {
                 title="달력에서 날짜 선택"
                 onClick={handleOpenCalendar}
               >
-                {periodLabel(periodStart, periodType)}
+                {periodType === "week"
+                  ? weekPeriodLabel(periodStart)
+                  : periodLabel(periodStart, periodType)}
               </button>
               <button
                 type="button"
