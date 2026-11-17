@@ -192,7 +192,12 @@ export function routineScheduleLabel(routine: {
       return `월 ${routine.target_count}회`;
     }
     if (routine.frequency === "quarterly") {
-      return `분기 ${routine.target_count}회`;
+      const quarter = routine.month
+        ? Math.floor((routine.month - 1) / 3) + 1
+        : null;
+      return quarter
+        ? `${quarter}분기 ${routine.target_count}회`
+        : `분기 ${routine.target_count}회`;
     }
     return `연 ${routine.target_count}회`;
   }
@@ -211,7 +216,12 @@ export function routineScheduleLabel(routine: {
     }
     return "매월";
   }
-  if (routine.frequency === "quarterly") return "매분기";
+  if (routine.frequency === "quarterly") {
+    if (routine.month !== null) {
+      return `매년 ${Math.floor((routine.month - 1) / 3) + 1}분기`;
+    }
+    return "매분기";
+  }
   if (routine.month !== null && routine.day_of_month !== null) {
     return `매년 ${routine.month}월 ${routine.day_of_month}일`;
   }

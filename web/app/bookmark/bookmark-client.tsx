@@ -146,6 +146,14 @@ function pad2(value: number) {
   return String(value).padStart(2, "0");
 }
 
+function quarterStartMonth(quarter: number) {
+  return quarter > 0 ? (quarter - 1) * 3 + 1 : null;
+}
+
+function quarterFromMonth(month: number | null) {
+  return month ? Math.floor((month - 1) / 3) + 1 : 0;
+}
+
 function dateKey(date: Date) {
   return `${date.getUTCFullYear()}-${pad2(
     date.getUTCMonth() + 1,
@@ -601,6 +609,7 @@ function SortableRoutineItem({
 export default function BookmarkClient({ username }: { username: string }) {
   const initialToday = todayDateInputValue();
   const [view, setView] = useState<BookmarkView>("today");
+  const collapseStorageKey = `bookmark-category-collapse:${username}:${view}`;
   const [periodStart, setPeriodStart] = useState(initialToday);
   const [data, setData] = useState<BookmarkPeriod | null>(null);
   const [loading, setLoading] = useState(true);
@@ -672,6 +681,9 @@ export default function BookmarkClient({ username }: { username: string }) {
   const [newCategoryName, setNewCategoryName] = useState("");
   const [editingCategory, setEditingCategory] =
     useState<BookmarkRoutineCategory | null>(null);
+  const [collapsedSections, setCollapsedSections] = useState<
+    Record<string, boolean>
+  >({});
   const [categorySaving, setCategorySaving] = useState(false);
   const [categoryError, setCategoryError] = useState<string | null>(
     null,
@@ -691,6 +703,42 @@ export default function BookmarkClient({ username }: { username: string }) {
   const [routineDayOfMonth, setRoutineDayOfMonth] = useState("1");
   const [routineNthWeek, setRoutineNthWeek] = useState(1);
   const [routineMonth, setRoutineMonth] = useState(1);
+  const [routineQuarter, setRoutineQuarter] = useState(0);
+
+  useEffect(() => {
+    let next: Record<string, boolean> = {};
+    try {
+      const raw = window.localStorage.getItem(collapseStorageKey);
+      if (raw) {
+        const parsed: unknown = JSON.parse(raw);
+        if (
+          parsed &&
+          typeof parsed === "object" &&
+          !Array.isArray(parsed)
+        ) {
+          next = parsed as Record<string, boolean>;
+        }
+      }
+    } catch {
+      // Ignore malformed or unavailable local storage.
+    }
+    setCollapsedSections(next);
+  }, [collapseStorageKey]);
+
+  const setSectionCollapsed = (key: string, collapsed: boolean) => {
+    setCollapsedSections((previous) => {
+      const next = { ...previous, [key]: collapsed };
+      try {
+        window.localStorage.setItem(
+          collapseStorageKey,
+          JSON.stringify(next),
+        );
+      } catch {
+        // The in-memory state still works for this session.
+      }
+      return next;
+    });
+  };
 
   const loadPeriod = useCallback(async () => {
     if (view === "stats") {
@@ -914,6 +962,7 @@ export default function BookmarkClient({ username }: { username: string }) {
     setRoutineDayOfMonth("1");
     setRoutineNthWeek(1);
     setRoutineMonth(1);
+    setRoutineQuarter(0);
     setError(null);
   };
 
@@ -939,6 +988,11 @@ export default function BookmarkClient({ username }: { username: string }) {
     );
     setRoutineNthWeek(routine.nth_week ?? 1);
     setRoutineMonth(routine.month ?? 1);
+    setRoutineQuarter(
+      routine.frequency === "quarterly"
+        ? quarterFromMonth(routine.month)
+        : 0,
+    );
     setError(null);
   };
 
@@ -1185,14 +1239,17 @@ export default function BookmarkClient({ username }: { username: string }) {
                   weekdays: null,
                   day_of_month: null,
                   nth_week: null,
-                  month: null,
+                  month: quarterStartMonth(routineQuarter),
                 }
         : {
             weekday: null,
             weekdays: null,
             day_of_month: null,
             nth_week: null,
-            month: null,
+            month:
+              modalFrequency === "quarterly"
+                ? quarterStartMonth(routineQuarter)
+                : null,
           };
 
     setItemSaving(true);
@@ -1714,68 +1771,67 @@ export default function BookmarkClient({ username }: { username: string }) {
     const categoryById = new Map(
       categories.map((category) => [category.id, category]),
     );
-    type RoutineGroup = {
+    type RoutineSection = {
       key: string;
       name: string;
-      routines: BookmarkRoutine[];
-      done: boolean;
+      categoryId: number | null;
+      pending: BookmarkRoutine[];
+      done: BookmarkRoutine[];
     };
-    const buildCategoryGroups = (
+    const buildCategorySection = (
       key: string,
       name: string,
+      categoryId: number | null,
       items: BookmarkRoutine[],
-    ): RoutineGroup[] => {
-      if (items.length === 0) return [];
+    ): RoutineSection | null => {
       const pending = items.filter(
         (routine) => !isRoutineDone(routine),
       );
       const done = items.filter(isRoutineDone);
-      const groups: RoutineGroup[] = [];
-      if (pending.length > 0) {
-        groups.push({
-          key: `${key}-pending`,
-          name,
-          routines: pending,
-          done: false,
-        });
-      }
-      if (done.length > 0) {
-        groups.push({
-          key: `${key}-done`,
-          name,
-          routines: done,
-          done: true,
-        });
-      }
-      return groups;
+      if (pending.length === 0 && done.length === 0) return null;
+      return {
+        key,
+        name,
+        categoryId,
+        pending,
+        done,
+      };
     };
 
-    const categoryGroups = categories.flatMap((category) =>
-      buildCategoryGroups(
-        `category-${category.id}`,
-        category.name,
-        routines.filter(
-          (routine) => routine.category_id === category.id,
+    const sections: RoutineSection[] = categories
+      .map((category) =>
+        buildCategorySection(
+          `category-${category.id}`,
+          category.name,
+          category.id,
+          routines.filter(
+            (routine) => routine.category_id === category.id,
+          ),
         ),
-      ),
-    );
+      )
+      .filter((section): section is RoutineSection =>
+        Boolean(section),
+      );
     const uncategorized = routines.filter(
       (routine) =>
         routine.category_id === null ||
         !categoryById.has(routine.category_id),
     );
-    const allGroups = [
-      ...categoryGroups,
-      ...buildCategoryGroups(
-        "uncategorized",
-        "미분류",
-        uncategorized,
-      ),
-    ];
-    const groups = [
-      ...allGroups.filter((group) => !group.done),
-      ...allGroups.filter((group) => group.done),
-    ];
+    const uncategorizedSection = buildCategorySection(
+      "uncategorized",
+      "미분류",
+      null,
+      uncategorized,
+    );
+    if (uncategorizedSection) {
+      sections.push(uncategorizedSection);
+    }
+
+    const isSectionCollapsed = (section: RoutineSection) =>
+      Boolean(collapsedSections[section.key]);
+    const toggleSection = (section: RoutineSection) => {
+      setSectionCollapsed(section.key, !isSectionCollapsed(section));
+    };
 
     const renderRoutineItem = (routine: BookmarkRoutine) => {
       const isDaily = routine.frequency === "daily";
@@ -1909,50 +1965,93 @@ export default function BookmarkClient({ username }: { username: string }) {
       );
     };
 
+    const renderRoutineList = (
+      key: string,
+      items: BookmarkRoutine[],
+    ) => (
+      <DndContext
+        key={key}
+        sensors={dndSensors}
+        collisionDetection={closestCenter}
+        onDragEnd={(event) => handleRoutineDragEnd(items, event)}
+      >
+        <SortableContext
+          items={items.map((routine) => routine.id)}
+          strategy={verticalListSortingStrategy}
+        >
+          <ul className="bookmark-item-list">
+            {items.map(renderRoutineItem)}
+          </ul>
+        </SortableContext>
+      </DndContext>
+    );
+
     return (
       <div className="bookmark-routine-groups">
-        {groups
-          .filter((group) => group.routines.length > 0)
-          .map((group) => (
+        {sections.map((section) => {
+          const collapsed = isSectionCollapsed(section);
+          const total = section.pending.length + section.done.length;
+          const panelId = `bookmark-routine-section-${section.key}`;
+
+          return (
             <section
-              className={`bookmark-routine-group${
-                group.done ? " is-done-group" : ""
+              className={`bookmark-category-group${
+                collapsed ? " is-collapsed" : ""
               }`}
-              key={group.key}
+              key={section.key}
             >
-              <header className="bookmark-routine-group-header">
+              <header className="bookmark-category-group-header">
                 <h3>
-                  {group.name}
-                  {group.done ? (
+                  <button
+                    type="button"
+                    className="bookmark-category-group-toggle"
+                    aria-expanded={!collapsed}
+                    aria-controls={panelId}
+                    onClick={() => toggleSection(section)}
+                  >
                     <span
-                      className="bookmark-routine-group-check"
-                      aria-label="완료"
+                      className="bookmark-category-group-arrow"
+                      aria-hidden="true"
                     >
-                      ✓
+                      {collapsed ? "▸" : "▾"}
                     </span>
-                  ) : null}
+                    <span>{section.name}</span>
+                  </button>
                 </h3>
-                <span>{group.routines.length}</span>
+                <span>{total}</span>
               </header>
-              <DndContext
-                key={group.key}
-                sensors={dndSensors}
-                collisionDetection={closestCenter}
-                onDragEnd={(event) =>
-                  handleRoutineDragEnd(group.routines, event)
-                }
-              >
-                <SortableContext
-                  items={group.routines.map((routine) => routine.id)}
-                  strategy={verticalListSortingStrategy}
-                >
-                  <ul className="bookmark-item-list">
-                    {group.routines.map(renderRoutineItem)}
-                  </ul>
-                </SortableContext>
-              </DndContext>
+
+              <div id={panelId} hidden={collapsed}>
+                {section.pending.length > 0
+                  ? renderRoutineList(
+                      `${section.key}-pending`,
+                      section.pending,
+                    )
+                  : null}
+                {section.done.length > 0 ? (
+                  <div className="bookmark-routine-group is-done-group">
+                    <header className="bookmark-routine-group-header">
+                      <h3>
+                        완료
+                        <span
+                          className="bookmark-routine-group-check"
+                          aria-label="완료"
+                        >
+                          ✓
+                        </span>
+                      </h3>
+                      <span>{section.done.length}</span>
+                    </header>
+                    {renderRoutineList(
+                      `${section.key}-done`,
+                      section.done,
+                    )}
+                  </div>
+                ) : null}
+              </div>
             </section>
-          ))}
+          );
+        })}
       </div>
     );
   };
@@ -2877,25 +2976,65 @@ export default function BookmarkClient({ username }: { username: string }) {
 
                     {routineMode === "count" ? (
                       <>
-                        <label>
-                          <span>{TARGET_LABELS[modalFrequency]}</span>
-                          <input
-                            type="number"
-                            min={1}
-                            max={1000}
-                            value={routineTarget}
-                            onChange={(event) =>
-                              setRoutineTarget(event.target.value)
-                            }
-                          />
-                        </label>
+                        {modalFrequency === "quarterly" ? (
+                          <div className="bookmark-schedule-row">
+                            <label>
+                              <span>분기</span>
+                              <select
+                                value={routineQuarter}
+                                onChange={(event) =>
+                                  setRoutineQuarter(
+                                    Number(event.target.value),
+                                  )
+                                }
+                              >
+                                <option value={0}>매분기</option>
+                                {[1, 2, 3, 4].map((quarter) => (
+                                  <option
+                                    value={quarter}
+                                    key={quarter}
+                                  >
+                                    {quarter}분기
+                                  </option>
+                                ))}
+                              </select>
+                            </label>
+                            <label>
+                              <span>{TARGET_LABELS[modalFrequency]}</span>
+                              <input
+                                type="number"
+                                min={1}
+                                max={1000}
+                                value={routineTarget}
+                                onChange={(event) =>
+                                  setRoutineTarget(event.target.value)
+                                }
+                              />
+                            </label>
+                          </div>
+                        ) : (
+                          <label>
+                            <span>{TARGET_LABELS[modalFrequency]}</span>
+                            <input
+                              type="number"
+                              min={1}
+                              max={1000}
+                              value={routineTarget}
+                              onChange={(event) =>
+                                setRoutineTarget(event.target.value)
+                              }
+                            />
+                          </label>
+                        )}
                         <p className="bookmark-form-hint">
                           {modalFrequency === "weekly"
                             ? "이번 주에 몇 회 수행할지 정합니다."
                             : modalFrequency === "monthly"
                               ? "이번 달에 몇 회 수행할지 정합니다."
                               : modalFrequency === "quarterly"
-                                ? "이번 분기에 몇 회 수행할지 정합니다."
+                                ? routineQuarter > 0
+                                  ? `${routineQuarter}분기에 몇 회 수행할지 정합니다.`
+                                  : "매분기 몇 회 수행할지 정합니다."
                                 : "올해 몇 회 수행할지 정합니다."}
                         </p>
                       </>
@@ -3052,9 +3191,34 @@ export default function BookmarkClient({ username }: { username: string }) {
                         ) : null}
 
                         {modalFrequency === "quarterly" ? (
-                          <p className="bookmark-form-hint">
-                            분기마다 1회 체크하는 루틴입니다.
-                          </p>
+                          <>
+                            <label>
+                              <span>분기</span>
+                              <select
+                                value={routineQuarter}
+                                onChange={(event) =>
+                                  setRoutineQuarter(
+                                    Number(event.target.value),
+                                  )
+                                }
+                              >
+                                <option value={0}>매분기</option>
+                                {[1, 2, 3, 4].map((quarter) => (
+                                  <option
+                                    value={quarter}
+                                    key={quarter}
+                                  >
+                                    {quarter}분기
+                                  </option>
+                                ))}
+                              </select>
+                            </label>
+                            <p className="bookmark-form-hint">
+                              {routineQuarter > 0
+                                ? `${routineQuarter}분기에 1회 체크하는 루틴입니다.`
+                                : "매분기 1회 체크하는 루틴입니다."}
+                            </p>
+                          </>
                         ) : null}
                       </>
                     )}

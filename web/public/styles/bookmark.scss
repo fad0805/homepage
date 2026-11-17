@@ -333,6 +333,74 @@
   margin-top: 0.65rem;
 }
 
+.bookmark-category-group + .bookmark-category-group {
+  padding-top: 0.9rem;
+  border-top: 1px solid
+    color-mix(in srgb, var(--theme-main) 20%, transparent);
+}
+
+.bookmark-category-group-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+
+  h3 {
+    margin: 0;
+    font-family: inherit;
+    font-weight: normal;
+  }
+
+  > span {
+    color: var(--foreground);
+    font-size: 0.58rem;
+    opacity: 0.45;
+  }
+}
+
+.bookmark-category-group-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--title-color);
+  font-family: inherit;
+  font-size: 0.64rem;
+  letter-spacing: 0.12em;
+  cursor: pointer;
+  opacity: 0.72;
+
+  &:hover {
+    opacity: 1;
+  }
+
+  &:focus-visible {
+    outline: 2px solid
+      color-mix(in srgb, var(--theme-main) 55%, transparent);
+    outline-offset: 3px;
+    opacity: 1;
+  }
+}
+
+.bookmark-category-group-arrow {
+  width: 0.75rem;
+  font-size: 0.7rem;
+  letter-spacing: 0;
+}
+
+.bookmark-category-group .bookmark-item-list {
+  margin-top: 0.45rem;
+}
+
+.bookmark-category-group .bookmark-routine-group.is-done-group {
+  margin-top: 0.6rem;
+  padding-top: 0.55rem;
+  border-top: 1px solid
+    color-mix(in srgb, var(--theme-main) 20%, transparent);
+}
+
 .bookmark-routine-group + .bookmark-routine-group {
   padding-top: 0.9rem;
   border-top: 1px solid

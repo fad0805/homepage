@@ -58,6 +58,7 @@ FREQUENCY_ORDER = {
     "quarterly": 3,
     "yearly": 4,
 }
+QUARTER_START_MONTHS = {1, 4, 7, 10}
 KST = ZoneInfo("Asia/Seoul")
 SHORT_RETENTION_MONTHS = 3
 LONG_RETENTION_MONTHS = 36
@@ -147,6 +148,23 @@ def _week_start(value: date) -> date:
 def _quarter_start(value: date) -> date:
     month = ((value.month - 1) // 3) * 3 + 1
     return date(value.year, month, 1)
+
+
+def _quarter_start_month(value: int | None) -> int | None:
+    if value is None:
+        return None
+    if value not in QUARTER_START_MONTHS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="분기를 선택해주세요.",
+        )
+    return value
+
+
+def _quarter_matches(routine: BookmarkRoutine, day: date) -> bool:
+    if routine.frequency != "quarterly" or routine.month is None:
+        return True
+    return _quarter_start(day).month == routine.month
 
 
 def _year_start(value: date) -> date:
@@ -261,7 +279,11 @@ def _validate_schedule(
             "weekdays": None,
             "day_of_month": None,
             "nth_week": None,
-            "month": None,
+            "month": (
+                _quarter_start_month(month)
+                if frequency == "quarterly"
+                else None
+            ),
         }
     if tracking_mode != "date":
         raise HTTPException(
@@ -309,7 +331,7 @@ def _validate_schedule(
             "weekdays": None,
             "day_of_month": None,
             "nth_week": None,
-            "month": None,
+            "month": _quarter_start_month(month),
         }
     if month is None or day_of_month is None:
         raise HTTPException(
@@ -557,6 +579,8 @@ def _date_period_entry(
             occurrences=[{"date": month, "done": completed > 0}],
         )
     if routine.frequency == "quarterly":
+        if not _quarter_matches(routine, period_start):
+            return None
         quarter = _quarter_start(period_start)
         completed = _period_check_count(db, routine, "quarter", quarter)
         return _routine_period_dict(
@@ -743,7 +767,9 @@ def _routine_month_values(
         return _period_check_count(db, routine, "month", first), target
 
     if routine.frequency == "quarterly":
-        if first.month not in (1, 4, 7, 10):
+        if first.month not in QUARTER_START_MONTHS:
+            return None
+        if not _quarter_matches(routine, first):
             return None
         quarter = date(first.year, first.month, 1)
         completed = _period_check_count(db, routine, "quarter", quarter)
@@ -1084,6 +1110,8 @@ def get_today(
     )
     entries: list[dict[str, Any]] = []
     for routine in routines:
+        if not _quarter_matches(routine, target):
+            continue
         if routine.frequency == "daily":
             entry = _date_period_entry(
                 db,
@@ -1284,6 +1312,9 @@ def _quarterly_stat_buckets(
     ]
     buckets: list[dict[str, Any]] = []
     for quarter_start in starts:
+        if not _quarter_matches(routine, quarter_start):
+            buckets.append(_stat_bucket(quarter_start, 0, 0))
+            continue
         active = _stat_active_range(
             routine,
             quarter_start,
@@ -1430,6 +1461,8 @@ def get_period(
     )
     entries: list[dict[str, Any]] = []
     for routine in routines:
+        if not _quarter_matches(routine, period_start):
+            continue
         if routine.frequency == "daily":
             entry = _date_period_entry(
                 db,
