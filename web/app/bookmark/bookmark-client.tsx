@@ -128,7 +128,7 @@ export default function BookmarkClient({ username }: { username: string }) {
   });
   const [statsRange, setStatsRange] = useState<StatsRange>("month");
   const [statsSection, setStatsSection] =
-    useState<StatsSection>("routines");
+    useState<StatsSection>("journal");
   const [expandedDoneSections, setExpandedDoneSections] = useState<
     Set<string>
   >(() => new Set());
@@ -664,20 +664,20 @@ export default function BookmarkClient({ username }: { username: string }) {
         <button
           type="button"
           role="tab"
-          aria-selected={statsSection === "routines"}
-          className={statsSection === "routines" ? "is-active" : ""}
-          onClick={() => setStatsSection("routines")}
-        >
-          루틴 통계
-        </button>
-        <button
-          type="button"
-          role="tab"
           aria-selected={statsSection === "journal"}
           className={statsSection === "journal" ? "is-active" : ""}
           onClick={() => setStatsSection("journal")}
         >
           회고 모아보기
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={statsSection === "routines"}
+          className={statsSection === "routines" ? "is-active" : ""}
+          onClick={() => setStatsSection("routines")}
+        >
+          루틴 통계
         </button>
       </div>
       {statsSection === "routines" ? (
