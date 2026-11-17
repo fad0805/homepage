@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
+  useCallback,
   useEffect,
   useRef,
   useState,
@@ -38,6 +39,28 @@ interface SiteShellProps {
 const RIGHT_HOVER_OFFSET = 40;
 const RIGHT_HOVER_MIN_ZONE = 24;
 
+const FOCUSABLE_SELECTOR = [
+  "a[href]",
+  "button:not([disabled])",
+  "input:not([disabled])",
+  "select:not([disabled])",
+  "textarea:not([disabled])",
+  "summary",
+  '[tabindex]:not([tabindex="-1"])',
+].join(",");
+
+function getFocusableElements(container: HTMLElement | null) {
+  if (!container) return [];
+
+  return Array.from(
+    container.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR),
+  ).filter(
+    (element) =>
+      !element.hasAttribute("disabled") &&
+      element.getClientRects().length > 0,
+  );
+}
+
 function SiteTitle() {
   return (
     <div id="title">
@@ -62,6 +85,8 @@ export function SiteShell({
   const [drawerPinned, setDrawerPinned] = useState(false);
   const [sideMenuOpen, setSideMenuOpen] = useState(false);
   const drawerRef = useRef<HTMLDivElement>(null);
+  const drawerTriggerRef = useRef<HTMLButtonElement>(null);
+  const drawerReturnFocusRef = useRef<HTMLElement | null>(null);
   const topbarRef = useRef<HTMLElement>(null);
   const rightHoverArmedRef = useRef(true);
 
@@ -75,18 +100,90 @@ export function SiteShell({
   const isAdminRoute = pathname.startsWith("/admin");
   const sideRight = isSide && activeSidePosition === "right";
 
-  const closeDrawer = () => {
+  const openDrawer = useCallback(
+    (pinned: boolean, returnFocus?: HTMLElement | null) => {
+      drawerReturnFocusRef.current = returnFocus ?? null;
+      setDrawerOpen(true);
+      setDrawerPinned(pinned);
+
+      if (returnFocus) {
+        window.requestAnimationFrame(() => {
+          const first = getFocusableElements(drawerRef.current)[0];
+          (first ?? drawerRef.current)?.focus();
+        });
+      }
+    },
+    [],
+  );
+
+  const closeDrawer = useCallback((restoreFocus: boolean) => {
     setDrawerOpen(false);
     setDrawerPinned(false);
     rightHoverArmedRef.current = false;
-  };
+
+    const returnFocus = drawerReturnFocusRef.current;
+    drawerReturnFocusRef.current = null;
+
+    if (restoreFocus) {
+      window.requestAnimationFrame(() => {
+        if (returnFocus?.isConnected) returnFocus.focus();
+      });
+    }
+  }, []);
 
   useEffect(() => {
-    setDrawerOpen(false);
-    setDrawerPinned(false);
+    closeDrawer(false);
     setSideMenuOpen(false);
-    rightHoverArmedRef.current = false;
-  }, [pathname]);
+  }, [closeDrawer, pathname]);
+
+  useEffect(() => {
+    if (!drawerOpen) return;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.defaultPrevented) return;
+
+      if (event.key === "Escape") {
+        event.preventDefault();
+        closeDrawer(true);
+        return;
+      }
+
+      if (event.key !== "Tab") return;
+
+      const drawer = drawerRef.current;
+      if (!drawer) return;
+
+      const focusable = getFocusableElements(drawer);
+      if (focusable.length === 0) {
+        event.preventDefault();
+        drawer.focus();
+        return;
+      }
+
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (!first || !last) return;
+
+      const active = document.activeElement;
+      const outside =
+        !active || active === drawer || !drawer.contains(active);
+
+      if (event.shiftKey) {
+        if (active === first || outside) {
+          event.preventDefault();
+          last.focus();
+        }
+      } else if (active === last || outside) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [closeDrawer, drawerOpen]);
 
   useEffect(() => {
     if (!isSide) setSideMenuOpen(false);
@@ -127,13 +224,12 @@ export function SiteShell({
       }
 
       if (!rightHoverArmedRef.current) return;
-      setDrawerOpen(true);
-      setDrawerPinned(false);
+      openDrawer(false);
     };
 
     window.addEventListener("mousemove", handleMouseMove);
     return () => window.removeEventListener("mousemove", handleMouseMove);
-  }, [isDrawer, drawerOpen]);
+  }, [isDrawer, drawerOpen, openDrawer]);
 
   useEffect(() => {
     if (!drawerOpen || drawerPinned) return;
@@ -153,9 +249,7 @@ export function SiteShell({
         if (event.clientX >= triggerStart) return;
       }
 
-      setDrawerOpen(false);
-      setDrawerPinned(false);
-      rightHoverArmedRef.current = false;
+      closeDrawer(false);
     };
     const timer = window.setTimeout(() => {
       window.addEventListener("mousemove", handleMouseMove);
@@ -165,7 +259,7 @@ export function SiteShell({
       window.clearTimeout(timer);
       window.removeEventListener("mousemove", handleMouseMove);
     };
-  }, [drawerOpen, drawerPinned]);
+  }, [closeDrawer, drawerOpen, drawerPinned]);
 
   const classes = [
     "site-layout",
@@ -251,18 +345,18 @@ export function SiteShell({
         <SiteTitle />
         {isDrawer ? (
           <button
+            ref={drawerTriggerRef}
             type="button"
             className="site-menu-toggle"
-            onClick={() => {
-              setDrawerOpen(true);
-              setDrawerPinned(true);
-            }}
-            onMouseEnter={() => {
-              setDrawerOpen(true);
-              setDrawerPinned(false);
-            }}
+            onClick={() =>
+              openDrawer(true, drawerTriggerRef.current)
+            }
+            onMouseEnter={() => openDrawer(false)}
             aria-label="메뉴 열기"
             aria-expanded={drawerOpen}
+            aria-haspopup="dialog"
+            aria-controls="site-drawer"
+            tabIndex={drawerOpen ? -1 : undefined}
           >
             <span />
             <span />
@@ -275,22 +369,25 @@ export function SiteShell({
       {isDrawer ? (
         <div
           className={`site-drawer-backdrop${drawerOpen ? " is-open" : ""}`}
-          onClick={closeDrawer}
+          onClick={() => closeDrawer(true)}
           aria-hidden={!drawerOpen}
+          inert={!drawerOpen}
         >
           <div
             ref={drawerRef}
+            id="site-drawer"
             className="site-drawer"
             role="dialog"
             aria-modal="true"
-            aria-label="메뉴"
+            aria-labelledby="site-drawer-title"
+            tabIndex={-1}
             onClick={(event) => event.stopPropagation()}
           >
             <div className="site-drawer__header">
-              <span>메뉴</span>
+              <span id="site-drawer-title">메뉴</span>
               <button
                 type="button"
-                onClick={closeDrawer}
+                onClick={() => closeDrawer(true)}
                 aria-label="메뉴 닫기"
               >
                 ×

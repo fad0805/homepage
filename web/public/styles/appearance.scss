@@ -291,6 +291,15 @@ html:has(#container.site-layout--side) {
   }
 }
 
+.site-drawer__header button:focus-visible,
+.site-drawer #navbar a:focus-visible,
+.site-drawer #drawer-admin-navbar a:focus-visible,
+.site-drawer__site-menu summary:focus-visible,
+.site-drawer__theme button:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.9);
+  outline-offset: 3px;
+}
+
 .site-drawer #navbar {
   flex-direction: column;
   align-items: flex-start;
