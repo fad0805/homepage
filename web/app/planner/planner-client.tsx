@@ -35,6 +35,7 @@ import { usePlannerData } from "./use-planner-data";
 import { usePlannerEventPreview } from "./use-planner-event-preview";
 import { usePlannerMonthPicker } from "./use-planner-month-picker";
 import { usePlannerSearch } from "./use-planner-search";
+import { usePlannerTaskDetail } from "./use-planner-task-detail";
 import { usePlannerSpecialDates } from "./use-planner-special-dates";
 import { PlannerTaskCard } from "./planner-task-card";
 import { PlannerChipCreator } from "./planner-chip-creator";
@@ -167,6 +168,12 @@ export default function PlannerClient({ username }: { username: string }) {
     onError: setError,
   });
   const {
+    selectedTask,
+    setSelectedTask,
+    openTaskDetail,
+    closeTaskDetail,
+  } = usePlannerTaskDetail({ onError: setError });
+  const {
     specialDates,
     specialTab,
     setSpecialTab,
@@ -231,7 +238,6 @@ export default function PlannerClient({ username }: { username: string }) {
     setSelectedDate,
   });
   const [recordCompleted, setRecordCompleted] = useState(false);
-  const [selectedTask, setSelectedTask] = useState<PlannerTask | null>(null);
   const [taskModalOpen, setTaskModalOpen] = useState(false);
   const initializedToday = useRef(false);
   const eventsRequestRef = useRef(0);
@@ -1072,16 +1078,6 @@ export default function PlannerClient({ username }: { username: string }) {
     } finally {
       setNoteSavingId(null);
     }
-  };
-
-  const openTaskDetail = (task: PlannerTask) => {
-    setError(null);
-    setSelectedTask(task);
-  };
-
-  const closeTaskDetail = () => {
-    setSelectedTask(null);
-    setError(null);
   };
 
   const renderTaskCard = (task: PlannerTask) => (
