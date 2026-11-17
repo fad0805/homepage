@@ -114,16 +114,18 @@ printf '%s\n' "$PASSWORD" | bin/create-author --username alice --password-stdin
 날짜 계산, 기간별 집계, 기록 보존 로직은 `api/tests/`에서 자동 테스트합니다.
 테스트는 in-memory SQLite를 사용하므로 개발 DB에 영향을 주지 않습니다.
 
-```bash
-cd api
-python3 -m unittest discover -s tests -v
-```
-
 API 컨테이너가 실행 중이라면:
 
 ```bash
 docker compose -f docker-compose.yml -f docker-compose.dev.yml \
   exec api python -m unittest discover -s tests -v
+```
+
+API 의존성이 설치된 호스트에서는:
+
+```bash
+cd api
+python3 -m unittest discover -s tests -v
 ```
 
 현재 테스트 범위:
@@ -137,6 +139,9 @@ docker compose -f docker-compose.yml -f docker-compose.dev.yml \
 - 월간/주간 통계 집계
 - 기간별 통계 버킷
 - 오래된 체크 삭제와 월간 집계 보존
+- 플래너 정오 기준 마감일과 범위 일정 검증
+- 플래너 색상·일정 CRUD와 상태 전이
+- 플래너 이력 조회·검색·완료 기록
 
 ## 환경 변수
 
@@ -255,7 +260,8 @@ API 컨테이너는 시작 시 `api/entrypoint.sh`에서 `alembic upgrade head`�
 │   ├── alembic/                 # DB 마이그레이션
 │   ├── core/                    # 보안·설정·업로드·백그라운드 작업
 │   ├── crud/                    # CRUD 로직
-│   │   └── bookmark/            # 책갈피 도메인 패키지
+│   │   ├── bookmark/            # 책갈피 도메인 패키지
+│   │   └── planner/             # 플래너 도메인 패키지
 │   ├── db/                      # DB 세션/엔진
 │   ├── models/                  # SQLAlchemy ORM 모델
 │   ├── routers/                 # API 라우터
