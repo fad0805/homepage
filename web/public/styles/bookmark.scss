@@ -318,6 +318,11 @@
   opacity: 0.5;
 }
 
+[data-theme='dark'] .bookmark-panel-eyebrow {
+  color: #b7d9b7;
+  opacity: 1;
+}
+
 .bookmark-panel-actions {
   display: flex;
   flex-wrap: wrap;
@@ -382,6 +387,11 @@
     outline-offset: 3px;
     opacity: 1;
   }
+}
+
+[data-theme='dark'] .bookmark-category-group-toggle {
+  color: #b7d9b7;
+  opacity: 1;
 }
 
 .bookmark-category-group-arrow {
