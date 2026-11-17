@@ -3,7 +3,6 @@ import { useEffect, useState } from "react";
 import { CloverIcon } from "@/app/bookmark/clover-rating";
 import type { BookmarkJournalNode } from "@/lib/bookmark";
 
-import { pad2, parseDateKey } from "./bookmark-utils";
 import { useBookmarkJournalTree } from "./use-bookmark-journal-tree";
 
 function formatAverage(value: number | null) {
@@ -98,41 +97,15 @@ export function BookmarkJournalPanel() {
         ) ?? null
       : null;
 
-  const decadeYear = tree
-    ? parseDateKey(tree.decade_start).getUTCFullYear()
-    : null;
-  const decadeYears =
-    decadeYear === null
-      ? []
-      : Array.from({ length: 10 }, (_, index) =>
-          tree?.years.find(
-            (year) => year.period_start === `${decadeYear + index}-01-01`,
-          ) ?? null,
-        );
-
-  const monthsByStart = new Map(
-    yearNode
-      ? yearNode.children.flatMap((quarter) =>
-          quarter.children.map((month) => [
-            month.period_start,
-            month,
-          ] as const),
-        )
-      : [],
-  );
+  const decadeYears = tree
+    ? [...tree.years].sort((a, b) =>
+        a.period_start.localeCompare(b.period_start),
+      )
+    : [];
   const yearMonths = yearNode
-    ? Array.from({ length: 12 }, (_, index) => {
-        const month = index + 1;
-        return {
-          month,
-          start: `${yearNode.period_start.slice(0, 4)}-${pad2(
-            month,
-          )}-01`,
-          node: monthsByStart.get(
-            `${yearNode.period_start.slice(0, 4)}-${pad2(month)}-01`,
-          ) ?? null,
-        };
-      })
+    ? yearNode.children
+        .flatMap((quarter) => quarter.children)
+        .sort((a, b) => a.period_start.localeCompare(b.period_start))
     : [];
 
   const goBack = () => {
@@ -157,30 +130,30 @@ export function BookmarkJournalPanel() {
       return <p className="bookmark-error">{error}</p>;
     }
     if (!tree) return null;
+    if (decadeYears.length === 0) {
+      return (
+        <p className="bookmark-empty-row">
+          이 10년에 기록된 회고가 없습니다.
+        </p>
+      );
+    }
     return (
       <div className="bookmark-journal-grid">
-        {decadeYears.map((year, index) => {
-          const label = `${decadeYear! + index}년`;
-          return (
-            <button
-              type="button"
-              className="bookmark-journal-card"
-              key={label}
-              disabled={year === null}
-              onClick={() => {
-                if (!year) return;
-                setYearStart(year.period_start);
-                setMonthStart(null);
-                setWeekStart(null);
-              }}
-            >
-              <strong>{label}</strong>
-              <span>
-                {year ? countText(year) : "기록 없음"}
-              </span>
-            </button>
-          );
-        })}
+        {decadeYears.map((year) => (
+          <button
+            type="button"
+            className="bookmark-journal-card"
+            key={year.period_start}
+            onClick={() => {
+              setYearStart(year.period_start);
+              setMonthStart(null);
+              setWeekStart(null);
+            }}
+          >
+            <strong>{year.label}</strong>
+            <span>{countText(year)}</span>
+          </button>
+        ))}
       </div>
     );
   };
@@ -213,28 +186,30 @@ export function BookmarkJournalPanel() {
         ) : null}
         <div className="bookmark-journal-section">
           <h3>월간 기록</h3>
-          <div className="bookmark-journal-grid is-months">
-            {yearMonths.map(({ month, start, node: monthData }) => (
-              <button
-                type="button"
-                className="bookmark-journal-card"
-                key={start}
-                disabled={monthData === null}
-                onClick={() => {
-                  if (!monthData) return;
-                  setMonthStart(monthData.period_start);
-                  setWeekStart(null);
-                }}
-              >
-                <strong>{month}월</strong>
-                <span>
-                  {monthData
-                    ? countText(monthData)
-                    : "기록 없음"}
-                </span>
-              </button>
-            ))}
-          </div>
+          {yearMonths.length === 0 ? (
+            <p className="bookmark-empty-row">
+              이 해에 기록된 월간 회고가 없습니다.
+            </p>
+          ) : (
+            <div className="bookmark-journal-grid is-months">
+              {yearMonths.map((month) => (
+                <button
+                  type="button"
+                  className="bookmark-journal-card"
+                  key={month.period_start}
+                  onClick={() => {
+                    setMonthStart(month.period_start);
+                    setWeekStart(null);
+                  }}
+                >
+                  <strong>
+                    {Number(month.period_start.slice(5, 7))}월
+                  </strong>
+                  <span>{countText(month)}</span>
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       </>
     );
