@@ -166,7 +166,7 @@ def reorder_routines(
             detail="루틴 순서가 올바르지 않습니다.",
         )
 
-    routines = (
+    requested = (
         db.query(BookmarkRoutine)
         .filter(
             BookmarkRoutine.user_id == user_id,
@@ -175,31 +175,62 @@ def reorder_routines(
         )
         .all()
     )
-    if len(routines) != len(ids):
+    if len(requested) != len(ids):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="루틴을 찾을 수 없습니다.",
         )
 
-    # Reuse the position slots the visible routines already occupy. Positions
-    # are tracked per frequency, so keep each frequency's slots separate.
-    positions_by_frequency: dict[str, list[int]] = {}
-    for routine in routines:
-        positions_by_frequency.setdefault(
-            routine.frequency, []
-        ).append(routine.position)
-    for positions in positions_by_frequency.values():
-        positions.sort()
-
-    by_id = {routine.id: routine for routine in routines}
-    next_slot = {frequency: 0 for frequency in positions_by_frequency}
+    by_id = {routine.id: routine for routine in requested}
+    requested_by_frequency: dict[str, list[BookmarkRoutine]] = {}
     for routine_id in ids:
         routine = by_id[routine_id]
-        frequency = routine.frequency
-        routine.position = positions_by_frequency[frequency][
-            next_slot[frequency]
+        requested_by_frequency.setdefault(routine.frequency, []).append(
+            routine
+        )
+
+    # Rebuild each affected frequency's order in full. The reorder payload may
+    # contain only the routines visible in the current view (for example,
+    # today's due routines). Put the requested routines into the slots they
+    # already occupy so unlisted routines keep their relative order, then
+    # rewrite every position sequentially. This also repairs legacy rows that
+    # all share position 0.
+    all_routines = (
+        db.query(BookmarkRoutine)
+        .filter(
+            BookmarkRoutine.user_id == user_id,
+            BookmarkRoutine.calendar_only.is_(False),
+            BookmarkRoutine.frequency.in_(
+                requested_by_frequency.keys()
+            ),
+        )
+        .order_by(BookmarkRoutine.position, BookmarkRoutine.id)
+        .all()
+    )
+    routines_by_frequency: dict[str, list[BookmarkRoutine]] = {}
+    for routine in all_routines:
+        routines_by_frequency.setdefault(routine.frequency, []).append(
+            routine
+        )
+
+    for frequency, requested_routines in requested_by_frequency.items():
+        current = routines_by_frequency[frequency]
+        requested_ids = {routine.id for routine in requested_routines}
+        slots = [
+            index
+            for index, routine in enumerate(current)
+            if routine.id in requested_ids
         ]
-        next_slot[frequency] += 1
+        if len(slots) != len(requested_routines):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="루틴을 찾을 수 없습니다.",
+            )
+        merged = list(current)
+        for slot, routine in zip(slots, requested_routines):
+            merged[slot] = routine
+        for position, routine in enumerate(merged):
+            routine.position = position
 
     db.commit()
     return {"success": True}
