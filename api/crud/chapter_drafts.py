@@ -1,4 +1,4 @@
-from datetime import timezone
+from datetime import datetime, timedelta, timezone
 
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
@@ -8,6 +8,7 @@ from schemas.chapter_drafts import ChapterDraftSave
 
 
 MAX_DRAFT_KEY_LENGTH = 120
+DRAFT_RETENTION_DAYS = 30
 
 
 def _clean_tags(tags: list[str] | None) -> list[str]:
@@ -101,3 +102,22 @@ def delete_chapter_draft(db: Session, owner: str, draft_key: str):
         db.delete(draft)
         db.commit()
     return True
+
+
+def prune_old_chapter_drafts(
+    db: Session,
+    *,
+    now: datetime | None = None,
+) -> int:
+    """Delete drafts not saved within the retention window."""
+    current = now or datetime.now(timezone.utc)
+    if current.tzinfo is not None:
+        current = current.astimezone(timezone.utc).replace(tzinfo=None)
+    cutoff = current - timedelta(days=DRAFT_RETENTION_DAYS)
+    deleted = (
+        db.query(ChapterDraft)
+        .filter(ChapterDraft.updated_at < cutoff)
+        .delete(synchronize_session=False)
+    )
+    db.commit()
+    return deleted
