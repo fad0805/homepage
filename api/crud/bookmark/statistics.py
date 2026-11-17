@@ -123,10 +123,7 @@ def _upsert_routine_monthly_stat(
 ) -> None:
     db.flush()
     values = _routine_month_values(db, routine, month_start)
-    if values is None:
-        return
     first = _month_start(month_start)
-    completed, expected = values
     stat = (
         db.query(BookmarkRoutineMonthlyStat)
         .filter(
@@ -136,6 +133,11 @@ def _upsert_routine_monthly_stat(
         )
         .first()
     )
+    if values is None:
+        if stat is not None:
+            db.delete(stat)
+        return
+    completed, expected = values
     if stat is None:
         stat = BookmarkRoutineMonthlyStat(
             user_id=routine.user_id,

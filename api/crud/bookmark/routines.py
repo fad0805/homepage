@@ -97,7 +97,21 @@ def update_routine(
     routine.day_of_month = schedule["day_of_month"]
     routine.nth_week = schedule["nth_week"]
     routine.month = schedule["month"]
-    _upsert_routine_monthly_stat(db, routine, _month_start(_kst_today()))
+
+    # Settings such as target_count and weekdays change the expected values of
+    # every stored month, not only the current one. Recompute all months that
+    # already have an aggregate so history and the statistics page agree.
+    stat_months = {
+        month_start
+        for (month_start,) in db.query(
+            BookmarkRoutineMonthlyStat.month_start
+        )
+        .filter(BookmarkRoutineMonthlyStat.routine_id == routine.id)
+        .all()
+    }
+    stat_months.add(_month_start(_kst_today()))
+    for month_start in sorted(stat_months):
+        _upsert_routine_monthly_stat(db, routine, month_start)
 
     db.commit()
     db.refresh(routine)

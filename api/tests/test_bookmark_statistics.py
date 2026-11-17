@@ -2,12 +2,16 @@ import unittest
 from datetime import date, timedelta
 from unittest.mock import patch
 
+from crud.bookmark.history import get_routine_history
 from crud.bookmark.periods import get_period
+from crud.bookmark.routines import update_routine
 from crud.bookmark.schedule import _routine_monthly_due_date
 from crud.bookmark.statistics import (
     _routine_month_values,
+    _upsert_routine_monthly_stat,
     get_statistics,
 )
+from schemas.bookmark import BookmarkRoutineUpdate
 from tests.bookmark_test_base import BookmarkDatabaseTestCase
 
 
@@ -149,6 +153,85 @@ class BookmarkStatisticsTests(
             _routine_month_values(self.db, routine, date(2026, 3, 1)),
             (2, 15),
         )
+
+    def test_weekly_date_started_midweek_keeps_first_partial_week(
+        self,
+    ) -> None:
+        routine = self.make_routine(
+            frequency="weekly",
+            tracking_mode="date",
+            weekdays=[0, 2],
+            start_date=date(2026, 3, 4),
+        )
+        self.add_check(routine, "day", date(2026, 3, 4))
+        self.assertEqual(
+            _routine_month_values(self.db, routine, date(2026, 3, 1)),
+            (1, 8),
+        )
+
+    def test_update_routine_refreshes_past_monthly_stats(self) -> None:
+        routine = self.make_routine(
+            frequency="weekly",
+            tracking_mode="count",
+            target_count=2,
+            start_date=date(2026, 1, 1),
+        )
+        self.add_check(
+            routine,
+            "week",
+            date(2026, 1, 5),
+            count=1,
+        )
+        _upsert_routine_monthly_stat(
+            self.db,
+            routine,
+            date(2026, 1, 1),
+        )
+        self.add_check(
+            routine,
+            "week",
+            date(2026, 2, 2),
+            count=1,
+        )
+        _upsert_routine_monthly_stat(
+            self.db,
+            routine,
+            date(2026, 2, 1),
+        )
+        self.db.commit()
+
+        with patch(
+            "crud.bookmark.routines._kst_today",
+            return_value=date(2026, 3, 15),
+        ):
+            update_routine(
+                self.db,
+                routine.id,
+                BookmarkRoutineUpdate(target_count=3),
+                routine.user_id,
+            )
+
+        history = get_routine_history(
+            self.db,
+            routine.id,
+            routine.user_id,
+            today=date(2026, 3, 15),
+        )
+        by_month = {
+            item.month_start: item for item in history["monthly"]
+        }
+        self.assertEqual(
+            _routine_month_values(self.db, routine, date(2026, 1, 1)),
+            (1, 15),
+        )
+        self.assertEqual(
+            _routine_month_values(self.db, routine, date(2026, 2, 1)),
+            (1, 12),
+        )
+        self.assertEqual(by_month[date(2026, 1, 1)].completed_count, 1)
+        self.assertEqual(by_month[date(2026, 1, 1)].expected_count, 15)
+        self.assertEqual(by_month[date(2026, 2, 1)].completed_count, 1)
+        self.assertEqual(by_month[date(2026, 2, 1)].expected_count, 12)
 
     def test_weekly_count_started_on_first_day_midweek_keeps_partial_week(
         self,
