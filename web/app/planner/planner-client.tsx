@@ -30,6 +30,7 @@ import { PlannerCalendar } from "./planner-calendar";
 import { PlannerDayDetail } from "./planner-day-detail";
 import { PlannerHistoryList } from "./planner-history-list";
 import { PlannerTabs } from "./planner-tabs";
+import { usePlannerData } from "./use-planner-data";
 import { usePlannerEventPreview } from "./use-planner-event-preview";
 import { usePlannerMonthPicker } from "./use-planner-month-picker";
 import { usePlannerSearch } from "./use-planner-search";
@@ -105,10 +106,6 @@ import {
 
 export default function PlannerClient({ username }: { username: string }) {
   const initialToday = todayDateInputValue();
-  const [today, setToday] = useState(initialToday);
-  const [tasks, setTasks] = useState<PlannerTask[]>([]);
-  const [events, setEvents] = useState<PlannerEvent[]>([]);
-  const [savedColors, setSavedColors] = useState<PlannerColor[]>([]);
   const [selectedDate, setSelectedDate] = useState(initialToday);
   const [dragRange, setDragRange] = useState<{
     start: string;
@@ -120,8 +117,6 @@ export default function PlannerClient({ username }: { username: string }) {
   const [activeTab, setActiveTab] = useState<PlannerTab>("active");
   const [form, setForm] = useState<TaskFormState>(() => emptyForm(initialToday));
   const [editingId, setEditingId] = useState<number | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [eventsLoading, setEventsLoading] = useState(false);
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [noteSavingId, setNoteSavingId] = useState<number | null>(null);
   const [colorSaving, setColorSaving] = useState(false);
@@ -171,6 +166,31 @@ export default function PlannerClient({ username }: { username: string }) {
     updateSearchTaskNotes,
     resetSearch,
   } = usePlannerSearch({ viewMonth, onError: setError });
+  const {
+    today,
+    tasks,
+    setTasks,
+    events,
+    setEvents,
+    savedColors,
+    setSavedColors,
+    loading,
+    eventsLoading,
+    dayBookmark,
+    loadTasks,
+    loadEvents,
+    refreshData,
+  } = usePlannerData({
+    initialDate: initialToday,
+    viewMonth,
+    selectedDate,
+    setViewMonth,
+    setSelectedDate,
+    setSearchFrom,
+    setSearchTo,
+    setForm,
+    onError: setError,
+  });
   const {
     specialDates,
     specialTab,
@@ -237,114 +257,9 @@ export default function PlannerClient({ username }: { username: string }) {
   });
   const [recordCompleted, setRecordCompleted] = useState(false);
   const [selectedTask, setSelectedTask] = useState<PlannerTask | null>(null);
-  const [dayBookmark, setDayBookmark] =
-    useState<BookmarkPeriod | null>(null);
   const [taskModalOpen, setTaskModalOpen] = useState(false);
   const initializedToday = useRef(false);
   const eventsRequestRef = useRef(0);
-
-  const loadTasks = useCallback(async () => {
-    try {
-      const data = await apiFetch<PlannerTasksResponse>("/api/planner/tasks", {
-        cache: "no-store",
-      });
-      setToday(data.today);
-      setTasks(sortTasks(data.tasks));
-      if (!initializedToday.current) {
-        initializedToday.current = true;
-        const bounds = monthBounds(data.today.slice(0, 7));
-        setSelectedDate(data.today);
-        setViewMonth(data.today.slice(0, 7));
-        setSearchFrom(bounds.start);
-        setSearchTo(bounds.end);
-        setForm((previous) =>
-          previous.title || previous.notes
-            ? previous
-            : emptyForm(data.today),
-        );
-      }
-      setError(null);
-    } catch (reason) {
-      setError(
-        reason instanceof Error
-          ? reason.message
-          : "일정을 불러오지 못했습니다.",
-      );
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  const loadColors = useCallback(async () => {
-    try {
-      const data = await apiFetch<PlannerColorsResponse>(
-        "/api/planner/colors",
-        { cache: "no-store" },
-      );
-      setSavedColors(data.colors);
-    } catch (reason) {
-      setError(
-        reason instanceof Error
-          ? reason.message
-          : "저장된 색상을 불러오지 못했습니다.",
-      );
-    }
-  }, []);
-
-  const loadEvents = useCallback(async (monthKey: string) => {
-    const requestId = ++eventsRequestRef.current;
-    const visibleCells = monthCells(monthKey);
-    const start = visibleCells[0].date;
-    const end = visibleCells[visibleCells.length - 1].date;
-    setEventsLoading(true);
-    try {
-      const data = await apiFetch<PlannerEventsResponse>(
-        `/api/planner/events?start=${start}&end=${end}`,
-        { cache: "no-store" },
-      );
-      if (requestId !== eventsRequestRef.current) return;
-      setEvents(data.events);
-    } catch (reason) {
-      if (requestId !== eventsRequestRef.current) return;
-      setError(
-        reason instanceof Error
-          ? reason.message
-          : "이력을 불러오지 못했습니다.",
-      );
-    } finally {
-      if (requestId === eventsRequestRef.current) {
-        setEventsLoading(false);
-      }
-    }
-  }, []);
-
-  const loadDayBookmark = useCallback(async (date: string) => {
-    try {
-      const data = await apiFetch<BookmarkPeriod>(
-        `/api/bookmark?period_type=day&period_start=${date}`,
-        { cache: "no-store" },
-      );
-      setDayBookmark(data);
-    } catch {
-      setDayBookmark(null);
-    }
-  }, []);
-
-  useEffect(() => {
-    void loadTasks();
-  }, [loadTasks]);
-
-  useEffect(() => {
-    void loadColors();
-  }, [loadColors]);
-
-  useEffect(() => {
-    void loadEvents(viewMonth);
-  }, [loadEvents, viewMonth]);
-
-  useEffect(() => {
-    void loadDayBookmark(selectedDate);
-  }, [loadDayBookmark, selectedDate]);
 
   useEffect(() => {
     if (activeTab === "colors") return;
@@ -699,12 +614,7 @@ export default function PlannerClient({ username }: { username: string }) {
     if (searchOpen) {
       closeSearchResults();
     }
-    await Promise.all([
-      loadTasks(),
-      loadEvents(viewMonth),
-      loadColors(),
-      loadSpecialDates(),
-    ]);
+    await Promise.all([refreshData(), loadSpecialDates()]);
   };
 
   const changeMonth = (delta: number) => {
