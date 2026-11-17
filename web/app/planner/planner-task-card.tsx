@@ -25,7 +25,10 @@ export function PlannerTaskCard({
         key={task.id}
         role="button"
         tabIndex={0}
-        style={{ borderLeftColor: taskColor(task) }}
+        style={{
+          borderLeftColor: taskColor(task),
+          borderRightColor: taskColor(task),
+        }}
         onClick={() => onOpen(task)}
         onKeyDown={(event) => {
           if (event.target !== event.currentTarget) return;
