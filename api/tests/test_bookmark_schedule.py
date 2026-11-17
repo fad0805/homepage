@@ -1,5 +1,6 @@
 import unittest
 from datetime import date
+from types import SimpleNamespace
 
 from fastapi import HTTPException
 
@@ -11,6 +12,7 @@ from crud.bookmark.common import (
     _shift_months,
 )
 from crud.bookmark.schedule import (
+    _next_routine_date,
     _quarter_matches,
     _routine_monthly_due_date,
     _validate_schedule,
@@ -175,6 +177,72 @@ class BookmarkScheduleTests(unittest.TestCase):
         self.assertTrue(_quarter_matches(routine, date(2026, 4, 1)))
         self.assertTrue(_quarter_matches(routine, date(2026, 6, 30)))
         self.assertFalse(_quarter_matches(routine, date(2026, 7, 1)))
+
+    def _next_routine(self, **overrides):
+        values = {
+            "frequency": "monthly",
+            "tracking_mode": "date",
+            "start_date": date(2026, 1, 1),
+            "end_date": None,
+            "weekday": None,
+            "weekdays": None,
+            "day_of_month": 10,
+            "nth_week": None,
+            "month": None,
+            "active": True,
+        }
+        values.update(overrides)
+        return SimpleNamespace(**values)
+
+    def test_next_routine_date_monthly_and_weekly(self) -> None:
+        monthly = self._next_routine()
+        self.assertEqual(
+            _next_routine_date(monthly, date(2026, 11, 5)),
+            date(2026, 11, 10),
+        )
+        self.assertEqual(
+            _next_routine_date(monthly, date(2026, 11, 15)),
+            date(2026, 12, 10),
+        )
+        weekly = self._next_routine(
+            frequency="weekly",
+            day_of_month=None,
+            weekdays=[0, 2],
+        )
+        self.assertEqual(
+            _next_routine_date(weekly, date(2026, 11, 17)),
+            date(2026, 11, 18),
+        )
+
+    def test_next_routine_date_quarterly_and_yearly(self) -> None:
+        quarterly = self._next_routine(
+            frequency="quarterly",
+            day_of_month=None,
+            month=4,
+        )
+        self.assertEqual(
+            _next_routine_date(quarterly, date(2026, 11, 17)),
+            date(2027, 4, 1),
+        )
+        yearly = self._next_routine(
+            frequency="yearly",
+            month=3,
+            day_of_month=1,
+        )
+        self.assertEqual(
+            _next_routine_date(yearly, date(2026, 11, 17)),
+            date(2027, 3, 1),
+        )
+
+    def test_next_routine_date_skips_count_and_ended_routines(self) -> None:
+        count = self._next_routine(tracking_mode="count")
+        self.assertIsNone(
+            _next_routine_date(count, date(2026, 11, 17))
+        )
+        ended = self._next_routine(end_date=date(2026, 11, 16))
+        self.assertIsNone(
+            _next_routine_date(ended, date(2026, 11, 17))
+        )
 
 
 if __name__ == "__main__":

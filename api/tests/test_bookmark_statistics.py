@@ -2,6 +2,7 @@ import unittest
 from datetime import date, timedelta
 from unittest.mock import patch
 
+from crud.bookmark.periods import get_period
 from crud.bookmark.schedule import _routine_monthly_due_date
 from crud.bookmark.statistics import (
     _routine_month_values,
@@ -128,6 +129,33 @@ class BookmarkStatisticsTests(
         )
         self.assertEqual(bucket["completed_count"], 1)
         self.assertEqual(bucket["expected_count"], 1)
+
+    def test_period_includes_future_routines_with_next_date(self) -> None:
+        current = self.make_routine(
+            frequency="monthly",
+            tracking_mode="date",
+            day_of_month=10,
+            start_date=date(2026, 1, 1),
+        )
+        future = self.make_routine(
+            frequency="monthly",
+            tracking_mode="date",
+            day_of_month=10,
+            start_date=date(2027, 1, 1),
+        )
+        data = get_period(
+            self.db,
+            current.user_id,
+            period_type="month",
+            period_start=date(2026, 11, 1),
+        )
+        by_id = {item["id"]: item for item in data["routines"]}
+        self.assertIn(current.id, by_id)
+        self.assertIn(future.id, by_id)
+        self.assertEqual(
+            by_id[future.id]["next_date"],
+            date(2027, 1, 10),
+        )
 
 
 if __name__ == "__main__":

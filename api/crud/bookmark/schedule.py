@@ -79,6 +79,44 @@ def _routine_due_on_day(routine: BookmarkRoutine, day: date) -> bool:
     return True
 
 
+def _next_routine_date(
+    routine: BookmarkRoutine,
+    today: date,
+) -> date | None:
+    """Return the next date-mode occurrence on or after ``today``."""
+    if routine.tracking_mode != "date":
+        return None
+
+    start = max(today, routine.start_date)
+    if routine.end_date is not None and start > routine.end_date:
+        return None
+
+    if routine.frequency == "quarterly":
+        quarter = _quarter_start(start)
+        for _ in range(9):
+            if (
+                quarter >= routine.start_date
+                and (routine.end_date is None or quarter <= routine.end_date)
+                and (
+                    routine.month is None
+                    or quarter.month == routine.month
+                )
+            ):
+                return quarter
+            quarter = _shift_months(quarter, 3)
+        return None
+
+    for offset in range(0, 371):
+        day = start + timedelta(days=offset)
+        if routine.end_date is not None and day > routine.end_date:
+            return None
+        if not _in_routine_lifespan(routine, day):
+            continue
+        if _routine_due_on_day(routine, day):
+            return day
+    return None
+
+
 def _validate_schedule(
     *,
     frequency: str,

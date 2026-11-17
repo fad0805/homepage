@@ -2,6 +2,7 @@
 
 from .common import *  # noqa: F401,F403
 from .schedule import (
+    _next_routine_date,
     _quarter_matches,
     _routine_due_on_day,
     _routine_monthly_due_date,
@@ -256,7 +257,6 @@ def get_period(
 ) -> dict[str, Any]:
     _validate_period(period_type, period_start)
     frequency = PERIOD_FREQUENCY[period_type]
-    period_end = _period_end(period_type, period_start)
     routines = (
         db.query(BookmarkRoutine)
         .options(selectinload(BookmarkRoutine.category))
@@ -264,19 +264,13 @@ def get_period(
             BookmarkRoutine.user_id == user_id,
             BookmarkRoutine.calendar_only.is_(False),
             BookmarkRoutine.frequency == frequency,
-            BookmarkRoutine.start_date <= period_end,
-            or_(
-                BookmarkRoutine.end_date.is_(None),
-                BookmarkRoutine.end_date >= period_start,
-            ),
         )
         .order_by(BookmarkRoutine.position, BookmarkRoutine.id)
         .all()
     )
+    today = _kst_today()
     entries: list[dict[str, Any]] = []
     for routine in routines:
-        if not _quarter_matches(routine, period_start):
-            continue
         if routine.frequency == "daily":
             entry = _date_period_entry(
                 db,
@@ -298,8 +292,16 @@ def get_period(
                 period_type=period_type,
                 period_start=period_start,
             )
-        if entry is not None:
-            entries.append(entry)
+        if entry is None:
+            entry = _routine_period_dict(
+                routine,
+                period_type=period_type,
+                period_start=period_start,
+                completed_count=0,
+                occurrences=[],
+            )
+        entry["next_date"] = _next_routine_date(routine, today)
+        entries.append(entry)
     goal = (
         db.query(BookmarkGoal)
         .filter(

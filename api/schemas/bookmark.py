@@ -146,6 +146,7 @@ class BookmarkRoutinePeriodRead(BookmarkRoutineRead):
     occurrences: list[BookmarkRoutineOccurrenceRead] = Field(
         default_factory=list
     )
+    next_date: date | None = None
 
 
 class BookmarkRoutineCheckUpdate(BaseModel):

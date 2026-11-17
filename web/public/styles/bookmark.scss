@@ -961,6 +961,13 @@
   opacity: 0.6;
 }
 
+.bookmark-routine-next {
+  color: var(--title-color);
+  font-size: 0.6rem;
+  opacity: 0.55;
+  white-space: nowrap;
+}
+
 .bookmark-occurrence-list {
   display: flex;
   flex-wrap: wrap;
