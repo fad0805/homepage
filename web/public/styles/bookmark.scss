@@ -319,7 +319,11 @@
 }
 
 [data-theme='dark'] .bookmark-panel-eyebrow {
-  color: #b7d9b7;
+  color: color-mix(
+    in srgb,
+    var(--title-color) 35%,
+    var(--foreground)
+  );
   opacity: 1;
 }
 
@@ -390,7 +394,11 @@
 }
 
 [data-theme='dark'] .bookmark-category-group-toggle {
-  color: #b7d9b7;
+  color: color-mix(
+    in srgb,
+    var(--title-color) 60%,
+    var(--foreground)
+  );
   opacity: 1;
 }
 
