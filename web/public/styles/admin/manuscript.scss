@@ -64,6 +64,7 @@
 .admin-manuscript-create {
   display: flex;
   gap: 0.35rem;
+  margin-left: auto;
 
   input {
     width: 11rem;
@@ -157,6 +158,11 @@
     text-overflow: ellipsis;
     white-space: nowrap;
   }
+
+  &:not(.is-head) > span,
+  &:not(.is-head) .admin-manuscript-book {
+    font-size: 0.8em;
+  }
 }
 
 .admin-manuscript-title {
@@ -168,7 +174,7 @@
   cursor: pointer;
 
   &:hover {
-    text-decoration: underline;
+    color: var(--theme-main);
   }
 }
 
@@ -189,7 +195,6 @@
   &:hover {
     color: var(--theme-main);
     opacity: 1;
-    text-decoration: underline;
   }
 }
 

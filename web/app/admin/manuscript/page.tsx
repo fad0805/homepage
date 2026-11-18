@@ -156,7 +156,7 @@ export default function AdminManuscriptPage() {
         <div>
           <h1>원고 관리</h1>
           <p className="admin-manuscript-hint">
-            프로젝트를 더블클릭하면 새 탭에서 원고 편집기가 열립니다.
+            프로젝트 이름을 클릭하면 새 탭에서 원고 편집기가 열립니다.
           </p>
         </div>
         <div className="admin-manuscript-actions">
@@ -228,8 +228,8 @@ export default function AdminManuscriptPage() {
             <div key={project.id} className="admin-manuscript-row">
               <span
                 className="admin-manuscript-title"
-                onDoubleClick={() => openProject(project)}
-                title="더블클릭하여 편집기에서 열기"
+                onClick={() => openProject(project)}
+                title="클릭하여 편집기에서 열기"
               >
                 {project.title}
               </span>
