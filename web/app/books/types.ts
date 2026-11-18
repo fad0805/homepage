@@ -16,6 +16,7 @@ export interface Book {
   order: number;
   visible: boolean;
   protected: boolean;
+  chapter_count?: number;
   locked?: boolean;
 }
 

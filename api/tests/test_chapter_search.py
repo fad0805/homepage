@@ -1,3 +1,4 @@
+import re
 import unittest
 from datetime import datetime, timezone
 
@@ -13,7 +14,7 @@ from crud.books import (
     search_chapters_for_owner,
 )
 from db.base import Base
-from models.books import Book, Chapter
+from models.books import Book, BookCategory, Chapter
 from models.users import User
 
 
@@ -202,6 +203,128 @@ class ChapterSearchTests(unittest.TestCase):
         self.assertEqual(second_total, 5)
         self.assertEqual(first, [created[4].id, created[3].id])
         self.assertEqual(second, [created[2].id, created[1].id])
+
+    def test_paginated_search_excludes_hidden_categories(self) -> None:
+        hidden_category = BookCategory(
+            user_id=self.owner.id,
+            name="비공개 카테고리",
+            visible=False,
+        )
+        self.db.add(hidden_category)
+        self.db.flush()
+        self.book.category_id = hidden_category.id
+        self._chapter(
+            "비공개 카테고리 글",
+            "공통 검색어",
+            owner_id=self.owner.id,
+            created_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
+        )
+        public_book = Book(
+            user_id=self.owner.id,
+            title="공개 책",
+            tags=[],
+        )
+        self.db.add(public_book)
+        self.db.flush()
+        self.db.add(
+            Chapter(
+                user_id=self.owner.id,
+                book_id=public_book.id,
+                title="공개 카테고리 글",
+                body="공통 검색어",
+                tags=[],
+                created_at=datetime(2026, 1, 2, tzinfo=timezone.utc),
+            )
+        )
+        self.db.commit()
+
+        results, total = get_chapters_page(
+            self.db,
+            query="검색어",
+            include_body=False,
+            page=1,
+            page_size=10,
+        )
+        self.assertEqual(total, 1)
+        self.assertEqual(
+            [item["title"] for item in results],
+            ["공개 카테고리 글"],
+        )
+
+        other_results, other_total = get_chapters_page(
+            self.db,
+            include_hidden=True,
+            viewer_user_id=self.other.id,
+            query="검색어",
+            include_body=False,
+            page=1,
+            page_size=10,
+        )
+        self.assertEqual(other_total, 1)
+        self.assertEqual(
+            [item["title"] for item in other_results],
+            ["공개 카테고리 글"],
+        )
+
+        owner_viewer_results, owner_viewer_total = get_chapters_page(
+            self.db,
+            include_hidden=True,
+            viewer_user_id=self.owner.id,
+            query="검색어",
+            include_body=False,
+            page=1,
+            page_size=10,
+        )
+        self.assertEqual(owner_viewer_total, 2)
+        self.assertEqual(len(owner_viewer_results), 2)
+
+        owner_results, owner_total = get_chapters_page(
+            self.db,
+            include_hidden=True,
+            owner_user_id=self.owner.id,
+            query="검색어",
+            include_body=False,
+            page=1,
+            page_size=10,
+        )
+        self.assertEqual(owner_total, 2)
+        self.assertEqual(len(owner_results), 2)
+
+    def test_paginated_search_clamps_page_to_last(self) -> None:
+        created = []
+        for day in range(1, 6):
+            created.append(
+                self._chapter(
+                    f"{day}화",
+                    "공통 검색어",
+                    owner_id=self.owner.id,
+                    created_at=datetime(2026, 1, day, tzinfo=timezone.utc),
+                )
+            )
+        self.db.commit()
+
+        results, total = get_chapters_page(
+            self.db,
+            query="검색어",
+            include_body=False,
+            ids_only=True,
+            page=10**9,
+            page_size=2,
+        )
+
+        self.assertEqual(total, 5)
+        self.assertEqual(results, [created[0].id])
+
+        empty_results, empty_total = get_chapters_page(
+            self.db,
+            query="없는검색어",
+            include_body=False,
+            ids_only=True,
+            page=10**9,
+            page_size=2,
+        )
+        self.assertEqual(empty_total, 0)
+        self.assertEqual(empty_results, [])
 
     def test_paginated_search_total_excludes_hidden_and_future(self) -> None:
         self._chapter(
@@ -405,6 +528,48 @@ class ChapterSearchTests(unittest.TestCase):
 
         event.listen(self.engine, "before_cursor_execute", record)
         return statements, record
+
+    def test_list_query_only_selects_needed_book_columns(self) -> None:
+        self._chapter(
+            "목차",
+            "본문",
+            owner_id=self.owner.id,
+            created_at=datetime(2026, 2, 1, tzinfo=timezone.utc),
+        )
+        self.db.commit()
+
+        statements, record = self._record_statements()
+        try:
+            get_all_chapters(
+                self.db,
+                include_hidden=True,
+                owner_user_id=self.owner.id,
+                include_body=False,
+            )
+        finally:
+            event.remove(self.engine, "before_cursor_execute", record)
+
+        self.assertTrue(statements)
+        chapter_selects = [
+            statement
+            for statement in statements
+            if "from chapters" in statement.lower()
+        ]
+        self.assertTrue(chapter_selects)
+        select_clause = re.split(
+            r"\bfrom\b", chapter_selects[0].lower(), maxsplit=1
+        )[0]
+        for column in ("id", "user_id", "title", "protected"):
+            self.assertIn(f"books.{column}", select_clause)
+        for column in (
+            "description",
+            "category_id",
+            "tags",
+            "visible",
+            "created_at",
+            "updated_at",
+        ):
+            self.assertNotIn(f"books.{column}", select_clause)
 
     def test_list_query_eager_loads_books(self) -> None:
         for day in range(1, 4):

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy.orm import Session
 
 from crud.books import (
@@ -26,6 +26,7 @@ from schemas.books import (
 from .utils import (
     filter_by_author,
     get_default_author_id,
+    get_gallery_grants,
     get_optional_user,
     is_admin,
     require_auth,
@@ -37,8 +38,12 @@ router = APIRouter()
 @router.get("/")
 @router.get("")
 def get_books(
+    request: Request,
+    response: Response,
     mine: bool = False,
     q: str | None = None,
+    page: int | None = None,
+    page_size: int = 20,
     db: Session = Depends(get_db),
     current_user=Depends(get_optional_user),
 ):
@@ -48,22 +53,36 @@ def get_books(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Not authenticated",
             )
-        return get_all_books(
+        books = get_all_books(
             db,
             include_hidden=True,
             owner_user_id=current_user.id,
             query=q,
         )
-    if current_user is not None and is_admin(current_user):
-        books = get_all_books(db, include_hidden=True, query=q)
+    elif current_user is not None and is_admin(current_user):
+        books = get_all_books(
+            db, include_hidden=True, is_admin=True, query=q
+        )
     else:
+        grants = get_gallery_grants(request, db)
         books = get_all_books(
             db,
             include_hidden=current_user is not None,
             viewer_user_id=current_user.id if current_user else None,
+            granted_chapters=grants.chapters,
+            granted_books=grants.books,
             query=q,
         )
-    return filter_by_author(books, get_default_author_id(db))
+
+    books = filter_by_author(books, get_default_author_id(db))
+    total = len(books)
+    response.headers["X-Total-Count"] = str(total)
+    if page is not None:
+        page_size = max(1, min(page_size, 100))
+        max_page = max(1, (total + page_size - 1) // page_size)
+        page = min(max(1, page), max_page)
+        books = books[(page - 1) * page_size : page * page_size]
+    return books
 
 
 @router.post("/")
@@ -151,7 +170,7 @@ def get_book_detail(
             owner_user_id=current_user.id,
         )
     if current_user is not None and is_admin(current_user):
-        book = get_book(db, book_id, include_hidden=True)
+        book = get_book(db, book_id, include_hidden=True, is_admin=True)
     else:
         book = get_book(
             db,
