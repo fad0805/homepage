@@ -1,14 +1,17 @@
 import unittest
 from datetime import datetime, timedelta, timezone
 
+from fastapi import Response
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
+from starlette.requests import Request
 
 from crud.books import get_all_books, get_chapters_page
 from db.base import Base
 from models.books import Book, Chapter
 from models.users import User
+from routers.books import get_books
 
 
 class BookChapterPaginationSupportTests(unittest.TestCase):
@@ -123,6 +126,38 @@ class BookChapterPaginationSupportTests(unittest.TestCase):
 
         self.assertEqual(total, 1)
         self.assertEqual([chapter["title"] for chapter in chapters], ["고정 글"])
+
+    def test_book_route_paginates_search_results(self) -> None:
+        request = Request(
+            {
+                "type": "http",
+                "http_version": "1.1",
+                "method": "GET",
+                "scheme": "http",
+                "path": "/books",
+                "raw_path": b"/books",
+                "query_string": b"",
+                "headers": [],
+                "client": ("test", 123),
+                "server": ("test", 80),
+            }
+        )
+        response = Response()
+
+        first_page = get_books(
+            request,
+            response,
+            q="책",
+            page=1,
+            page_size=1,
+            db=self.db,
+            current_user=None,
+        )
+
+        self.assertEqual(
+            [book["id"] for book in first_page], [self.first.id]
+        )
+        self.assertEqual(response.headers["x-total-count"], "2")
 
 
 if __name__ == "__main__":

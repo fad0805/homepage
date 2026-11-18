@@ -5,8 +5,8 @@ import { redirect } from "next/navigation";
 import { formatDate, formatDateTime } from "@/lib/datetime";
 import type { IllustrationItem } from "@/lib/illustration-types";
 import { paginationPages } from "@/lib/pagination";
-import { serverApiFetch, serverApiFetchWithTotal } from "@/lib/server-api";
-import { matchesAllTokens, searchTokens } from "@/lib/search";
+import { serverApiFetchWithTotal } from "@/lib/server-api";
+import { searchTokens } from "@/lib/search";
 import { getCurrentUser } from "@/lib/server-auth";
 import type { Book, Chapter } from "../books/types";
 
@@ -25,29 +25,25 @@ export const metadata: Metadata = {
 
 const MAX_QUERY_LENGTH = 100;
 const CHAPTERS_PER_PAGE = 10;
+const BOOKS_PER_PAGE = 10;
 
 function firstParam(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] : value;
 }
 
-function searchHref(q: string, chapterPage = 1) {
+function searchHref(q: string, chapterPage = 1, bookPage = 1) {
   const params = new URLSearchParams({ q });
   if (chapterPage > 1) {
     params.set("chapter_page", String(chapterPage));
+  }
+  if (bookPage > 1) {
+    params.set("book_page", String(bookPage));
   }
   return `/search?${params.toString()}`;
 }
 
 function normalize(value: string) {
   return value.trim().toLowerCase();
-}
-
-function matchAll(
-  values: Array<string | null | undefined>,
-  tags: string[] | undefined,
-  tokens: string[],
-) {
-  return matchesAllTokens([...values, ...(tags ?? [])], tokens);
 }
 
 function dateValue(value: string | null) {
@@ -92,6 +88,7 @@ export default async function SearchPage({
   searchParams: Promise<{
     q?: string | string[];
     chapter_page?: string | string[];
+    book_page?: string | string[];
   }>;
 }) {
   const params = await searchParams;
@@ -101,54 +98,80 @@ export default async function SearchPage({
     Number.isFinite(requestedChapterPage) && requestedChapterPage > 0
       ? Math.floor(requestedChapterPage)
       : 1;
+  const requestedBookPage = Number(firstParam(params.book_page));
+  const bookPage =
+    Number.isFinite(requestedBookPage) && requestedBookPage > 0
+      ? Math.floor(requestedBookPage)
+      : 1;
   const normalizedQuery = normalize(q);
   const queryTokens = searchTokens(normalizedQuery);
 
   let books: Book[] = [];
   let chapters: Chapter[] = [];
   let illustrations: IllustrationItem[] = [];
+  let bookTotal = 0;
   let chapterTotal = 0;
+  let illustrationTotal = 0;
   let failed = false;
-  const currentUser = await getCurrentUser();
+  const currentUser = queryTokens.length > 0 ? await getCurrentUser() : null;
 
-  const searchSuffix = q ? `?q=${encodeURIComponent(q)}` : "";
+  const bookParams = new URLSearchParams({
+    page: String(bookPage),
+    page_size: String(BOOKS_PER_PAGE),
+  });
   const chapterParams = new URLSearchParams({
     include_body: "false",
     page: String(chapterPage),
     page_size: String(CHAPTERS_PER_PAGE),
   });
-  if (q) chapterParams.set("q", q);
+  const illustrationParams = new URLSearchParams({
+    sort: "created",
+    page_size: "50",
+  });
+  if (q) {
+    bookParams.set("q", q);
+    chapterParams.set("q", q);
+    illustrationParams.set("q", q);
+  }
 
   try {
-    const [bookList, chapterPageResult, illustrationList] =
+    const [bookResult, chapterPageResult, illustrationResult] =
       await Promise.all([
-        // Book metadata is needed to resolve every matching chapter's book.
-        // Fetch the full visible list, then filter books below.
-        serverApiFetch<Book[]>("/books", {
-          tags: ["books"],
-          auth: Boolean(currentUser),
-        }),
+        // Search conditions go to the API so the browser never receives the
+        // full book list just to filter it locally.
+        q
+          ? serverApiFetchWithTotal<Book[]>(`/books?${bookParams.toString()}`, {
+              tags: ["books"],
+              auth: Boolean(currentUser),
+            })
+          : Promise.resolve({ data: [] as Book[], total: 0 }),
         // The API already matches title, subtitle, tags, and body text. Keep
         // bodies out of this payload; the search page only renders metadata.
-        serverApiFetchWithTotal<Chapter[]>(
-          `/chapters?${chapterParams.toString()}`,
-          {
-            tags: ["chapters"],
-            auth: Boolean(currentUser),
-          },
-        ),
-        serverApiFetch<IllustrationItem[]>(
-          `/illustrations?${searchSuffix ? `${searchSuffix.slice(1)}&` : ""}page_size=50`,
-          {
-            tags: ["illustrations"],
-            auth: Boolean(currentUser),
-          },
-        ),
+        queryTokens.length > 0
+          ? serverApiFetchWithTotal<Chapter[]>(
+              `/chapters?${chapterParams.toString()}`,
+              {
+                tags: ["chapters"],
+                auth: Boolean(currentUser),
+              },
+            )
+          : Promise.resolve({ data: [] as Chapter[], total: 0 }),
+        queryTokens.length > 0
+          ? serverApiFetchWithTotal<IllustrationItem[]>(
+              `/illustrations?${illustrationParams.toString()}`,
+              {
+                tags: ["illustrations"],
+                auth: Boolean(currentUser),
+              },
+            )
+          : Promise.resolve({ data: [] as IllustrationItem[], total: 0 }),
       ]);
-    books = bookList;
+    books = bookResult.data;
+    bookTotal = bookResult.total ?? books.length;
     chapters = chapterPageResult.data;
     chapterTotal = chapterPageResult.total ?? chapters.length;
-    illustrations = illustrationList;
+    illustrations = illustrationResult.data;
+    illustrationTotal = illustrationResult.total ?? illustrations.length;
   } catch (error) {
     console.error(error);
     failed = true;
@@ -158,43 +181,36 @@ export default async function SearchPage({
     1,
     Math.ceil(chapterTotal / CHAPTERS_PER_PAGE),
   );
+  const bookTotalPages = Math.max(1, Math.ceil(bookTotal / BOOKS_PER_PAGE));
   if (
     !failed &&
     queryTokens.length > 0 &&
     chapterTotal > 0 &&
     chapterPage > chapterTotalPages
   ) {
-    redirect(searchHref(q, chapterTotalPages));
+    redirect(searchHref(q, chapterTotalPages, bookPage));
+  }
+  if (
+    !failed &&
+    queryTokens.length > 0 &&
+    bookTotal > 0 &&
+    bookPage > bookTotalPages
+  ) {
+    redirect(searchHref(q, chapterPage, bookTotalPages));
   }
 
-  const visibleBooks = currentUser
-    ? books
-    : books.filter((book) => book.visible !== false);
-  const bookMap = new Map(visibleBooks.map((book) => [book.id, book]));
   const now = Date.now();
   const visibleChapters = chapters.filter(
     (chapter) =>
       (currentUser || chapter.visible !== false) &&
-      bookMap.has(chapter.book_id) &&
       (!chapter.published_at ||
         new Date(chapter.published_at).getTime() <= now),
   );
 
-  const matchedBooks = queryTokens.length
-    ? visibleBooks.filter((book) =>
-        matchAll(
-          [book.title, book.description, book.category?.name],
-          book.tags,
-          queryTokens,
-        ),
-      )
-    : [];
+  // Search matching is done by the APIs; these arrays are already filtered.
+  const matchedBooks = queryTokens.length ? books : [];
   const matchedChapters = queryTokens.length ? visibleChapters : [];
-  const matchedIllustrations = queryTokens.length
-    ? illustrations.filter((item) =>
-        matchAll([item.title], item.tags, queryTokens),
-      )
-    : [];
+  const matchedIllustrations = queryTokens.length ? illustrations : [];
 
   matchedBooks.sort((a, b) => a.order - b.order || a.id - b.id);
   matchedChapters.sort(
@@ -205,8 +221,7 @@ export default async function SearchPage({
       compareCreatedDesc(a.created_at, b.created_at) || b.id - a.id,
   );
 
-  const total =
-    matchedBooks.length + chapterTotal + matchedIllustrations.length;
+  const total = bookTotal + chapterTotal + illustrationTotal;
 
   return (
     <div id="search-page">
@@ -249,7 +264,6 @@ export default async function SearchPage({
               </h2>
               <div className="search-list">
                 {matchedChapters.map((chapter) => {
-                  const book = bookMap.get(chapter.book_id);
                   return (
                     <article className="search-result" key={chapter.id}>
                       <p className="search-result__kind">게시글</p>
@@ -265,7 +279,7 @@ export default async function SearchPage({
                         </p>
                       ) : null}
                       <p className="search-result__meta">
-                        {book?.title ?? "목차"} ·{" "}
+                        {chapter.book?.title ?? "목차"} ·{" "}
                         {formatDateTime(chapter.created_at)}
                       </p>
                       <TagLinks tags={chapter.tags ?? []} />
@@ -281,7 +295,7 @@ export default async function SearchPage({
                   {chapterPage > 1 ? (
                     <Link
                       className="search-pagination__button"
-                      href={searchHref(q, chapterPage - 1)}
+                      href={searchHref(q, chapterPage - 1, bookPage)}
                       prefetch={false}
                     >
                       이전
@@ -305,7 +319,7 @@ export default async function SearchPage({
                           className={`search-pagination__button${
                             value === chapterPage ? " is-active" : ""
                           }`}
-                          href={searchHref(q, value)}
+                          href={searchHref(q, value, bookPage)}
                           aria-current={
                             value === chapterPage ? "page" : undefined
                           }
@@ -319,7 +333,7 @@ export default async function SearchPage({
                   {chapterPage < chapterTotalPages ? (
                     <Link
                       className="search-pagination__button"
-                      href={searchHref(q, chapterPage + 1)}
+                      href={searchHref(q, chapterPage + 1, bookPage)}
                       prefetch={false}
                     >
                       다음
@@ -338,7 +352,7 @@ export default async function SearchPage({
             <section className="search-section">
               <h2>
                 목차 · 책
-                <span>{matchedBooks.length}</span>
+                <span>{bookTotal}</span>
               </h2>
               <div className="search-list">
                 {matchedBooks.map((book) => (
@@ -361,6 +375,62 @@ export default async function SearchPage({
                   </article>
                 ))}
               </div>
+              {bookTotalPages > 1 ? (
+                <nav
+                  className="search-pagination"
+                  aria-label="책 검색 페이지 이동"
+                >
+                  {bookPage > 1 ? (
+                    <Link
+                      className="search-pagination__button"
+                      href={searchHref(q, chapterPage, bookPage - 1)}
+                      prefetch={false}
+                    >
+                      이전
+                    </Link>
+                  ) : (
+                    <span className="search-pagination__button is-disabled">
+                      이전
+                    </span>
+                  )}
+                  {paginationPages(bookPage, bookTotalPages).map(
+                    (value, index) =>
+                      value === "ellipsis" ? (
+                        <span
+                          className="search-pagination__ellipsis"
+                          key={`book-ellipsis-${index}`}
+                        >
+                          …
+                        </span>
+                      ) : (
+                        <Link
+                          className={`search-pagination__button${
+                            value === bookPage ? " is-active" : ""
+                          }`}
+                          href={searchHref(q, chapterPage, value)}
+                          aria-current={value === bookPage ? "page" : undefined}
+                          prefetch={false}
+                          key={value}
+                        >
+                          {value}
+                        </Link>
+                      ),
+                  )}
+                  {bookPage < bookTotalPages ? (
+                    <Link
+                      className="search-pagination__button"
+                      href={searchHref(q, chapterPage, bookPage + 1)}
+                      prefetch={false}
+                    >
+                      다음
+                    </Link>
+                  ) : (
+                    <span className="search-pagination__button is-disabled">
+                      다음
+                    </span>
+                  )}
+                </nav>
+              ) : null}
             </section>
           ) : null}
 
@@ -368,7 +438,7 @@ export default async function SearchPage({
             <section className="search-section">
               <h2>
                 삽화
-                <span>{matchedIllustrations.length}</span>
+                <span>{illustrationTotal}</span>
               </h2>
               <div className="search-list">
                 {matchedIllustrations.map((item) => (
