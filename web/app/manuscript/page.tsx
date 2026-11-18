@@ -14,6 +14,9 @@ import { apiFetch } from "@/lib/api";
 
 import "@/public/styles/manuscript.scss";
 
+/** Same debounce window as the board's draft autosave. */
+const AUTOSAVE_DELAY_MS = 2000;
+
 interface Project {
   id: number;
   title: string;
@@ -148,6 +151,16 @@ const EMPTY_FORM = {
   body: "",
 };
 
+type ChapterForm = typeof EMPTY_FORM;
+
+function chapterSignature(nodeId: number, form: ChapterForm): string {
+  return JSON.stringify({ nodeId, ...form });
+}
+
+function folderSignature(folderId: number, html: string): string {
+  return JSON.stringify({ folderId, html });
+}
+
 /** Collect chapter ids in exactly the order the binder renders them. */
 function collectBinderChapterIds(
   rootId: number | null,
@@ -214,8 +227,14 @@ export default function ManuscriptWorkspace() {
   const [notice, setNotice] = useState<Notice | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [autoSaving, setAutoSaving] = useState(false);
   const dragId = useRef<number | null>(null);
   const cancelRename = useRef(false);
+  const autosaveRef = useRef<{ key: string | null; signature: string | null }>({
+    key: null,
+    signature: null,
+  });
+  const latestSignatureRef = useRef<string | null>(null);
 
   const notify = useCallback((text: string, type: Notice["type"] = "success") => {
     setNotice({ type, text });
@@ -391,11 +410,14 @@ export default function ManuscriptWorkspace() {
     }
   };
 
-  const saveNode = async () => {
+  const saveNode = async (silent = false) => {
     if (!selectedId) return;
-    setSaving(true);
+    const nodeId = selectedId;
+    const signature = chapterSignature(nodeId, form);
+    if (silent) setAutoSaving(true);
+    else setSaving(true);
     try {
-      await apiFetch(`/api/manuscript/nodes/${selectedId}`, {
+      await apiFetch(`/api/manuscript/nodes/${nodeId}`, {
         method: "PATCH",
         body: JSON.stringify({
           subtitle: form.subtitle || null,
@@ -404,13 +426,17 @@ export default function ManuscriptWorkspace() {
           body: form.body,
         }),
       });
-      setDirty(false);
-      await refresh();
-      notify("원고를 저장했습니다.");
+      autosaveRef.current.signature = signature;
+      if (latestSignatureRef.current === signature) setDirty(false);
+      if (!silent) {
+        await refresh();
+        notify("원고를 저장했습니다.");
+      }
     } catch (error) {
-      notify((error as Error).message, "error");
+      if (!silent) notify((error as Error).message, "error");
     } finally {
-      setSaving(false);
+      if (silent) setAutoSaving(false);
+      else setSaving(false);
     }
   };
 
@@ -480,7 +506,7 @@ export default function ManuscriptWorkspace() {
     }
   };
 
-  const openScrivenings = async (rootId: number) => {
+  const openScrivenings = async (rootId: number): Promise<string | null> => {
     try {
       const docs = await apiFetch<ScrivDoc[]>(
         `/api/manuscript/scrivenings?root_id=${rootId}`,
@@ -494,45 +520,110 @@ export default function ManuscriptWorkspace() {
         .filter((doc): doc is ScrivDoc => Boolean(doc));
       const remaining = docs.filter((doc) => !binderIds.includes(doc.id));
       const orderedDocs = [...ordered, ...remaining];
+      const html = orderedDocs.map((doc) => doc.body || "<p></p>").join("<hr>");
       setScrivenings(orderedDocs);
-      setScrivCombinedHtml(
-        orderedDocs.map((doc) => doc.body || "<p></p>").join("<hr>"),
-      );
+      setScrivCombinedHtml(html);
       setScrivDirty(false);
+      return html;
     } catch (error) {
       notify((error as Error).message, "error");
+      return null;
     }
   };
 
-  const saveCombined = async () => {
+  const saveCombined = async (silent = false) => {
     if (!scrivenings || !selected || !projectId) return;
+    const folderId = selected.id;
+    const docs = scrivenings;
     const bodies = splitCombinedHtml(scrivCombinedHtml);
-    if (bodies.length !== scrivenings.length) {
-      notify(
-        `구분선이 ${scrivenings.length - 1}개여야 합니다. 지금은 ${bodies.length - 1}개입니다.`,
-        "error",
-      );
+    if (bodies.length !== docs.length) {
+      if (!silent) {
+        notify(
+          `구분선이 ${docs.length - 1}개여야 합니다. 지금은 ${bodies.length - 1}개입니다.`,
+          "error",
+        );
+      }
       return;
     }
-    setSaving(true);
+    const signature = folderSignature(folderId, scrivCombinedHtml);
+    if (silent) setAutoSaving(true);
+    else setSaving(true);
     try {
       await Promise.all(
         bodies.map((body, index) =>
-          apiFetch(`/api/manuscript/nodes/${scrivenings[index].id}`, {
+          apiFetch(`/api/manuscript/nodes/${docs[index].id}`, {
             method: "PATCH",
             body: JSON.stringify({ body }),
           }),
         ),
       );
-      await loadTree(projectId);
-      await openScrivenings(selected.id);
-      notify("폴더 본문을 저장했습니다.");
+      autosaveRef.current.signature = signature;
+      if (latestSignatureRef.current === signature) setScrivDirty(false);
+      if (!silent) {
+        await loadTree(projectId);
+        const reloaded = await openScrivenings(folderId);
+        if (reloaded !== null) {
+          autosaveRef.current.signature = folderSignature(folderId, reloaded);
+        }
+        notify("폴더 본문을 저장했습니다.");
+      }
     } catch (error) {
-      notify((error as Error).message, "error");
+      if (!silent) notify((error as Error).message, "error");
     } finally {
-      setSaving(false);
+      if (silent) setAutoSaving(false);
+      else setSaving(false);
     }
   };
+
+  const flushAutosave = async () => {
+    if (loading) return;
+    if (scrivenings && selected) {
+      if (scrivDirty) await saveCombined(true);
+      return;
+    }
+    if (dirty && selectedId) await saveNode(true);
+  };
+
+  useEffect(() => {
+    if (loading || saving || autoSaving) return;
+
+    const folderActive = scrivenings !== null && selected !== null;
+    const signature = folderActive
+      ? folderSignature(selected!.id, scrivCombinedHtml)
+      : selectedId
+        ? chapterSignature(selectedId, form)
+        : null;
+    if (!signature) return;
+    latestSignatureRef.current = signature;
+
+    const key = folderActive
+      ? `folder:${selected!.id}`
+      : `chapter:${selectedId}`;
+    if (autosaveRef.current.key !== key) {
+      autosaveRef.current.key = key;
+      autosaveRef.current.signature = signature;
+      return;
+    }
+    if (autosaveRef.current.signature === signature) return;
+    if (folderActive ? !scrivDirty : !dirty) return;
+
+    const timer = window.setTimeout(() => {
+      if (folderActive) void saveCombined(true);
+      else void saveNode(true);
+    }, AUTOSAVE_DELAY_MS);
+    return () => window.clearTimeout(timer);
+  }, [
+    autoSaving,
+    dirty,
+    form,
+    loading,
+    saving,
+    scrivCombinedHtml,
+    scrivDirty,
+    scrivenings,
+    selected,
+    selectedId,
+  ]);
 
   const restoreFromTrash = async (id: number) => {
     try {
@@ -616,13 +707,15 @@ export default function ManuscriptWorkspace() {
               moveNode(movingId, targetParent);
             }}
             onClick={() => {
-              setSelectedId(node.id);
-              if (node.node_type === "folder") {
-                setScrivenings(null);
-                void openScrivenings(node.id);
-              } else {
-                setScrivenings(null);
-              }
+              void flushAutosave().finally(() => {
+                setSelectedId(node.id);
+                if (node.node_type === "folder") {
+                  setScrivenings(null);
+                  void openScrivenings(node.id);
+                } else {
+                  setScrivenings(null);
+                }
+              });
             }}
           >
             <button
@@ -707,8 +800,10 @@ export default function ManuscriptWorkspace() {
           className="ms-select"
           value={projectId ?? ""}
           onChange={(event) => {
-            setProjectId(Number(event.target.value) || null);
-            setSelectedId(null);
+            void flushAutosave().finally(() => {
+              setProjectId(Number(event.target.value) || null);
+              setSelectedId(null);
+            });
           }}
           aria-label="원고 프로젝트"
         >
@@ -837,20 +932,32 @@ export default function ManuscriptWorkspace() {
                     <button
                       type="button"
                       className="ms-button ms-button--primary"
-                      disabled={!scrivDirty || saving}
-                      onClick={saveCombined}
+                      disabled={!scrivDirty || saving || autoSaving}
+                      onClick={() => saveCombined()}
                     >
-                      {saving ? "저장 중…" : scrivDirty ? "폴더 본문 저장" : "저장됨"}
+                      {saving
+                        ? "저장 중…"
+                        : autoSaving
+                          ? "자동 저장 중…"
+                          : scrivDirty
+                            ? "폴더 본문 저장"
+                            : "저장됨"}
                     </button>
                   ) : (
                     <>
                       <button
                         type="button"
                         className="ms-button ms-button--primary"
-                        disabled={!dirty || saving}
-                        onClick={saveNode}
+                        disabled={!dirty || saving || autoSaving}
+                        onClick={() => saveNode()}
                       >
-                        {saving ? "저장 중…" : dirty ? "저장" : "저장됨"}
+                        {saving
+                          ? "저장 중…"
+                          : autoSaving
+                            ? "자동 저장 중…"
+                            : dirty
+                              ? "저장"
+                              : "저장됨"}
                       </button>
                       <button type="button" className="ms-button--danger" onClick={deleteSelected}>
                         삭제
