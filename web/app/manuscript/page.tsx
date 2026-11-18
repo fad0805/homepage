@@ -10,6 +10,7 @@ import {
   type ReactElement,
   type ReactNode,
 } from "react";
+import type { Editor } from "@tiptap/core";
 import { RichTextEditor, type EditorNotice } from "@/components/rich-text-editor";
 import { apiFetch } from "@/lib/api";
 
@@ -218,6 +219,43 @@ function collectTrashChapterIds(
   return ids;
 }
 
+/** Locate the first query token in the live Tiptap document. */
+function findSearchRange(
+  editor: Editor,
+  query: string,
+): { from: number; to: number } | null {
+  const tokens = query
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((token) => token.toLocaleLowerCase());
+  if (!tokens.length) return null;
+
+  const positions: number[] = [];
+  let text = "";
+  editor.state.doc.descendants((node, pos) => {
+    if (!node.isText || !node.text) return;
+    const lower = node.text.toLocaleLowerCase();
+    for (let index = 0; index < lower.length; index += 1) {
+      positions.push(pos + index);
+    }
+    text += lower;
+  });
+
+  let found: { index: number; length: number } | null = null;
+  for (const token of tokens) {
+    const index = text.indexOf(token);
+    if (index >= 0 && (found === null || index < found.index)) {
+      found = { index, length: token.length };
+    }
+  }
+  if (!found || found.index >= positions.length) return null;
+  return {
+    from: positions[found.index],
+    to: positions[found.index] + found.length,
+  };
+}
+
 /** Highlight every query token inside a plain-text search snippet. */
 function highlightSnippet(text: string, query: string): ReactNode[] {
   const tokens = query
@@ -302,9 +340,24 @@ export default function ManuscriptWorkspace() {
     signature: null,
   });
   const latestSignatureRef = useRef<string | null>(null);
+  const editorRef = useRef<Editor | null>(null);
+  const pendingSearchRef = useRef<string | null>(null);
 
   const notify = useCallback((text: string, type: Notice["type"] = "success") => {
     setNotice({ type, text });
+  }, []);
+
+  const handleEditorReady = useCallback((editor: Editor | null) => {
+    editorRef.current = editor;
+    const pending = pendingSearchRef.current;
+    if (!editor || !pending) return;
+    const range = findSearchRange(editor, pending);
+    if (!range) return;
+    pendingSearchRef.current = null;
+    window.requestAnimationFrame(() => {
+      if (editorRef.current !== editor) return;
+      editor.chain().focus().setTextSelection(range).scrollIntoView().run();
+    });
   }, []);
 
   const loadTrash = useCallback(async () => {
@@ -1174,6 +1227,7 @@ export default function ManuscriptWorkspace() {
                 setScrivDirty(true);
               }}
               uploadUrl="/api/chapters/upload"
+              onEditorReady={handleEditorReady}
               onNotice={(editorNotice: EditorNotice) =>
                 notify(editorNotice.text, editorNotice.type)
               }
@@ -1186,6 +1240,7 @@ export default function ManuscriptWorkspace() {
               readOnly={isPlaceholder}
               placeholder="본문을 입력해주세요."
               value={form.body}
+              onEditorReady={handleEditorReady}
               onChange={(html) => {
                 if (isPlaceholder) return;
                 setForm({ ...form, body: html });
@@ -1267,22 +1322,6 @@ export default function ManuscriptWorkspace() {
                   </button>
                   {selected.node_type === "chapter" ? (
                     <div className="ms-publish-control">
-                      <select
-                        className="ms-select ms-publish-control__select"
-                        value={publishBookId ?? ""}
-                        onChange={(event) =>
-                          setPublishOverrideId(Number(event.target.value) || null)
-                        }
-                        aria-label="발행할 책"
-                      >
-                        {books.map((book) => (
-                          <option key={book.id} value={book.id}>
-                            {book.id === linkedBookId
-                              ? `${book.title} (연결된 책)`
-                              : book.title}
-                          </option>
-                        ))}
-                      </select>
                       <button
                         type="button"
                         className="ms-button ms-button--primary"
@@ -1376,6 +1415,28 @@ export default function ManuscriptWorkspace() {
                 </label>
 
                 {selected.node_type === "chapter" ? (
+                  <label className="ms-inspector__field">
+                    발행 대상
+                    <select
+                      className="ms-select"
+                      value={publishBookId ?? ""}
+                      onChange={(event) =>
+                        setPublishOverrideId(Number(event.target.value) || null)
+                      }
+                      aria-label="발행할 책"
+                    >
+                      {books.map((book) => (
+                        <option key={book.id} value={book.id}>
+                          {book.id === linkedBookId
+                            ? `${book.title} (연결된 책)`
+                            : book.title}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                ) : null}
+
+                {selected.node_type === "chapter" ? (
                   <p className="ms-publish__state">
                     {STATE_LABEL[selected.published_state]}
                     {selected.published_chapter_id
@@ -1419,6 +1480,7 @@ export default function ManuscriptWorkspace() {
                   type="button"
                   key={result.id}
                   onClick={() => {
+                    pendingSearchRef.current = query;
                     setSelectedId(result.id);
                     setSearchOpen(false);
                     setScrivenings(null);

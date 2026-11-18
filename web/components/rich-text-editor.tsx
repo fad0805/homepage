@@ -9,6 +9,7 @@ import {
   type ReactNode,
 } from "react";
 import { EditorContent, useEditor } from "@tiptap/react";
+import type { Editor } from "@tiptap/core";
 import StarterKit from "@tiptap/starter-kit";
 import Highlight from "@tiptap/extension-highlight";
 import Placeholder from "@tiptap/extension-placeholder";
@@ -50,6 +51,8 @@ interface RichTextEditorProps {
   variant?: "default" | "chapter" | "workspace";
   /** Render as a read-only surface (used before a node is selected). */
   readOnly?: boolean;
+  /** Receive the live editor instance for programmatic navigation. */
+  onEditorReady?: (editor: Editor | null) => void;
 }
 
 function ToolbarButton({
@@ -165,6 +168,7 @@ export function RichTextEditor({
   enableHighlight = false,
   variant = "default",
   readOnly = false,
+  onEditorReady,
 }: RichTextEditorProps) {
   const onChangeRef = useRef(onChange);
   const onNoticeRef = useRef(onNotice);
@@ -247,12 +251,18 @@ export function RichTextEditor({
   });
 
   useEffect(() => {
-    if (!editor) return;
-    if (htmlMode) return;
+    if (!editor || htmlMode) return;
     if (value !== editor.getHTML()) {
       editor.commands.setContent(value || "<p></p>");
     }
-  }, [editor, htmlMode, value]);
+    onEditorReady?.(editor);
+  }, [editor, htmlMode, value, onEditorReady]);
+
+  useEffect(() => {
+    if (!editor) return;
+    onEditorReady?.(editor);
+    return () => onEditorReady?.(null);
+  }, [editor, onEditorReady]);
 
   useEffect(() => {
     editor?.setEditable(!readOnly);
