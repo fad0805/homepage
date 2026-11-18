@@ -48,13 +48,16 @@
 
 .admin-manuscript-field input,
 .admin-manuscript-create input {
+  width: 10rem;
   min-width: 0;
+  height: 2rem;
   border: 1px solid color-mix(in srgb, var(--foreground) 22%, transparent);
-  border-radius: 0.35rem;
-  padding: 0.42rem 0.55rem;
-  background: var(--background);
+  border-radius: 0.45rem;
+  padding: 0 0.5rem;
+  background: var(--input-background);
   color: inherit;
   font: inherit;
+  font-size: 0.75rem;
 
   &::placeholder {
     color: color-mix(in srgb, var(--foreground) 45%, transparent);
@@ -65,21 +68,18 @@
   display: flex;
   gap: 0.35rem;
   margin-left: auto;
-
-  input {
-    width: 11rem;
-  }
 }
 
 .admin-manuscript-button {
   flex: 0 0 auto;
+  height: 2rem;
   border: 1px solid color-mix(in srgb, var(--foreground) 24%, transparent);
-  border-radius: 0.35rem;
-  padding: 0.42rem 0.7rem;
+  border-radius: 0.45rem;
+  padding: 0 0.6rem;
   background: color-mix(in srgb, var(--background) 60%, var(--subtheme));
   color: inherit;
   font: inherit;
-  font-size: 0.8rem;
+  font-size: 0.75rem;
   cursor: pointer;
 
   &:disabled {
@@ -94,6 +94,7 @@
   }
 
   &.is-danger {
+    height: auto;
     font-size: 0.72rem;
     padding: 0.28rem 0.5rem;
   }
@@ -161,6 +162,10 @@
 
   &:not(.is-head) > span,
   &:not(.is-head) .admin-manuscript-book {
+    font-size: 0.9em;
+  }
+
+  &:not(.is-head) > span:nth-child(4) {
     font-size: 0.8em;
   }
 }
