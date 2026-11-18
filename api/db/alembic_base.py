@@ -7,6 +7,7 @@ from models import (
     illustrations,
     index_page,
     links,
+    manuscript,
     memos,
     planner,
     profiles,
