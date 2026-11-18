@@ -1,12 +1,11 @@
 "use client";
-import { Fragment, useState } from "react";
+import { Fragment } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 
 import "@/public/styles/admin/navbar.scss";
 import navigation from "@/config/navigation";
 import { useAuth } from "@/components/auth-provider";
-import { ManuscriptProjectPicker } from "@/components/manuscript-project-picker";
 
 interface AdminNavbarProps {
   id?: string;
@@ -20,7 +19,6 @@ export const AdminNavbar = ({
   const currentPath = usePathname();
   const router = useRouter();
   const { isAdmin } = useAuth();
-  const [projectPickerOpen, setProjectPickerOpen] = useState(false);
   const groups = navigation.admin.rows
     .map((row, rowIndex) => ({
       label: navigation.admin.rowLabels?.[rowIndex],
@@ -35,7 +33,7 @@ export const AdminNavbar = ({
     return currentPath === href || currentPath.startsWith(`${href}/`);
   };
 
-  return <>
+  return (
     <nav id={id}>
       {groups.map((group, groupIndex) => (
         <Fragment key={group.label ?? groupIndex}>
@@ -52,20 +50,7 @@ export const AdminNavbar = ({
                 }`}
                 title={item.iconOnly ? item.label : undefined}
                 aria-label={item.iconOnly ? item.label : undefined}
-                target={item.iconOnly ? "_blank" : undefined}
-                rel={item.iconOnly ? "noopener noreferrer" : undefined}
                 onClick={(event) => {
-                  // Open the standalone workspace in a new tab so the admin
-                  // page stays exactly where it was.
-                  if (item.iconOnly) {
-                    event.preventDefault();
-                    if (item.href === "/manuscript") {
-                      setProjectPickerOpen(true);
-                    } else {
-                      window.open(item.href, "_blank", "noopener,noreferrer");
-                    }
-                    return;
-                  }
                   // Only intercept the exact active page. A parent menu such as
                   // /admin/books must still navigate away from /admin/books/123.
                   if (currentPath === item.href) {
@@ -98,9 +83,5 @@ export const AdminNavbar = ({
         </Fragment>
       ))}
     </nav>
-    <ManuscriptProjectPicker
-      open={projectPickerOpen}
-      onClose={() => setProjectPickerOpen(false)}
-    />
-  </>;
+  );
 };
