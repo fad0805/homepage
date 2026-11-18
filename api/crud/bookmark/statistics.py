@@ -1,8 +1,158 @@
 """Bookmark statistics."""
 
+from collections import defaultdict
+
 from .common import *  # noqa: F401,F403
 from .categories import list_routine_categories
 from .schedule import _quarter_matches, _routine_monthly_due_date
+
+
+class _StatsChecks:
+    """Check rows prefetched once for all statistics buckets."""
+
+    def __init__(self, rows: list[BookmarkRoutineCheck]) -> None:
+        self._rows: dict[
+            tuple[int, str, date], BookmarkRoutineCheck
+        ] = {}
+        self._days: dict[int, dict[date, int]] = defaultdict(dict)
+        for row in rows:
+            self._rows[
+                (row.routine_id, row.period_type, row.period_start)
+            ] = row
+            if row.period_type == "day":
+                counts = self._days[row.routine_id]
+                counts[row.period_start] = counts.get(
+                    row.period_start, 0
+                ) + int(row.count or 0)
+
+    def row(
+        self,
+        routine: BookmarkRoutine,
+        period_type: str,
+        period_start: date,
+    ) -> BookmarkRoutineCheck | None:
+        return self._rows.get(
+            (routine.id, period_type, period_start)
+        )
+
+    def count(
+        self,
+        routine: BookmarkRoutine,
+        period_type: str,
+        period_start: date,
+    ) -> int:
+        row = self.row(routine, period_type, period_start)
+        return int(row.count or 0) if row is not None else 0
+
+    def completed(
+        self,
+        routine: BookmarkRoutine,
+        period_type: str,
+        period_start: date,
+    ) -> int:
+        row = self.row(routine, period_type, period_start)
+        if row is None:
+            return 0
+        if row.manual_done:
+            return max(1, int(routine.target_count or 1))
+        return int(row.count or 0)
+
+    def day_sum(
+        self,
+        routine: BookmarkRoutine,
+        start: date,
+        end: date,
+    ) -> int:
+        return sum(
+            count
+            for day, count in self._days.get(routine.id, {}).items()
+            if start <= day <= end
+        )
+
+    def done_dates(
+        self,
+        routine: BookmarkRoutine,
+        start: date,
+        end: date,
+    ) -> set[date]:
+        return {
+            day
+            for day, count in self._days.get(routine.id, {}).items()
+            if count > 0 and start <= day <= end
+        }
+
+    def week_rows(
+        self,
+        routine: BookmarkRoutine,
+        starts: list[date],
+    ) -> list[tuple[date, int | None, bool]]:
+        rows: list[tuple[date, int | None, bool]] = []
+        for start in starts:
+            row = self.row(routine, "week", start)
+            if row is not None:
+                rows.append((start, row.count, bool(row.manual_done)))
+        return rows
+
+
+def _check_count(
+    db: Session,
+    routine: BookmarkRoutine,
+    period_type: str,
+    period_start: date,
+    checks: _StatsChecks | None = None,
+) -> int:
+    if checks is not None:
+        return checks.count(routine, period_type, period_start)
+    return _period_check_count(db, routine, period_type, period_start)
+
+
+def _check_completed(
+    db: Session,
+    routine: BookmarkRoutine,
+    period_type: str,
+    period_start: date,
+    checks: _StatsChecks | None = None,
+) -> int:
+    if checks is not None:
+        return checks.completed(routine, period_type, period_start)
+    return _period_check_completed(
+        db, routine, period_type, period_start
+    )
+
+
+def _check_day_sum(
+    db: Session,
+    routine: BookmarkRoutine,
+    start: date,
+    end: date,
+    checks: _StatsChecks | None = None,
+) -> int:
+    if checks is not None:
+        return checks.day_sum(routine, start, end)
+    completed = (
+        db.query(func.coalesce(func.sum(BookmarkRoutineCheck.count), 0))
+        .filter(
+            BookmarkRoutineCheck.user_id == routine.user_id,
+            BookmarkRoutineCheck.routine_id == routine.id,
+            BookmarkRoutineCheck.period_type == "day",
+            BookmarkRoutineCheck.period_start >= start,
+            BookmarkRoutineCheck.period_start <= end,
+        )
+        .scalar()
+    )
+    return int(completed or 0)
+
+
+def _check_done_dates(
+    db: Session,
+    routine: BookmarkRoutine,
+    start: date,
+    end: date,
+    checks: _StatsChecks | None = None,
+) -> set[date]:
+    if checks is not None:
+        return checks.done_dates(routine, start, end)
+    return _done_dates(db, routine, start, end)
 
 
 def _period_check_completed(
@@ -10,7 +160,10 @@ def _period_check_completed(
     routine: BookmarkRoutine,
     period_type: str,
     period_start: date,
+    checks: _StatsChecks | None = None,
 ) -> int:
+    if checks is not None:
+        return checks.completed(routine, period_type, period_start)
     if routine.tracking_mode != "count":
         return _period_check_count(db, routine, period_type, period_start)
     row = (
@@ -38,6 +191,7 @@ def _routine_month_values(
     db: Session,
     routine: BookmarkRoutine,
     month_start: date,
+    checks: _StatsChecks | None = None,
 ) -> tuple[int, int] | None:
     first = _month_start(month_start)
     last = _month_end(first)
@@ -55,18 +209,10 @@ def _routine_month_values(
     target = max(1, int(routine.target_count or 1))
 
     if routine.frequency == "daily":
-        completed = (
-            db.query(func.coalesce(func.sum(BookmarkRoutineCheck.count), 0))
-            .filter(
-                BookmarkRoutineCheck.user_id == routine.user_id,
-                BookmarkRoutineCheck.routine_id == routine.id,
-                BookmarkRoutineCheck.period_type == "day",
-                BookmarkRoutineCheck.period_start >= active_start,
-                BookmarkRoutineCheck.period_start <= active_end,
-            )
-            .scalar()
+        completed = _check_day_sum(
+            db, routine, active_start, active_end, checks
         )
-        return int(completed or 0), (active_end - active_start).days + 1
+        return completed, (active_end - active_start).days + 1
 
     if routine.frequency == "weekly":
         if routine.tracking_mode == "count":
@@ -88,20 +234,25 @@ def _routine_month_values(
             expected = target * len(expected_weeks)
             if expected <= 0:
                 return None
-            rows = (
-                db.query(
-                    BookmarkRoutineCheck.period_start,
-                    BookmarkRoutineCheck.count,
-                    BookmarkRoutineCheck.manual_done,
+            if checks is not None:
+                rows = checks.week_rows(routine, expected_weeks)
+            else:
+                rows = (
+                    db.query(
+                        BookmarkRoutineCheck.period_start,
+                        BookmarkRoutineCheck.count,
+                        BookmarkRoutineCheck.manual_done,
+                    )
+                    .filter(
+                        BookmarkRoutineCheck.user_id == routine.user_id,
+                        BookmarkRoutineCheck.routine_id == routine.id,
+                        BookmarkRoutineCheck.period_type == "week",
+                        BookmarkRoutineCheck.period_start.in_(
+                            expected_weeks
+                        ),
+                    )
+                    .all()
                 )
-                .filter(
-                    BookmarkRoutineCheck.user_id == routine.user_id,
-                    BookmarkRoutineCheck.routine_id == routine.id,
-                    BookmarkRoutineCheck.period_type == "week",
-                    BookmarkRoutineCheck.period_start.in_(expected_weeks),
-                )
-                .all()
-            )
             completed = sum(
                 target if manual_done else int(count or 0)
                 for _period_start, count, manual_done in rows
@@ -119,7 +270,9 @@ def _routine_month_values(
         if not expected_dates:
             return None
         completed = len(
-            _done_dates(db, routine, active_start, active_end)
+            _check_done_dates(
+                db, routine, active_start, active_end, checks
+            )
             & expected_dates
         )
         return completed, len(expected_dates)
@@ -133,8 +286,8 @@ def _routine_month_values(
                 or due_date > active_end
             ):
                 return None
-            return _period_check_count(db, routine, "month", first), 1
-        return _period_check_completed(db, routine, "month", first), target
+            return _check_count(db, routine, "month", first, checks), 1
+        return _check_completed(db, routine, "month", first, checks), target
 
     if routine.frequency == "quarterly":
         if first.month not in QUARTER_START_MONTHS:
@@ -142,14 +295,14 @@ def _routine_month_values(
         if not _quarter_matches(routine, first):
             return None
         quarter = date(first.year, first.month, 1)
-        completed = _period_check_completed(
-            db, routine, "quarter", quarter
+        completed = _check_completed(
+            db, routine, "quarter", quarter, checks
         )
         return completed, 1 if routine.tracking_mode == "date" else target
 
     if first.month != 1:
         return None
-    completed = _period_check_completed(db, routine, "year", first)
+    completed = _check_completed(db, routine, "year", first, checks)
     return completed, 1 if routine.tracking_mode == "date" else target
 
 
@@ -218,7 +371,7 @@ def _stat_bucket(
 
 
 def _weekly_stat_buckets(
-    db: Session,
+    checks: _StatsChecks,
     routine: BookmarkRoutine,
     today: date,
 ) -> list[dict[str, Any]]:
@@ -241,28 +394,11 @@ def _weekly_stat_buckets(
         active_start, active_end = active
         if routine.frequency == "daily":
             expected = (active_end - active_start).days + 1
-            completed = (
-                db.query(func.coalesce(func.sum(BookmarkRoutineCheck.count), 0))
-                .filter(
-                    BookmarkRoutineCheck.user_id == routine.user_id,
-                    BookmarkRoutineCheck.routine_id == routine.id,
-                    BookmarkRoutineCheck.period_type == "day",
-                    BookmarkRoutineCheck.period_start >= active_start,
-                    BookmarkRoutineCheck.period_start <= active_end,
-                )
-                .scalar()
-            )
-            buckets.append(
-                _stat_bucket(week_start, int(completed or 0), expected)
-            )
+            completed = checks.day_sum(routine, active_start, active_end)
+            buckets.append(_stat_bucket(week_start, completed, expected))
             continue
         if routine.tracking_mode == "count":
-            completed = _period_check_completed(
-                db,
-                routine,
-                "week",
-                week_start,
-            )
+            completed = checks.completed(routine, "week", week_start)
             buckets.append(
                 _stat_bucket(week_start, completed, routine.target_count)
             )
@@ -275,7 +411,7 @@ def _weekly_stat_buckets(
             in weekdays
         }
         completed = len(
-            _done_dates(db, routine, active_start, active_end)
+            checks.done_dates(routine, active_start, active_end)
             & expected_dates
         )
         buckets.append(
@@ -290,6 +426,7 @@ def _weekly_stat_buckets(
 
 def _monthly_stat_buckets(
     db: Session,
+    checks: _StatsChecks,
     routine: BookmarkRoutine,
     today: date,
 ) -> list[dict[str, Any]]:
@@ -300,7 +437,9 @@ def _monthly_stat_buckets(
     ]
     buckets: list[dict[str, Any]] = []
     for month_start in starts:
-        values = _routine_month_values(db, routine, month_start)
+        values = _routine_month_values(
+            db, routine, month_start, checks
+        )
         if values is None:
             buckets.append(_stat_bucket(month_start, 0, 0))
         else:
@@ -311,7 +450,7 @@ def _monthly_stat_buckets(
 
 
 def _quarterly_stat_buckets(
-    db: Session,
+    checks: _StatsChecks,
     routine: BookmarkRoutine,
     today: date,
 ) -> list[dict[str, Any]]:
@@ -333,12 +472,7 @@ def _quarterly_stat_buckets(
         if active is None:
             buckets.append(_stat_bucket(quarter_start, 0, 0))
             continue
-        completed = _period_check_count(
-            db,
-            routine,
-            "quarter",
-            quarter_start,
-        )
+        completed = checks.count(routine, "quarter", quarter_start)
         expected = (
             1
             if routine.tracking_mode == "date"
@@ -351,7 +485,7 @@ def _quarterly_stat_buckets(
 
 
 def _yearly_stat_buckets(
-    db: Session,
+    checks: _StatsChecks,
     routine: BookmarkRoutine,
     today: date,
 ) -> list[dict[str, Any]]:
@@ -370,12 +504,7 @@ def _yearly_stat_buckets(
         if active is None:
             buckets.append(_stat_bucket(year_start, 0, 0))
             continue
-        completed = _period_check_count(
-            db,
-            routine,
-            "year",
-            year_start,
-        )
+        completed = checks.count(routine, "year", year_start)
         expected = (
             1
             if routine.tracking_mode == "date"
@@ -403,24 +532,36 @@ def get_statistics(
         .all()
     )
     today = _kst_today()
+    min_stat_date = _shift_months(_month_start(today), -35)
+    check_rows = (
+        db.query(BookmarkRoutineCheck)
+        .filter(
+            BookmarkRoutineCheck.user_id == user_id,
+            BookmarkRoutineCheck.period_start >= min_stat_date,
+        )
+        .all()
+    )
+    checks = _StatsChecks(check_rows)
     entries: list[dict[str, Any]] = []
     for routine in routines:
         if routine.frequency in {"daily", "weekly"}:
             aggregation = "week"
             retention_label = "최근 3개월"
-            buckets = _weekly_stat_buckets(db, routine, today)
+            buckets = _weekly_stat_buckets(checks, routine, today)
         elif routine.frequency == "monthly":
             aggregation = "month"
             retention_label = "최근 3년"
-            buckets = _monthly_stat_buckets(db, routine, today)
+            buckets = _monthly_stat_buckets(
+                db, checks, routine, today
+            )
         elif routine.frequency == "quarterly":
             aggregation = "quarter"
             retention_label = "최근 3년"
-            buckets = _quarterly_stat_buckets(db, routine, today)
+            buckets = _quarterly_stat_buckets(checks, routine, today)
         else:
             aggregation = "year"
             retention_label = "최근 3년"
-            buckets = _yearly_stat_buckets(db, routine, today)
+            buckets = _yearly_stat_buckets(checks, routine, today)
         entries.append(
             {
                 "id": routine.id,

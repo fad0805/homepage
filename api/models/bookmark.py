@@ -157,6 +157,16 @@ class BookmarkRoutine(Base):
         cascade="all, delete-orphan",
     )
 
+    __table_args__ = (
+        Index(
+            "ix_bookmark_routines_user_frequency_lifespan",
+            "user_id",
+            "frequency",
+            "start_date",
+            "end_date",
+        ),
+    )
+
 
 class BookmarkRoutineCheck(Base):
     """Completion state for one routine in one day/week/month/year."""

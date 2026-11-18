@@ -446,6 +446,52 @@ class BookmarkStatisticsTests(
         for routine in (future, ended, ended_count, no_due_date):
             self.assertNotIn(routine.id, by_id)
 
+    def test_statistics_batches_check_queries(self) -> None:
+        from sqlalchemy import event
+
+        statements: list[str] = []
+
+        @event.listens_for(self.engine, "before_cursor_execute")
+        def record_statement(
+            conn, cursor, statement, parameters, context, executemany
+        ):
+            statements.append(statement)
+
+        daily = self.make_routine(
+            frequency="daily",
+            tracking_mode="date",
+        )
+        self.make_routine(
+            frequency="weekly",
+            tracking_mode="count",
+            target_count=3,
+        )
+        self.make_routine(
+            frequency="monthly",
+            tracking_mode="count",
+            target_count=2,
+        )
+        self.make_routine(frequency="quarterly", tracking_mode="date")
+        self.make_routine(frequency="yearly", tracking_mode="date")
+        self.add_check(daily, "day", date(2026, 11, 16), count=1)
+        self.add_check(daily, "day", date(2026, 11, 17), count=1)
+        statements.clear()
+
+        with patch(
+            "crud.bookmark.statistics._kst_today",
+            return_value=date(2026, 11, 18),
+        ):
+            data = get_statistics(self.db, daily.user_id)
+
+        self.assertEqual(len(data["routines"]), 5)
+        self.assertLess(len(statements), 12)
+        buckets = {
+            entry["frequency"]: entry["buckets"]
+            for entry in data["routines"]
+        }
+        current_week = buckets["daily"][-1]
+        self.assertEqual(current_week["completed_count"], 2)
+
 
 if __name__ == "__main__":
     unittest.main()
