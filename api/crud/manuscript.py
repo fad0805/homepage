@@ -624,11 +624,13 @@ def _preorder_nodes(
     *,
     project_id: int | None,
     root_id: int | None,
+    include_deleted: bool = False,
 ) -> list[ManuscriptNode]:
     query = db.query(ManuscriptNode).filter(
         ManuscriptNode.user_id == user_id,
-        ManuscriptNode.deleted_at.is_(None),
     )
+    if not include_deleted:
+        query = query.filter(ManuscriptNode.deleted_at.is_(None))
     if project_id is not None:
         query = query.filter(ManuscriptNode.project_id == project_id)
     nodes = query.all()
@@ -641,11 +643,11 @@ def _preorder_nodes(
 
     roots = [by_id[root_id]] if root_id is not None and root_id in by_id else children.get(None, [])
     ordered: list[ManuscriptNode] = []
-    queue = deque(reversed(roots))
-    while queue:
-        node = queue.popleft()
+    stack = list(reversed(roots))
+    while stack:
+        node = stack.pop()
         ordered.append(node)
-        queue.extend(reversed(children.get(node.id, [])))
+        stack.extend(reversed(children.get(node.id, [])))
     return ordered
 
 
@@ -655,6 +657,7 @@ def get_scrivenings(
     *,
     project_id: int | None = None,
     root_id: int | None = None,
+    include_deleted: bool = False,
 ) -> list[dict]:
     if project_id is None and root_id is None:
         raise HTTPException(
@@ -662,9 +665,17 @@ def get_scrivenings(
             detail="project_id or root_id is required",
         )
     if root_id is not None:
-        root = _get_node_or_404(db, root_id, user_id)
+        root = _get_node_or_404(
+            db, root_id, user_id, include_deleted=include_deleted
+        )
         project_id = root.project_id
-    ordered = _preorder_nodes(db, user_id, project_id=project_id, root_id=root_id)
+    ordered = _preorder_nodes(
+        db,
+        user_id,
+        project_id=project_id,
+        root_id=root_id,
+        include_deleted=include_deleted,
+    )
     return [
         {
             "id": node.id,

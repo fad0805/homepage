@@ -171,10 +171,17 @@ def search(
 def get_scrivenings(
     project_id: int | None = None,
     root_id: int | None = None,
+    include_deleted: bool = False,
     db: Session = Depends(get_db),
     user=Depends(require_auth),
 ):
-    return crud.get_scrivenings(db, user.id, project_id=project_id, root_id=root_id)
+    return crud.get_scrivenings(
+        db,
+        user.id,
+        project_id=project_id,
+        root_id=root_id,
+        include_deleted=include_deleted,
+    )
 
 
 @public_router.get("/books/{book_id}/toc")

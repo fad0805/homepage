@@ -201,6 +201,22 @@ function collectBinderChapterIds(
   return ids;
 }
 
+/** Collect trashed chapter ids in the same order the trash binder renders them. */
+function collectTrashChapterIds(
+  rootId: number,
+  children: Map<number | null, TrashItem[]>,
+): number[] {
+  const ids: number[] = [];
+  const visit = (parentId: number | null) => {
+    (children.get(parentId) ?? []).forEach((item) => {
+      if (item.node_type === "chapter") ids.push(item.id);
+      visit(item.id);
+    });
+  };
+  visit(rootId);
+  return ids;
+}
+
 /** Split the combined folder document back into per-chapter bodies. */
 function splitCombinedHtml(html: string): string[] {
   const parsed = new DOMParser().parseFromString(html || "", "text/html");
@@ -247,6 +263,8 @@ export default function ManuscriptWorkspace() {
   const [trash, setTrash] = useState<TrashItem[]>([]);
   const [trashFoldersOpen, setTrashFoldersOpen] = useState<Set<number>>(new Set());
   const [trashPreview, setTrashPreview] = useState<TrashPreview | null>(null);
+  const [trashScrivenings, setTrashScrivenings] = useState<ScrivDoc[] | null>(null);
+  const [trashCombinedHtml, setTrashCombinedHtml] = useState("");
   const [scrivenings, setScrivenings] = useState<ScrivDoc[] | null>(null);
   const [scrivCombinedHtml, setScrivCombinedHtml] = useState("");
   const [scrivDirty, setScrivDirty] = useState(false);
@@ -517,6 +535,8 @@ export default function ManuscriptWorkspace() {
       await apiFetch(`/api/manuscript/nodes/${selectedId}`, { method: "DELETE" });
       setSelectedId(null);
       setTrashPreview(null);
+      setTrashScrivenings(null);
+      setTrashCombinedHtml("");
       setScrivenings(null);
       setScrivCombinedHtml("");
       setScrivDirty(false);
@@ -687,6 +707,48 @@ export default function ManuscriptWorkspace() {
       const node = await apiFetch<ManuscriptNode>(
         `/api/manuscript/nodes/${item.id}?include_deleted=true`,
       );
+      setTrashScrivenings(null);
+      setTrashCombinedHtml("");
+      setTrashPreview({
+        id: node.id,
+        title: node.title,
+        node_type: node.node_type,
+        body: node.body ?? null,
+        subtitle: node.subtitle,
+        synopsis: node.synopsis,
+        notes: node.notes,
+        deleted_at: item.deleted_at,
+        expires_at: item.expires_at,
+      });
+    } catch (error) {
+      notify((error as Error).message, "error");
+    }
+  };
+
+  const openTrashFolderPreview = async (item: TrashItem) => {
+    await flushAutosave();
+    try {
+      const [node, docs] = await Promise.all([
+        apiFetch<ManuscriptNode>(
+          `/api/manuscript/nodes/${item.id}?include_deleted=true`,
+        ),
+        apiFetch<ScrivDoc[]>(
+          `/api/manuscript/scrivenings?root_id=${item.id}&include_deleted=true`,
+        ),
+      ]);
+      // Use the trash binder as the source of truth, just like the normal
+      // folder view uses the live binder.
+      const binderIds = collectTrashChapterIds(item.id, trashChildrenMap);
+      const byId = new Map(docs.map((doc) => [doc.id, doc]));
+      const ordered = binderIds
+        .map((id) => byId.get(id))
+        .filter((doc): doc is ScrivDoc => Boolean(doc));
+      const remaining = docs.filter((doc) => !binderIds.includes(doc.id));
+      const orderedDocs = [...ordered, ...remaining];
+      setTrashScrivenings(orderedDocs);
+      setTrashCombinedHtml(
+        orderedDocs.map((doc) => doc.body || "<p></p>").join("<hr>"),
+      );
       setTrashPreview({
         id: node.id,
         title: node.title,
@@ -749,6 +811,8 @@ export default function ManuscriptWorkspace() {
     try {
       await apiFetch(`/api/manuscript/nodes/${id}/restore`, { method: "POST" });
       setTrashPreview((current) => (current?.id === id ? null : current));
+      setTrashScrivenings(null);
+      setTrashCombinedHtml("");
       await loadTrash();
       if (projectId) await loadTree(projectId);
       notify("복원했습니다.");
@@ -764,6 +828,8 @@ export default function ManuscriptWorkspace() {
         { method: "POST" },
       );
       setTrashPreview(null);
+      setTrashScrivenings(null);
+      setTrashCombinedHtml("");
       await loadTrash();
       notify(`${result.purged}개를 영구 삭제했습니다.`);
     } catch (error) {
@@ -832,6 +898,8 @@ export default function ManuscriptWorkspace() {
             onClick={() => {
               void flushAutosave().finally(() => {
                 setTrashPreview(null);
+                setTrashScrivenings(null);
+                setTrashCombinedHtml("");
                 setSelectedId(node.id);
                 if (node.node_type === "folder") {
                   setScrivenings(null);
@@ -920,7 +988,9 @@ export default function ManuscriptWorkspace() {
             className={`ms-node${trashPreview?.id === item.id ? " is-selected" : ""}`}
             style={{ paddingLeft: `${0.65 + depth * 1.05}rem` }}
             title={`삭제: ${item.deleted_at}\n영구 삭제: ${item.expires_at}`}
-            onClick={() => void openTrashPreview(item)}
+            onClick={() =>
+              void (isFolder ? openTrashFolderPreview(item) : openTrashPreview(item))
+            }
           >
             <button
               type="button"
@@ -969,6 +1039,8 @@ export default function ManuscriptWorkspace() {
           onChange={(event) => {
             void flushAutosave().finally(() => {
               setTrashPreview(null);
+              setTrashScrivenings(null);
+              setTrashCombinedHtml("");
               setProjectId(Number(event.target.value) || null);
               setSelectedId(null);
             });
@@ -1096,7 +1168,7 @@ export default function ManuscriptWorkspace() {
             <RichTextEditor
               variant="workspace"
               readOnly
-              value={trashPreview.body ?? ""}
+              value={trashScrivenings ? trashCombinedHtml : trashPreview.body ?? ""}
               onChange={() => {}}
               placeholder="삭제된 원고"
               uploadUrl="/api/chapters/upload"
@@ -1157,7 +1229,14 @@ export default function ManuscriptWorkspace() {
                   >
                     복원
                   </button>
-                  <button type="button" onClick={() => setTrashPreview(null)}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setTrashPreview(null);
+                      setTrashScrivenings(null);
+                      setTrashCombinedHtml("");
+                    }}
+                  >
                     닫기
                   </button>
                 </div>

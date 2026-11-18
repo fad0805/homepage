@@ -192,6 +192,22 @@ class ManuscriptTests(unittest.TestCase):
         self.assertIsNone(items[folder_id]["parent_id"])
         self.assertEqual(items[child_id]["parent_id"], folder_id)
 
+    def test_scrivenings_can_read_deleted_folder(self) -> None:
+        project = self._project()
+        folder_id = self._node(project, "폴더", node_type="folder").id
+        first_id = self._node(project, "1화", parent_id=folder_id).id
+        second_id = self._node(project, "2화", parent_id=folder_id).id
+
+        crud.delete_node(self.db, folder_id, self.owner.id)
+
+        with self.assertRaises(HTTPException):
+            crud.get_scrivenings(self.db, self.owner.id, root_id=folder_id)
+
+        docs = crud.get_scrivenings(
+            self.db, self.owner.id, root_id=folder_id, include_deleted=True
+        )
+        self.assertEqual([doc["id"] for doc in docs], [first_id, second_id])
+
     def test_search_covers_title_synopsis_notes_and_body(self) -> None:
         project = self._project()
         self._node(project, "찾을말 제목", body="相关内容")
