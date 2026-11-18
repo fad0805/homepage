@@ -49,13 +49,14 @@ export const AdminNavbar = ({
                 }`}
                 title={item.iconOnly ? item.label : undefined}
                 aria-label={item.iconOnly ? item.label : undefined}
+                target={item.iconOnly ? "_blank" : undefined}
+                rel={item.iconOnly ? "noopener noreferrer" : undefined}
                 onClick={(event) => {
-                  // The manuscript workspace uses its own root layout branch,
-                  // so it must be a full document navigation rather than a
-                  // client-side transition that keeps the public site shell.
+                  // Open the standalone workspace in a new tab so the admin
+                  // page stays exactly where it was.
                   if (item.iconOnly) {
                     event.preventDefault();
-                    window.location.assign(item.href);
+                    window.open(item.href, "_blank", "noopener,noreferrer");
                     return;
                   }
                   // Only intercept the exact active page. A parent menu such as
