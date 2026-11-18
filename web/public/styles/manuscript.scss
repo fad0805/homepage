@@ -723,7 +723,7 @@ html[data-workspace='manuscript'] .ms-editor--workspace .ms-editor__surface .tip
   display: flex;
   align-items: center;
   gap: 0.35rem;
-  min-height: 1.5rem;
+  min-height: 1.6rem;
   border-radius: 0.3rem;
   padding: 0.15rem 0.3rem;
   font-size: 0.72rem;
@@ -741,20 +741,23 @@ html[data-workspace='manuscript'] .ms-editor--workspace .ms-editor__surface .tip
 
   &__meta {
     color: var(--ms-muted);
-    font-size: 0.6rem;
+    font-size: 0.62rem;
   }
 
   button {
-    border: 1px solid var(--ms-border);
+    flex: 0 0 auto;
+    border: 1px solid color-mix(in srgb, var(--ms-accent) 50%, var(--ms-border));
     border-radius: 0.3rem;
-    background: transparent;
-    color: var(--ms-accent);
-    font-size: 0.65rem;
-    padding: 0.1rem 0.3rem;
+    background: color-mix(in srgb, var(--ms-accent) 16%, var(--ms-panel));
+    color: var(--ms-text);
+    font-size: 0.68rem;
+    font-weight: 600;
+    line-height: 1.4;
+    padding: 0.12rem 0.35rem;
     cursor: pointer;
 
     &:hover {
-      background: color-mix(in srgb, var(--ms-accent) 14%, transparent);
+      background: color-mix(in srgb, var(--ms-accent) 28%, var(--ms-panel));
     }
   }
 }
