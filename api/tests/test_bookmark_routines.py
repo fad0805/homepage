@@ -1,12 +1,13 @@
 import os
 import unittest
 from datetime import date
+from unittest.mock import patch
 
 os.environ.setdefault("ENVIRONMENT", "development")
 
 from fastapi import HTTPException
 
-from crud.bookmark.periods import get_period
+from crud.bookmark.periods import get_period, get_today
 from crud.bookmark.routines import reorder_routines, update_routine
 from models.bookmark import BookmarkRoutine
 from schemas.bookmark import BookmarkRoutineReorder, BookmarkRoutineUpdate
@@ -148,6 +149,82 @@ class BookmarkRoutineOrderTests(
                     1,
                 )
             self.assertEqual(context.exception.status_code, 404)
+
+    def test_get_period_batches_check_queries(self) -> None:
+        from sqlalchemy import event
+
+        statements: list[str] = []
+
+        @event.listens_for(self.engine, "before_cursor_execute")
+        def record_statement(
+            conn, cursor, statement, parameters, context, executemany
+        ):
+            statements.append(statement)
+
+        routines = [
+            self.make_routine(
+                frequency="monthly",
+                tracking_mode="date",
+                day_of_month=10,
+                title=f"루틴 {index}",
+                position=index,
+            )
+            for index in range(5)
+        ]
+        for routine in routines:
+            self.add_check(routine, "month", date(2026, 11, 1), count=1)
+        statements.clear()
+
+        with patch(
+            "crud.bookmark.periods._kst_today",
+            return_value=date(2026, 11, 18),
+        ):
+            data = get_period(
+                self.db,
+                routines[0].user_id,
+                period_type="month",
+                period_start=date(2026, 11, 1),
+            )
+
+        self.assertEqual(len(data["routines"]), 5)
+        self.assertLess(len(statements), 10)
+        self.assertTrue(
+            all(
+                entry["completed_count"] == 1
+                for entry in data["routines"]
+            )
+        )
+
+    def test_get_today_batches_check_queries(self) -> None:
+        from sqlalchemy import event
+
+        statements: list[str] = []
+
+        @event.listens_for(self.engine, "before_cursor_execute")
+        def record_statement(
+            conn, cursor, statement, parameters, context, executemany
+        ):
+            statements.append(statement)
+
+        routines = self.make_daily_routines(5)
+        for routine in routines:
+            self.add_check(routine, "day", date(2026, 11, 18), count=1)
+        statements.clear()
+
+        data = get_today(
+            self.db,
+            routines[0].user_id,
+            day=date(2026, 11, 18),
+        )
+
+        self.assertEqual(len(data["routines"]), 5)
+        self.assertLess(len(statements), 10)
+        self.assertTrue(
+            all(
+                entry["completed_count"] == 1
+                for entry in data["routines"]
+            )
+        )
 
 
 if __name__ == "__main__":
