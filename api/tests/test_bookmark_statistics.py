@@ -393,7 +393,9 @@ class BookmarkStatisticsTests(
             (0, 8),
         )
 
-    def test_period_includes_future_routines_with_next_date(self) -> None:
+    def test_period_skips_routines_outside_lifespan_and_empty_entries(
+        self,
+    ) -> None:
         current = self.make_routine(
             frequency="monthly",
             tracking_mode="date",
@@ -406,19 +408,43 @@ class BookmarkStatisticsTests(
             day_of_month=10,
             start_date=date(2027, 1, 1),
         )
-        data = get_period(
-            self.db,
-            current.user_id,
-            period_type="month",
-            period_start=date(2026, 11, 1),
+        ended = self.make_routine(
+            frequency="monthly",
+            tracking_mode="date",
+            day_of_month=10,
+            start_date=date(2025, 1, 1),
+            end_date=date(2026, 10, 31),
         )
+        ended_count = self.make_routine(
+            frequency="monthly",
+            tracking_mode="count",
+            start_date=date(2025, 1, 1),
+            end_date=date(2026, 10, 31),
+        )
+        no_due_date = self.make_routine(
+            frequency="monthly",
+            tracking_mode="date",
+            start_date=date(2026, 1, 1),
+        )
+
+        with patch(
+            "crud.bookmark.periods._kst_today",
+            return_value=date(2026, 11, 18),
+        ):
+            data = get_period(
+                self.db,
+                current.user_id,
+                period_type="month",
+                period_start=date(2026, 11, 1),
+            )
         by_id = {item["id"]: item for item in data["routines"]}
         self.assertIn(current.id, by_id)
-        self.assertIn(future.id, by_id)
         self.assertEqual(
-            by_id[future.id]["next_date"],
-            date(2027, 1, 10),
+            by_id[current.id]["next_date"],
+            date(2026, 12, 10),
         )
+        for routine in (future, ended, ended_count, no_due_date):
+            self.assertNotIn(routine.id, by_id)
 
 
 if __name__ == "__main__":

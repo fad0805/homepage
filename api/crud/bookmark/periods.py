@@ -267,6 +267,7 @@ def get_period(
 ) -> dict[str, Any]:
     _validate_period(period_type, period_start)
     frequency = PERIOD_FREQUENCY[period_type]
+    period_end = _period_end(period_type, period_start)
     routines = (
         db.query(BookmarkRoutine)
         .options(selectinload(BookmarkRoutine.category))
@@ -274,6 +275,11 @@ def get_period(
             BookmarkRoutine.user_id == user_id,
             BookmarkRoutine.calendar_only.is_(False),
             BookmarkRoutine.frequency == frequency,
+            BookmarkRoutine.start_date <= period_end,
+            or_(
+                BookmarkRoutine.end_date.is_(None),
+                BookmarkRoutine.end_date >= period_start,
+            ),
         )
         .order_by(BookmarkRoutine.position, BookmarkRoutine.id)
         .all()
@@ -303,13 +309,7 @@ def get_period(
                 period_start=period_start,
             )
         if entry is None:
-            entry = _routine_period_dict(
-                routine,
-                period_type=period_type,
-                period_start=period_start,
-                completed_count=0,
-                occurrences=[],
-            )
+            continue
         entry["next_date"] = _next_routine_date(routine, today)
         entries.append(entry)
     goal = (
