@@ -396,3 +396,72 @@ class ChapterSearchTests(unittest.TestCase):
         self.assertTrue(
             all("body" not in statement.lower() for statement in chapter_selects)
         )
+
+    def _record_statements(self):
+        statements: list[str] = []
+
+        def record(conn, cursor, statement, parameters, context, many):
+            statements.append(statement)
+
+        event.listen(self.engine, "before_cursor_execute", record)
+        return statements, record
+
+    def test_list_query_eager_loads_books(self) -> None:
+        for day in range(1, 4):
+            self._chapter(
+                f"{day}화",
+                "본문",
+                owner_id=self.owner.id,
+                created_at=datetime(2026, 3, day, tzinfo=timezone.utc),
+            )
+        self.db.commit()
+        owner_id = self.owner.id
+
+        statements, record = self._record_statements()
+        try:
+            results = get_all_chapters(
+                self.db,
+                include_hidden=True,
+                owner_user_id=owner_id,
+                include_body=False,
+            )
+        finally:
+            event.remove(self.engine, "before_cursor_execute", record)
+
+        # One query should load both chapters and their joined books. A lazy
+        # `chapter.book` access per row would add one SELECT per chapter here.
+        self.assertEqual(len(statements), 1)
+        self.assertTrue(
+            all(item["book"]["title"] == "소설" for item in results)
+        )
+
+    def test_id_search_does_not_load_books_per_row(self) -> None:
+        for day in range(1, 4):
+            self._chapter(
+                f"{day}화",
+                "검색어",
+                owner_id=self.owner.id,
+                created_at=datetime(2026, 4, day, tzinfo=timezone.utc),
+            )
+        self.db.commit()
+        owner_id = self.owner.id
+
+        statements, record = self._record_statements()
+        try:
+            results, total = get_chapters_page(
+                self.db,
+                include_hidden=True,
+                owner_user_id=owner_id,
+                query="검색어",
+                ids_only=True,
+                page=1,
+                page_size=10,
+            )
+        finally:
+            event.remove(self.engine, "before_cursor_execute", record)
+
+        # One count query plus one page query. IDs-only serialization must not
+        # trigger a book lookup for each chapter.
+        self.assertEqual(len(statements), 2)
+        self.assertEqual(total, 3)
+        self.assertEqual(len(results), 3)
