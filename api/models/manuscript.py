@@ -38,6 +38,7 @@ class ManuscriptProject(Base):
     created_at = Column(DateTime, default=func.now())
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
 
+    book = relationship("Book", foreign_keys=[linked_book_id])
     nodes = relationship(
         "ManuscriptNode",
         back_populates="project",
@@ -77,6 +78,7 @@ class ManuscriptNode(Base):
     # as another value without a DB migration because this is a plain String.
     node_type = Column(String(16), nullable=False)
     title = Column(String, nullable=False)
+    subtitle = Column(String, nullable=True)
     synopsis = Column(Text, nullable=True)
     status = Column(String(32), nullable=True)
     notes = Column(Text, nullable=True)
