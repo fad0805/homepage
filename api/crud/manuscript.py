@@ -417,16 +417,18 @@ def restore_node(db: Session, node_id: int, user_id: int) -> dict:
     return {"restored": len(ids)}
 
 
-def get_trash(db: Session, user_id: int) -> list[dict]:
-    nodes = (
-        db.query(ManuscriptNode)
-        .filter(
-            ManuscriptNode.user_id == user_id,
-            ManuscriptNode.deleted_at.is_not(None),
-        )
-        .order_by(ManuscriptNode.deleted_at.desc(), ManuscriptNode.id.desc())
-        .all()
+def get_trash(
+    db: Session, user_id: int, project_id: int | None = None
+) -> list[dict]:
+    query = db.query(ManuscriptNode).filter(
+        ManuscriptNode.user_id == user_id,
+        ManuscriptNode.deleted_at.is_not(None),
     )
+    if project_id is not None:
+        query = query.filter(ManuscriptNode.project_id == project_id)
+    nodes = query.order_by(
+        ManuscriptNode.deleted_at.desc(), ManuscriptNode.id.desc()
+    ).all()
     return [
         {
             "id": node.id,
@@ -444,13 +446,20 @@ def get_trash(db: Session, user_id: int) -> list[dict]:
     ]
 
 
-def purge_expired(db: Session, *, retention_days: int = TRASH_RETENTION_DAYS) -> int:
+def purge_expired(
+    db: Session,
+    *,
+    retention_days: int = TRASH_RETENTION_DAYS,
+    project_id: int | None = None,
+) -> int:
     cutoff = _utcnow() - timedelta(days=retention_days)
-    count = (
-        db.query(ManuscriptNode)
-        .filter(ManuscriptNode.deleted_at.is_not(None), ManuscriptNode.deleted_at < cutoff)
-        .delete(synchronize_session=False)
+    query = db.query(ManuscriptNode).filter(
+        ManuscriptNode.deleted_at.is_not(None),
+        ManuscriptNode.deleted_at < cutoff,
     )
+    if project_id is not None:
+        query = query.filter(ManuscriptNode.project_id == project_id)
+    count = query.delete(synchronize_session=False)
     db.commit()
     return count
 

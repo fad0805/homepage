@@ -136,19 +136,25 @@ def unlink_node(
 
 @router.get("/trash")
 def get_trash(
+    project_id: int | None = Query(default=None),
     db: Session = Depends(get_db),
     user=Depends(require_auth),
 ):
-    return crud.get_trash(db, user.id)
+    return crud.get_trash(db, user.id, project_id=project_id)
 
 
 @router.post("/trash/purge")
 def purge_trash(
     retention_days: int = Query(default=crud.TRASH_RETENTION_DAYS, ge=1),
+    project_id: int | None = Query(default=None),
     db: Session = Depends(get_db),
     user=Depends(require_auth),
 ):
-    return {"purged": crud.purge_expired(db, retention_days=retention_days)}
+    return {
+        "purged": crud.purge_expired(
+            db, retention_days=retention_days, project_id=project_id
+        )
+    }
 
 
 @router.get("/search")

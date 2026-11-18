@@ -700,3 +700,80 @@ html[data-workspace='manuscript'] .ms-editor--workspace .ms-editor__surface .tip
   border-radius: 0.4rem;
   font-size: 0.8rem;
 }
+
+.ms-node--trash {
+  margin-top: 0.35rem;
+  border-top: 1px solid var(--ms-border);
+  padding-top: 0.35rem;
+  color: var(--ms-muted);
+
+  .ms-node__icon {
+    font-size: 0.75rem;
+  }
+}
+
+.ms-trash-binder {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  padding: 0.15rem 0.5rem 0.4rem 1.6rem;
+}
+
+.ms-trash-row {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-height: 1.5rem;
+  border-radius: 0.3rem;
+  padding: 0.15rem 0.3rem;
+  font-size: 0.72rem;
+
+  &:hover {
+    background: color-mix(in srgb, var(--ms-text) 6%, transparent);
+  }
+
+  &__title {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &__meta {
+    color: var(--ms-muted);
+    font-size: 0.6rem;
+  }
+
+  button {
+    border: 1px solid var(--ms-border);
+    border-radius: 0.3rem;
+    background: transparent;
+    color: var(--ms-accent);
+    font-size: 0.65rem;
+    padding: 0.1rem 0.3rem;
+    cursor: pointer;
+
+    &:hover {
+      background: color-mix(in srgb, var(--ms-accent) 14%, transparent);
+    }
+  }
+}
+
+.ms-trash-empty,
+.ms-trash-purge {
+  color: var(--ms-muted);
+  font-size: 0.68rem;
+}
+
+.ms-trash-purge {
+  align-self: flex-start;
+  margin-top: 0.2rem;
+  border: 0;
+  background: transparent;
+  text-decoration: underline;
+  cursor: pointer;
+
+  &:hover {
+    color: var(--ms-danger);
+  }
+}

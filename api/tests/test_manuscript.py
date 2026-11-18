@@ -157,6 +157,27 @@ class ManuscriptTests(unittest.TestCase):
             .first()
         )
 
+    def test_trash_and_purge_can_be_scoped_to_project(self) -> None:
+        project_a = self._project()
+        project_b = self._project(linked_book=False)
+        a_id = self._node(project_a, "A 원고").id
+        b_id = self._node(project_b, "B 원고").id
+
+        crud.delete_node(self.db, a_id, self.owner.id)
+        crud.delete_node(self.db, b_id, self.owner.id)
+
+        self.assertEqual(
+            [item["id"] for item in crud.get_trash(self.db, self.owner.id, project_id=project_a.id)],
+            [a_id],
+        )
+
+        expired = self.db.query(ManuscriptNode).filter(ManuscriptNode.id == b_id).one()
+        expired.deleted_at = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=31)
+        self.db.commit()
+
+        self.assertEqual(crud.purge_expired(self.db, project_id=project_a.id), 0)
+        self.assertEqual(crud.purge_expired(self.db, project_id=project_b.id), 1)
+
     def test_search_covers_title_synopsis_notes_and_body(self) -> None:
         project = self._project()
         self._node(project, "찾을말 제목", body="相关内容")

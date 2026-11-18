@@ -219,7 +219,7 @@ export default function ManuscriptWorkspace() {
   const [searchOpen, setSearchOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchResult[]>([]);
-  const [trashOpen, setTrashOpen] = useState(false);
+  const [trashExpanded, setTrashExpanded] = useState(false);
   const [trash, setTrash] = useState<TrashItem[]>([]);
   const [scrivenings, setScrivenings] = useState<ScrivDoc[] | null>(null);
   const [scrivCombinedHtml, setScrivCombinedHtml] = useState("");
@@ -240,11 +240,39 @@ export default function ManuscriptWorkspace() {
     setNotice({ type, text });
   }, []);
 
+  const loadTrash = useCallback(async () => {
+    if (!projectId) return;
+    const items = await apiFetch<TrashItem[]>(
+      `/api/manuscript/trash?project_id=${projectId}`,
+    );
+    setTrash(items);
+  }, [projectId]);
+
   useEffect(() => {
     if (!notice) return;
     const timer = window.setTimeout(() => setNotice(null), 3600);
     return () => window.clearTimeout(timer);
   }, [notice]);
+
+  // Trash expansion is remembered per project; new projects start collapsed.
+  useEffect(() => {
+    if (!projectId) return;
+    const stored = window.localStorage.getItem(`ms-trash-expanded:${projectId}`);
+    setTrashExpanded(stored === "1");
+  }, [projectId]);
+
+  const toggleTrash = () => {
+    setTrashExpanded((current) => {
+      const next = !current;
+      if (projectId) {
+        window.localStorage.setItem(
+          `ms-trash-expanded:${projectId}`,
+          next ? "1" : "0",
+        );
+      }
+      return next;
+    });
+  };
 
   const loadProjects = useCallback(async () => {
     const [projectList, bookList] = await Promise.all([
@@ -335,11 +363,9 @@ export default function ManuscriptWorkspace() {
   }, [query, searchOpen, notify]);
 
   useEffect(() => {
-    if (!trashOpen) return;
-    apiFetch<TrashItem[]>("/api/manuscript/trash")
-      .then(setTrash)
-      .catch((error: Error) => notify(error.message, "error"));
-  }, [trashOpen, notify]);
+    if (!trashExpanded || !projectId) return;
+    loadTrash().catch((error: Error) => notify(error.message, "error"));
+  }, [trashExpanded, projectId, loadTrash, notify]);
 
   const childrenMap = useMemo(() => {
     const map = new Map<number | null, ManuscriptNode[]>();
@@ -628,7 +654,7 @@ export default function ManuscriptWorkspace() {
   const restoreFromTrash = async (id: number) => {
     try {
       await apiFetch(`/api/manuscript/nodes/${id}/restore`, { method: "POST" });
-      setTrash((current) => current.filter((item) => item.id !== id));
+      await loadTrash();
       if (projectId) await loadTree(projectId);
       notify("복원했습니다.");
     } catch (error) {
@@ -638,10 +664,11 @@ export default function ManuscriptWorkspace() {
 
   const purgeTrash = async () => {
     try {
-      const result = await apiFetch<{ purged: number }>("/api/manuscript/trash/purge", {
-        method: "POST",
-      });
-      setTrash([]);
+      const result = await apiFetch<{ purged: number }>(
+        `/api/manuscript/trash/purge?project_id=${projectId}`,
+        { method: "POST" },
+      );
+      await loadTrash();
       notify(`${result.purged}개를 영구 삭제했습니다.`);
     } catch (error) {
       notify((error as Error).message, "error");
@@ -832,9 +859,6 @@ export default function ManuscriptWorkspace() {
           <button type="button" onClick={() => setSearchOpen(true)}>
             전체 검색
           </button>
-          <button type="button" onClick={() => setTrashOpen(true)}>
-            휴지통
-          </button>
           <a href="/admin/books">책장 관리</a>
         </div>
       </header>
@@ -873,6 +897,74 @@ export default function ManuscriptWorkspace() {
               }}
             >
               {renderRows(null, 0)}
+              <div
+                className="ms-node ms-node--trash"
+                onClick={toggleTrash}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    toggleTrash();
+                  }
+                }}
+                role="button"
+                tabIndex={0}
+                aria-expanded={trashExpanded}
+              >
+                <button
+                  type="button"
+                  className="ms-node__toggle"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    toggleTrash();
+                  }}
+                  aria-label={trashExpanded ? "휴지통 접기" : "휴지통 펼치기"}
+                >
+                  {trashExpanded ? "▾" : "▸"}
+                </button>
+                <span className="ms-node__icon">⌫</span>
+                <span className="ms-node__title">휴지통</span>
+                <span className="ms-node__count">{trash.length}</span>
+              </div>
+              {trashExpanded ? (
+                <div className="ms-trash-binder">
+                  {trash.map((item) => (
+                    <div
+                      key={item.id}
+                      className="ms-trash-row"
+                      title={`삭제: ${item.deleted_at}\n영구 삭제: ${item.expires_at}`}
+                    >
+                      <span className="ms-trash-row__title">{item.title}</span>
+                      <span className="ms-trash-row__meta">
+                        {item.node_type === "folder" ? "폴더" : "챕터"}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          void restoreFromTrash(item.id);
+                        }}
+                      >
+                        복원
+                      </button>
+                    </div>
+                  ))}
+                  {trash.length === 0 ? (
+                    <p className="ms-trash-empty">휴지통이 비어 있습니다.</p>
+                  ) : null}
+                  {trash.length ? (
+                    <button
+                      type="button"
+                      className="ms-trash-purge"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        void purgeTrash();
+                      }}
+                    >
+                      만료 항목 영구 삭제
+                    </button>
+                  ) : null}
+                </div>
+              ) : null}
             </div>
             <div className="ms-binder__hint">
               항목을 끌어 이동 · 제목 더블클릭으로 변경 · 폴더 클릭 시 폴더 전체 보기
@@ -1096,37 +1188,6 @@ export default function ManuscriptWorkspace() {
         </div>
       ) : null}
 
-      {trashOpen ? (
-        <div className="ms-modal-backdrop" onClick={() => setTrashOpen(false)}>
-          <div className="ms-modal" onClick={(event) => event.stopPropagation()}>
-            <div className="ms-modal__header">
-              <h2>휴지통</h2>
-              <button type="button" onClick={() => setTrashOpen(false)} aria-label="닫기">
-                ×
-              </button>
-            </div>
-            <p className="ms-modal__hint">
-              이동 후 30일이 지나면 자동으로 영구 삭제됩니다.
-            </p>
-            <div className="ms-trash-list">
-              {trash.map((item) => (
-                <div key={item.id} className="ms-trash-item">
-                  <span>{item.title}</span>
-                  <button type="button" onClick={() => restoreFromTrash(item.id)}>
-                    복원
-                  </button>
-                </div>
-              ))}
-              {trash.length === 0 ? <p>휴지통이 비어 있습니다.</p> : null}
-            </div>
-            {trash.length ? (
-              <button type="button" className="ms-button--danger" onClick={purgeTrash}>
-                만료 항목 영구 삭제
-              </button>
-            ) : null}
-          </div>
-        </div>
-      ) : null}
     </div>
   );
 }
