@@ -21,8 +21,8 @@ from schemas.books import (
     ChapterReorderRequest,
     ChapterUpdate,
 )
+
 from .utils import (
-    filter_by_author,
     get_client_ip,
     get_default_author_id,
     get_gallery_grants,
@@ -51,6 +51,7 @@ def get_chapters(
     mine: bool = False,
     q: str | None = None,
     include_body: bool = True,
+    ids_only: bool = False,
     db: Session = Depends(get_db),
     current_user=Depends(get_optional_user),
 ):
@@ -67,25 +68,31 @@ def get_chapters(
             owner_user_id=current_user.id,
             query=q,
             include_body=include_body,
+            ids_only=ids_only,
         )
+    author_id = get_default_author_id(db)
+    if author_id is None:
+        return []
     if current_user is not None and is_admin(current_user):
-        chapters = get_all_chapters(
+        return get_all_chapters(
             db,
             include_hidden=True,
+            author_user_id=author_id,
             query=q,
             include_body=include_body,
+            ids_only=ids_only,
         )
-    else:
-        chapters = get_all_chapters(
-            db,
-            include_hidden=current_user is not None,
-            granted_chapters=grants.chapters,
-            granted_books=grants.books,
-            viewer_user_id=current_user.id if current_user else None,
-            query=q,
-            include_body=include_body,
-        )
-    return filter_by_author(chapters, get_default_author_id(db))
+    return get_all_chapters(
+        db,
+        include_hidden=current_user is not None,
+        granted_chapters=grants.chapters,
+        granted_books=grants.books,
+        viewer_user_id=current_user.id if current_user else None,
+        author_user_id=author_id,
+        query=q,
+        include_body=include_body,
+        ids_only=ids_only,
+    )
 
 
 @router.post("/")

@@ -125,6 +125,151 @@ class ChapterSearchTests(unittest.TestCase):
 
         self.assertEqual([item["title"] for item in results], ["1화"])
 
+    def test_public_list_search_matches_unlocked_body(self) -> None:
+        self._chapter(
+            "1화",
+            "<p>본문에만 있는 <b>검색어</b></p>",
+            owner_id=self.owner.id,
+            created_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
+        )
+        self.db.commit()
+
+        results = get_all_chapters(
+            self.db,
+            query="검색어",
+            include_body=False,
+        )
+
+        self.assertEqual([item["title"] for item in results], ["1화"])
+        self.assertIsNone(results[0]["body"])
+
+    def test_public_list_search_can_return_ids_only(self) -> None:
+        matched = self._chapter(
+            "1화",
+            "본문 검색어",
+            owner_id=self.owner.id,
+            created_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
+        )
+        self._chapter(
+            "2화",
+            "관련 없는 본문",
+            owner_id=self.owner.id,
+            created_at=datetime(2026, 1, 2, tzinfo=timezone.utc),
+        )
+        self.db.commit()
+
+        results = get_all_chapters(
+            self.db,
+            query="검색어",
+            include_body=False,
+            ids_only=True,
+        )
+
+        self.assertEqual(results, [matched.id])
+
+    def test_author_filter_is_applied_with_search(self) -> None:
+        own = self._chapter(
+            "내 글",
+            "공통 검색어",
+            owner_id=self.owner.id,
+            created_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
+        )
+        other_book = Book(user_id=self.other.id, title="남의 책", tags=[])
+        self.db.add(other_book)
+        self.db.flush()
+        self.db.add(
+            Chapter(
+                user_id=self.other.id,
+                book_id=other_book.id,
+                title="남의 글",
+                body="공통 검색어",
+                tags=[],
+                created_at=datetime(2026, 1, 2, tzinfo=timezone.utc),
+            )
+        )
+        self.db.commit()
+
+        results = get_all_chapters(
+            self.db,
+            query="검색어",
+            author_user_id=self.owner.id,
+            ids_only=True,
+        )
+
+        self.assertEqual(results, [own.id])
+
+    def test_public_list_search_ignores_protected_body(self) -> None:
+        protected = self._chapter(
+            "보호 글",
+            "비밀 본문 검색어",
+            owner_id=self.owner.id,
+            created_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
+        )
+        protected.protected = True
+        self._chapter(
+            "공개 글",
+            "평범한 본문",
+            owner_id=self.owner.id,
+            created_at=datetime(2026, 1, 2, tzinfo=timezone.utc),
+        )
+        self.db.commit()
+
+        self.assertEqual(
+            get_all_chapters(self.db, query="검색어"),
+            [],
+        )
+
+        granted = get_all_chapters(
+            self.db,
+            query="검색어",
+            granted_chapters=frozenset({protected.id}),
+        )
+        self.assertEqual([item["title"] for item in granted], ["보호 글"])
+        self.assertEqual(granted[0]["body"], "비밀 본문 검색어")
+
+    def test_public_list_search_ignores_body_of_protected_book(self) -> None:
+        self.book.protected = True
+        chapter = self._chapter(
+            "1화",
+            "책 보호 본문 검색어",
+            owner_id=self.owner.id,
+            created_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
+        )
+        self.db.commit()
+
+        self.assertEqual(
+            get_all_chapters(self.db, query="검색어"),
+            [],
+        )
+
+        granted = get_all_chapters(
+            self.db,
+            query="검색어",
+            granted_books=frozenset({self.book.id}),
+        )
+        self.assertEqual([item["title"] for item in granted], ["1화"])
+        self.assertEqual(granted[0]["id"], chapter.id)
+
+    def test_owner_search_can_match_protected_body(self) -> None:
+        chapter = self._chapter(
+            "1화",
+            "비밀 본문 검색어",
+            owner_id=self.owner.id,
+            created_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
+        )
+        chapter.protected = True
+        self.db.commit()
+
+        results = get_all_chapters(
+            self.db,
+            owner_user_id=self.owner.id,
+            query="검색어",
+            include_body=False,
+        )
+
+        self.assertEqual([item["id"] for item in results], [chapter.id])
+        self.assertIsNone(results[0]["body"])
+
     def test_body_snippet_unescapes_entities(self) -> None:
         snippet = _body_snippet("<p>a &amp; b</p>", ["b"])
         self.assertEqual(snippet, "a & b")

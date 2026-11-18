@@ -248,6 +248,10 @@ export default function BooksClient({
     () => new Set(),
   );
   const [searchQuery, setSearchQuery] = useState("");
+  const [bodySearch, setBodySearch] = useState<{
+    query: string;
+    ids: Set<number>;
+  } | null>(null);
   const [chapterPage, setChapterPage] = useState(1);
   const [isMobile, setIsMobile] = useState(initialIsMobile);
   const [now, setNow] = useState(() => Date.now());
@@ -271,6 +275,51 @@ export default function BooksClient({
     const timer = setInterval(() => setNow(Date.now()), 60_000);
     return () => clearInterval(timer);
   }, []);
+
+  // The chapter list is metadata-only, so body matches are resolved by the
+  // API when a query is present. Title and tag matches keep working instantly
+  // on the client while this request is in flight.
+  useEffect(() => {
+    if (searchTokens(searchQuery).length === 0) {
+      setBodySearch(null);
+      return;
+    }
+
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => {
+      const params = new URLSearchParams({
+        q: searchQuery,
+        include_body: "false",
+        ids_only: "true",
+      });
+      fetch(`/api/chapters?${params.toString()}`, {
+        signal: controller.signal,
+        credentials: "include",
+      })
+        .then((response) => {
+          if (!response.ok) throw new Error("Failed to search chapters");
+          return response.json() as Promise<number[]>;
+        })
+        .then((ids) => {
+          if (controller.signal.aborted) return;
+          setBodySearch({
+            query: searchQuery,
+            ids: new Set(ids),
+          });
+        })
+        .catch(() => {
+          if (controller.signal.aborted) return;
+          // Body search is an enhancement; failed requests simply leave the
+          // local title/tag matches in place.
+          setBodySearch({ query: searchQuery, ids: new Set() });
+        });
+    }, 250);
+
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+    };
+  }, [searchQuery]);
 
   // The chapter list is metadata-only, so load the body only for the chapter
   // the reader actually opened. Locked chapters let the unlock form handle it.
@@ -410,6 +459,16 @@ export default function BooksClient({
     return counts;
   }, [visibleChapters]);
 
+  const bodyMatchedChapterIds = useMemo(() => {
+    if (bodySearch?.query !== searchQuery) return new Set<number>();
+    const visibleChapterIds = new Set(
+      visibleChapters.map((chapter) => chapter.id),
+    );
+    return new Set(
+      [...bodySearch.ids].filter((id) => visibleChapterIds.has(id)),
+    );
+  }, [bodySearch, searchQuery, visibleChapters]);
+
   const filteredBooks = useMemo(() => {
     const tokens = searchTokens(searchQuery);
     if (tokens.length === 0) return visibleBooks;
@@ -425,19 +484,33 @@ export default function BooksClient({
       chapterValues.set(chapter.book_id, values);
     }
 
-    return visibleBooks.filter((book) =>
-      matchesAllTokens(
-        [
-          book.title,
-          book.description,
-          book.category?.name,
-          ...(book.tags ?? []),
-          ...(chapterValues.get(book.id) ?? []),
-        ],
-        tokens,
-      ),
+    const bodyMatchedBookIds = new Set<number>();
+    for (const chapter of visibleChapters) {
+      if (bodyMatchedChapterIds.has(chapter.id)) {
+        bodyMatchedBookIds.add(chapter.book_id);
+      }
+    }
+
+    return visibleBooks.filter(
+      (book) =>
+        bodyMatchedBookIds.has(book.id) ||
+        matchesAllTokens(
+          [
+            book.title,
+            book.description,
+            book.category?.name,
+            ...(book.tags ?? []),
+            ...(chapterValues.get(book.id) ?? []),
+          ],
+          tokens,
+        ),
     );
-  }, [visibleBooks, searchQuery, visibleChapters]);
+  }, [
+    visibleBooks,
+    searchQuery,
+    visibleChapters,
+    bodyMatchedChapterIds,
+  ]);
 
   const groupedBooks = useMemo(() => {
     const result: { category: BookCategory | null; books: Book[] }[] = [];
@@ -480,17 +553,24 @@ export default function BooksClient({
     const tokens = searchTokens(searchQuery);
     if (tokens.length === 0) return bookChapters;
 
-    return bookChapters.filter((chapter) =>
-      matchesAllTokens(
-        [
-          chapter.title,
-          chapter.subtitle,
-          ...(chapter.tags ?? []),
-        ],
-        tokens,
-      ),
+    return bookChapters.filter(
+      (chapter) =>
+        bodyMatchedChapterIds.has(chapter.id) ||
+        matchesAllTokens(
+          [
+            chapter.title,
+            chapter.subtitle,
+            ...(chapter.tags ?? []),
+          ],
+          tokens,
+        ),
     );
-  }, [activeBook, searchQuery, visibleChapters]);
+  }, [
+    activeBook,
+    searchQuery,
+    visibleChapters,
+    bodyMatchedChapterIds,
+  ]);
 
   const activeChapter =
     activeBook && activeChapterId !== null

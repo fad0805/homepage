@@ -4,7 +4,7 @@ import re
 from datetime import datetime, timedelta, timezone
 
 from fastapi import HTTPException, status
-from sqlalchemy import Text, cast, func, or_
+from sqlalchemy import and_, func, or_
 from sqlalchemy.orm import Session, load_only
 
 from core.mastodon import maybe_notify_chapter
@@ -23,7 +23,6 @@ from schemas.books import (
     ChapterReorderRequest,
     ChapterUpdate,
 )
-
 
 CHAPTER_VIEW_DEDUP_MINUTES = int(
     os.getenv("CHAPTER_VIEW_DEDUP_MINUTES", "60")
@@ -492,11 +491,24 @@ def get_all_chapters(
     granted_books: frozenset[int] = frozenset(),
     viewer_user_id: int | None = None,
     owner_user_id: int | None = None,
+    author_user_id: int | None = None,
     query: str | None = None,
     include_body: bool = True,
+    ids_only: bool = False,
 ):
     chapters_query = db.query(Chapter)
-    if not include_body:
+    if ids_only:
+        chapters_query = chapters_query.options(
+            load_only(
+                Chapter.id,
+                Chapter.user_id,
+                Chapter.book_id,
+                Chapter.visible,
+                Chapter.protected,
+                Chapter.published_at,
+            )
+        )
+    elif not include_body:
         chapters_query = chapters_query.options(
             load_only(*CHAPTER_LIST_COLUMNS)
         )
@@ -512,8 +524,41 @@ def get_all_chapters(
         chapters_query = chapters_query.filter(
             Chapter.user_id == owner_user_id
         )
+    if author_user_id is not None:
+        # Public chapter lists only expose the default author. Filtering here
+        # keeps body searches from scanning every author's rows before the
+        # result is trimmed in Python.
+        chapters_query = chapters_query.filter(
+            Chapter.user_id == author_user_id
+        )
 
     tokens = search_tokens(query)
+    # Protected bodies must never influence public search results, since even
+    # returning a locked chapter would reveal that its contents contain the
+    # query. Owners, admins, and granted readers may still search the bodies
+    # they are allowed to open.
+    body_unrestricted = owner_user_id is not None or (
+        include_hidden and viewer_user_id is None
+    )
+    body_access = [
+        and_(Book.protected.is_(False), Chapter.protected.is_(False)),
+    ]
+    if granted_books:
+        body_access.append(Book.id.in_(granted_books))
+    if granted_chapters:
+        body_access.append(
+            and_(
+                Book.protected.is_(False),
+                Chapter.id.in_(granted_chapters),
+            )
+        )
+    if viewer_user_id is not None:
+        body_access.extend(
+            [
+                Chapter.user_id == viewer_user_id,
+                Book.user_id == viewer_user_id,
+            ]
+        )
     for token in tokens:
         pattern = like_pattern(token)
         tag_match = (
@@ -525,11 +570,15 @@ def get_all_chapters(
             )
             .exists()
         )
+        body_match = Chapter.body.ilike(pattern, escape="\\")
+        if not body_unrestricted:
+            body_match = and_(body_match, or_(*body_access))
         chapters_query = chapters_query.filter(
             or_(
                 Chapter.title.ilike(pattern, escape="\\"),
                 Chapter.subtitle.ilike(pattern, escape="\\"),
                 tag_match,
+                body_match,
             )
         )
 
@@ -556,6 +605,10 @@ def get_all_chapters(
             and not is_own
             and not _chapter_is_public(chapter)
         ):
+            continue
+
+        if ids_only:
+            result.append(chapter.id)
             continue
 
         unlocked = include_all or owner_user_id is not None or (

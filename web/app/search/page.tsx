@@ -101,10 +101,17 @@ export default async function SearchPage({
         tags: ["books"],
         auth: Boolean(currentUser),
       }),
-      serverApiFetch<Chapter[]>(`/chapters${searchSuffix}`, {
-        tags: ["chapters"],
-        auth: Boolean(currentUser),
-      }),
+      // The API already matches title, subtitle, tags, and body text. Keep
+      // bodies out of this payload; the search page only renders metadata.
+      serverApiFetch<Chapter[]>(
+        `/chapters?include_body=false${
+          q ? `&q=${encodeURIComponent(q)}` : ""
+        }`,
+        {
+          tags: ["chapters"],
+          auth: Boolean(currentUser),
+        },
+      ),
       serverApiFetch<IllustrationItem[]>(
         `/illustrations?${searchSuffix ? `${searchSuffix.slice(1)}&` : ""}page_size=50`,
         {
@@ -140,15 +147,7 @@ export default async function SearchPage({
         ),
       )
     : [];
-  const matchedChapters = queryTokens.length
-    ? visibleChapters.filter((chapter) =>
-        matchAll(
-          [chapter.title, chapter.subtitle],
-          chapter.tags,
-          queryTokens,
-        ),
-      )
-    : [];
+  const matchedChapters = queryTokens.length ? visibleChapters : [];
   const matchedIllustrations = queryTokens.length
     ? illustrations.filter((item) =>
         matchAll([item.title], item.tags, queryTokens),
