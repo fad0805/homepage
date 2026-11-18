@@ -79,6 +79,30 @@ export default async function RootLayout({
   const requestHeaders = await headers();
   const authorSlug = requestHeaders.get("x-author-slug");
   const nonce = requestHeaders.get("x-nonce") ?? undefined;
+
+  // The manuscript workspace is a standalone application. It deliberately
+  // skips the public site shell, appearance fetch and public chrome.
+  if (requestHeaders.get("x-workspace-route") === "1") {
+    return (
+      <html
+        lang="ko"
+        data-workspace="manuscript"
+        style={buildColorThemeStyle(DEFAULT_COLOR_THEME, {})}
+        suppressHydrationWarning
+      >
+        <body>
+          <ThemeProvider
+            themeColors={getThemeMetaColors(DEFAULT_COLOR_THEME, {})}
+            defaultTheme={DEFAULT_THEME_MODE}
+            nonce={nonce}
+          >
+            <AuthProvider>{children}</AuthProvider>
+          </ThemeProvider>
+        </body>
+      </html>
+    );
+  }
+
   let layoutKey: LayoutKey = DEFAULT_LAYOUT;
   let sidePosition: SidePosition = DEFAULT_SIDE_POSITION;
   let defaultTheme: ThemeMode = DEFAULT_THEME_MODE;

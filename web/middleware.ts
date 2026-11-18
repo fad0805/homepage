@@ -51,6 +51,10 @@ export function middleware(request: NextRequest) {
     Boolean(slug) && (rest === "/admin" || rest.startsWith("/admin/"));
   const authorMemo =
     Boolean(slug) && (rest === "/memo" || rest.startsWith("/memo/"));
+  const isWorkspaceRoute =
+    pathname === "/manuscript" || pathname.startsWith("/manuscript/");
+
+  requestHeaders.set("x-workspace-route", isWorkspaceRoute ? "1" : "0");
 
   const requiresAuth =
     pathname === "/memo" ||
@@ -60,7 +64,8 @@ export function middleware(request: NextRequest) {
     pathname === "/admin" ||
     pathname.startsWith("/admin/") ||
     authorAdmin ||
-    authorMemo;
+    authorMemo ||
+    isWorkspaceRoute;
 
   if (requiresAuth) {
     const hasAuthCookie =
