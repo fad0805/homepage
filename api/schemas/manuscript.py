@@ -64,9 +64,10 @@ class RestoreRequest(BaseModel):
 class PublishRequest(BaseModel):
     """Publish a manuscript chapter into a book's table of contents.
 
-    ``target_book_id`` is required for the first publish and ignored when the
-    node already has a linked chapter. ``sync_structure`` explicitly pushes
-    the manuscript folder path into the public serial tree.
+    ``target_book_id`` defaults to the project's linked book. Publishing to
+    another book creates a chapter there without linking it back to the
+    manuscript node. ``sync_structure`` explicitly pushes the manuscript
+    folder path into the public serial tree.
     """
 
     target_book_id: int | None = None

@@ -278,7 +278,7 @@ export default function ManuscriptWorkspace() {
   const [renamingId, setRenamingId] = useState<number | null>(null);
   const [renameValue, setRenameValue] = useState("");
   const [books, setBooks] = useState<Book[]>([]);
-  const [publishBookId, setPublishBookId] = useState<number | null>(null);
+  const [publishOverrideId, setPublishOverrideId] = useState<number | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchResult[]>([]);
@@ -352,8 +352,7 @@ export default function ManuscriptWorkspace() {
       const valid = projectList.some((project) => project.id === current);
       return valid ? current : projectList[0]?.id ?? null;
     });
-    if (bookList.length && !publishBookId) setPublishBookId(bookList[0].id);
-  }, [publishBookId]);
+  }, []);
 
   const loadTree = useCallback(async (id: number) => {
     const nodes = await apiFetch<ManuscriptNode[]>(
@@ -584,21 +583,34 @@ export default function ManuscriptWorkspace() {
     }
   };
 
+  const linkedBookId =
+    projects.find((project) => project.id === projectId)?.linked_book_id ?? null;
+  const publishBookId =
+    publishOverrideId ?? linkedBookId ?? books[0]?.id ?? null;
+  const isLinkedPublishTarget = publishBookId === linkedBookId && linkedBookId !== null;
+
   const publish = async () => {
     if (!selectedId || selected?.node_type !== "chapter") return;
-    if (!selected.published_chapter_id && !publishBookId) {
+    if (!publishBookId) {
       notify("발행할 게시판을 선택해 주세요.", "error");
       return;
     }
     try {
-      await apiFetch(`/api/manuscript/nodes/${selectedId}/publish`, {
-        method: "POST",
-        body: JSON.stringify({
-          target_book_id: selected.published_chapter_id ? null : publishBookId,
-        }),
-      });
+      const result = await apiFetch<{ linked: boolean }>(
+        `/api/manuscript/nodes/${selectedId}/publish`,
+        {
+          method: "POST",
+          body: JSON.stringify({ target_book_id: publishBookId }),
+        },
+      );
       await refresh();
-      notify(selected.published_chapter_id ? "재발행했습니다." : "발행했습니다.");
+      notify(
+        !result.linked
+          ? "연결되지 않은 책에 발행했습니다."
+          : selected.published_chapter_id
+            ? "재발행했습니다."
+            : "발행했습니다.",
+      );
     } catch (error) {
       notify((error as Error).message, "error");
     }
@@ -1250,6 +1262,48 @@ export default function ManuscriptWorkspace() {
             ) : selected ? (
               <>
                 <div className="ms-inspector__actions">
+                  <button type="button" className="ms-button--danger" onClick={deleteSelected}>
+                    삭제
+                  </button>
+                  {selected.node_type === "chapter" ? (
+                    <div className="ms-publish-control">
+                      <select
+                        className="ms-select ms-publish-control__select"
+                        value={publishBookId ?? ""}
+                        onChange={(event) =>
+                          setPublishOverrideId(Number(event.target.value) || null)
+                        }
+                        aria-label="발행할 책"
+                      >
+                        {books.map((book) => (
+                          <option key={book.id} value={book.id}>
+                            {book.id === linkedBookId
+                              ? `${book.title} (연결된 책)`
+                              : book.title}
+                          </option>
+                        ))}
+                      </select>
+                      <button
+                        type="button"
+                        className="ms-button ms-button--primary"
+                        disabled={!publishBookId}
+                        onClick={publish}
+                      >
+                        {isLinkedPublishTarget && selected.published_chapter_id
+                          ? "재발행"
+                          : "발행"}
+                      </button>
+                      {selected.published_chapter_id ? (
+                        <button
+                          type="button"
+                          className="ms-button--danger"
+                          onClick={unlink}
+                        >
+                          링크 해제
+                        </button>
+                      ) : null}
+                    </div>
+                  ) : null}
                   {scrivenings ? (
                     <button
                       type="button"
@@ -1281,9 +1335,6 @@ export default function ManuscriptWorkspace() {
                             : "저장됨"}
                     </button>
                   )}
-                  <button type="button" className="ms-button--danger" onClick={deleteSelected}>
-                    삭제
-                  </button>
                 </div>
                 {selected.node_type === "chapter" ? (
                   <label className="ms-inspector__field">
@@ -1325,37 +1376,12 @@ export default function ManuscriptWorkspace() {
                 </label>
 
                 {selected.node_type === "chapter" ? (
-                  <div className="ms-publish">
-                    <div className="ms-panel-title"><span>발행</span></div>
-                    <p className="ms-publish__state">
-                      {STATE_LABEL[selected.published_state]}
-                      {selected.published_chapter_id
-                        ? ` · 챕터 #${selected.published_chapter_id}`
-                        : ""}
-                    </p>
-                    {!selected.published_chapter_id ? (
-                      <select
-                        className="ms-select"
-                        value={publishBookId ?? ""}
-                        onChange={(event) => setPublishBookId(Number(event.target.value) || null)}
-                      >
-                        <option value="">게시판 선택</option>
-                        {books.map((book) => (
-                          <option key={book.id} value={book.id}>
-                            {book.title}
-                          </option>
-                        ))}
-                      </select>
-                    ) : null}
-                    <button type="button" className="ms-button ms-button--primary" onClick={publish}>
-                      {selected.published_chapter_id ? "재발행" : "발행"}
-                    </button>
-                    {selected.published_chapter_id ? (
-                      <button type="button" className="ms-button--danger" onClick={unlink}>
-                        링크 해제
-                      </button>
-                    ) : null}
-                  </div>
+                  <p className="ms-publish__state">
+                    {STATE_LABEL[selected.published_state]}
+                    {selected.published_chapter_id
+                      ? ` · 챕터 #${selected.published_chapter_id}`
+                      : ""}
+                  </p>
                 ) : null}
               </>
             ) : (

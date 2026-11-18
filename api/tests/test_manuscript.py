@@ -318,6 +318,27 @@ class ManuscriptTests(unittest.TestCase):
             "published",
         )
 
+    def test_publish_to_another_book_stays_unlinked(self) -> None:
+        project = self._project()
+        other_book = Book(user_id=self.owner.id, title="다른 책", tags=[])
+        self.db.add(other_book)
+        self.db.flush()
+        node = self._node(project, "1화", body="<p>본문</p>")
+
+        result = crud.publish_node(
+            self.db,
+            node.id,
+            schemas.PublishRequest(target_book_id=other_book.id),
+            self.owner.id,
+        )
+
+        self.assertFalse(result["linked"])
+        self.db.refresh(node)
+        self.assertIsNone(node.published_chapter_id)
+        toc = crud.get_public_toc(self.db, other_book.id)
+        self.assertEqual(len(toc), 1)
+        self.assertEqual(toc[0]["chapter"]["title"], "1화")
+
     def test_unlink_keeps_book_by_default_and_can_delete_it(self) -> None:
         project = self._project()
         node = self._node(project, "1화", body="<p>본문</p>")

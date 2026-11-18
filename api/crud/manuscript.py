@@ -864,8 +864,29 @@ def publish_node(
             detail="Only chapter nodes can be published",
         )
 
+    project = (
+        db.query(ManuscriptProject)
+        .filter(ManuscriptProject.id == node.project_id)
+        .first()
+    )
+    linked_book_id = project.linked_book_id if project else None
+    target_book_id = (
+        payload.target_book_id
+        if payload.target_book_id is not None
+        else linked_book_id
+    )
+    if target_book_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Connect a book to the project or choose a target book",
+        )
+    _get_book_or_404(db, target_book_id, user_id)
+    # Publishing to the project's linked book keeps the manuscript/chapter
+    # link. Publishing elsewhere only creates a chapter in that book's TOC.
+    is_linked_target = target_book_id == linked_book_id
+
     chapter = None
-    if node.published_chapter_id:
+    if is_linked_target and node.published_chapter_id:
         chapter = (
             db.query(Chapter)
             .filter(
@@ -879,26 +900,20 @@ def publish_node(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Linked chapter no longer exists",
             )
-        if payload.target_book_id is not None and payload.target_book_id != chapter.book_id:
+        if chapter.book_id != target_book_id:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="A published chapter cannot change books; unlink it first",
             )
     else:
-        if payload.target_book_id is None:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="target_book_id is required for the first publish",
-            )
-        _get_book_or_404(db, payload.target_book_id, user_id)
         chapter = Chapter(
             user_id=user_id,
-            book_id=payload.target_book_id,
+            book_id=target_book_id,
             title=node.title,
             subtitle=node.subtitle,
             body=node.body,
             tags=[],
-            order=_next_chapter_order(db, payload.target_book_id),
+            order=_next_chapter_order(db, target_book_id),
         )
         db.add(chapter)
         db.flush()
@@ -914,20 +929,22 @@ def publish_node(
         node,
         chapter,
         user_id=user_id,
-        sync_structure=payload.sync_structure,
+        sync_structure=payload.sync_structure if is_linked_target else False,
     )
 
-    content_hash = _content_hash(node.title, node.subtitle, node.body)
-    node.published_chapter_id = chapter.id
-    node.published_manuscript_hash = content_hash
-    node.published_chapter_hash = content_hash
-    node.published_at = _utcnow()
+    if is_linked_target:
+        content_hash = _content_hash(node.title, node.subtitle, node.body)
+        node.published_chapter_id = chapter.id
+        node.published_manuscript_hash = content_hash
+        node.published_chapter_hash = content_hash
+        node.published_at = _utcnow()
     db.commit()
     db.refresh(node)
     return {
         "node": get_node(db, node.id, user_id),
         "chapter_id": chapter.id,
         "book_id": chapter.book_id,
+        "linked": is_linked_target,
     }
 
 
