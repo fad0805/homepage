@@ -1,13 +1,14 @@
 import unittest
 from datetime import datetime, timezone
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from crud.books import (
     _body_snippet,
     _serialize_chapter,
+    get_all_chapters,
     search_chapters_for_owner,
 )
 from db.base import Base
@@ -143,4 +144,40 @@ class ChapterSearchTests(unittest.TestCase):
         self.assertEqual(
             _serialize_chapter(chapter, include_body=True)["body"],
             "비밀 본문",
+        )
+
+    def test_list_metadata_query_does_not_select_body(self) -> None:
+        self._chapter(
+            "큰 본문",
+            "<p>" + "가" * 5000 + "</p>",
+            owner_id=self.owner.id,
+            created_at=datetime(2026, 2, 1, tzinfo=timezone.utc),
+        )
+        self.db.commit()
+
+        statements: list[str] = []
+
+        def record(conn, cursor, statement, parameters, context, many):
+            statements.append(statement)
+
+        event.listen(self.engine, "before_cursor_execute", record)
+        try:
+            results = get_all_chapters(
+                self.db,
+                include_hidden=True,
+                owner_user_id=self.owner.id,
+                include_body=False,
+            )
+        finally:
+            event.remove(self.engine, "before_cursor_execute", record)
+
+        self.assertEqual(results[0]["body"], None)
+        chapter_selects = [
+            statement
+            for statement in statements
+            if "chapters" in statement.lower() and "select" in statement.lower()
+        ]
+        self.assertTrue(chapter_selects)
+        self.assertTrue(
+            all("body" not in statement.lower() for statement in chapter_selects)
         )

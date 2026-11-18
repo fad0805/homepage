@@ -5,7 +5,7 @@ from datetime import datetime, timedelta, timezone
 
 from fastapi import HTTPException, status
 from sqlalchemy import Text, cast, func, or_
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, load_only
 
 from core.mastodon import maybe_notify_chapter
 from core.search import like_pattern, search_tokens
@@ -27,6 +27,25 @@ from schemas.books import (
 
 CHAPTER_VIEW_DEDUP_MINUTES = int(
     os.getenv("CHAPTER_VIEW_DEDUP_MINUTES", "60")
+)
+
+# Columns needed to build a list row. ``body`` is intentionally absent so
+# metadata-only list requests never read the large text column from the DB.
+CHAPTER_LIST_COLUMNS = (
+    Chapter.id,
+    Chapter.user_id,
+    Chapter.book_id,
+    Chapter.title,
+    Chapter.subtitle,
+    Chapter.tags,
+    Chapter.order,
+    Chapter.visible,
+    Chapter.pinned,
+    Chapter.protected,
+    Chapter.view_count,
+    Chapter.published_at,
+    Chapter.created_at,
+    Chapter.updated_at,
 )
 MAX_PINNED_CHAPTERS = 5
 
@@ -476,15 +495,18 @@ def get_all_chapters(
     query: str | None = None,
     include_body: bool = True,
 ):
-    chapters_query = (
-        db.query(Chapter)
-        .join(Book, Chapter.book_id == Book.id)
-        .order_by(
-            Book.order,
-            Book.id,
-            Chapter.order,
-            Chapter.id,
+    chapters_query = db.query(Chapter)
+    if not include_body:
+        chapters_query = chapters_query.options(
+            load_only(*CHAPTER_LIST_COLUMNS)
         )
+    chapters_query = chapters_query.join(
+        Book, Chapter.book_id == Book.id
+    ).order_by(
+        Book.order,
+        Book.id,
+        Chapter.order,
+        Chapter.id,
     )
     if owner_user_id is not None:
         chapters_query = chapters_query.filter(
