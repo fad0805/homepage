@@ -61,6 +61,8 @@ def get_chapters(
     response: Response,
     mine: bool = False,
     q: str | None = None,
+    book_id: int | None = None,
+    pinned: bool | None = None,
     include_body: bool = True,
     ids_only: bool = False,
     page: int | None = None,
@@ -71,6 +73,8 @@ def get_chapters(
     grants = get_gallery_grants(request, db)
     filters: dict = {
         "query": q,
+        "book_id": book_id,
+        "pinned": pinned,
         "include_body": include_body,
         "ids_only": ids_only,
     }
@@ -100,9 +104,9 @@ def get_chapters(
             )
 
     if page is None:
-        # Body/title searches are always paginated so a broad query cannot
-        # return every matching chapter in one payload. Full chapter lists
-        # (for example the books board) still omit page and keep their shape.
+        # Searches are always paginated so a broad query cannot return every
+        # matching chapter in one payload. Callers that need a full list can
+        # still pass ``book_id`` with an explicit page when paginating.
         if not q:
             return get_all_chapters(db, **filters)
         page = 1

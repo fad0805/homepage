@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
 from crud.books import (
@@ -26,6 +26,7 @@ from schemas.books import (
 from .utils import (
     filter_by_author,
     get_default_author_id,
+    get_gallery_grants,
     get_optional_user,
     is_admin,
     require_auth,
@@ -37,6 +38,7 @@ router = APIRouter()
 @router.get("/")
 @router.get("")
 def get_books(
+    request: Request,
     mine: bool = False,
     q: str | None = None,
     db: Session = Depends(get_db),
@@ -59,10 +61,13 @@ def get_books(
             db, include_hidden=True, is_admin=True, query=q
         )
     else:
+        grants = get_gallery_grants(request, db)
         books = get_all_books(
             db,
             include_hidden=current_user is not None,
             viewer_user_id=current_user.id if current_user else None,
+            granted_chapters=grants.chapters,
+            granted_books=grants.books,
             query=q,
         )
     return filter_by_author(books, get_default_author_id(db))

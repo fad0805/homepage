@@ -123,6 +123,60 @@ def _category_is_visible_to(
     return viewer_user_id is not None and book.user_id == viewer_user_id
 
 
+def _chapter_counts_for_books(
+    db: Session,
+    books: list[Book],
+    *,
+    viewer_user_id: int | None,
+    owner_user_id: int | None,
+    is_admin: bool,
+) -> dict[int, int]:
+    """Count the chapters each viewer can see in the given books.
+
+    The books board shows a per-book count without loading every chapter row.
+    """
+    if not books:
+        return {}
+
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    query = db.query(
+        Chapter.book_id,
+        func.count(Chapter.id),
+    ).filter(
+        Chapter.book_id.in_([book.id for book in books]),
+        or_(
+            Chapter.published_at.is_(None),
+            Chapter.published_at <= now,
+        ),
+    )
+    if not (is_admin or owner_user_id is not None):
+        query = query.join(Book, Book.id == Chapter.book_id)
+        if viewer_user_id is None:
+            query = query.filter(Chapter.visible.is_(True))
+        else:
+            query = query.filter(
+                or_(
+                    Chapter.visible.is_(True),
+                    Book.user_id == viewer_user_id,
+                )
+            )
+    rows = query.group_by(Chapter.book_id).all()
+    return {book_id: count for book_id, count in rows}
+
+
+def _serialize_books_with_counts(
+    books: list[Book],
+    counts: dict[int, int],
+) -> list[dict]:
+    return [
+        {
+            **_serialize_book(book),
+            "chapter_count": counts.get(book.id, 0),
+        }
+        for book in books
+    ]
+
+
 def _get_book_category_or_404(
     db: Session, category_id: int, user_id: int
 ) -> BookCategory:
@@ -311,6 +365,8 @@ def get_all_books(
     viewer_user_id: int | None = None,
     owner_user_id: int | None = None,
     is_admin: bool = False,
+    granted_chapters: frozenset[int] = frozenset(),
+    granted_books: frozenset[int] = frozenset(),
     query: str | None = None,
 ):
     books_query = db.query(Book)
@@ -330,7 +386,31 @@ def get_all_books(
     tokens = search_tokens(query)
     books = books_query.order_by(Book.order, Book.id).all()
     if tokens:
+        chapter_match_query = _build_chapter_query(
+            db,
+            include_hidden=include_hidden,
+            granted_chapters=granted_chapters,
+            granted_books=granted_books,
+            viewer_user_id=viewer_user_id,
+            owner_user_id=owner_user_id,
+            query=query,
+            include_body=False,
+            ids_only=True,
+            published_only=True,
+        )
+        chapter_book_ids = {
+            book_id
+            for (book_id,) in chapter_match_query.with_entities(
+                Chapter.book_id
+            )
+            .order_by(None)
+            .distinct()
+            .all()
+        }
+
         def matches(book: Book) -> bool:
+            if book.id in chapter_book_ids:
+                return True
             category = (
                 book.category_relation.name
                 if book.category_relation is not None
@@ -353,18 +433,24 @@ def get_all_books(
             )
 
         books = [book for book in books if matches(book)]
-    if owner_user_id is not None or is_admin:
-        return [_serialize_book(book) for book in books]
-    books = [
-        book
-        for book in books
-        if _category_is_visible_to(
-            book,
-            viewer_user_id=viewer_user_id,
-            can_view_hidden=False,
-        )
-    ]
-    return [_serialize_book(book) for book in books]
+    if owner_user_id is None and not is_admin:
+        books = [
+            book
+            for book in books
+            if _category_is_visible_to(
+                book,
+                viewer_user_id=viewer_user_id,
+                can_view_hidden=False,
+            )
+        ]
+    counts = _chapter_counts_for_books(
+        db,
+        books,
+        viewer_user_id=viewer_user_id,
+        owner_user_id=owner_user_id,
+        is_admin=is_admin,
+    )
+    return _serialize_books_with_counts(books, counts)
 
 
 def get_book(
@@ -517,6 +603,8 @@ def _build_chapter_query(
     viewer_user_id: int | None = None,
     owner_user_id: int | None = None,
     author_user_id: int | None = None,
+    book_id: int | None = None,
+    pinned: bool | None = None,
     query: str | None = None,
     include_body: bool = True,
     ids_only: bool = False,
@@ -570,6 +658,10 @@ def _build_chapter_query(
         chapters_query = chapters_query.filter(
             Chapter.user_id == author_user_id
         )
+    if book_id is not None:
+        chapters_query = chapters_query.filter(Chapter.book_id == book_id)
+    if pinned is not None:
+        chapters_query = chapters_query.filter(Chapter.pinned.is_(pinned))
 
     now = datetime.now(timezone.utc).replace(tzinfo=None)
     include_all = (
@@ -721,6 +813,8 @@ def get_all_chapters(
     viewer_user_id: int | None = None,
     owner_user_id: int | None = None,
     author_user_id: int | None = None,
+    book_id: int | None = None,
+    pinned: bool | None = None,
     query: str | None = None,
     include_body: bool = True,
     ids_only: bool = False,
@@ -733,6 +827,8 @@ def get_all_chapters(
         viewer_user_id=viewer_user_id,
         owner_user_id=owner_user_id,
         author_user_id=author_user_id,
+        book_id=book_id,
+        pinned=pinned,
         query=query,
         include_body=include_body,
         ids_only=ids_only,
@@ -760,6 +856,8 @@ def get_chapters_page(
     viewer_user_id: int | None = None,
     owner_user_id: int | None = None,
     author_user_id: int | None = None,
+    book_id: int | None = None,
+    pinned: bool | None = None,
     query: str | None = None,
     include_body: bool = True,
     ids_only: bool = False,
@@ -774,6 +872,8 @@ def get_chapters_page(
         viewer_user_id=viewer_user_id,
         owner_user_id=owner_user_id,
         author_user_id=author_user_id,
+        book_id=book_id,
+        pinned=pinned,
         query=query,
         include_body=include_body,
         ids_only=ids_only,

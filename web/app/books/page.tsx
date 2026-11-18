@@ -1,7 +1,7 @@
 import { headers } from "next/headers";
 
 import { getGalleryGrants } from "@/lib/gallery-auth";
-import { serverApiFetch } from "@/lib/server-api";
+import { serverApiFetch, serverApiFetchWithTotal } from "@/lib/server-api";
 import { getCurrentUser } from "@/lib/server-auth";
 
 import BooksClient from "./books-client";
@@ -9,10 +9,31 @@ import type { Book, Chapter } from "./types";
 
 export const dynamic = "force-dynamic";
 
+const CHAPTERS_PER_PAGE = 15;
+const PINNED_CHAPTER_LIMIT = 100;
+
 function parseId(value: string | string[] | undefined) {
   const raw = Array.isArray(value) ? value[0] : value;
   const parsed = Number(raw);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+}
+
+async function fetchChapterPage(
+  bookId: number,
+  page: number,
+  pinned: boolean,
+) {
+  const params = new URLSearchParams({
+    book_id: String(bookId),
+    include_body: "false",
+    page: String(page),
+    page_size: String(pinned ? PINNED_CHAPTER_LIMIT : CHAPTERS_PER_PAGE),
+    pinned: String(pinned),
+  });
+  return serverApiFetchWithTotal<Chapter[]>(
+    `/chapters?${params.toString()}`,
+    { auth: true, tags: ["chapters"] },
+  );
 }
 
 export default async function BooksPage({
@@ -31,22 +52,13 @@ export default async function BooksPage({
   const initialIsMobile = /Mobi|Android|iPhone|iPad|iPod/i.test(userAgent);
 
   let books: Book[] = [];
-  let chapters: Chapter[] = [];
   let failed = false;
 
   try {
-    [books, chapters] = await Promise.all([
-      serverApiFetch<Book[]>("/books", {
-        auth: true,
-        tags: ["books"],
-      }),
-      // Body text is fetched on demand when a chapter is opened. Shipping
-      // every body here makes a long series expensive for every visitor.
-      serverApiFetch<Chapter[]>("/chapters?include_body=false", {
-        auth: true,
-        tags: ["chapters"],
-      }),
-    ]);
+    books = await serverApiFetch<Book[]>("/books", {
+      auth: true,
+      tags: ["books"],
+    });
   } catch (error) {
     console.error(error);
     failed = true;
@@ -64,58 +76,72 @@ export default async function BooksPage({
     getGalleryGrants(),
     getCurrentUser(),
   ]);
-  const isAdmin = user !== null;
-  const visibleBooks = isAdmin
-    ? books
-    : books.filter((book) => book.visible !== false);
+  const isLoggedIn = user !== null;
+  const isAdmin = user?.role === "admin";
+  const visibleBooks = books
+    .filter(
+      (book) =>
+        (isLoggedIn || book.visible !== false) &&
+        (isAdmin || book.category?.visible !== false),
+    )
+    .map((book) => ({
+      ...book,
+      locked: !isAdmin && book.protected && !grants.books.has(book.id),
+    }));
   const visibleBookIds = new Set(visibleBooks.map((book) => book.id));
 
-  books = visibleBooks.map((book) => ({
-    ...book,
-    locked:
-      !isAdmin && book.protected && !grants.books.has(book.id),
-  }));
-  const lockedBookIds = new Set(
-    books.filter((book) => book.locked).map((book) => book.id),
-  );
-  chapters = chapters
-    .filter(
-      (chapter) =>
-        isAdmin ||
-        (chapter.visible !== false && visibleBookIds.has(chapter.book_id)),
-    )
-    .map((chapter) => {
-      const bookLocked = lockedBookIds.has(chapter.book_id);
-      const chapterLocked =
-        chapter.protected &&
-        !grants.chapters.has(chapter.id) &&
-        !grants.books.has(chapter.book_id);
-      const locked = !isAdmin && (bookLocked || chapterLocked);
-      return {
-        ...chapter,
-        locked,
-        body: locked ? null : chapter.body,
-      };
-    });
-
   let initialBookId = requestedBookId;
+  if (initialBookId !== null && !visibleBookIds.has(initialBookId)) {
+    initialBookId = null;
+  }
   if (initialBookId === null && initialChapterId !== null) {
-    initialBookId =
-      chapters.find((chapter) => chapter.id === initialChapterId)?.book_id ??
-      null;
+    try {
+      const chapter = await serverApiFetch<Chapter>(
+        `/chapters/${initialChapterId}`,
+        { auth: true },
+      );
+      if (visibleBookIds.has(chapter.book_id)) {
+        initialBookId = chapter.book_id;
+      }
+    } catch (error) {
+      console.error(error);
+    }
   }
   if (initialBookId === null && !initialIsMobile) {
     initialBookId =
-      [...books]
+      [...visibleBooks]
         .filter((book) => book.visible !== false)
         .sort((a, b) => a.order - b.order || a.id - b.id)[0]?.id ?? null;
+  }
+
+  let chapters: Chapter[] = [];
+  let pinnedChapters: Chapter[] = [];
+  let chapterTotal = 0;
+  if (initialBookId !== null) {
+    try {
+      const [regular, pinned] = await Promise.all([
+        fetchChapterPage(initialBookId, 1, false),
+        fetchChapterPage(initialBookId, 1, true),
+      ]);
+      chapters = regular.data.filter(
+        (chapter) => isLoggedIn || chapter.visible !== false,
+      );
+      chapterTotal = regular.total ?? chapters.length;
+      pinnedChapters = pinned.data.filter(
+        (chapter) => isLoggedIn || chapter.visible !== false,
+      );
+    } catch (error) {
+      console.error(error);
+    }
   }
 
   return (
     <BooksClient
       key={`${initialBookId ?? "none"}-${initialChapterId ?? "none"}`}
-      initialBooks={books}
+      initialBooks={visibleBooks}
       initialChapters={chapters}
+      initialPinnedChapters={pinnedChapters}
+      initialChapterTotal={chapterTotal}
       initialBookId={initialBookId}
       initialChapterId={initialChapterId}
       initialIsMobile={initialIsMobile}

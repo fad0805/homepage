@@ -16,52 +16,39 @@ import { ImageLightbox, type LightboxImage } from "@/components/image-lightbox";
 import { Pagination } from "@/components/pagination";
 import { RssSubscribe } from "@/components/rss-subscribe";
 import { formatDateTime } from "@/lib/datetime";
-import { matchesAllTokens, searchTokens } from "@/lib/search";
 import type { Book, BookCategory, Chapter } from "./types";
 
 import "@/public/styles/books.scss";
 
 const CHAPTERS_PER_PAGE = 15;
-const BODY_SEARCH_PAGE_SIZE = 100;
+const PINNED_CHAPTER_LIMIT = 100;
 
-function createdTime(value: string | null) {
-  if (!value) return null;
-  const time = new Date(value).getTime();
-  return Number.isNaN(time) ? null : time;
-}
-
-function compareChaptersByCreatedDesc(a: Chapter, b: Chapter) {
-  const aTime = createdTime(a.created_at);
-  const bTime = createdTime(b.created_at);
-  if (aTime === null && bTime === null) return b.id - a.id;
-  if (aTime === null) return 1;
-  if (bTime === null) return -1;
-  return bTime - aTime || b.id - a.id;
-}
-
-async function fetchChapterSearchPage(
-  query: string,
+async function fetchChapterPage(
+  bookId: number,
   page: number,
+  query: string,
+  pinned: boolean,
   signal: AbortSignal,
 ) {
   const params = new URLSearchParams({
-    q: query,
+    book_id: String(bookId),
     include_body: "false",
-    ids_only: "true",
     page: String(page),
-    page_size: String(BODY_SEARCH_PAGE_SIZE),
+    page_size: String(pinned ? PINNED_CHAPTER_LIMIT : CHAPTERS_PER_PAGE),
+    pinned: String(pinned),
   });
+  if (query.trim()) params.set("q", query);
   const response = await fetch(`/api/chapters?${params.toString()}`, {
     signal,
     credentials: "include",
   });
-  if (!response.ok) throw new Error("Failed to search chapters");
-  const ids = (await response.json()) as number[];
+  if (!response.ok) throw new Error("Failed to load chapters");
+  const chapters = (await response.json()) as Chapter[];
   const rawTotal = response.headers.get("x-total-count");
-  const total = rawTotal === null ? ids.length : Number(rawTotal);
+  const total = rawTotal === null ? chapters.length : Number(rawTotal);
   return {
-    ids,
-    total: Number.isFinite(total) ? total : ids.length,
+    chapters,
+    total: Number.isFinite(total) ? total : chapters.length,
   };
 }
 
@@ -238,6 +225,8 @@ function ChapterDetail({
 interface BooksClientProps {
   initialBooks: Book[];
   initialChapters: Chapter[];
+  initialPinnedChapters: Chapter[];
+  initialChapterTotal: number;
   initialBookId: number | null;
   initialChapterId: number | null;
   initialIsMobile: boolean;
@@ -247,6 +236,8 @@ interface BooksClientProps {
 export default function BooksClient({
   initialBooks,
   initialChapters,
+  initialPinnedChapters,
+  initialChapterTotal,
   initialBookId,
   initialChapterId,
   initialIsMobile,
@@ -254,7 +245,15 @@ export default function BooksClient({
 }: BooksClientProps) {
   const { isLoggedIn, isAdmin } = useAuth();
   const books = initialBooks;
-  const chapters = initialChapters;
+  const [chapters, setChapters] = useState<Chapter[]>(initialChapters);
+  const [pinnedChapters, setPinnedChapters] =
+    useState<Chapter[]>(initialPinnedChapters);
+  const [chapterTotal, setChapterTotal] = useState(initialChapterTotal);
+  const [chapterBookId, setChapterBookId] = useState<number | null>(
+    initialBookId,
+  );
+  const [chaptersLoading, setChaptersLoading] = useState(false);
+  const [chaptersError, setChaptersError] = useState(false);
   const [activeBookId, setActiveBookId] = useState<number | null>(() => {
     if (initialBookId !== null) return initialBookId;
     if (initialChapterId === null) return null;
@@ -266,6 +265,7 @@ export default function BooksClient({
   const [activeChapterId, setActiveChapterId] = useState<number | null>(
     initialChapterId,
   );
+  const [fallbackChapter, setFallbackChapter] = useState<Chapter | null>(null);
   const [chapterBody, setChapterBody] = useState<{
     id: number;
     body: string | null;
@@ -275,20 +275,12 @@ export default function BooksClient({
     () => new Set(),
   );
   const [searchQuery, setSearchQuery] = useState("");
-  const [bodySearch, setBodySearch] = useState<{
+  const [bookSearch, setBookSearch] = useState<{
     query: string;
-    ids: Set<number>;
-    total: number;
-    page: number;
+    books: Book[];
   } | null>(null);
-  const [bodySearchLoading, setBodySearchLoading] = useState(false);
-  const [bodySearchError, setBodySearchError] = useState<
-    "initial" | "more" | null
-  >(null);
-  const bodySearchRequestRef = useRef<AbortController | null>(null);
   const [chapterPage, setChapterPage] = useState(1);
   const [isMobile, setIsMobile] = useState(initialIsMobile);
-  const [now, setNow] = useState(() => Date.now());
   const [unlockedCategories, setUnlockedCategories] = useState<Set<number>>(
     () => new Set(initialUnlockedCategoryIds),
   );
@@ -299,133 +291,150 @@ export default function BooksClient({
     null,
   );
   const [categoryCodeLoading, setCategoryCodeLoading] = useState(false);
+  const chapterRequestRef = useRef<AbortController | null>(null);
+  const chapterLookupRef = useRef(new Map<number, Chapter>());
   const viewDepthRef = useRef(0);
   const initialViewRef = useRef({
     bookId: activeBookId,
     chapterId: activeChapterId,
   });
 
+  // Book-level search runs on the API so matching chapters do not have to be
+  // loaded into the browser just to find their books.
   useEffect(() => {
-    const timer = setInterval(() => setNow(Date.now()), 60_000);
-    return () => clearInterval(timer);
-  }, []);
-
-  // The chapter list is metadata-only, so body matches are resolved by the
-  // API when a query is present. Title and tag matches keep working instantly
-  // on the client while this request is in flight.
-  useEffect(() => {
-    if (searchTokens(searchQuery).length === 0) {
-      bodySearchRequestRef.current?.abort();
-      setBodySearch(null);
-      setBodySearchLoading(false);
-      setBodySearchError(null);
+    const query = searchQuery.trim();
+    if (!query) {
+      setBookSearch(null);
       return;
     }
 
-    bodySearchRequestRef.current?.abort();
     const controller = new AbortController();
-    bodySearchRequestRef.current = controller;
-    setBodySearchLoading(true);
-    setBodySearchError(null);
     const timer = window.setTimeout(() => {
-      fetchChapterSearchPage(searchQuery, 1, controller.signal)
-        .then(({ ids, total }) => {
-          if (controller.signal.aborted) return;
-          setBodySearch({
-            query: searchQuery,
-            ids: new Set(ids),
-            total,
-            page: 1,
-          });
-          setBodySearchError(null);
+      fetch(`/api/books?q=${encodeURIComponent(query)}`, {
+        signal: controller.signal,
+        credentials: "include",
+      })
+        .then((response) => {
+          if (!response.ok) throw new Error("Failed to search books");
+          return response.json() as Promise<Book[]>;
+        })
+        .then((items) => {
+          if (!controller.signal.aborted) {
+            setBookSearch({ query, books: items });
+          }
         })
         .catch(() => {
-          if (controller.signal.aborted) return;
-          // Title/tag matches still work, but the user must know that body
-          // search did not complete.
-          setBodySearch({
-            query: searchQuery,
-            ids: new Set(),
-            total: 0,
-            page: 1,
-          });
-          setBodySearchError("initial");
-        })
-        .finally(() => {
-          if (!controller.signal.aborted) setBodySearchLoading(false);
+          if (!controller.signal.aborted) {
+            setBookSearch({ query, books: [] });
+          }
         });
     }, 250);
 
     return () => {
       window.clearTimeout(timer);
-      bodySearchRequestRef.current?.abort();
+      controller.abort();
     };
   }, [searchQuery]);
 
-  const loadMoreBodySearch = () => {
-    const current = bodySearch;
-    if (!current || current.query !== searchQuery || bodySearchLoading) {
-      return;
-    }
-    const nextPage = current.page + 1;
-    if ((nextPage - 1) * BODY_SEARCH_PAGE_SIZE >= current.total) {
+  // Chapters are loaded one book/page at a time. Pinned chapters are fetched
+  // separately so they stay visible on every page.
+  useEffect(() => {
+    if (activeBookId === null) {
+      chapterRequestRef.current?.abort();
+      setChapters([]);
+      setPinnedChapters([]);
+      setChapterTotal(0);
+      setChapterBookId(null);
+      setChaptersLoading(false);
+      setChaptersError(false);
       return;
     }
 
-    bodySearchRequestRef.current?.abort();
+    chapterRequestRef.current?.abort();
     const controller = new AbortController();
-    bodySearchRequestRef.current = controller;
-    setBodySearchLoading(true);
-    setBodySearchError(null);
-    fetchChapterSearchPage(current.query, nextPage, controller.signal)
-      .then(({ ids, total }) => {
-        if (controller.signal.aborted) return;
-        setBodySearch((previous) =>
-          previous && previous.query === current.query
-            ? {
-                query: current.query,
-                ids: new Set([...previous.ids, ...ids]),
-                total,
-                page: nextPage,
-              }
-            : previous,
-        );
-        setBodySearchError(null);
-      })
-      .catch(() => {
-        if (controller.signal.aborted) return;
-        setBodySearchError("more");
-      })
-      .finally(() => {
-        if (!controller.signal.aborted) setBodySearchLoading(false);
-      });
-  };
+    chapterRequestRef.current = controller;
+    setChaptersLoading(true);
+    setChaptersError(false);
+
+    const timer = window.setTimeout(() => {
+      Promise.all([
+        fetchChapterPage(
+          activeBookId,
+          chapterPage,
+          searchQuery,
+          false,
+          controller.signal,
+        ),
+        fetchChapterPage(
+          activeBookId,
+          1,
+          searchQuery,
+          true,
+          controller.signal,
+        ),
+      ])
+        .then(([regular, pinned]) => {
+          if (controller.signal.aborted) return;
+          setChapters(regular.chapters);
+          setChapterTotal(regular.total);
+          setPinnedChapters(pinned.chapters);
+          setChapterBookId(activeBookId);
+          setChaptersError(false);
+        })
+        .catch(() => {
+          if (controller.signal.aborted) return;
+          setChapters([]);
+          setPinnedChapters([]);
+          setChapterTotal(0);
+          setChapterBookId(activeBookId);
+          setChaptersError(true);
+        })
+        .finally(() => {
+          if (!controller.signal.aborted) setChaptersLoading(false);
+        });
+    }, 200);
+
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+    };
+  }, [activeBookId, chapterPage, searchQuery]);
+
+  chapterLookupRef.current = new Map(
+    [...pinnedChapters, ...chapters].map((chapter) => [chapter.id, chapter]),
+  );
 
   // The chapter list is metadata-only, so load the body only for the chapter
-  // the reader actually opened. Locked chapters let the unlock form handle it.
+  // the reader actually opened. A deep-linked chapter may not be on the
+  // current list page, so its metadata is fetched separately when needed.
   useEffect(() => {
     if (activeChapterId === null) {
+      setFallbackChapter(null);
       setChapterBody(null);
       setChapterBodyLoading(false);
       return;
     }
-    const chapter = chapters.find((item) => item.id === activeChapterId);
-    if (!chapter || chapter.locked) {
+    const known = chapterLookupRef.current.get(activeChapterId);
+    if (known?.locked) {
       setChapterBody(null);
       setChapterBodyLoading(false);
       return;
     }
 
     let cancelled = false;
+    setFallbackChapter(null);
     setChapterBody(null);
     setChapterBodyLoading(true);
-    fetch(`/api/chapters/${activeChapterId}`)
+    fetch(`/api/chapters/${activeChapterId}`, {
+      credentials: "include",
+    })
       .then((response) => {
         if (!response.ok) throw new Error("Failed to load chapter body");
         return response.json() as Promise<Chapter>;
       })
       .then((data) => {
         if (!cancelled) {
+          if (!known) setFallbackChapter(data);
           setChapterBody({
             id: activeChapterId,
             body: data.body ?? null,
@@ -444,7 +453,7 @@ export default function BooksClient({
     return () => {
       cancelled = true;
     };
-  }, [activeChapterId, chapters]);
+  }, [activeChapterId]);
 
   // Mobile book/chapter selection does not change the URL, so tag the
   // current history entry and push one per view. The browser back button can
@@ -515,87 +524,18 @@ export default function BooksClient({
     );
   }, [visibleBooks]);
 
-  const visibleChapters = useMemo(
-    () =>
-      chapters
-        .filter(
-          (chapter) =>
-            (isLoggedIn || chapter.visible !== false) &&
-            (!chapter.published_at ||
-              new Date(chapter.published_at).getTime() <= now),
-        )
-        .sort((a, b) => {
-          if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
-          return compareChaptersByCreatedDesc(a, b);
-        }),
-    [chapters, isLoggedIn, now],
-  );
-
-  const chapterCounts = useMemo(() => {
-    const counts = new Map<number, number>();
-    for (const chapter of visibleChapters) {
-      counts.set(chapter.book_id, (counts.get(chapter.book_id) ?? 0) + 1);
-    }
-    return counts;
-  }, [visibleChapters]);
-
-  const bodyMatchedChapterIds = useMemo(() => {
-    if (bodySearch?.query !== searchQuery) return new Set<number>();
-    const visibleChapterIds = new Set(
-      visibleChapters.map((chapter) => chapter.id),
-    );
-    return new Set(
-      [...bodySearch.ids].filter((id) => visibleChapterIds.has(id)),
-    );
-  }, [bodySearch, searchQuery, visibleChapters]);
-
-  const bodySearchHasMore =
-    bodySearch !== null &&
-    bodySearch.query === searchQuery &&
-    bodySearch.page * BODY_SEARCH_PAGE_SIZE < bodySearch.total;
-
   const filteredBooks = useMemo(() => {
-    const tokens = searchTokens(searchQuery);
-    if (tokens.length === 0) return visibleBooks;
-
-    const chapterValues = new Map<number, string[]>();
-    for (const chapter of visibleChapters) {
-      const values = chapterValues.get(chapter.book_id) ?? [];
-      values.push(
-        chapter.title,
-        chapter.subtitle ?? "",
-        ...(chapter.tags ?? []),
-      );
-      chapterValues.set(chapter.book_id, values);
-    }
-
-    const bodyMatchedBookIds = new Set<number>();
-    for (const chapter of visibleChapters) {
-      if (bodyMatchedChapterIds.has(chapter.id)) {
-        bodyMatchedBookIds.add(chapter.book_id);
-      }
-    }
-
-    return visibleBooks.filter(
-      (book) =>
-        bodyMatchedBookIds.has(book.id) ||
-        matchesAllTokens(
-          [
-            book.title,
-            book.description,
-            book.category?.name,
-            ...(book.tags ?? []),
-            ...(chapterValues.get(book.id) ?? []),
-          ],
-          tokens,
-        ),
-    );
-  }, [
-    visibleBooks,
-    searchQuery,
-    visibleChapters,
-    bodyMatchedChapterIds,
-  ]);
+    const query = searchQuery.trim();
+    if (!query) return visibleBooks;
+    if (bookSearch?.query !== query) return visibleBooks;
+    return bookSearch.books
+      .filter(
+        (book) =>
+          (isLoggedIn || book.visible !== false) &&
+          (isAdmin || book.category?.visible !== false),
+      )
+      .sort((a, b) => a.order - b.order || a.id - b.id);
+  }, [bookSearch, isAdmin, isLoggedIn, searchQuery, visibleBooks]);
 
   const groupedBooks = useMemo(() => {
     const result: { category: BookCategory | null; books: Book[] }[] = [];
@@ -629,54 +569,24 @@ export default function BooksClient({
 
   const activeBook =
     filteredBooks.find((book) => book.id === activeBookId) ?? null;
-
-  const activeChapters = useMemo(() => {
-    if (!activeBook) return [];
-    const bookChapters = visibleChapters.filter(
-      (chapter) => chapter.book_id === activeBook.id,
-    );
-    const tokens = searchTokens(searchQuery);
-    if (tokens.length === 0) return bookChapters;
-
-    return bookChapters.filter(
-      (chapter) =>
-        bodyMatchedChapterIds.has(chapter.id) ||
-        matchesAllTokens(
-          [
-            chapter.title,
-            chapter.subtitle,
-            ...(chapter.tags ?? []),
-          ],
-          tokens,
-        ),
-    );
-  }, [
-    activeBook,
-    searchQuery,
-    visibleChapters,
-    bodyMatchedChapterIds,
-  ]);
+  const chapterDataReady =
+    activeBook !== null && chapterBookId === activeBook.id;
+  const activeChapters = chapterDataReady ? chapters : [];
+  const activePinnedChapters = chapterDataReady ? pinnedChapters : [];
+  const totalChapterPages = Math.max(
+    1,
+    Math.ceil(
+      (chapterDataReady ? chapterTotal : 0) / CHAPTERS_PER_PAGE,
+    ),
+  );
 
   const activeChapter =
     activeBook && activeChapterId !== null
-      ? activeChapters.find((chapter) => chapter.id === activeChapterId) ??
-        null
+      ? [...activePinnedChapters, ...activeChapters].find(
+          (chapter) => chapter.id === activeChapterId,
+        ) ??
+        (fallbackChapter?.id === activeChapterId ? fallbackChapter : null)
       : null;
-
-  const pinnedChapters = activeChapters.filter(
-    (chapter) => chapter.pinned,
-  );
-  const regularChapters = activeChapters.filter(
-    (chapter) => !chapter.pinned,
-  );
-  const totalChapterPages = Math.max(
-    1,
-    Math.ceil(regularChapters.length / CHAPTERS_PER_PAGE),
-  );
-  const pagedChapters = regularChapters.slice(
-    (chapterPage - 1) * CHAPTERS_PER_PAGE,
-    chapterPage * CHAPTERS_PER_PAGE,
-  );
 
   useEffect(() => {
     setChapterPage(1);
@@ -857,25 +767,6 @@ export default function BooksClient({
           </button>
         ) : null}
       </div>
-      {bodySearchHasMore ? (
-        <button
-          type="button"
-          className="books-search-more"
-          onClick={loadMoreBodySearch}
-          disabled={bodySearchLoading}
-        >
-          {bodySearchLoading
-            ? "본문 검색 중…"
-            : `본문 검색 결과 더 보기 (${bodySearch.ids.size}/${bodySearch.total})`}
-        </button>
-      ) : null}
-      {bodySearchError ? (
-        <p className="books-search-error" role="alert">
-          {bodySearchError === "initial"
-            ? "본문 검색에 실패했습니다. 제목·태그 검색 결과만 표시됩니다."
-            : "본문 검색 결과를 더 불러오지 못했습니다. 다시 시도해 주세요."}
-        </p>
-      ) : null}
       <div className="books-books">
         {groupedBooks.length === 0 ? (
           <p className="books-list-empty">검색 결과가 없습니다.</p>
@@ -951,7 +842,7 @@ export default function BooksClient({
                           </span>
                         </span>
                         <span className="books-book-button__count">
-                          {chapterCounts.get(book.id) ?? 0}
+                          {book.chapter_count ?? 0}
                         </span>
                       </button>
                     ))
@@ -1023,7 +914,16 @@ export default function BooksClient({
         </p>
       ) : null}
 
-      {activeChapters.length === 0 ? (
+      {chaptersError ? (
+        <p className="books-panel__empty" role="alert">
+          게시글을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.
+        </p>
+      ) : chaptersLoading &&
+        activeChapters.length === 0 &&
+        activePinnedChapters.length === 0 ? (
+        <p className="books-panel__empty">게시글을 불러오는 중…</p>
+      ) : activeChapters.length === 0 &&
+        activePinnedChapters.length === 0 ? (
         <p className="books-panel__empty">
           {searchQuery
             ? "검색 결과가 없습니다."
@@ -1031,15 +931,15 @@ export default function BooksClient({
         </p>
       ) : (
         <>
-          {pinnedChapters.length > 0 ? (
+          {activePinnedChapters.length > 0 ? (
             <div className="books-chapters books-chapters--pinned">
-              {pinnedChapters.map(renderChapterButton)}
+              {activePinnedChapters.map(renderChapterButton)}
             </div>
           ) : null}
           <div className="books-chapters">
-            {pagedChapters.map(renderChapterButton)}
+            {activeChapters.map(renderChapterButton)}
           </div>
-          {regularChapters.length > 0 ? (
+          {activeChapters.length > 0 ? (
             <Pagination
               page={chapterPage}
               totalPages={totalChapterPages}
