@@ -444,6 +444,20 @@ export function RichTextEditor({
           })
           .run();
 
+        // Select the image we just inserted so its alignment and text-wrap
+        // controls appear immediately in the editor.
+        const inserted = { pos: -1 };
+        editor.state.doc.descendants((node, pos) => {
+          if (node.type.name === "image" && node.attrs.src === uploaded.url) {
+            inserted.pos = pos;
+            return false;
+          }
+          return true;
+        });
+        if (inserted.pos >= 0) {
+          editor.chain().focus().setNodeSelection(inserted.pos).run();
+        }
+
         notify({ type: "success", text: "이미지를 추가했습니다." });
       } catch (error) {
         notify({
@@ -493,6 +507,80 @@ export function RichTextEditor({
       ? imageAttrs.align
       : "center";
   const imageWrap = Boolean(imageAttrs.wrap) && imageAlign !== "center";
+  const isImageSelected = Boolean(editor?.isActive("image"));
+  const alignMenuItems: ToolbarMenuItem[] = isImageSelected
+    ? [
+        {
+          label: "왼쪽 정렬",
+          active: imageAlign === "left",
+          onSelect: () =>
+            editor
+              ?.chain()
+              .focus()
+              .updateAttributes("image", {
+                align: "left",
+                wrap: imageWrap,
+              })
+              .run(),
+        },
+        {
+          label: "가운데 정렬",
+          active: imageAlign === "center",
+          onSelect: () =>
+            editor
+              ?.chain()
+              .focus()
+              .updateAttributes("image", {
+                align: "center",
+                wrap: false,
+              })
+              .run(),
+        },
+        {
+          label: "오른쪽 정렬",
+          active: imageAlign === "right",
+          onSelect: () =>
+            editor
+              ?.chain()
+              .focus()
+              .updateAttributes("image", {
+                align: "right",
+                wrap: imageWrap,
+              })
+              .run(),
+        },
+        ...(imageAlign === "center"
+          ? []
+          : [
+              {
+                label: imageWrap ? "글씨 옆 배치 해제" : "글씨를 옆에 배치",
+                active: imageWrap,
+                onSelect: () =>
+                  editor
+                    ?.chain()
+                    .focus()
+                    .updateAttributes("image", { wrap: !imageWrap })
+                    .run(),
+              },
+            ]),
+      ]
+    : [
+        {
+          label: "왼쪽 정렬",
+          active: editor?.isActive({ textAlign: "left" }),
+          onSelect: () => editor?.chain().focus().setTextAlign("left").run(),
+        },
+        {
+          label: "가운데 정렬",
+          active: editor?.isActive({ textAlign: "center" }),
+          onSelect: () => editor?.chain().focus().setTextAlign("center").run(),
+        },
+        {
+          label: "오른쪽 정렬",
+          active: editor?.isActive({ textAlign: "right" }),
+          onSelect: () => editor?.chain().focus().setTextAlign("right").run(),
+        },
+      ];
   const imageWidth =
     typeof imageAttrs.width === "number" ? imageAttrs.width : null;
   const pagePreviewAttrs = editor?.getAttributes("pagePreview") ?? {};
@@ -598,30 +686,13 @@ export function RichTextEditor({
           <ToolbarMenu
             label="정렬"
             active={
-              editor?.isActive({ textAlign: "center" }) ||
-              editor?.isActive({ textAlign: "right" })
+              isImageSelected
+                ? imageAlign !== "center" || imageWrap
+                : editor?.isActive({ textAlign: "center" }) ||
+                  editor?.isActive({ textAlign: "right" })
             }
             disabled={!editor}
-            items={[
-              {
-                label: "왼쪽 정렬",
-                active: editor?.isActive({ textAlign: "left" }),
-                onSelect: () =>
-                  editor?.chain().focus().setTextAlign("left").run(),
-              },
-              {
-                label: "가운데 정렬",
-                active: editor?.isActive({ textAlign: "center" }),
-                onSelect: () =>
-                  editor?.chain().focus().setTextAlign("center").run(),
-              },
-              {
-                label: "오른쪽 정렬",
-                active: editor?.isActive({ textAlign: "right" }),
-                onSelect: () =>
-                  editor?.chain().focus().setTextAlign("right").run(),
-              },
-            ]}
+            items={alignMenuItems}
           />
           <ToolbarMenu
             label="목록"
@@ -785,7 +856,7 @@ export function RichTextEditor({
       </div>
       {editor?.isActive("image") ? (
         <div className="admin-editor__image-controls">
-          <span className="admin-editor__image-label">이미지</span>
+          <span className="admin-editor__image-label">이미지 정렬</span>
           <ToolbarButton
             onClick={() =>
               editor
@@ -831,7 +902,10 @@ export function RichTextEditor({
           >
             오른쪽
           </ToolbarButton>
-          <label className="admin-editor__image-wrap">
+          <label
+            className="admin-editor__image-wrap"
+            title="왼쪽/오른쪽 정렬에서 이미지 옆에 글씨를 배치합니다."
+          >
             <input
               type="checkbox"
               checked={imageWrap}
@@ -846,7 +920,7 @@ export function RichTextEditor({
                   .run()
               }
             />
-            텍스트 감싸기
+            글씨를 옆에 배치
           </label>
           {imageWidth ? (
             <span className="admin-editor__image-size">{imageWidth}px</span>

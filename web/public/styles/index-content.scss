@@ -74,6 +74,36 @@
     height: auto;
     margin: 1.2rem 0;
     border-radius: 0.6rem;
+
+    &[data-align='center'] {
+      display: block;
+      margin: 1.2rem auto;
+      clear: both;
+    }
+
+    &[data-align='left'] {
+      display: block;
+      margin: 1.2rem auto 1.2rem 0;
+      clear: both;
+    }
+
+    &[data-align='right'] {
+      display: block;
+      margin: 1.2rem 0 1.2rem auto;
+      clear: both;
+    }
+
+    &[data-wrap='true'][data-align='left'] {
+      float: left;
+      margin: 0.3rem 1.2rem 0.9rem 0;
+      clear: none;
+    }
+
+    &[data-wrap='true'][data-align='right'] {
+      float: right;
+      margin: 0.3rem 0 0.9rem 1.2rem;
+      clear: none;
+    }
   }
 
   ul,

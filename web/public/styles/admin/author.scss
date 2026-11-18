@@ -356,6 +356,11 @@
   color: var(--admin-muted);
   cursor: pointer;
 
+  &:has(input:disabled) {
+    cursor: default;
+    opacity: 0.5;
+  }
+
   input[type='checkbox'] {
     width: auto;
     padding: 0;
@@ -615,6 +620,36 @@
   img {
     max-width: 100%;
     height: auto;
+
+    &[data-align='center'] {
+      display: block;
+      margin: 0.8rem auto;
+      clear: both;
+    }
+
+    &[data-align='left'] {
+      display: block;
+      margin: 0.8rem auto 0.8rem 0;
+      clear: both;
+    }
+
+    &[data-align='right'] {
+      display: block;
+      margin: 0.8rem 0 0.8rem auto;
+      clear: both;
+    }
+
+    &[data-wrap='true'][data-align='left'] {
+      float: left;
+      margin: 0.2rem 0.8rem 0.6rem 0;
+      clear: none;
+    }
+
+    &[data-wrap='true'][data-align='right'] {
+      float: right;
+      margin: 0.2rem 0 0.6rem 0.8rem;
+      clear: none;
+    }
   }
 }
 
