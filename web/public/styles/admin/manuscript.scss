@@ -64,10 +64,17 @@
   }
 }
 
+.admin-manuscript-actions-right {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-left: auto;
+}
+
 .admin-manuscript-create {
   display: flex;
+  align-items: center;
   gap: 0.35rem;
-  margin-left: auto;
 }
 
 .admin-manuscript-button {

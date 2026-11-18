@@ -168,36 +168,38 @@ export default function AdminManuscriptPage() {
               placeholder="프로젝트 제목"
             />
           </label>
-          <div className="admin-manuscript-create">
-            <input
-              value={newTitle}
-              onChange={(event) => setNewTitle(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") {
-                  event.preventDefault();
-                  void createProject();
-                }
-              }}
-              placeholder="새 프로젝트 이름"
-              aria-label="새 프로젝트 이름"
-            />
+          <div className="admin-manuscript-actions-right">
+            <div className="admin-manuscript-create">
+              <input
+                value={newTitle}
+                onChange={(event) => setNewTitle(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    void createProject();
+                  }
+                }}
+                placeholder="새 프로젝트 이름"
+                aria-label="새 프로젝트 이름"
+              />
+              <button
+                type="button"
+                className="admin-manuscript-button is-primary"
+                onClick={() => void createProject()}
+                disabled={saving || !newTitle.trim()}
+              >
+                {saving ? "만드는 중..." : "만들기"}
+              </button>
+            </div>
             <button
               type="button"
-              className="admin-manuscript-button is-primary"
-              onClick={() => void createProject()}
-              disabled={saving || !newTitle.trim()}
+              className="admin-manuscript-button"
+              onClick={() => void load()}
+              disabled={loading}
             >
-              {saving ? "만드는 중..." : "만들기"}
+              새로고침
             </button>
           </div>
-          <button
-            type="button"
-            className="admin-manuscript-button"
-            onClick={() => void load()}
-            disabled={loading}
-          >
-            새로고침
-          </button>
         </div>
       </header>
 
