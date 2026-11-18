@@ -169,11 +169,14 @@ def purge_trash(
 @router.get("/search")
 def search(
     q: str | None = None,
+    project_id: int | None = None,
     limit: int = Query(default=50, ge=1, le=100),
     db: Session = Depends(get_db),
     user=Depends(require_auth),
 ):
-    return crud.search_nodes(db, user.id, q, limit=limit)
+    return crud.search_nodes(
+        db, user.id, q, project_id=project_id, limit=limit
+    )
 
 
 @router.get("/scrivenings")

@@ -240,6 +240,28 @@ class ManuscriptTests(unittest.TestCase):
         })
         self.assertTrue(all("body" not in item for item in results))
 
+    def test_search_scopes_project_and_snippet_includes_surrounding_sentences(
+        self,
+    ) -> None:
+        project = self._project()
+        other_project = self._project(linked_book=False)
+        self._node(
+            project,
+            "A",
+            body="<p>앞 문장입니다. 가운데 찾을말이 있다. 뒤 문장입니다.</p>",
+        )
+        self._node(other_project, "B", body="<p>다른 프로젝트 찾을말</p>")
+
+        results = crud.search_nodes(
+            self.db, self.owner.id, "찾을말", project_id=project.id
+        )
+
+        self.assertEqual(len(results), 1)
+        snippet = results[0]["snippet"]
+        self.assertIn("앞 문장입니다", snippet)
+        self.assertIn("찾을말", snippet)
+        self.assertIn("뒤 문장입니다", snippet)
+
     def test_publish_republish_and_public_toc(self) -> None:
         project = self._project()
         folder = self._node(project, "1권", node_type="folder")

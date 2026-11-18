@@ -542,13 +542,51 @@ def reorder_nodes(
     return get_tree(db, project_id, user_id)
 
 
-def _snippet(text: str, tokens: list[str], width: int = 120) -> str:
+def _snippet(text: str, tokens: list[str], max_chars: int = 240) -> str:
+    """Return the matching sentence plus one sentence before and after."""
+    if not text:
+        return ""
     lowered = text.lower()
-    positions = [lowered.find(token.lower()) for token in tokens]
+    positions = [lowered.find(token.lower()) for token in tokens if token]
     positions = [position for position in positions if position >= 0]
-    start = max(0, min(positions) - 30) if positions else 0
-    end = min(len(text), start + width)
-    snippet = text[start:end].replace("\n", " ").strip()
+    focus = min(positions) if positions else 0
+
+    starts = [0]
+    for index, char in enumerate(text):
+        if char in ".!?。？！" and (
+            index + 1 == len(text) or text[index + 1].isspace()
+        ):
+            following = index + 1
+            while following < len(text) and text[following].isspace():
+                following += 1
+            if following < len(text):
+                starts.append(following)
+    bounds = starts + [len(text)]
+    sentences = [
+        (bounds[index], bounds[index + 1])
+        for index in range(len(bounds) - 1)
+        if bounds[index + 1] > bounds[index]
+    ]
+    if not sentences:
+        return ""
+    match_index = next(
+        (
+            index
+            for index, (start, end) in enumerate(sentences)
+            if start <= focus < end
+        ),
+        len(sentences) - 1,
+    )
+    first = max(0, match_index - 1)
+    last = min(len(sentences) - 1, match_index + 1)
+    start = sentences[first][0]
+    end = sentences[last][1]
+
+    # Keep the excerpt compact when surrounding sentences are very long.
+    if end - start > max_chars:
+        start = max(start, focus - max_chars // 3)
+        end = min(end, start + max_chars)
+    snippet = " ".join(text[start:end].split())
     if start > 0:
         snippet = "…" + snippet
     if end < len(text):
@@ -561,6 +599,7 @@ def search_nodes(
     user_id: int,
     query: str | None,
     *,
+    project_id: int | None = None,
     limit: int = 50,
 ) -> list[dict]:
     tokens = search_tokens(query)
@@ -571,6 +610,10 @@ def search_nodes(
         ManuscriptNode.user_id == user_id,
         ManuscriptNode.deleted_at.is_(None),
     )
+    if project_id is not None:
+        nodes_query = nodes_query.filter(
+            ManuscriptNode.project_id == project_id
+        )
     for token in tokens:
         pattern = like_pattern(token)
         nodes_query = nodes_query.filter(

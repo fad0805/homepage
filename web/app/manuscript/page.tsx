@@ -8,6 +8,7 @@ import {
   useRef,
   useState,
   type ReactElement,
+  type ReactNode,
 } from "react";
 import { RichTextEditor, type EditorNotice } from "@/components/rich-text-editor";
 import { apiFetch } from "@/lib/api";
@@ -217,6 +218,29 @@ function collectTrashChapterIds(
   return ids;
 }
 
+/** Highlight every query token inside a plain-text search snippet. */
+function highlightSnippet(text: string, query: string): ReactNode[] {
+  const tokens = query
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .sort((a, b) => b.length - a.length);
+  if (!tokens.length) return [text];
+  const pattern = tokens
+    .map((token) => token.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
+    .join("|");
+  const lowered = new Set(tokens.map((token) => token.toLocaleLowerCase()));
+  return text
+    .split(new RegExp(`(${pattern})`, "gi"))
+    .map((part, index) =>
+      lowered.has(part.toLocaleLowerCase()) ? (
+        <mark key={index}>{part}</mark>
+      ) : (
+        part
+      ),
+    );
+}
+
 /** Split the combined folder document back into per-chapter bodies. */
 function splitCombinedHtml(html: string): string[] {
   const parsed = new DOMParser().parseFromString(html || "", "text/html");
@@ -407,14 +431,15 @@ export default function ManuscriptWorkspace() {
       return;
     }
     const timer = window.setTimeout(() => {
+      const projectParam = projectId ? `&project_id=${projectId}` : "";
       apiFetch<SearchResult[]>(
-        `/api/manuscript/search?q=${encodeURIComponent(query.trim())}`,
+        `/api/manuscript/search?q=${encodeURIComponent(query.trim())}${projectParam}`,
       )
         .then(setResults)
         .catch((error: Error) => notify(error.message, "error"));
     }, 250);
     return () => window.clearTimeout(timer);
-  }, [query, searchOpen, notify]);
+  }, [query, searchOpen, projectId, notify]);
 
   useEffect(() => {
     if (!trashExpanded || !projectId) return;
@@ -1380,7 +1405,9 @@ export default function ManuscriptWorkspace() {
                   <span className="ms-search-results__path">
                     {result.path.map((part) => part.title).join(" / ") || "최상위"}
                   </span>
-                  <span className="ms-search-results__snippet">{result.snippet}</span>
+                  <span className="ms-search-results__snippet">
+                    {highlightSnippet(result.snippet, query)}
+                  </span>
                 </button>
               ))}
               {query.trim() && results.length === 0 ? (

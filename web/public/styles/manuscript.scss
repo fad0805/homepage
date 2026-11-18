@@ -670,6 +670,14 @@ html[data-workspace='manuscript'] .ms-editor--workspace .ms-editor__surface .tip
   font-size: 0.72rem;
 }
 
+.ms-search-results__snippet mark {
+  border-radius: 0.2rem;
+  padding: 0 0.1rem;
+  background: color-mix(in srgb, var(--ms-accent) 35%, transparent);
+  color: var(--ms-text);
+  font-weight: 700;
+}
+
 .ms-trash-list {
   display: flex;
   flex-direction: column;
