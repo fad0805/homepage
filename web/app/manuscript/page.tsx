@@ -168,7 +168,6 @@ export default function ManuscriptWorkspace() {
   const [trashOpen, setTrashOpen] = useState(false);
   const [trash, setTrash] = useState<TrashItem[]>([]);
   const [scrivenings, setScrivenings] = useState<ScrivDoc[] | null>(null);
-  const [scriveningsTitle, setScriveningsTitle] = useState("");
   const [notice, setNotice] = useState<Notice | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -251,7 +250,6 @@ export default function ManuscriptWorkspace() {
           body: node.body ?? "",
         });
         setDirty(false);
-        setScrivenings(null);
       })
       .catch((error: Error) => notify(error.message, "error"));
     return () => {
@@ -435,14 +433,12 @@ export default function ManuscriptWorkspace() {
     }
   };
 
-  const openScrivenings = async () => {
-    if (!selectedId) return;
+  const openScrivenings = async (rootId: number) => {
     try {
       const docs = await apiFetch<ScrivDoc[]>(
-        `/api/manuscript/scrivenings?root_id=${selectedId}`,
+        `/api/manuscript/scrivenings?root_id=${rootId}`,
       );
       setScrivenings(docs);
-      setScriveningsTitle(selected?.title ?? "묶어보기");
     } catch (error) {
       notify((error as Error).message, "error");
     }
@@ -529,7 +525,15 @@ export default function ManuscriptWorkspace() {
                 node.node_type === "folder" ? node.id : node.parent_id;
               moveNode(movingId, targetParent);
             }}
-            onClick={() => setSelectedId(node.id)}
+            onClick={() => {
+              setSelectedId(node.id);
+              if (node.node_type === "folder") {
+                setScrivenings(null);
+                void openScrivenings(node.id);
+              } else {
+                setScrivenings(null);
+              }
+            }}
           >
             <button
               type="button"
@@ -686,7 +690,7 @@ export default function ManuscriptWorkspace() {
               {renderRows(null, 0)}
             </div>
             <div className="ms-binder__hint">
-              항목을 끌어 폴더에 넣거나 최상단으로 옮길 수 있습니다.
+              항목을 끌어 이동 · 제목 더블클릭으로 변경 · 폴더 클릭 시 폴더 전체 보기
             </div>
           </aside>
 
@@ -694,13 +698,6 @@ export default function ManuscriptWorkspace() {
             {scrivenings ? (
               <>
                 <div className="ms-editor__header">
-                  <div>
-                    <h1>{scriveningsTitle} — 묶어보기</h1>
-                    <p>
-                      {scrivenings.length}편 · 공백 포함{" "}
-                      {scrivenings.reduce((sum, doc) => sum + doc.char_count_with_spaces, 0)}자
-                    </p>
-                  </div>
                   <button type="button" onClick={() => setScrivenings(null)}>
                     편집기로 돌아가기
                   </button>
@@ -708,7 +705,6 @@ export default function ManuscriptWorkspace() {
                 <div className="ms-scrivenings">
                   {scrivenings.map((doc) => (
                     <article key={doc.id} className="ms-scrivenings__doc">
-                      <h2>{doc.title}</h2>
                       <div dangerouslySetInnerHTML={{ __html: doc.body ?? "" }} />
                     </article>
                   ))}
@@ -717,20 +713,6 @@ export default function ManuscriptWorkspace() {
             ) : (
               <>
                 <div className="ms-editor__header">
-                  <div>
-                    <div className="ms-eyebrow">
-                      {selected
-                        ? selected.node_type === "folder"
-                          ? "폴더"
-                          : "챕터"
-                        : "새 챕터"}{" "}
-                      · {selected ? STATE_LABEL[selected.published_state] : STATE_LABEL.unpublished}
-                    </div>
-                    <h1>{selected ? selected.title : "챕터를 선택해 주세요"}</h1>
-                    {isPlaceholder ? (
-                      <p>왼쪽 바인더에서 챕터를 선택하거나 새 챕터를 추가하세요.</p>
-                    ) : null}
-                  </div>
                   <div className="ms-editor__actions">
                     <button
                       type="button"
@@ -740,7 +722,13 @@ export default function ManuscriptWorkspace() {
                     >
                       {saving ? "저장 중…" : dirty ? "저장" : "저장됨"}
                     </button>
-                    <button type="button" disabled={isPlaceholder} onClick={openScrivenings}>
+                    <button
+                      type="button"
+                      disabled={isPlaceholder}
+                      onClick={() => {
+                        if (selected) void openScrivenings(selected.id);
+                      }}
+                    >
                       묶어보기
                     </button>
                     <button
@@ -753,22 +741,6 @@ export default function ManuscriptWorkspace() {
                     </button>
                   </div>
                 </div>
-
-                {selected?.node_type === "folder" ? (
-                  <div className="ms-editor__fields">
-                    <label>
-                      시놉시스
-                      <textarea
-                        value={form.synopsis}
-                        rows={2}
-                        onChange={(event) => {
-                          setForm({ ...form, synopsis: event.target.value });
-                          setDirty(true);
-                        }}
-                      />
-                    </label>
-                  </div>
-                ) : null}
 
                 {!selected || selected.node_type === "chapter" ? (
                   <div className={`ms-editor__body${isPlaceholder ? " is-placeholder" : ""}`}>
@@ -787,9 +759,9 @@ export default function ManuscriptWorkspace() {
                     />
                   </div>
                 ) : (
-                  <p className="ms-editor__folder-note">
-                    폴더는 시놉시스와 메모만 저장하고 본문은 갖지 않습니다. 하위 챕터를 추가해 주세요.
-                  </p>
+                  <div className="ms-empty">
+                    <p>폴더 내용을 불러오는 중…</p>
+                  </div>
                 )}
 
                 <footer className="ms-statusbar">
@@ -814,6 +786,20 @@ export default function ManuscriptWorkspace() {
                       placeholder="부제를 입력하세요"
                       onChange={(event) => {
                         setForm({ ...form, subtitle: event.target.value });
+                        setDirty(true);
+                      }}
+                    />
+                  </label>
+                ) : null}
+                {selected.node_type === "folder" ? (
+                  <label className="ms-inspector__field">
+                    시놉시스
+                    <textarea
+                      value={form.synopsis}
+                      rows={4}
+                      placeholder="폴더 시놉시스를 입력하세요"
+                      onChange={(event) => {
+                        setForm({ ...form, synopsis: event.target.value });
                         setDirty(true);
                       }}
                     />
@@ -896,6 +882,10 @@ export default function ManuscriptWorkspace() {
                   onClick={() => {
                     setSelectedId(result.id);
                     setSearchOpen(false);
+                    setScrivenings(null);
+                    if (result.node_type === "folder") {
+                      void openScrivenings(result.id);
+                    }
                   }}
                 >
                   <span className="ms-search-results__title">{result.title}</span>
