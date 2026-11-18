@@ -46,6 +46,8 @@ interface RichTextEditorProps {
   enableFontSize?: boolean;
   /** Show the highlight toggle in the toolbar. */
   enableHighlight?: boolean;
+  /** Match the editor's content typography to the public chapter view. */
+  variant?: "default" | "chapter";
 }
 
 function ToolbarButton({
@@ -159,6 +161,7 @@ export function RichTextEditor({
   compact = false,
   enableFontSize = false,
   enableHighlight = false,
+  variant = "default",
 }: RichTextEditorProps) {
   const onChangeRef = useRef(onChange);
   const onNoticeRef = useRef(onNotice);
@@ -628,7 +631,11 @@ export function RichTextEditor({
       : null;
 
   return (
-    <div className={`admin-editor${compact ? " admin-editor--compact" : ""}`}>
+    <div
+      className={`admin-editor${compact ? " admin-editor--compact" : ""}${
+        variant === "chapter" ? " admin-editor--chapter" : ""
+      }`}
+    >
       <div className="admin-editor__toolbar">
         <div className="admin-editor__toolbar-row">
           {enableFontSize ? (

@@ -948,6 +948,7 @@ export default function AdminChapterEdit() {
                   onNotice={(notice) => notify(notice.type, notice.text)}
                   enableFontSize
                   enableHighlight
+                  variant="chapter"
                 />
               </div>
               <label className="admin-field">

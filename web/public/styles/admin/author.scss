@@ -110,6 +110,44 @@
   }
 }
 
+/* Keep the chapter editor's reading typography in step with the public view. */
+.admin-editor--chapter {
+  .admin-editor__content .tiptap {
+    font-size: 0.92rem;
+    line-height: 1.7;
+
+    p {
+      margin: 0 0 0.7rem;
+      font-size: 0.92rem;
+      line-height: 1.7;
+    }
+
+    /* Empty paragraphs are blank lines, not extra paragraph spacing. */
+    p:has(> br.ProseMirror-trailingBreak:only-child) {
+      margin-bottom: 0;
+    }
+
+    ul,
+    ol {
+      font-size: 0.92rem;
+      line-height: 1.7;
+    }
+
+    blockquote {
+      font-size: 0.9rem;
+      line-height: 1.65;
+    }
+
+    h2 {
+      font-size: 1.2rem;
+    }
+
+    h3 {
+      font-size: 1rem;
+    }
+  }
+}
+
 .admin-editor__toolbar {
   display: flex;
   flex-direction: column;
