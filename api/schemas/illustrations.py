@@ -41,6 +41,7 @@ class IllustrationListItem(BaseModel):
     order: int
     created_at: datetime
     updated_at: datetime
+    locked: bool = False
 
 
 class IllustrationSummary(IllustrationListItem):
@@ -58,6 +59,12 @@ class IllustrationDetail(IllustrationSummary):
 
 class IllustrationAdminDetail(IllustrationDetail):
     """Admin detail with the private view counter."""
+
+    view_count: int = 0
+
+
+class IllustrationAdminListItem(IllustrationSummary):
+    """Admin list row. Images are fetched separately when the editor opens."""
 
     view_count: int = 0
 

@@ -20,15 +20,10 @@ export interface IllustrationCardItem {
   image_count: number;
   visible: boolean;
   protected: boolean;
+  locked?: boolean;
 }
 
-export function IllustrationGrid({
-  items,
-  unlockedIds,
-}: {
-  items: IllustrationCardItem[];
-  unlockedIds: number[] | null;
-}) {
+export function IllustrationGrid({ items }: { items: IllustrationCardItem[] }) {
   const router = useRouter();
   const [mounted, setMounted] = useState(false);
   const [unlockItem, setUnlockItem] =
@@ -64,9 +59,6 @@ export function IllustrationGrid({
       document.removeEventListener("keydown", handleKeyDown);
     };
   }, [unlockItem]);
-
-  const isUnlocked = (illustrationId: number) =>
-    unlockedIds === null || unlockedIds.includes(illustrationId);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -128,7 +120,7 @@ export function IllustrationGrid({
     <>
       <div className="illustrations-grid">
         {items.map((item) => {
-          const locked = item.protected && !isUnlocked(item.id);
+          const locked = item.locked === true;
 
           return (
             <article className="illustration-card" key={item.id}>
@@ -144,12 +136,17 @@ export function IllustrationGrid({
                     : undefined
                 }
               >
-                <div className="illustration-card__thumb">
+                <div
+                  className={`illustration-card__thumb${
+                    locked ? " is-locked" : ""
+                  }`}
+                >
                   {item.representative_url ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
                       src={item.representative_url}
-                      alt={item.title}
+                      alt={locked ? "잠긴 삽화" : item.title}
+                      aria-hidden={locked || undefined}
                       loading="lazy"
                       decoding="async"
                     />
@@ -171,6 +168,23 @@ export function IllustrationGrid({
                   {item.visible !== false && item.protected ? (
                     <span className="illustration-card__protected">
                       보호
+                    </span>
+                  ) : null}
+                  {locked ? (
+                    <span className="illustration-card__locked-notice">
+                      <svg
+                        viewBox="0 0 24 24"
+                        aria-hidden="true"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.8"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      >
+                        <rect x="4" y="10" width="16" height="11" rx="2" />
+                        <path d="M8 10V7a4 4 0 0 1 8 0v3" />
+                      </svg>
+                      열람 권한이 필요합니다
                     </span>
                   ) : null}
                 </div>

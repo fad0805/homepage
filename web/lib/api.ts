@@ -1,9 +1,9 @@
 import { maybeRevalidatePublicContent } from "@/lib/revalidate";
 
-export async function apiFetch<T>(
+async function requestApi<T>(
   url: string,
-  init: RequestInit = {},
-): Promise<T> {
+  init: RequestInit,
+): Promise<{ data: T; headers: Headers }> {
   const headers = new Headers(init.headers);
   if (
     init.body &&
@@ -53,8 +53,33 @@ export async function apiFetch<T>(
   maybeRevalidatePublicContent(url, init);
 
   if (response.status === 204) {
-    return undefined as T;
+    return { data: undefined as T, headers: response.headers };
   }
 
-  return response.json() as Promise<T>;
+  return {
+    data: (await response.json()) as T,
+    headers: response.headers,
+  };
+}
+
+export async function apiFetch<T>(
+  url: string,
+  init: RequestInit = {},
+): Promise<T> {
+  const { data } = await requestApi<T>(url, init);
+  return data;
+}
+
+/** Fetch a list together with the API's X-Total-Count header. */
+export async function apiFetchWithTotal<T>(
+  url: string,
+  init: RequestInit = {},
+): Promise<{ data: T; total: number | null }> {
+  const { data, headers } = await requestApi<T>(url, init);
+  const raw = headers.get("x-total-count");
+  const total = raw === null ? null : Number(raw);
+  return {
+    data,
+    total: total !== null && Number.isFinite(total) ? total : null,
+  };
 }

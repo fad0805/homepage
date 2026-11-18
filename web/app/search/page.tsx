@@ -106,7 +106,7 @@ export default async function SearchPage({
         auth: Boolean(currentUser),
       }),
       serverApiFetch<IllustrationItem[]>(
-        `/illustrations${searchSuffix}`,
+        `/illustrations?${searchSuffix ? `${searchSuffix.slice(1)}&` : ""}page_size=50`,
         {
           tags: ["illustrations"],
           auth: Boolean(currentUser),

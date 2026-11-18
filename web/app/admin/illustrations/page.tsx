@@ -14,7 +14,7 @@ import {
   type CroppedImageResult,
 } from "@/components/image-crop-modal";
 import { TagInput } from "@/components/tag-input";
-import { apiFetch } from "@/lib/api";
+import { apiFetch, apiFetchWithTotal } from "@/lib/api";
 import {
   formatDate,
   formatDateTime,
@@ -140,6 +140,9 @@ export default function AdminIllustrations() {
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [listPage, setListPage] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
+  const [listQuery, setListQuery] = useState("");
+  const [listQueryInput, setListQueryInput] = useState("");
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<{
     done: number;
@@ -183,27 +186,25 @@ export default function AdminIllustrations() {
 
   const totalPages = Math.max(
     1,
-    Math.ceil(items.length / LIST_PAGE_SIZE),
+    Math.ceil(totalCount / LIST_PAGE_SIZE),
   );
   const currentPage = Math.min(listPage, totalPages);
-  const visibleItems = items.slice(
-    (currentPage - 1) * LIST_PAGE_SIZE,
-    currentPage * LIST_PAGE_SIZE,
-  );
+  const visibleItems = items;
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await apiFetch<IllustrationDetailItem[]>(
-        "/api/illustrations/admin",
-      );
-      setItems(
-        [...data].sort(
-          (a, b) => a.order - b.order || b.id - a.id,
-        ),
-      );
+      const params = new URLSearchParams({
+        page: String(listPage),
+        page_size: String(LIST_PAGE_SIZE),
+      });
+      if (listQuery) params.set("q", listQuery);
+      const { data, total } = await apiFetchWithTotal<
+        Omit<IllustrationDetailItem, "images">[]
+      >(`/api/illustrations/admin?${params.toString()}`);
+      setItems(data.map((item) => ({ ...item, images: [] })));
+      setTotalCount(total ?? data.length);
       setSelectedIds(new Set());
-      setListPage(1);
     } catch (error) {
       setNotice({
         type: "error",
@@ -215,7 +216,7 @@ export default function AdminIllustrations() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [listPage, listQuery]);
 
   useEffect(() => {
     void load();
@@ -480,22 +481,36 @@ export default function AdminIllustrations() {
     } finally {
       setUploading(false);
       setUploadProgress(null);
+      void load();
     }
   };
 
-  const openEdit = useCallback((item: IllustrationDetailItem) => {
-    setEditingItem({
-      ...item,
-      images: [...item.images],
-    });
-    setEditingTagsInput((item.tags ?? []).join(", "));
-    setModalNotice(null);
-    setModalDragIndex(null);
-    setModalDragOverIndex(null);
+  const openEdit = useCallback(async (id: number) => {
+    try {
+      const detail = await apiFetch<IllustrationDetailItem>(
+        `/api/illustrations/${id}?mine=true`,
+      );
+      setEditingItem({
+        ...detail,
+        images: [...(detail.images ?? [])],
+      });
+      setEditingTagsInput((detail.tags ?? []).join(", "));
+      setModalNotice(null);
+      setModalDragIndex(null);
+      setModalDragOverIndex(null);
+    } catch (error) {
+      setNotice({
+        type: "error",
+        text:
+          error instanceof Error
+            ? error.message
+            : "삽화를 불러오지 못했습니다.",
+      });
+    }
   }, []);
 
   useEffect(() => {
-    if (handledEditParamRef.current || items.length === 0) {
+    if (handledEditParamRef.current) {
       return;
     }
 
@@ -509,14 +524,9 @@ export default function AdminIllustrations() {
       return;
     }
 
-    const item = items.find((entry) => entry.id === requested);
-    if (!item) {
-      return;
-    }
-
     handledEditParamRef.current = true;
-    openEdit(item);
-  }, [items, openEdit]);
+    void openEdit(requested);
+  }, [openEdit]);
 
   const updateEditing = (patch: Partial<IllustrationDetailItem>) => {
     setEditingItem((current) =>
@@ -831,17 +841,21 @@ export default function AdminIllustrations() {
 
   const persistOrder = async (nextItems: IllustrationDetailItem[]) => {
     try {
+      const offset = (currentPage - 1) * LIST_PAGE_SIZE;
       await apiFetch("/api/illustrations/reorder", {
         method: "PUT",
         body: JSON.stringify({
           items: nextItems.map((item, index) => ({
             id: item.id,
-            order: index,
+            order: offset + index,
           })),
         }),
       });
       setItems(
-        nextItems.map((item, index) => ({ ...item, order: index })),
+        nextItems.map((item, index) => ({
+          ...item,
+          order: offset + index,
+        })),
       );
       setNotice({ type: "success", text: "삽화 순서를 저장했습니다." });
     } catch (error) {
@@ -948,6 +962,7 @@ export default function AdminIllustrations() {
       setItems((previous) =>
         previous.filter((item) => !removed.has(item.id)),
       );
+      setTotalCount((previous) => Math.max(0, previous - result.deleted));
       setSelectedIds(new Set());
       setNotice({
         type: "success",
@@ -984,6 +999,7 @@ export default function AdminIllustrations() {
       setItems((previous) =>
         previous.filter((current) => current.id !== item.id),
       );
+      setTotalCount((previous) => Math.max(0, previous - 1));
       setSelectedIds((previous) => {
         const next = new Set(previous);
         next.delete(item.id);
@@ -1309,7 +1325,24 @@ export default function AdminIllustrations() {
         <div className="admin-illustrations-list__head">
           <h2>등록된 삽화</h2>
           <div className="admin-illustrations-list__tools">
-            <span>{items.length}개</span>
+            <form
+              className="admin-illustrations-list__search"
+              onSubmit={(event) => {
+                event.preventDefault();
+                setListQuery(listQueryInput.trim().slice(0, 100));
+                setListPage(1);
+              }}
+            >
+              <input
+                type="search"
+                value={listQueryInput}
+                onChange={(event) => setListQueryInput(event.target.value)}
+                placeholder="제목·태그 검색"
+                aria-label="삽화 검색"
+              />
+              <button type="submit">검색</button>
+            </form>
+            <span>{totalCount}개</span>
             <label className="admin-illustrations-select-all">
               <input
                 type="checkbox"
@@ -1437,11 +1470,11 @@ export default function AdminIllustrations() {
                   key={item.id}
                   role="button"
                   tabIndex={0}
-                  onClick={() => openEdit(item)}
+                  onClick={() => void openEdit(item.id)}
                   onKeyDown={(event) => {
                     if (event.key === "Enter" || event.key === " ") {
                       event.preventDefault();
-                      openEdit(item);
+                      void openEdit(item.id);
                     }
                   }}
                   onDragOver={(event) => {

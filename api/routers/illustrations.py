@@ -7,7 +7,9 @@ from fastapi import (
     File,
     Form,
     HTTPException,
+    Query,
     Request,
+    Response,
     UploadFile,
     status,
 )
@@ -24,16 +26,16 @@ from crud.illustrations import (
     get_all_illustrations,
     get_visible_illustration,
     get_visible_illustrations,
+    register_illustration_view,
     reorder_illustration_images,
     reorder_illustrations,
-    register_illustration_view,
     set_illustration_representative,
     update_illustration,
 )
 from db.session import get_db
 from models.illustrations import Illustration
 from schemas.illustrations import (
-    IllustrationAdminDetail,
+    IllustrationAdminListItem,
     IllustrationBulkDelete,
     IllustrationBulkUpdate,
     IllustrationDetail,
@@ -43,8 +45,8 @@ from schemas.illustrations import (
     IllustrationUpdate,
     today_kst,
 )
+
 from .utils import (
-    filter_by_author,
     get_client_ip,
     get_default_author_id,
     get_gallery_grants,
@@ -90,36 +92,72 @@ def _require_owned_illustration(
     include_in_schema=False,
 )
 def read_illustrations(
+    request: Request,
+    response: Response,
     q: str | None = None,
+    sort: str = "taken",
+    filter_basis: str = Query("taken", alias="filter"),
+    from_: date | None = Query(None, alias="from"),
+    to: date | None = None,
+    include_undated: bool = True,
+    page: int = 1,
+    page_size: int = 12,
     db: Session = Depends(get_db),
     current_user=Depends(get_optional_user),
 ):
-    """Return public illustrations plus the viewer's own hidden ones."""
+    """Return one page of illustrations with the total in a response header."""
+    grants = get_gallery_grants(request, db)
+    date_from, date_to = from_, to
+    if date_from and date_to and date_from > date_to:
+        date_from, date_to = date_to, date_from
+
+    common = {
+        "author_user_id": get_default_author_id(db),
+        "query": q,
+        "sort": sort,
+        "filter_basis": filter_basis,
+        "date_from": date_from,
+        "date_to": date_to,
+        "include_undated": include_undated,
+        "page": max(1, page),
+        "page_size": max(1, min(page_size, 50)),
+        "granted_illustrations": grants.illustrations,
+    }
     if current_user is not None and is_admin(current_user):
-        illustrations = get_visible_illustrations(
+        illustrations, total = get_visible_illustrations(
             db,
             include_hidden=True,
-            query=q,
+            **common,
         )
     else:
-        illustrations = get_visible_illustrations(
+        illustrations, total = get_visible_illustrations(
             db,
             viewer_user_id=current_user.id if current_user else None,
-            query=q,
+            **common,
         )
-    return filter_by_author(
-        illustrations,
-        get_default_author_id(db),
-    )
+    response.headers["X-Total-Count"] = str(total)
+    return illustrations
 
 
-@router.get("/admin", response_model=list[IllustrationAdminDetail])
+@router.get("/admin", response_model=list[IllustrationAdminListItem])
 def read_all_illustrations(
+    response: Response,
+    q: str | None = None,
+    page: int = 1,
+    page_size: int = 12,
     db: Session = Depends(get_db),
     user=Depends(require_auth),
 ):
-    """Return the signed-in user's illustration groups for the admin board."""
-    return get_all_illustrations(db, user.id)
+    """Return one page of the user's illustration groups for the admin board."""
+    illustrations, total = get_all_illustrations(
+        db,
+        user.id,
+        query=q,
+        page=max(1, page),
+        page_size=max(1, min(page_size, 50)),
+    )
+    response.headers["X-Total-Count"] = str(total)
+    return illustrations
 
 
 @router.post("/bulk", response_model=IllustrationDetail)
@@ -305,11 +343,27 @@ def post_illustration_view(
 def read_illustration(
     illustration_id: int,
     request: Request,
+    mine: bool = False,
     db: Session = Depends(get_db),
     current_user=Depends(get_optional_user),
 ):
     """Return a single illustration, hiding images until it is unlocked."""
     grants = get_gallery_grants(request, db)
+    if mine:
+        if current_user is None:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="로그인이 필요합니다.",
+            )
+        return get_visible_illustration(
+            db,
+            illustration_id,
+            owner_user_id=current_user.id,
+            include_hidden=True,
+            granted_illustrations=grants.illustrations,
+            viewer_user_id=current_user.id,
+        )
+
     if current_user is not None and is_admin(current_user):
         illustration = get_visible_illustration(
             db,

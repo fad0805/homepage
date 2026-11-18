@@ -1,14 +1,10 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 
-import {
-  dateInputValue,
-  todayDateInputValue,
-} from "@/lib/datetime";
-import { getGalleryGrants } from "@/lib/gallery-auth";
+import { todayDateInputValue } from "@/lib/datetime";
 import type { IllustrationItem } from "@/lib/illustration-types";
-import { serverApiFetch } from "@/lib/server-api";
-import { matchesAllTokens, searchTokens } from "@/lib/search";
+import { serverApiFetchWithTotal } from "@/lib/server-api";
 import { getCurrentUser } from "@/lib/server-auth";
 
 import { IllustrationGrid } from "./illustration-grid";
@@ -55,62 +51,6 @@ function parseDateParam(value: string | string[] | undefined) {
 
   const parsed = new Date(`${raw}T00:00:00Z`);
   return Number.isNaN(parsed.getTime()) ? null : raw;
-}
-
-function dateValue(value: string | null) {
-  if (!value) return null;
-  const parsed = new Date(value).getTime();
-  return Number.isNaN(parsed) ? null : parsed;
-}
-
-function compareDateDesc(a: number | null, b: number | null) {
-  if (a === null && b === null) return 0;
-  if (a === null) return 1;
-  if (b === null) return -1;
-  return b - a;
-}
-
-function filterIllustrations(
-  items: IllustrationItem[],
-  basis: SortKey,
-  from: string | null,
-  to: string | null,
-  includeUndated: boolean,
-) {
-  return items.filter((item) => {
-    const value =
-      basis === "taken"
-        ? item.taken_at?.slice(0, 10) ?? null
-        : dateInputValue(item.created_at) || null;
-    if (!value) return includeUndated;
-    if (from && value < from) return false;
-    if (to && value > to) return false;
-    return true;
-  });
-}
-
-function sortIllustrations(items: IllustrationItem[], sort: SortKey) {
-  return [...items].sort((a, b) => {
-    if (sort === "created") {
-      const created = compareDateDesc(
-        dateValue(a.created_at),
-        dateValue(b.created_at),
-      );
-      return created || b.id - a.id;
-    }
-
-    const taken = compareDateDesc(
-      dateValue(a.taken_at),
-      dateValue(b.taken_at),
-    );
-    if (taken !== 0) return taken;
-
-    const created = compareDateDesc(
-      dateValue(a.created_at),
-      dateValue(b.created_at),
-    );
-    return created || b.id - a.id;
-  });
 }
 
 function pageNumbers(page: number, totalPages: number) {
@@ -167,7 +107,6 @@ export default async function IllustrationsPage({
 }) {
   const params = await searchParams;
   const q = (firstParam(params.q) ?? "").trim().slice(0, 100);
-  const queryTokens = searchTokens(q);
   const requestedPage = parsePage(params.page);
   const sort = parseSort(params.sort);
   const filterBasis = parseFilter(params.filter);
@@ -187,52 +126,46 @@ export default async function IllustrationsPage({
   const defaultEndDate = to ?? today;
 
   let illustrations: IllustrationItem[] = [];
+  let total: number | null = null;
   let failed = false;
   const currentUser = await getCurrentUser();
 
   try {
-    illustrations = await serverApiFetch<IllustrationItem[]>(
-      "/illustrations",
+    const apiParams = new URLSearchParams();
+    if (q) apiParams.set("q", q);
+    if (sort !== "taken") apiParams.set("sort", sort);
+    if (filterBasis !== "taken") apiParams.set("filter", filterBasis);
+    if (from) apiParams.set("from", from);
+    if (to) apiParams.set("to", to);
+    apiParams.set("include_undated", from ? "false" : "true");
+    apiParams.set("page", String(requestedPage));
+    apiParams.set("page_size", String(PAGE_SIZE));
+
+    const result = await serverApiFetchWithTotal<IllustrationItem[]>(
+      `/illustrations?${apiParams.toString()}`,
       {
         tags: ["illustrations"],
         auth: Boolean(currentUser),
       },
     );
+    illustrations = result.data;
+    total = result.total;
   } catch (error) {
     console.error(error);
     failed = true;
   }
 
-  const searched = queryTokens.length
-    ? illustrations.filter((item) =>
-        matchesAllTokens(
-          [item.title, ...(item.tags ?? [])],
-          queryTokens,
-        ),
-      )
-    : illustrations;
-
-  const unlockedIllustrationIds = currentUser
-    ? null
-    : [...(await getGalleryGrants()).illustrations];
-
-  const filtered = filterIllustrations(
-    searched,
-    filterBasis,
-    from,
-    to,
-    !from,
-  );
-  const sorted = sortIllustrations(filtered, sort);
-  const totalPages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
+  const totalCount = total ?? illustrations.length;
+  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
   const page = Math.min(requestedPage, totalPages);
-  const visible = sorted.slice(
-    (page - 1) * PAGE_SIZE,
-    page * PAGE_SIZE,
-  );
+  if (!failed && requestedPage > totalPages) {
+    redirect(pageHref(page, sort, filterBasis, from, to, q));
+  }
+  const hasFilters = Boolean(q || hasRange);
+  const visible = illustrations;
   return (
     <div id="illustrations-page">
-      {!failed && illustrations.length > 0 ? (
+      {!failed && (totalCount > 0 || hasFilters) ? (
         <header className="illustrations-header">
           <div className="illustrations-controls">
             <form
@@ -312,11 +245,11 @@ export default async function IllustrationsPage({
 
       {failed ? (
         <p className="illustrations-state">삽화를 불러오지 못했습니다.</p>
-      ) : illustrations.length === 0 ? (
-        <p className="illustrations-state">등록된 삽화가 없습니다.</p>
-      ) : filtered.length === 0 ? (
+      ) : totalCount === 0 ? (
         <p className="illustrations-state">
-          조건에 맞는 삽화가 없습니다.
+          {hasFilters
+            ? "조건에 맞는 삽화가 없습니다."
+            : "등록된 삽화가 없습니다."}
         </p>
       ) : (
         <>
@@ -329,8 +262,8 @@ export default async function IllustrationsPage({
               image_count: item.image_count,
               visible: item.visible,
               protected: item.protected,
+              locked: item.locked,
             }))}
-            unlockedIds={unlockedIllustrationIds}
           />
 
           {totalPages > 1 ? (

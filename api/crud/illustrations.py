@@ -1,20 +1,20 @@
 import os
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, time, timedelta
 
 from fastapi import HTTPException, status
-from sqlalchemy import Text, cast, func, or_
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session, selectinload
 
 from core.mastodon import maybe_notify_illustration
 from core.search import like_pattern, search_tokens
 from core.uploads import delete_replaced_upload, delete_uploaded_file
 from crud.tags import sync_illustration_tags
-from models.tags import IllustrationTag, Tag
 from models.illustrations import (
     Illustration,
     IllustrationImage,
     IllustrationView,
 )
+from models.tags import IllustrationTag, Tag
 from schemas.illustrations import (
     IllustrationBulkUpdate,
     IllustrationImageReorderRequest,
@@ -83,42 +83,149 @@ def _serialize_summary(illustration: Illustration) -> dict:
     }
 
 
-def _serialize_list_item(illustration: Illustration) -> dict:
-    """Serialize a list entry without its (potentially long) description."""
-    data = _serialize_summary(illustration)
-    data.pop("description", None)
-    return data
-
-
-def _serialize_detail(
+def _serialize_list_item(
     illustration: Illustration,
     locked: bool = False,
 ) -> dict:
-    data = _serialize_summary(illustration)
-    data["locked"] = locked
-    data["images"] = (
-        []
-        if locked
-        else [
-            _serialize_image(image)
-            for image in (illustration.images or [])
-        ]
+    """Serialize a list row without touching the image relationship.
+
+    Image count and representative image are filled in afterwards for the
+    whole page in one batch (see ``_attach_list_image_info``).
+    """
+    return {
+        "id": illustration.id,
+        "user_id": illustration.user_id,
+        "title": illustration.title,
+        "description": illustration.description,
+        "tags": illustration.tags or [],
+        "taken_at": illustration.taken_at,
+        "visible": illustration.visible,
+        "protected": bool(illustration.protected),
+        "view_count": illustration.view_count or 0,
+        "representative_image_id": illustration.representative_image_id,
+        "representative_url": illustration.representative_url,
+        "image_count": 0,
+        "order": illustration.order,
+        "created_at": illustration.created_at,
+        "updated_at": illustration.updated_at,
+        "locked": locked,
+    }
+
+
+def _attach_list_image_info(db: Session, items: list[dict]) -> None:
+    """Add representative image and count for a page of illustration rows."""
+    ids = [item["id"] for item in items]
+    if not ids:
+        return
+
+    counts = dict(
+        db.query(
+            IllustrationImage.illustration_id,
+            func.count(IllustrationImage.id),
+        )
+        .filter(IllustrationImage.illustration_id.in_(ids))
+        .group_by(IllustrationImage.illustration_id)
+        .all()
     )
-    return data
+
+    representatives: dict[int, dict] = {}
+    explicit_ids = [
+        item["representative_image_id"]
+        for item in items
+        if item.get("representative_image_id")
+    ]
+    if explicit_ids:
+        for image in (
+            db.query(IllustrationImage)
+            .filter(IllustrationImage.id.in_(explicit_ids))
+            .all()
+        ):
+            representatives[image.illustration_id] = {
+                "id": image.id,
+                "url": image.url,
+            }
+
+    missing_ids = [illustration_id for illustration_id in ids if illustration_id not in representatives]
+    if missing_ids:
+        ranked = (
+            db.query(
+                IllustrationImage.illustration_id.label("illustration_id"),
+                IllustrationImage.id.label("image_id"),
+                IllustrationImage.url.label("url"),
+                func.row_number()
+                .over(
+                    partition_by=IllustrationImage.illustration_id,
+                    order_by=(
+                        IllustrationImage.order,
+                        IllustrationImage.id,
+                    ),
+                )
+                .label("position"),
+            )
+            .filter(IllustrationImage.illustration_id.in_(missing_ids))
+            .subquery()
+        )
+        for row in db.query(ranked).filter(ranked.c.position == 1).all():
+            representatives[row.illustration_id] = {
+                "id": row.image_id,
+                "url": row.url,
+            }
+
+    for item in items:
+        item["image_count"] = counts.get(item["id"], 0)
+        representative = representatives.get(item["id"])
+        item["representative_image_id"] = (
+            representative["id"] if representative else None
+        )
+        item["representative_url"] = item.get("representative_url") or (
+            representative["url"] if representative else None
+        )
 
 
-def _group_query(db: Session):
-    return db.query(Illustration).options(selectinload(Illustration.images))
+def _utc_boundary(value: date, *, end: bool = False) -> datetime:
+    """Convert a KST calendar date to its UTC boundary.
+
+    Dates coming from the UI are KST dates, while ``created_at`` is stored as
+    naive UTC, so a KST day is shifted by nine hours.
+    """
+    boundary = datetime.combine(value, time.min) - timedelta(hours=9)
+    return boundary + timedelta(days=1) if end else boundary
 
 
-def get_visible_illustrations(
+def _locked_for_viewer(
+    illustration: Illustration,
+    *,
+    viewer_user_id: int | None,
+    is_admin_view: bool,
+    granted_illustrations: frozenset[int],
+) -> bool:
+    if not illustration.protected:
+        return False
+    if is_admin_view:
+        return False
+    if viewer_user_id is not None and illustration.user_id == viewer_user_id:
+        return False
+    return illustration.id not in granted_illustrations
+
+
+def _list_query(
     db: Session,
-    viewer_user_id: int | None = None,
-    include_hidden: bool = False,
-    query: str | None = None,
+    *,
+    viewer_user_id: int | None,
+    include_hidden: bool,
+    author_user_id: int | None,
+    query: str | None,
+    sort: str,
+    filter_basis: str,
+    date_from: date | None,
+    date_to: date | None,
+    include_undated: bool,
 ):
-    """Return public groups, own hidden groups, or every group for admins."""
-    illustrations_query = _group_query(db)
+    illustrations_query = db.query(Illustration)
+    if author_user_id is not None:
+        illustrations_query = illustrations_query.filter(
+            Illustration.user_id == author_user_id
+        )
     if include_hidden and viewer_user_id is None:
         pass
     elif viewer_user_id is None:
@@ -152,18 +259,120 @@ def get_visible_illustrations(
             )
         )
 
-    illustrations = (
-        illustrations_query.order_by(
+    if filter_basis == "created":
+        if date_from:
+            illustrations_query = illustrations_query.filter(
+                Illustration.created_at >= _utc_boundary(date_from)
+            )
+        if date_to:
+            illustrations_query = illustrations_query.filter(
+                Illustration.created_at < _utc_boundary(date_to, end=True)
+            )
+    else:
+        if date_from:
+            illustrations_query = illustrations_query.filter(
+                Illustration.taken_at >= date_from
+            )
+            if not include_undated:
+                illustrations_query = illustrations_query.filter(
+                    Illustration.taken_at.isnot(None)
+                )
+        if date_to:
+            illustrations_query = illustrations_query.filter(
+                Illustration.taken_at <= date_to
+            )
+
+    if sort == "created":
+        order_by = (
+            Illustration.created_at.desc().nullslast(),
+            Illustration.id.desc(),
+        )
+    elif sort == "order":
+        order_by = (
             Illustration.order.asc(),
             Illustration.created_at.desc(),
             Illustration.id.desc(),
         )
+    else:
+        order_by = (
+            Illustration.taken_at.desc().nullslast(),
+            Illustration.created_at.desc().nullslast(),
+            Illustration.id.desc(),
+        )
+    return illustrations_query.order_by(*order_by)
+
+
+def _serialize_detail(
+    illustration: Illustration,
+    locked: bool = False,
+) -> dict:
+    data = _serialize_summary(illustration)
+    data["locked"] = locked
+    data["images"] = (
+        []
+        if locked
+        else [
+            _serialize_image(image)
+            for image in (illustration.images or [])
+        ]
+    )
+    return data
+
+
+def _group_query(db: Session):
+    return db.query(Illustration).options(selectinload(Illustration.images))
+
+
+def get_visible_illustrations(
+    db: Session,
+    viewer_user_id: int | None = None,
+    include_hidden: bool = False,
+    query: str | None = None,
+    *,
+    author_user_id: int | None = None,
+    granted_illustrations: frozenset[int] = frozenset(),
+    sort: str = "taken",
+    filter_basis: str = "taken",
+    date_from: date | None = None,
+    date_to: date | None = None,
+    include_undated: bool = True,
+    page: int = 1,
+    page_size: int = 12,
+) -> tuple[list[dict], int]:
+    """Return one page of visible groups plus the total matching count."""
+    illustrations_query = _list_query(
+        db,
+        viewer_user_id=viewer_user_id,
+        include_hidden=include_hidden,
+        author_user_id=author_user_id,
+        query=query,
+        sort=sort,
+        filter_basis=filter_basis,
+        date_from=date_from,
+        date_to=date_to,
+        include_undated=include_undated,
+    )
+    total = illustrations_query.count()
+    illustrations = (
+        illustrations_query.offset((page - 1) * page_size)
+        .limit(page_size)
         .all()
     )
-    return [
-        _serialize_list_item(illustration)
+    is_admin_view = include_hidden and viewer_user_id is None
+    items = [
+        _serialize_list_item(
+            illustration,
+            locked=_locked_for_viewer(
+                illustration,
+                viewer_user_id=viewer_user_id,
+                is_admin_view=is_admin_view,
+                granted_illustrations=granted_illustrations,
+            ),
+        )
         for illustration in illustrations
     ]
+    _attach_list_image_info(db, items)
+    return items, total
 
 
 def get_visible_illustration(
@@ -219,20 +428,33 @@ def get_visible_illustration(
 def get_all_illustrations(
     db: Session,
     owner_user_id: int | None,
-):
-    """Return the admin board for one user, or every group for admins."""
-    query = _group_query(db)
-    if owner_user_id is not None:
-        query = query.filter(Illustration.user_id == owner_user_id)
+    *,
+    query: str | None = None,
+    page: int = 1,
+    page_size: int = 12,
+) -> tuple[list[dict], int]:
+    """Return one page of admin list rows plus the total matching count."""
+    illustrations_query = _list_query(
+        db,
+        viewer_user_id=owner_user_id,
+        include_hidden=True,
+        author_user_id=owner_user_id,
+        query=query,
+        sort="order",
+        filter_basis="taken",
+        date_from=None,
+        date_to=None,
+        include_undated=True,
+    )
+    total = illustrations_query.count()
     illustrations = (
-        query.order_by(
-            Illustration.order.asc(),
-            Illustration.created_at.desc(),
-            Illustration.id.desc(),
-        )
+        illustrations_query.offset((page - 1) * page_size)
+        .limit(page_size)
         .all()
     )
-    return [_serialize_detail(illustration) for illustration in illustrations]
+    items = [_serialize_list_item(illustration) for illustration in illustrations]
+    _attach_list_image_info(db, items)
+    return items, total
 
 
 def _get_illustration_or_404(db: Session, illustration_id: int):

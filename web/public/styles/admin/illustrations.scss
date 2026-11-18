@@ -607,6 +607,32 @@
   gap: 0.65rem;
 }
 
+.admin-illustrations-list__search {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+
+  input {
+    width: 9rem;
+    padding: 0.3rem 0.5rem;
+    border: 1px solid var(--admin-border);
+    border-radius: 0.4rem;
+    background: var(--admin-card-bg);
+    color: var(--input-text);
+    font-size: 0.72rem;
+  }
+
+  button {
+    padding: 0.3rem 0.55rem;
+    border: 1px solid var(--admin-border);
+    border-radius: 0.4rem;
+    background: var(--theme-main);
+    color: #fff;
+    font-size: 0.72rem;
+    cursor: pointer;
+  }
+}
+
 .admin-illustrations-select-all {
   display: flex;
   align-items: center;

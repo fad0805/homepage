@@ -29,12 +29,28 @@ function parseId(value: string) {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
 }
 
+function listHref(
+  searchParams: Record<string, string | string[] | undefined>,
+) {
+  const params = new URLSearchParams();
+  for (const key of ["page", "sort", "filter", "from", "to", "q"]) {
+    const raw = searchParams[key];
+    const value = Array.isArray(raw) ? raw[0] : raw;
+    if (value) params.set(key, value);
+  }
+  const query = params.toString();
+  return query ? `/illustrations?${query}` : "/illustrations";
+}
+
 export default async function IllustrationDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ illustrationId: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const { illustrationId } = await params;
+  const listQuery = await searchParams;
   const id = parseId(illustrationId);
   const currentUser = await getCurrentUser();
 
@@ -70,7 +86,7 @@ export default async function IllustrationDetailPage({
       <div id="illustrations-page" className="illustration-detail-page">
         <div className="illustrations-state">
           <p>{errorMessage}</p>
-          <Link href="/illustrations">← 삽화 목록으로</Link>
+          <Link href={listHref(listQuery)}>← 삽화 목록으로</Link>
         </div>
       </div>
     );
@@ -82,7 +98,10 @@ export default async function IllustrationDetailPage({
     <div id="illustrations-page" className="illustration-detail-page">
       <IllustrationViewTracker illustrationId={illustration.id} />
       <div className="illustration-detail__actions">
-        <Link className="illustration-detail__back" href="/illustrations">
+        <Link
+          className="illustration-detail__back"
+          href={listHref(listQuery)}
+        >
           ← 삽화 목록
         </Link>
         {currentUser ? (

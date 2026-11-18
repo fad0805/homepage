@@ -46,10 +46,10 @@ interface ServerApiOptions {
  * route prefetches do not trigger another API round trip. Admin mutations can
  * invalidate the named tags through the /revalidate route handler.
  */
-export async function serverApiFetch<T>(
+async function requestServerApi<T>(
   path: string,
-  options: ServerApiOptions = {},
-): Promise<T> {
+  options: ServerApiOptions,
+): Promise<{ data: T; headers: Headers }> {
   const headers: Record<string, string> = {
     Accept: "application/json",
   };
@@ -102,5 +102,30 @@ export async function serverApiFetch<T>(
     throw new ServerApiError(response.status, detail);
   }
 
-  return response.json() as Promise<T>;
+  return {
+    data: (await response.json()) as T,
+    headers: response.headers,
+  };
+}
+
+export async function serverApiFetch<T>(
+  path: string,
+  options: ServerApiOptions = {},
+): Promise<T> {
+  const { data } = await requestServerApi<T>(path, options);
+  return data;
+}
+
+/** Fetch a list together with the API's X-Total-Count header. */
+export async function serverApiFetchWithTotal<T>(
+  path: string,
+  options: ServerApiOptions = {},
+): Promise<{ data: T; total: number | null }> {
+  const { data, headers } = await requestServerApi<T>(path, options);
+  const raw = headers.get("x-total-count");
+  const total = raw === null ? null : Number(raw);
+  return {
+    data,
+    total: total !== null && Number.isFinite(total) ? total : null,
+  };
 }

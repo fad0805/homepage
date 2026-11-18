@@ -102,10 +102,10 @@ export function IllustrationSearch({
     if (sort !== "taken") params.set("sort", sort);
     if (formFilter !== "taken") params.set("filter", formFilter);
 
+    if (effectiveFrom) params.set("from", effectiveFrom);
+    if (effectiveTo) params.set("to", effectiveTo);
     const trimmed = value.trim();
     if (trimmed) {
-      if (effectiveFrom) params.set("from", effectiveFrom);
-      if (effectiveTo) params.set("to", effectiveTo);
       params.set("q", trimmed);
     }
 
