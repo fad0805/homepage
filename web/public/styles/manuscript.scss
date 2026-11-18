@@ -330,6 +330,7 @@ html[data-workspace='manuscript'] body {
 
 .ms-editor {
   width: 100%;
+  min-width: 900px;
   max-width: none;
   background: var(--ms-bg);
   overflow-y: auto;
@@ -466,8 +467,8 @@ html[data-workspace='manuscript'] body {
 }
 
 .ms-scrivenings__doc {
-  margin: 0 auto 2.5rem;
-  max-width: 46rem;
+  margin: 0 0 2.5rem;
+  max-width: none;
   line-height: 1.8;
 
   h2 {
