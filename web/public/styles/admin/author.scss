@@ -488,6 +488,49 @@
       height: auto;
       border-radius: 0.7rem;
     }
+
+    /* Tiptap wraps React NodeViews in an extra .react-renderer element.
+       Apply float/alignment to that wrapper so text can flow beside the image. */
+    .react-renderer:has(> .author-image-node) {
+      width: fit-content;
+      max-width: 100%;
+
+      > .author-image-node {
+        float: none !important;
+        clear: none !important;
+        margin: 0 !important;
+      }
+    }
+
+    .react-renderer:has(> .author-image-node[data-align='center']) {
+      display: block;
+      margin: 1.2rem auto;
+      clear: both;
+    }
+
+    .react-renderer:has(> .author-image-node[data-align='left'][data-wrap='false']) {
+      display: block;
+      margin: 1.2rem auto 1.2rem 0;
+      clear: both;
+    }
+
+    .react-renderer:has(> .author-image-node[data-align='right'][data-wrap='false']) {
+      display: block;
+      margin: 1.2rem 0 1.2rem auto;
+      clear: both;
+    }
+
+    .react-renderer:has(> .author-image-node[data-align='left'][data-wrap='true']) {
+      float: left;
+      margin: 0.3rem 1.2rem 0.2rem 0;
+      clear: none;
+    }
+
+    .react-renderer:has(> .author-image-node[data-align='right'][data-wrap='true']) {
+      float: right;
+      margin: 0.3rem 0 0.2rem 1.2rem;
+      clear: none;
+    }
   }
 }
 
@@ -641,13 +684,13 @@
 
     &[data-wrap='true'][data-align='left'] {
       float: left;
-      margin: 0.2rem 0.8rem 0.6rem 0;
+      margin: 0.2rem 0.8rem 0.2rem 0;
       clear: none;
     }
 
     &[data-wrap='true'][data-align='right'] {
       float: right;
-      margin: 0.2rem 0 0.6rem 0.8rem;
+      margin: 0.2rem 0 0.2rem 0.8rem;
       clear: none;
     }
   }

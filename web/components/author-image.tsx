@@ -87,8 +87,8 @@ function AuthorImageView({ node, updateAttributes, selected }: NodeViewProps) {
     clear: effectiveWrap ? "none" : "both",
     margin: effectiveWrap
       ? effectiveAlign === "left"
-        ? "0.3rem 1.2rem 0.9rem 0"
-        : "0.3rem 0 0.9rem 1.2rem"
+        ? "0.3rem 1.2rem 0.2rem 0"
+        : "0.3rem 0 0.2rem 1.2rem"
       : effectiveAlign === "center"
         ? "1.2rem auto"
         : effectiveAlign === "left"

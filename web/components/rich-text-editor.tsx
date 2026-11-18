@@ -507,6 +507,45 @@ export function RichTextEditor({
       ? imageAttrs.align
       : "center";
   const imageWrap = Boolean(imageAttrs.wrap) && imageAlign !== "center";
+  const setImageWrap = useCallback(
+    (nextWrap: boolean) => {
+      if (!editor) return;
+
+      const attrs = editor.getAttributes("image");
+      const currentWidth =
+        typeof attrs.width === "number" ? attrs.width : null;
+      let nextWidth: number | null = null;
+
+      // When text wrap is turned on, make sure the image leaves room for a
+      // readable text column even in the narrower admin editor.
+      if (nextWrap && !imageWrap) {
+        const dom = editor.view.nodeDOM(
+          editor.state.selection.from,
+        ) as HTMLElement | null;
+        const imageEl = dom?.querySelector("img") as HTMLImageElement | null;
+        const displayedWidth =
+          currentWidth ??
+          (imageEl
+            ? Math.round(imageEl.getBoundingClientRect().width)
+            : null);
+        const containerWidth = editor.view.dom.clientWidth || 800;
+        const maxWrappedWidth = Math.round(containerWidth * 0.6);
+        if (displayedWidth && displayedWidth > maxWrappedWidth) {
+          nextWidth = maxWrappedWidth;
+        }
+      }
+
+      editor
+        .chain()
+        .focus()
+        .updateAttributes("image", {
+          wrap: nextWrap,
+          ...(nextWidth !== null ? { width: nextWidth } : {}),
+        })
+        .run();
+    },
+    [editor, imageWrap],
+  );
   const isImageSelected = Boolean(editor?.isActive("image"));
   const alignMenuItems: ToolbarMenuItem[] = isImageSelected
     ? [
@@ -555,12 +594,7 @@ export function RichTextEditor({
               {
                 label: imageWrap ? "글씨 옆 배치 해제" : "글씨를 옆에 배치",
                 active: imageWrap,
-                onSelect: () =>
-                  editor
-                    ?.chain()
-                    .focus()
-                    .updateAttributes("image", { wrap: !imageWrap })
-                    .run(),
+                onSelect: () => setImageWrap(!imageWrap),
               },
             ]),
       ]
@@ -904,21 +938,13 @@ export function RichTextEditor({
           </ToolbarButton>
           <label
             className="admin-editor__image-wrap"
-            title="왼쪽/오른쪽 정렬에서 이미지 옆에 글씨를 배치합니다."
+            title="왼쪽/오른쪽 정렬에서 이미지 옆에 글씨를 배치합니다. 이미지가 넓으면 글씨가 들어갈 공간을 확보하기 위해 자동으로 줄어듭니다."
           >
             <input
               type="checkbox"
               checked={imageWrap}
               disabled={imageAlign === "center"}
-              onChange={(event) =>
-                editor
-                  .chain()
-                  .focus()
-                  .updateAttributes("image", {
-                    wrap: event.target.checked,
-                  })
-                  .run()
-              }
+              onChange={(event) => setImageWrap(event.target.checked)}
             />
             글씨를 옆에 배치
           </label>
