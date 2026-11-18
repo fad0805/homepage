@@ -107,6 +107,22 @@ def _serialize_book_category(category: BookCategory) -> dict:
     }
 
 
+def _category_is_visible_to(
+    book: Book,
+    *,
+    viewer_user_id: int | None,
+    can_view_hidden: bool,
+) -> bool:
+    """Whether this viewer may see a book filed under its category."""
+    if can_view_hidden:
+        return True
+    if book.category_relation is None:
+        return True
+    if book.category_relation.visible is not False:
+        return True
+    return viewer_user_id is not None and book.user_id == viewer_user_id
+
+
 def _get_book_category_or_404(
     db: Session, category_id: int, user_id: int
 ) -> BookCategory:
@@ -294,6 +310,7 @@ def get_all_books(
     include_hidden: bool = False,
     viewer_user_id: int | None = None,
     owner_user_id: int | None = None,
+    is_admin: bool = False,
     query: str | None = None,
 ):
     books_query = db.query(Book)
@@ -336,13 +353,17 @@ def get_all_books(
             )
 
         books = [book for book in books if matches(book)]
-    if not include_hidden:
-        books = [
-            book
-            for book in books
-            if book.category_relation is None
-            or book.category_relation.visible is not False
-        ]
+    if owner_user_id is not None or is_admin:
+        return [_serialize_book(book) for book in books]
+    books = [
+        book
+        for book in books
+        if _category_is_visible_to(
+            book,
+            viewer_user_id=viewer_user_id,
+            can_view_hidden=False,
+        )
+    ]
     return [_serialize_book(book) for book in books]
 
 
@@ -353,6 +374,7 @@ def get_book(
     include_hidden: bool = False,
     viewer_user_id: int | None = None,
     owner_user_id: int | None = None,
+    is_admin: bool = False,
 ):
     query = db.query(Book).filter(Book.id == book_id)
     if owner_user_id is not None:
@@ -370,9 +392,12 @@ def get_book(
     if (
         book is not None
         and owner_user_id is None
-        and not include_hidden
-        and book.category_relation is not None
-        and book.category_relation.visible is False
+        and not is_admin
+        and not _category_is_visible_to(
+            book,
+            viewer_user_id=viewer_user_id,
+            can_view_hidden=False,
+        )
     ):
         book = None
     if not book:
@@ -520,6 +545,8 @@ def _build_chapter_query(
             )
     chapters_query = chapters_query.join(
         Book, Chapter.book_id == Book.id
+    ).outerjoin(
+        BookCategory, Book.category_id == BookCategory.id
     )
     if newest_first:
         chapters_query = chapters_query.order_by(
@@ -557,6 +584,14 @@ def _build_chapter_query(
             or_(
                 Chapter.published_at.is_(None),
                 Chapter.published_at <= now,
+            ),
+            # Hidden categories stay out of public search for guests and for
+            # signed-in viewers without ownership. Owned books are still
+            # allowed through the separate own_condition below, and admins
+            # skip this whole public branch.
+            or_(
+                Book.category_id.is_(None),
+                BookCategory.visible.is_(True),
             ),
         )
         if viewer_user_id is not None:
@@ -746,6 +781,8 @@ def get_chapters_page(
         published_only=True,
     )
     total = chapters_query.order_by(None).count()
+    max_page = max(1, (total + page_size - 1) // page_size)
+    page = min(page, max_page)
     chapters = (
         chapters_query.offset((page - 1) * page_size)
         .limit(page_size)

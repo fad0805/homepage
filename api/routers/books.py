@@ -55,7 +55,9 @@ def get_books(
             query=q,
         )
     if current_user is not None and is_admin(current_user):
-        books = get_all_books(db, include_hidden=True, query=q)
+        books = get_all_books(
+            db, include_hidden=True, is_admin=True, query=q
+        )
     else:
         books = get_all_books(
             db,
@@ -151,7 +153,7 @@ def get_book_detail(
             owner_user_id=current_user.id,
         )
     if current_user is not None and is_admin(current_user):
-        book = get_book(db, book_id, include_hidden=True)
+        book = get_book(db, book_id, include_hidden=True, is_admin=True)
     else:
         book = get_book(
             db,
