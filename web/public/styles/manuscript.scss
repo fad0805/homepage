@@ -1,21 +1,14 @@
 @use './variables' as *;
 
+/* Derive every workspace token from the site's appearance palette. */
 :root {
   --ms-bg: var(--background, #f7f7f4);
-  --ms-panel: var(--content, #ffffff);
-  --ms-text: var(--title-color, #222);
-  --ms-muted: var(--admin-muted, #777);
-  --ms-border: color-mix(in srgb, var(--ms-text) 14%, transparent);
-  --ms-accent: var(--home-highlight, #4d7c0f);
+  --ms-panel: var(--subtheme, var(--input-background, #ffffff));
+  --ms-text: var(--foreground, #222);
+  --ms-muted: color-mix(in srgb, var(--foreground, #222) 62%, transparent);
+  --ms-border: color-mix(in srgb, var(--foreground, #222) 16%, transparent);
+  --ms-accent: var(--theme-main, var(--title-color, #4d7c0f));
   --ms-danger: #b42318;
-}
-
-[data-theme='dark'] {
-  --ms-bg: #15171a;
-  --ms-panel: #1e2126;
-  --ms-text: #e8e8e5;
-  --ms-muted: #9aa0a6;
-  --ms-border: color-mix(in srgb, var(--ms-text) 18%, transparent);
 }
 
 html[data-workspace='manuscript'],
