@@ -330,9 +330,10 @@ html[data-workspace='manuscript'] body {
 }
 
 .ms-editor {
-  width: 900px;
-  min-width: 900px;
+  width: 100%;
+  min-width: 0;
   max-width: 900px;
+  justify-self: center;
   background: var(--ms-bg);
   overflow-y: auto;
 }
