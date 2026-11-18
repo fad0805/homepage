@@ -38,6 +38,15 @@ def patch_project(
     return crud.update_project(db, project_id, payload, user.id)
 
 
+@router.delete("/projects/{project_id}")
+def delete_project(
+    project_id: int,
+    db: Session = Depends(get_db),
+    user=Depends(require_auth),
+):
+    return crud.delete_project(db, project_id, user.id)
+
+
 @router.get("/projects/{project_id}/tree")
 def get_tree(
     project_id: int,

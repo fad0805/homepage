@@ -245,7 +245,6 @@ function splitCombinedHtml(html: string): string[] {
 export default function ManuscriptWorkspace() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [projectId, setProjectId] = useState<number | null>(null);
-  const [newProjectTitle, setNewProjectTitle] = useState("");
   const [tree, setTree] = useState<ManuscriptNode[]>([]);
   const [expanded, setExpanded] = useState<Set<number>>(new Set());
   const [selectedId, setSelectedId] = useState<number | null>(null);
@@ -325,7 +324,10 @@ export default function ManuscriptWorkspace() {
     ]);
     setProjects(projectList);
     setBooks(bookList);
-    setProjectId((current) => current ?? projectList[0]?.id ?? null);
+    setProjectId((current) => {
+      const valid = projectList.some((project) => project.id === current);
+      return valid ? current : projectList[0]?.id ?? null;
+    });
     if (bookList.length && !publishBookId) setPublishBookId(bookList[0].id);
   }, [publishBookId]);
 
@@ -341,6 +343,14 @@ export default function ManuscriptWorkspace() {
       });
       return next;
     });
+  }, []);
+
+  // The admin project picker opens the workspace with an explicit project.
+  useEffect(() => {
+    const requested = Number(
+      new URLSearchParams(window.location.search).get("project"),
+    );
+    if (requested) setProjectId(requested);
   }, []);
 
   useEffect(() => {
@@ -456,23 +466,6 @@ export default function ManuscriptWorkspace() {
       setSelected(node);
     }
   }, [projectId, selectedId, loadTree]);
-
-  const createProject = async () => {
-    const title = newProjectTitle.trim();
-    if (!title) return;
-    try {
-      const project = await apiFetch<Project>("/api/manuscript/projects", {
-        method: "POST",
-        body: JSON.stringify({ title }),
-      });
-      setProjects((current) => [...current, project]);
-      setProjectId(project.id);
-      setNewProjectTitle("");
-      notify("원고 프로젝트를 만들었습니다.");
-    } catch (error) {
-      notify((error as Error).message, "error");
-    }
-  };
 
   const createNode = async (nodeType: "folder" | "chapter") => {
     if (!projectId) return;
@@ -1008,12 +1001,6 @@ export default function ManuscriptWorkspace() {
               {isFolder ? "▣" : "▤"}
             </span>
             <span className="ms-node__title">{item.title}</span>
-            <span
-              className="ms-node__badge ms-node__badge--deleted"
-              title="휴지통에 있는 항목"
-            >
-              삭제됨
-            </span>
           </div>
           {isFolder && isOpen ? renderTrashRows(item.id, depth + 1) : null}
         </Fragment>
@@ -1031,48 +1018,14 @@ export default function ManuscriptWorkspace() {
       <header className="ms-topbar">
         <div className="ms-brand">
           <span className="ms-brand__mark">✎</span>
-          <span className="ms-brand__name">원고 워크스페이스</span>
         </div>
-        <select
-          className="ms-select"
-          value={projectId ?? ""}
-          onChange={(event) => {
-            void flushAutosave().finally(() => {
-              setTrashPreview(null);
-              setTrashScrivenings(null);
-              setTrashCombinedHtml("");
-              setProjectId(Number(event.target.value) || null);
-              setSelectedId(null);
-            });
-          }}
-          aria-label="원고 프로젝트"
-        >
-          <option value="">프로젝트 선택</option>
-          {projects.map((project) => (
-            <option key={project.id} value={project.id}>
-              {project.title}
-            </option>
-          ))}
-        </select>
-        <div className="ms-new-project">
-          <input
-            value={newProjectTitle}
-            onChange={(event) => setNewProjectTitle(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") createProject();
-            }}
-            placeholder="새 원고 이름"
-            aria-label="새 원고 이름"
-          />
-          <button type="button" onClick={createProject}>
-            만들기
-          </button>
-        </div>
+        <span className="ms-topbar__project">
+          {projects.find((project) => project.id === projectId)?.title ?? ""}
+        </span>
         <div className="ms-topbar__actions">
           <button type="button" onClick={() => setSearchOpen(true)}>
             전체 검색
           </button>
-          <a href="/admin/books">책장 관리</a>
         </div>
       </header>
 
@@ -1158,9 +1111,6 @@ export default function ManuscriptWorkspace() {
                   ) : null}
                 </div>
               ) : null}
-            </div>
-            <div className="ms-binder__hint">
-              항목을 끌어 이동 · 제목 더블클릭으로 변경 · 폴더 클릭 시 폴더 전체 보기
             </div>
           </aside>
 

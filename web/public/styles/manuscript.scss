@@ -84,12 +84,17 @@ html[data-workspace='manuscript'] body {
   color: #fff;
 }
 
-.ms-brand__name {
-  font-size: 0.95rem;
+.ms-topbar__project {
+  max-width: 20rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.85rem;
+  font-weight: 600;
+  opacity: 0.85;
 }
 
 .ms-select,
-.ms-new-project input,
 .ms-editor__fields input,
 .ms-editor__fields textarea,
 .ms-inspector__field input,
@@ -102,15 +107,6 @@ html[data-workspace='manuscript'] body {
   font-family: inherit;
   font-size: 0.85rem;
   padding: 0.35rem 0.5rem;
-}
-
-.ms-new-project {
-  display: flex;
-  gap: 0.3rem;
-
-  input {
-    width: 10rem;
-  }
 }
 
 .ms-topbar__actions {
@@ -315,20 +311,6 @@ html[data-workspace='manuscript'] body {
   &--diverged {
     background: color-mix(in srgb, #d97706 22%, transparent);
   }
-
-  &--deleted {
-    color: var(--ms-muted);
-    background: color-mix(in srgb, var(--ms-muted) 18%, transparent);
-  }
-}
-
-.ms-binder__hint {
-  flex: 0 0 auto;
-  padding: 0.5rem 0.75rem;
-  border-top: 1px solid var(--ms-border);
-  color: var(--ms-muted);
-  font-size: 0.68rem;
-  line-height: 1.4;
 }
 
 .ms-editor {

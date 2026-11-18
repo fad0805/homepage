@@ -74,6 +74,16 @@ class ManuscriptTests(unittest.TestCase):
         self.db.flush()
         return node
 
+    def test_delete_project_removes_its_nodes(self) -> None:
+        project = self._project()
+        self._node(project, "챕터")
+        crud.delete_project(self.db, project.id, self.owner.id)
+        self.assertIsNone(
+            self.db.query(ManuscriptNode)
+            .filter(ManuscriptNode.project_id == project.id)
+            .first()
+        )
+
     def test_character_counts_include_spaces_and_separate_plain(self) -> None:
         self.assertEqual(
             count_characters("<p>가 나다</p><p>라</p>"),

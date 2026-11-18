@@ -233,6 +233,13 @@ def update_project(
     return _serialize_project(project)
 
 
+def delete_project(db: Session, project_id: int, user_id: int) -> dict:
+    project = _get_project_or_404(db, project_id, user_id)
+    db.delete(project)
+    db.commit()
+    return {"id": project_id}
+
+
 def get_tree(db: Session, project_id: int, user_id: int) -> list[dict]:
     _get_project_or_404(db, project_id, user_id)
     nodes = (

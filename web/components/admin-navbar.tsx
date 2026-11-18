@@ -1,11 +1,12 @@
 "use client";
-import { Fragment } from "react";
+import { Fragment, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 
 import "@/public/styles/admin/navbar.scss";
 import navigation from "@/config/navigation";
 import { useAuth } from "@/components/auth-provider";
+import { ManuscriptProjectPicker } from "@/components/manuscript-project-picker";
 
 interface AdminNavbarProps {
   id?: string;
@@ -19,6 +20,7 @@ export const AdminNavbar = ({
   const currentPath = usePathname();
   const router = useRouter();
   const { isAdmin } = useAuth();
+  const [projectPickerOpen, setProjectPickerOpen] = useState(false);
   const groups = navigation.admin.rows
     .map((row, rowIndex) => ({
       label: navigation.admin.rowLabels?.[rowIndex],
@@ -33,7 +35,8 @@ export const AdminNavbar = ({
     return currentPath === href || currentPath.startsWith(`${href}/`);
   };
 
-  return <nav id={id}>
+  return <>
+    <nav id={id}>
       {groups.map((group, groupIndex) => (
         <Fragment key={group.label ?? groupIndex}>
           {showGroupLabels && group.label ? (
@@ -56,7 +59,11 @@ export const AdminNavbar = ({
                   // page stays exactly where it was.
                   if (item.iconOnly) {
                     event.preventDefault();
-                    window.open(item.href, "_blank", "noopener,noreferrer");
+                    if (item.href === "/manuscript") {
+                      setProjectPickerOpen(true);
+                    } else {
+                      window.open(item.href, "_blank", "noopener,noreferrer");
+                    }
                     return;
                   }
                   // Only intercept the exact active page. A parent menu such as
@@ -90,5 +97,10 @@ export const AdminNavbar = ({
           </div>
         </Fragment>
       ))}
-  </nav>;
+    </nav>
+    <ManuscriptProjectPicker
+      open={projectPickerOpen}
+      onClose={() => setProjectPickerOpen(false)}
+    />
+  </>;
 };
