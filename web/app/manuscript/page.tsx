@@ -148,6 +148,22 @@ const EMPTY_FORM = {
   body: "",
 };
 
+/** Collect chapter ids in exactly the order the binder renders them. */
+function collectBinderChapterIds(
+  rootId: number | null,
+  children: Map<number | null, ManuscriptNode[]>,
+): number[] {
+  const ids: number[] = [];
+  const visit = (parentId: number | null) => {
+    (children.get(parentId) ?? []).forEach((node) => {
+      if (node.node_type === "chapter") ids.push(node.id);
+      visit(node.id);
+    });
+  };
+  visit(rootId);
+  return ids;
+}
+
 /** Split the combined folder document back into per-chapter bodies. */
 function splitCombinedHtml(html: string): string[] {
   const parsed = new DOMParser().parseFromString(html || "", "text/html");
@@ -469,9 +485,18 @@ export default function ManuscriptWorkspace() {
       const docs = await apiFetch<ScrivDoc[]>(
         `/api/manuscript/scrivenings?root_id=${rootId}`,
       );
-      setScrivenings(docs);
+      // The API already sorts siblings, but keep the binder as the single
+      // source of truth so both views can never drift apart.
+      const binderIds = collectBinderChapterIds(rootId, childrenMap);
+      const byId = new Map(docs.map((doc) => [doc.id, doc]));
+      const ordered = binderIds
+        .map((id) => byId.get(id))
+        .filter((doc): doc is ScrivDoc => Boolean(doc));
+      const remaining = docs.filter((doc) => !binderIds.includes(doc.id));
+      const orderedDocs = [...ordered, ...remaining];
+      setScrivenings(orderedDocs);
       setScrivCombinedHtml(
-        docs.map((doc) => doc.body || "<p></p>").join("<hr>"),
+        orderedDocs.map((doc) => doc.body || "<p></p>").join("<hr>"),
       );
       setScrivDirty(false);
     } catch (error) {
