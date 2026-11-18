@@ -5,7 +5,7 @@ from datetime import date, datetime, time, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 from fastapi import HTTPException, status
-from sqlalchemy import Text, and_, cast, or_
+from sqlalchemy import Text, and_, cast, func, or_
 from sqlalchemy.orm import Session, selectinload
 
 from core.audit import get_audit_actor

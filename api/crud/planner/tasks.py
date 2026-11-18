@@ -4,10 +4,14 @@ from .common import *  # noqa: F401,F403
 
 
 def maintain_tasks(db: Session, user_id: int) -> None:
-    """Apply lazy, KST-based lifecycle transitions for one account."""
+    """Apply lazy, KST-based lifecycle transitions for one account.
+
+    All transitions are pushed into SQL so only rows that actually change are
+    touched. The inactive->trashed pass runs last to preserve the old behavior
+    where an already-expired active task is trashed in the same call.
+    """
     now = _utc_naive_now()
     today = kst_today()
-    changed = False
 
     purged = (
         db.query(PlannerTask)
@@ -20,46 +24,64 @@ def maintain_tasks(db: Session, user_id: int) -> None:
         )
         .delete(synchronize_session=False)
     )
-    if purged:
-        changed = True
 
-    tasks = (
+    no_period = (
         db.query(PlannerTask)
         .filter(
             PlannerTask.user_id == user_id,
-            PlannerTask.status.in_(("active", "inactive")),
+            PlannerTask.status == "active",
+            or_(
+                PlannerTask.schedule_type == "undated",
+                PlannerTask.start_date.is_(None),
+                PlannerTask.end_date.is_(None),
+            ),
         )
-        .all()
+        .update(
+            {
+                "status": "inactive",
+                "inactive_at": func.coalesce(
+                    PlannerTask.inactive_at, now
+                ),
+            },
+            synchronize_session=False,
+        )
     )
-    for task in tasks:
-        if task.schedule_type == "undated":
-            if task.status != "inactive":
-                task.status = "inactive"
-                task.inactive_at = task.inactive_at or now
-                changed = True
-            continue
-        if task.start_date is None or task.end_date is None:
-            # Undated tasks stay inactive until the user assigns a date.
-            if task.status == "active":
-                task.status = "inactive"
-                task.inactive_at = task.inactive_at or now
-                changed = True
-            continue
-        if task.status == "active" and today > task.end_date:
-            task.status = "inactive"
-            task.inactive_at = now
-            changed = True
-        if (
-            task.status == "inactive"
-            and not task.pinned
-            and today
-            >= task.end_date + timedelta(days=INACTIVE_RETENTION_DAYS)
-        ):
-            task.status = "trashed"
-            task.trashed_at = now
-            changed = True
 
-    if changed:
+    expired = (
+        db.query(PlannerTask)
+        .filter(
+            PlannerTask.user_id == user_id,
+            PlannerTask.status == "active",
+            PlannerTask.schedule_type != "undated",
+            PlannerTask.start_date.isnot(None),
+            PlannerTask.end_date.isnot(None),
+            PlannerTask.end_date < today,
+        )
+        .update(
+            {"status": "inactive", "inactive_at": now},
+            synchronize_session=False,
+        )
+    )
+
+    stale_cutoff = today - timedelta(days=INACTIVE_RETENTION_DAYS)
+    stale = (
+        db.query(PlannerTask)
+        .filter(
+            PlannerTask.user_id == user_id,
+            PlannerTask.status == "inactive",
+            PlannerTask.pinned.is_(False),
+            PlannerTask.schedule_type != "undated",
+            PlannerTask.start_date.isnot(None),
+            PlannerTask.end_date.isnot(None),
+            PlannerTask.end_date <= stale_cutoff,
+        )
+        .update(
+            {"status": "trashed", "trashed_at": now},
+            synchronize_session=False,
+        )
+    )
+
+    if purged or no_period or expired or stale:
         db.commit()
 
 

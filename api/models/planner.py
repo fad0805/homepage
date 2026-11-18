@@ -85,6 +85,18 @@ class PlannerTask(Base):
             "start_date",
             "end_date",
         ),
+        Index(
+            "ix_planner_tasks_user_status_end_date",
+            "user_id",
+            "status",
+            "end_date",
+        ),
+        Index(
+            "ix_planner_tasks_user_status_trashed_at",
+            "user_id",
+            "status",
+            "trashed_at",
+        ),
     )
 
 

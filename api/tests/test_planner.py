@@ -4,6 +4,7 @@ from unittest.mock import patch
 
 from fastapi import HTTPException
 from pydantic import ValidationError
+from sqlalchemy import event
 
 from schemas.planner import (
     PlannerColorReorder,
@@ -449,6 +450,45 @@ class PlannerCrudTests(
         self.assertIsNone(self.db.get(type(trashed), trashed_id))
         self.db.refresh(undated)
         self.assertEqual(undated.status, "inactive")
+
+    def test_maintain_tasks_uses_bulk_updates(self) -> None:
+        now = datetime(2026, 11, 17, 0, 0)
+        self.make_task(
+            title="만료된 활성",
+            end_date=date(2026, 11, 16),
+            status="active",
+        )
+        statements: list[str] = []
+
+        def record(conn, cursor, statement, parameters, context, many):
+            statements.append(statement)
+
+        event.listen(self.engine, "before_cursor_execute", record)
+        try:
+            with patch(
+                "crud.planner.tasks.kst_today",
+                return_value=date(2026, 11, 17),
+            ), patch(
+                "crud.planner.tasks._utc_naive_now",
+                return_value=now,
+            ):
+                maintain_tasks(self.db, 1)
+        finally:
+            event.remove(self.engine, "before_cursor_execute", record)
+
+        selects = [
+            statement
+            for statement in statements
+            if "select" in statement.lower()
+            and "planner_tasks" in statement.lower()
+        ]
+        self.assertEqual(selects, [])
+        self.assertTrue(
+            any(
+                "update planner_tasks" in statement.lower()
+                for statement in statements
+            )
+        )
 
     def test_events_range_and_validation(self) -> None:
         start = date(2026, 11, 17)
