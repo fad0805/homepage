@@ -787,6 +787,8 @@ export default function ManuscriptWorkspace() {
           {scrivenings ? (
             <RichTextEditor
               variant="workspace"
+              enableFontSize
+              enableHighlight
               placeholder="폴더 본문을 입력해주세요."
               value={scrivCombinedHtml}
               onChange={(html) => {
@@ -801,6 +803,8 @@ export default function ManuscriptWorkspace() {
           ) : !selected || selected.node_type === "chapter" ? (
             <RichTextEditor
               variant="workspace"
+              enableFontSize
+              enableHighlight
               readOnly={isPlaceholder}
               placeholder="본문을 입력해주세요."
               value={form.body}

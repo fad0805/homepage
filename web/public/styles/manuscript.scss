@@ -25,7 +25,8 @@ html[data-workspace='manuscript'] body {
   overflow: hidden;
   background: var(--ms-bg);
   color: var(--ms-text);
-  font-family: inherit;
+  font-family: GowunDodum, Arial, Helvetica, sans-serif;
+  word-break: keep-all;
 }
 
 .ms-app {
@@ -329,9 +330,9 @@ html[data-workspace='manuscript'] body {
 }
 
 .ms-editor {
-  width: 100%;
+  width: 900px;
   min-width: 900px;
-  max-width: none;
+  max-width: 900px;
   background: var(--ms-bg);
   overflow-y: auto;
 }
@@ -362,6 +363,16 @@ html[data-workspace='manuscript'] body {
     border-radius: 0;
     overflow-x: hidden;
     overflow-y: auto;
+    color: var(--input-text);
+    font-family: GowunDodum, Arial, Helvetica, sans-serif;
+    overflow-wrap: anywhere;
+    word-break: keep-all;
+
+    h2,
+    h3 {
+      color: var(--title-color);
+      font-family: Eulyoo1945-SemiBold, Arial, Helvetica, sans-serif;
+    }
 
     hr {
       display: block;
