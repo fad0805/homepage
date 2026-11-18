@@ -117,9 +117,11 @@ function InlineUnlockForm({ label }: { label: string }) {
 function ChapterDetail({
   chapter,
   bookTitle,
+  bodyLoading = false,
 }: {
   chapter: Chapter;
   bookTitle: string;
+  bodyLoading?: boolean;
 }) {
   const [lightbox, setLightbox] = useState<{
     images: LightboxImage[];
@@ -172,6 +174,8 @@ function ChapterDetail({
       ) : null}
       {chapter.locked ? (
         <InlineUnlockForm label="이 글은 열람 비밀번호가 필요합니다." />
+      ) : bodyLoading ? (
+        <p className="chapter-detail__empty">본문을 불러오는 중...</p>
       ) : chapter.body ? (
         <div
           className="chapter-detail__body"
@@ -235,6 +239,11 @@ export default function BooksClient({
   const [activeChapterId, setActiveChapterId] = useState<number | null>(
     initialChapterId,
   );
+  const [chapterBody, setChapterBody] = useState<{
+    id: number;
+    body: string | null;
+  } | null>(null);
+  const [chapterBodyLoading, setChapterBodyLoading] = useState(false);
   const [expandedCategories, setExpandedCategories] = useState<Set<number>>(
     () => new Set(),
   );
@@ -262,6 +271,51 @@ export default function BooksClient({
     const timer = setInterval(() => setNow(Date.now()), 60_000);
     return () => clearInterval(timer);
   }, []);
+
+  // The chapter list is metadata-only, so load the body only for the chapter
+  // the reader actually opened. Locked chapters let the unlock form handle it.
+  useEffect(() => {
+    if (activeChapterId === null) {
+      setChapterBody(null);
+      setChapterBodyLoading(false);
+      return;
+    }
+    const chapter = chapters.find((item) => item.id === activeChapterId);
+    if (!chapter || chapter.locked) {
+      setChapterBody(null);
+      setChapterBodyLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    setChapterBody(null);
+    setChapterBodyLoading(true);
+    fetch(`/api/chapters/${activeChapterId}`)
+      .then((response) => {
+        if (!response.ok) throw new Error("Failed to load chapter body");
+        return response.json() as Promise<Chapter>;
+      })
+      .then((data) => {
+        if (!cancelled) {
+          setChapterBody({
+            id: activeChapterId,
+            body: data.body ?? null,
+          });
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setChapterBody({ id: activeChapterId, body: null });
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setChapterBodyLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeChapterId, chapters]);
 
   // Mobile book/chapter selection does not change the URL, so tag the
   // current history entry and push one per view. The browser back button can
@@ -838,8 +892,13 @@ export default function BooksClient({
           ) : null}
         </div>
         <ChapterDetail
-          chapter={activeChapter}
+          chapter={{
+            ...activeChapter,
+            body:
+              chapterBody?.id === activeChapter.id ? chapterBody.body : null,
+          }}
           bookTitle={activeBook.title}
+          bodyLoading={chapterBodyLoading}
         />
       </div>
     ) : null;

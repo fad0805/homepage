@@ -40,7 +40,9 @@ export default async function BooksPage({
         auth: true,
         tags: ["books"],
       }),
-      serverApiFetch<Chapter[]>("/chapters", {
+      // Body text is fetched on demand when a chapter is opened. Shipping
+      // every body here makes a long series expensive for every visitor.
+      serverApiFetch<Chapter[]>("/chapters?include_body=false", {
         auth: true,
         tags: ["chapters"],
       }),

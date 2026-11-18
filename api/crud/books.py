@@ -1,4 +1,6 @@
+import html
 import os
+import re
 from datetime import datetime, timedelta, timezone
 
 from fastapi import HTTPException, status
@@ -233,7 +235,11 @@ def reorder_book_categories(
     return True
 
 
-def _serialize_chapter(chapter: Chapter, locked: bool = False) -> dict:
+def _serialize_chapter(
+    chapter: Chapter,
+    locked: bool = False,
+    include_body: bool = True,
+) -> dict:
     book = chapter.book
     return {
         "id": chapter.id,
@@ -241,7 +247,7 @@ def _serialize_chapter(chapter: Chapter, locked: bool = False) -> dict:
         "book_id": chapter.book_id,
         "title": chapter.title,
         "subtitle": chapter.subtitle,
-        "body": None if locked else chapter.body,
+        "body": None if locked or not include_body else chapter.body,
         "tags": chapter.tags or [],
         "order": chapter.order,
         "visible": chapter.visible,
@@ -468,6 +474,7 @@ def get_all_chapters(
     viewer_user_id: int | None = None,
     owner_user_id: int | None = None,
     query: str | None = None,
+    include_body: bool = True,
 ):
     chapters_query = (
         db.query(Chapter)
@@ -537,7 +544,13 @@ def get_all_chapters(
             if unlocked
             else _chapter_is_locked(chapter, granted_chapters, granted_books)
         )
-        result.append(_serialize_chapter(chapter, locked=locked))
+        result.append(
+            _serialize_chapter(
+                chapter,
+                locked=locked,
+                include_body=include_body,
+            )
+        )
     return result
 
 
@@ -550,6 +563,7 @@ def get_chapter(
     granted_books: frozenset[int] = frozenset(),
     viewer_user_id: int | None = None,
     owner_user_id: int | None = None,
+    include_body: bool = True,
 ):
     query = db.query(Chapter).filter(Chapter.id == chapter_id)
     if owner_user_id is not None:
@@ -595,7 +609,7 @@ def get_chapter(
         if unlocked
         else _chapter_is_locked(chapter, granted_chapters, granted_books)
     )
-    return _serialize_chapter(chapter, locked=locked)
+    return _serialize_chapter(chapter, locked=locked, include_body=include_body)
 
 
 def _get_book_or_404(
@@ -864,3 +878,98 @@ def reorder_chapters(
             chapter.book_id = item.book_id
     db.commit()
     return True
+
+
+# Owner-only chapter search. Unlike the public list endpoint this searches
+# body text too, but it returns only a short snippet instead of the whole body.
+_TAG_PATTERN = re.compile(r"<[^>]*>")
+_WHITESPACE_PATTERN = re.compile(r"\s+")
+SNIPPET_BEFORE = 60
+SNIPPET_AFTER = 80
+
+
+def _body_snippet(body: str | None, tokens: list[str]) -> str:
+    text = _WHITESPACE_PATTERN.sub(
+        " ", html.unescape(_TAG_PATTERN.sub(" ", body or ""))
+    ).strip()
+    if not text:
+        return ""
+
+    lowered = text.lower()
+    hits = [lowered.find(token) for token in tokens]
+    hits = [hit for hit in hits if hit >= 0]
+    if hits:
+        center = min(hits)
+        start = max(0, center - SNIPPET_BEFORE)
+        end = min(len(text), center + SNIPPET_AFTER)
+    else:
+        start, end = 0, SNIPPET_BEFORE + SNIPPET_AFTER
+
+    snippet = text[start:end].strip()
+    if start > 0:
+        snippet = "…" + snippet
+    if end < len(text):
+        snippet = snippet + "…"
+    return snippet
+
+
+def search_chapters_for_owner(
+    db: Session,
+    *,
+    owner_user_id: int,
+    query: str | None,
+    limit: int = 50,
+) -> list[dict]:
+    tokens = search_tokens(query)
+    if not tokens:
+        return []
+
+    chapters_query = db.query(Chapter).filter(
+        Chapter.user_id == owner_user_id
+    )
+    for token in tokens:
+        pattern = like_pattern(token)
+        tag_match = (
+            db.query(ChapterTag.chapter_id)
+            .join(Tag, Tag.id == ChapterTag.tag_id)
+            .filter(
+                ChapterTag.chapter_id == Chapter.id,
+                Tag.name.ilike(pattern, escape="\\"),
+            )
+            .exists()
+        )
+        chapters_query = chapters_query.filter(
+            or_(
+                Chapter.title.ilike(pattern, escape="\\"),
+                Chapter.subtitle.ilike(pattern, escape="\\"),
+                Chapter.body.ilike(pattern, escape="\\"),
+                tag_match,
+            )
+        )
+
+    chapters = (
+        chapters_query.order_by(
+            Chapter.created_at.desc(), Chapter.id.desc()
+        )
+        .limit(limit)
+        .all()
+    )
+    return [
+        {
+            "id": chapter.id,
+            "book_id": chapter.book_id,
+            "title": chapter.title,
+            "subtitle": chapter.subtitle,
+            "created_at": _iso_utc(chapter.created_at),
+            "book": (
+                {
+                    "id": chapter.book.id,
+                    "title": chapter.book.title,
+                }
+                if chapter.book
+                else None
+            ),
+            "snippet": _body_snippet(chapter.body, tokens),
+        }
+        for chapter in chapters
+    ]

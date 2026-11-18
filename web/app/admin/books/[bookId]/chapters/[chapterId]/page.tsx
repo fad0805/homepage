@@ -3,6 +3,7 @@
 import {
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
   type FormEvent,
@@ -15,6 +16,8 @@ import { RichTextEditor } from "@/components/rich-text-editor";
 import { TagInput } from "@/components/tag-input";
 import { apiFetch } from "@/lib/api";
 import { formatDateTime } from "@/lib/datetime";
+
+import { ChapterSearch, type ChapterSearchResult } from "./chapter-search";
 
 import "@/public/styles/admin/books.scss";
 
@@ -151,6 +154,7 @@ export default function AdminChapterEdit() {
   const [draftViewOpen, setDraftViewOpen] = useState(false);
   const [autosaveReady, setAutosaveReady] = useState(false);
   const [notice, setNotice] = useState<Notice | null>(null);
+  const [searchOpen, setSearchOpen] = useState(false);
 
   const noticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastSavedSignatureRef = useRef<string | null>(null);
@@ -222,23 +226,28 @@ export default function AdminChapterEdit() {
     setAutosaveReady(false);
     lastSavedSignatureRef.current = null;
     try {
-      const [bookData, chapterData, bookList, draftData] = await Promise.all([
-        apiFetch<Book>(`/api/books/${bookId}?mine=true`),
-        apiFetch<ChapterItem[]>("/api/chapters?mine=true"),
-        apiFetch<Book[]>("/api/books?mine=true"),
-        draftKey
-          ? apiFetch<ChapterDraft | null>(
-              `/api/chapter-drafts/${encodeURIComponent(draftKey)}`,
-            )
-          : Promise.resolve(null),
-      ]);
+      // The full list is metadata-only so a long series doesn't ship every
+      // body on every edit-screen visit. Fetch the chapter being edited
+      // separately, with its body.
+      const [bookData, chapterData, bookList, currentData, draftData] =
+        await Promise.all([
+          apiFetch<Book>(`/api/books/${bookId}?mine=true`),
+          apiFetch<ChapterItem[]>(
+            "/api/chapters?mine=true&include_body=false",
+          ),
+          apiFetch<Book[]>("/api/books?mine=true"),
+          isNew
+            ? Promise.resolve(null)
+            : apiFetch<ChapterItem>(`/api/chapters/${chapterId}?mine=true`),
+          draftKey
+            ? apiFetch<ChapterDraft | null>(
+                `/api/chapter-drafts/${encodeURIComponent(draftKey)}`,
+              )
+            : Promise.resolve(null),
+        ]);
       setBook(bookData);
       setBooks(bookList);
       setAllChapters(chapterData);
-
-      const bookChapters = chapterData.filter(
-        (item) => item.book_id === bookId,
-      );
 
       let baseTitle = "";
       let baseSubtitle = "";
@@ -251,8 +260,7 @@ export default function AdminChapterEdit() {
       let baseTargetBookId = bookId;
 
       if (!isNew) {
-        const current =
-          bookChapters.find((item) => item.id === chapterId) ?? null;
+        const current = currentData;
         if (!current) {
           setNotice({
             type: "error",
@@ -327,6 +335,64 @@ export default function AdminChapterEdit() {
   useEffect(() => {
     load();
   }, [load]);
+
+  // Navigation spans every chapter the author owns, newest first, regardless
+  // of which book it belongs to. The metadata-only list is enough for this.
+  const orderedChapters = useMemo(
+    () =>
+      [...allChapters].sort((a, b) => {
+        const aTime = a.created_at ? Date.parse(a.created_at) : 0;
+        const bTime = b.created_at ? Date.parse(b.created_at) : 0;
+        return bTime - aTime || b.id - a.id;
+      }),
+    [allChapters],
+  );
+
+  const currentIndex = isNew
+    ? -1
+    : orderedChapters.findIndex((item) => item.id === chapterId);
+  const newerChapter =
+    currentIndex > 0 ? orderedChapters[currentIndex - 1] : null;
+  const olderChapter =
+    currentIndex >= 0 && currentIndex < orderedChapters.length - 1
+      ? orderedChapters[currentIndex + 1]
+      : null;
+
+  const navigateToChapter = useCallback(
+    (target: { id: number; book_id: number }) => {
+      if (target.id === chapterId) return;
+      const signature = getDraftSignature({
+        title,
+        subtitle,
+        body,
+        tagsInput,
+        visible,
+        pinned,
+        publishedAt,
+        targetBookId,
+      });
+      if (signature !== lastSavedSignatureRef.current) {
+        const confirmed = window.confirm(
+          "저장하지 않은 변경 내용이 있습니다. 다른 글으로 이동할까요?",
+        );
+        if (!confirmed) return;
+      }
+      setSearchOpen(false);
+      router.push(`/admin/books/${target.book_id}/chapters/${target.id}`);
+    },
+    [
+      body,
+      chapterId,
+      pinned,
+      publishedAt,
+      router,
+      subtitle,
+      tagsInput,
+      targetBookId,
+      title,
+      visible,
+    ],
+  );
 
   useEffect(() => {
     if (!draftPreviewOpen && !draftViewOpen) return;
@@ -883,8 +949,40 @@ export default function AdminChapterEdit() {
                 </div>
               ) : null}
             </div>
-            {!isNew && chapter && book ? (
-              <div className="admin-books-actions">
+            {!isNew && chapter && orderedChapters.length > 0 ? (
+              <div className="admin-books-chapter-nav">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (newerChapter) navigateToChapter(newerChapter);
+                  }}
+                  disabled={!newerChapter}
+                >
+                  ← 이전 글
+                </button>
+                <span>
+                  {currentIndex + 1} / {orderedChapters.length}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (olderChapter) navigateToChapter(olderChapter);
+                  }}
+                  disabled={!olderChapter}
+                >
+                  다음 글 →
+                </button>
+              </div>
+            ) : null}
+            <div className="admin-books-actions">
+              <button
+                type="button"
+                className="admin-button"
+                onClick={() => setSearchOpen(true)}
+              >
+                전체 검색
+              </button>
+              {!isNew && chapter && book ? (
                 <MastodonShare
                   title={chapter.title}
                   bookTitle={book.title}
@@ -892,8 +990,8 @@ export default function AdminChapterEdit() {
                   chapterId={chapter.id}
                   triggerClassName="admin-button"
                 />
-              </div>
-            ) : null}
+              ) : null}
+            </div>
           </header>
 
           <section className="admin-books-panel">
@@ -1160,6 +1258,12 @@ export default function AdminChapterEdit() {
           </div>
         </div>
       ) : null}
+
+      <ChapterSearch
+        open={searchOpen}
+        onClose={() => setSearchOpen(false)}
+        onSelect={(result: ChapterSearchResult) => navigateToChapter(result)}
+      />
     </div>
   );
 }
