@@ -144,6 +144,9 @@ def _serialize_node(
         "char_count_with_spaces": node.char_count_with_spaces or 0,
         "char_count_plain": node.char_count_plain or 0,
         "published_chapter_id": node.published_chapter_id,
+        "published_chapter_exists": bool(
+            node.published_chapter_id and chapter is not None
+        ),
         "published_state": _published_state(node, chapter),
         "deleted_at": _iso(node.deleted_at),
         "created_at": _iso(node.created_at),
@@ -892,20 +895,13 @@ def publish_node(
             .filter(
                 Chapter.id == node.published_chapter_id,
                 Chapter.user_id == user_id,
+                Chapter.book_id == target_book_id,
             )
             .first()
         )
-        if chapter is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Linked chapter no longer exists",
-            )
-        if chapter.book_id != target_book_id:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="A published chapter cannot change books; unlink it first",
-            )
-    else:
+    if chapter is None:
+        # The linked post may have been deleted on the bookshelf side. The two
+        # tables are independent, so publish a fresh chapter instead.
         chapter = Chapter(
             user_id=user_id,
             book_id=target_book_id,
@@ -952,61 +948,6 @@ def _next_chapter_order(db: Session, book_id: int) -> int:
     from sqlalchemy import func
 
     return (db.query(func.max(Chapter.order)).filter(Chapter.book_id == book_id).scalar() or 0) + 1
-
-
-def unlink_node(
-    db: Session,
-    node_id: int,
-    payload: schemas.UnlinkRequest,
-    user_id: int,
-) -> dict:
-    node = _get_node_or_404(db, node_id, user_id)
-    if not node.published_chapter_id:
-        return {"unlinked": False, "book_deleted": False}
-
-    chapter = (
-        db.query(Chapter)
-        .filter(
-            Chapter.id == node.published_chapter_id,
-            Chapter.user_id == user_id,
-        )
-        .first()
-    )
-    book_id = chapter.book_id if chapter else None
-    book_deleted = False
-
-    if payload.delete_book and book_id is not None:
-        chapter_ids = [
-            item.id
-            for item in db.query(Chapter.id).filter(Chapter.book_id == book_id).all()
-        ]
-        if chapter_ids:
-            db.query(ManuscriptNode).filter(
-                ManuscriptNode.published_chapter_id.in_(chapter_ids)
-            ).update(
-                {
-                    ManuscriptNode.published_chapter_id: None,
-                    ManuscriptNode.published_manuscript_hash: None,
-                    ManuscriptNode.published_chapter_hash: None,
-                    ManuscriptNode.published_at: None,
-                },
-                synchronize_session=False,
-            )
-        db.query(SerialNode).filter(SerialNode.book_id == book_id).delete(
-            synchronize_session=False
-        )
-        book = db.query(Book).filter(Book.id == book_id, Book.user_id == user_id).first()
-        if book is not None:
-            db.delete(book)
-            book_deleted = True
-    else:
-        node.published_chapter_id = None
-        node.published_manuscript_hash = None
-        node.published_chapter_hash = None
-        node.published_at = None
-
-    db.commit()
-    return {"unlinked": True, "book_deleted": book_deleted}
 
 
 def get_public_toc(db: Session, book_id: int) -> list[dict]:

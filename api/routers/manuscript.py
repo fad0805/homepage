@@ -133,16 +133,6 @@ def publish_node(
     return crud.publish_node(db, node_id, payload, user.id)
 
 
-@router.post("/nodes/{node_id}/unlink")
-def unlink_node(
-    node_id: int,
-    payload: schemas.UnlinkRequest,
-    db: Session = Depends(get_db),
-    user=Depends(require_auth),
-):
-    return crud.unlink_node(db, node_id, payload, user.id)
-
-
 @router.get("/trash")
 def get_trash(
     project_id: int | None = Query(default=None),

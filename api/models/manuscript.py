@@ -50,9 +50,6 @@ class ManuscriptNode(Base):
     __tablename__ = "manuscript_nodes"
     __table_args__ = (
         Index("ix_manuscript_nodes_tree", "project_id", "parent_id", "position"),
-        UniqueConstraint(
-            "published_chapter_id", name="uq_manuscript_nodes_published_chapter"
-        ),
     )
 
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
@@ -89,11 +86,9 @@ class ManuscriptNode(Base):
     char_count_plain = Column(Integer, nullable=False, default=0, server_default="0")
     target_chars = Column(Integer, nullable=True)
     position = Column(Integer, nullable=False, default=0, server_default="0")
-    published_chapter_id = Column(
-        Integer,
-        ForeignKey("chapters.id", ondelete="SET NULL"),
-        nullable=True,
-    )
+    # No foreign key: the manuscript and the bookshelf are independent. The
+    # public TOC (serial_nodes) is the only place that points at a chapter.
+    published_chapter_id = Column(Integer, nullable=True)
     published_manuscript_hash = Column(String(64), nullable=True)
     published_chapter_hash = Column(String(64), nullable=True)
     published_at = Column(DateTime, nullable=True)

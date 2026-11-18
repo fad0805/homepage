@@ -72,13 +72,3 @@ class PublishRequest(BaseModel):
 
     target_book_id: int | None = None
     sync_structure: bool = False
-
-
-class UnlinkRequest(BaseModel):
-    """Break the manuscript link.
-
-    ``delete_book`` removes the linked book itself; by default only the link is
-    cleared and the book, chapters and public TOC nodes are left untouched.
-    """
-
-    delete_book: bool = False

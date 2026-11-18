@@ -292,27 +292,6 @@ html[data-workspace='manuscript'] body {
   font-variant-numeric: tabular-nums;
 }
 
-.ms-node__badge {
-  max-width: 4.6rem;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  border-radius: 0.3rem;
-  padding: 0.05rem 0.25rem;
-  font-size: 0.6rem;
-  background: color-mix(in srgb, var(--ms-text) 8%, transparent);
-
-  &--published {
-    color: var(--ms-accent);
-  }
-
-  &--needs_republish,
-  &--chapter_edited,
-  &--diverged {
-    background: color-mix(in srgb, #d97706 22%, transparent);
-  }
-}
-
 .ms-editor {
   width: 100%;
   min-width: 0;
@@ -558,18 +537,6 @@ html[data-workspace='manuscript'] .ms-editor--workspace .ms-editor__surface .tip
   padding: 0.75rem 0.85rem;
   color: var(--ms-muted);
   font-size: 0.78rem;
-}
-
-.ms-publish__state {
-  margin: 0 0.85rem;
-  color: var(--ms-muted);
-  font-size: 0.7rem;
-}
-
-.ms-publish-control {
-  display: flex;
-  align-items: center;
-  gap: 0.3rem;
 }
 
 .ms-modal-backdrop {

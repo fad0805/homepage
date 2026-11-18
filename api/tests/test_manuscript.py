@@ -339,7 +339,7 @@ class ManuscriptTests(unittest.TestCase):
         self.assertEqual(len(toc), 1)
         self.assertEqual(toc[0]["chapter"]["title"], "1화")
 
-    def test_unlink_keeps_book_by_default_and_can_delete_it(self) -> None:
+    def test_deleted_chapter_falls_back_to_fresh_publish(self) -> None:
         project = self._project()
         node = self._node(project, "1화", body="<p>본문</p>")
         published = crud.publish_node(
@@ -349,39 +349,29 @@ class ManuscriptTests(unittest.TestCase):
             self.owner.id,
         )
         chapter_id = published["chapter_id"]
+        chapter = self.db.query(Chapter).filter(Chapter.id == chapter_id).one()
 
-        crud.unlink_node(
-            self.db,
-            node.id,
-            schemas.UnlinkRequest(delete_book=False),
-            self.owner.id,
+        # A bookshelf-side deletion must not delete or clear the manuscript row.
+        self.db.query(SerialNode).filter(SerialNode.chapter_id == chapter_id).delete(
+            synchronize_session=False
         )
-        self.assertIsNotNone(
-            self.db.query(Chapter).filter(Chapter.id == chapter_id).first()
-        )
-        self.assertEqual(len(crud.get_public_toc(self.db, self.book.id)), 1)
+        self.db.delete(chapter)
+        self.db.commit()
+        self.db.refresh(node)
+        self.assertEqual(node.published_chapter_id, chapter_id)
+        state = crud.get_node(self.db, node.id, self.owner.id)
+        self.assertFalse(state["published_chapter_exists"])
+        self.assertEqual(state["published_state"], "published_missing")
 
-        node = self._node(project, "2화", body="<p>본문</p>")
-        crud.publish_node(
+        # Publishing again creates a fresh chapter instead of failing.
+        result = crud.publish_node(
             self.db,
             node.id,
             schemas.PublishRequest(target_book_id=self.book.id),
             self.owner.id,
         )
-        result = crud.unlink_node(
-            self.db,
-            node.id,
-            schemas.UnlinkRequest(delete_book=True),
-            self.owner.id,
-        )
-        self.assertTrue(result["book_deleted"])
-        self.assertIsNone(
-            self.db.query(Book).filter(Book.id == self.book.id).first()
-        )
-        self.assertEqual(
-            self.db.query(SerialNode).filter(SerialNode.book_id == self.book.id).count(),
-            0,
-        )
+        self.assertEqual(result["node"]["published_chapter_id"], result["chapter_id"])
+        self.assertTrue(result["node"]["published_chapter_exists"])
 
     def test_one_chapter_can_only_appear_once_in_a_book_toc(self) -> None:
         project = self._project()

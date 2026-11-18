@@ -29,9 +29,10 @@
 
 .admin-manuscript-actions {
   display: flex;
+  flex: 1 1 100%;
   flex-wrap: wrap;
   align-items: flex-end;
-  gap: 0.5rem;
+  gap: 1rem;
 }
 
 .admin-manuscript-field {

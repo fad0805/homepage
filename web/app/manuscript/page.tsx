@@ -42,6 +42,7 @@ interface ManuscriptNode {
   char_count_with_spaces: number;
   char_count_plain: number;
   published_chapter_id: number | null;
+  published_chapter_exists?: boolean;
   published_state:
     | "unpublished"
     | "published"
@@ -51,11 +52,6 @@ interface ManuscriptNode {
     | "published_missing";
   body?: string | null;
   deleted_at?: string | null;
-}
-
-interface Book {
-  id: number;
-  title: string;
 }
 
 interface SearchResult {
@@ -150,15 +146,6 @@ function countText(html: string): { withSpaces: number; plain: number } {
     plain: Array.from(normalized.replace(/\s+/gu, "")).length,
   };
 }
-
-const STATE_LABEL: Record<ManuscriptNode["published_state"], string> = {
-  unpublished: "미발행",
-  published: "발행됨",
-  needs_republish: "재발행 필요",
-  chapter_edited: "발행본 수정됨",
-  diverged: "양쪽 수정됨",
-  published_missing: "발행본 없음",
-};
 
 const EMPTY_FORM = {
   subtitle: "",
@@ -315,8 +302,6 @@ export default function ManuscriptWorkspace() {
   const [dirty, setDirty] = useState(false);
   const [renamingId, setRenamingId] = useState<number | null>(null);
   const [renameValue, setRenameValue] = useState("");
-  const [books, setBooks] = useState<Book[]>([]);
-  const [publishOverrideId, setPublishOverrideId] = useState<number | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchResult[]>([]);
@@ -395,12 +380,10 @@ export default function ManuscriptWorkspace() {
   };
 
   const loadProjects = useCallback(async () => {
-    const [projectList, bookList] = await Promise.all([
+    const [projectList] = await Promise.all([
       apiFetch<Project[]>("/api/manuscript/projects"),
-      apiFetch<Book[]>("/api/books?mine=true"),
     ]);
     setProjects(projectList);
-    setBooks(bookList);
     setProjectId((current) => {
       const valid = projectList.some((project) => project.id === current);
       return valid ? current : projectList[0]?.id ?? null;
@@ -555,7 +538,7 @@ export default function ManuscriptWorkspace() {
           project_id: projectId,
           parent_id: parentId,
           node_type: nodeType,
-          title: nodeType === "folder" ? "새 폴더" : "새 챕터",
+          title: nodeType === "folder" ? "새 폴더" : "새 문서",
           body: nodeType === "chapter" ? "<p></p>" : null,
         }),
       });
@@ -638,49 +621,25 @@ export default function ManuscriptWorkspace() {
 
   const linkedBookId =
     projects.find((project) => project.id === projectId)?.linked_book_id ?? null;
-  const publishBookId =
-    publishOverrideId ?? linkedBookId ?? books[0]?.id ?? null;
-  const isLinkedPublishTarget = publishBookId === linkedBookId && linkedBookId !== null;
+  const hasLinkedPost = Boolean(
+    selected?.published_chapter_exists ??
+      (selected?.published_chapter_id && selected.published_state !== "published_missing"),
+  );
 
   const publish = async () => {
     if (!selectedId || selected?.node_type !== "chapter") return;
-    if (!publishBookId) {
-      notify("발행할 게시판을 선택해 주세요.", "error");
+    if (!linkedBookId) {
+      notify("프로젝트에 연결된 책이 없습니다.", "error");
       return;
     }
+    const wasRepublish = hasLinkedPost;
     try {
-      const result = await apiFetch<{ linked: boolean }>(
-        `/api/manuscript/nodes/${selectedId}/publish`,
-        {
-          method: "POST",
-          body: JSON.stringify({ target_book_id: publishBookId }),
-        },
-      );
-      await refresh();
-      notify(
-        !result.linked
-          ? "연결되지 않은 책에 발행했습니다."
-          : selected.published_chapter_id
-            ? "재발행했습니다."
-            : "발행했습니다.",
-      );
-    } catch (error) {
-      notify((error as Error).message, "error");
-    }
-  };
-
-  const unlink = async () => {
-    if (!selectedId || !selected?.published_chapter_id) return;
-    const deleteBook = window.confirm(
-      "연결된 발행용 게시판(책)도 삭제할까요?\n확인: 게시판 삭제 / 취소: 링크만 해제",
-    );
-    try {
-      await apiFetch(`/api/manuscript/nodes/${selectedId}/unlink`, {
+      await apiFetch(`/api/manuscript/nodes/${selectedId}/publish`, {
         method: "POST",
-        body: JSON.stringify({ delete_book: deleteBook }),
+        body: JSON.stringify({ target_book_id: linkedBookId }),
       });
       await refresh();
-      notify(deleteBook ? "링크와 게시판을 삭제했습니다." : "링크만 해제했습니다.");
+      notify(wasRepublish ? "재발행했습니다." : "발행했습니다.");
     } catch (error) {
       notify((error as Error).message, "error");
     }
@@ -1045,14 +1004,6 @@ export default function ManuscriptWorkspace() {
             {node.node_type === "chapter" ? (
               <span className="ms-node__count">{node.char_count_with_spaces}</span>
             ) : null}
-            {node.published_chapter_id ? (
-              <span
-                className={`ms-node__badge ms-node__badge--${node.published_state}`}
-                title={STATE_LABEL[node.published_state]}
-              >
-                {STATE_LABEL[node.published_state]}
-              </span>
-            ) : null}
           </div>
           {isOpen ? renderRows(node.id, depth + 1) : null}
         </Fragment>
@@ -1128,7 +1079,7 @@ export default function ManuscriptWorkspace() {
       {!projectId ? (
         <div className="ms-empty">
           <h1>원고를 시작해 주세요</h1>
-          <p>새 원고 프로젝트를 만들면 폴더와 챕터를 자유롭게 구성할 수 있습니다.</p>
+          <p>새 원고 프로젝트를 만들면 폴더와 문서를 자유롭게 구성할 수 있습니다.</p>
         </div>
       ) : (
         <div className="ms-layout">
@@ -1139,8 +1090,8 @@ export default function ManuscriptWorkspace() {
                 <button type="button" onClick={() => createNode("folder")} title="폴더 추가">
                   + 폴더
                 </button>
-                <button type="button" onClick={() => createNode("chapter")} title="챕터 추가">
-                  + 챕터
+                <button type="button" onClick={() => createNode("chapter")} title="문서 추가">
+                  + 문서
                 </button>
               </div>
             </div>
@@ -1291,7 +1242,7 @@ export default function ManuscriptWorkspace() {
                 <label className="ms-inspector__field">
                   유형
                   <input
-                    value={trashPreview.node_type === "folder" ? "폴더" : "챕터"}
+                    value={trashPreview.node_type === "folder" ? "폴더" : "문서"}
                     readOnly
                   />
                 </label>
@@ -1321,27 +1272,14 @@ export default function ManuscriptWorkspace() {
                     삭제
                   </button>
                   {selected.node_type === "chapter" ? (
-                    <div className="ms-publish-control">
-                      <button
-                        type="button"
-                        className="ms-button ms-button--primary"
-                        disabled={!publishBookId}
-                        onClick={publish}
-                      >
-                        {isLinkedPublishTarget && selected.published_chapter_id
-                          ? "재발행"
-                          : "발행"}
-                      </button>
-                      {selected.published_chapter_id ? (
-                        <button
-                          type="button"
-                          className="ms-button--danger"
-                          onClick={unlink}
-                        >
-                          링크 해제
-                        </button>
-                      ) : null}
-                    </div>
+                    <button
+                      type="button"
+                      className="ms-button ms-button--primary"
+                      disabled={!linkedBookId}
+                      onClick={publish}
+                    >
+                      {hasLinkedPost ? "재발행" : "발행"}
+                    </button>
                   ) : null}
                   {scrivenings ? (
                     <button
@@ -1414,36 +1352,6 @@ export default function ManuscriptWorkspace() {
                   />
                 </label>
 
-                {selected.node_type === "chapter" ? (
-                  <label className="ms-inspector__field">
-                    발행 대상
-                    <select
-                      className="ms-select"
-                      value={publishBookId ?? ""}
-                      onChange={(event) =>
-                        setPublishOverrideId(Number(event.target.value) || null)
-                      }
-                      aria-label="발행할 책"
-                    >
-                      {books.map((book) => (
-                        <option key={book.id} value={book.id}>
-                          {book.id === linkedBookId
-                            ? `${book.title} (연결된 책)`
-                            : book.title}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                ) : null}
-
-                {selected.node_type === "chapter" ? (
-                  <p className="ms-publish__state">
-                    {STATE_LABEL[selected.published_state]}
-                    {selected.published_chapter_id
-                      ? ` · 챕터 #${selected.published_chapter_id}`
-                      : ""}
-                  </p>
-                ) : null}
               </>
             ) : (
               <p className="ms-inspector__empty">선택된 노드가 없습니다.</p>
