@@ -952,7 +952,9 @@ export default function ManuscriptWorkspace() {
                 {node.title}
               </span>
             )}
-            <span className="ms-node__count">{node.char_count_with_spaces}</span>
+            {node.node_type === "chapter" ? (
+              <span className="ms-node__count">{node.char_count_with_spaces}</span>
+            ) : null}
             {node.published_chapter_id ? (
               <span
                 className={`ms-node__badge ms-node__badge--${node.published_state}`}
