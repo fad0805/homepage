@@ -391,6 +391,18 @@ html[data-workspace='manuscript'] body {
   }
 }
 
+/* The manuscript editor defaults to 10pt regardless of the public view. */
+html[data-workspace='manuscript'] .ms-editor--workspace .ms-editor__surface .tiptap {
+  font-size: 10pt;
+
+  p,
+  ul,
+  ol,
+  blockquote {
+    font-size: 10pt;
+  }
+}
+
 .ms-editor--placeholder .admin-editor__toolbar {
   pointer-events: none;
   opacity: 0.5;
