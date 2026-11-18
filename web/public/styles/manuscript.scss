@@ -171,7 +171,7 @@ html[data-workspace='manuscript'] body {
 
 .ms-layout {
   display: grid;
-  grid-template-columns: 17rem minmax(0, 1fr) 17rem;
+  grid-template-columns: minmax(12rem, 17rem) minmax(0, 1fr) minmax(12rem, 17rem);
   flex: 1;
   min-height: 0;
 
