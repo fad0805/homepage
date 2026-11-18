@@ -697,11 +697,6 @@ export default function ManuscriptWorkspace() {
           <section className="ms-editor">
             {scrivenings ? (
               <>
-                <div className="ms-editor__header">
-                  <button type="button" onClick={() => setScrivenings(null)}>
-                    편집기로 돌아가기
-                  </button>
-                </div>
                 <div className="ms-scrivenings">
                   {scrivenings.map((doc) => (
                     <article key={doc.id} className="ms-scrivenings__doc">
