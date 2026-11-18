@@ -473,7 +473,14 @@ export default function ManuscriptWorkspace() {
     try {
       await apiFetch(`/api/manuscript/nodes/${selectedId}`, { method: "DELETE" });
       setSelectedId(null);
-      if (projectId) await loadTree(projectId);
+      setScrivenings(null);
+      setScrivCombinedHtml("");
+      setScrivDirty(false);
+      setDirty(false);
+      if (projectId) {
+        await loadTree(projectId);
+        await loadTrash();
+      }
       notify("휴지통으로 이동했습니다.");
     } catch (error) {
       notify((error as Error).message, "error");
@@ -1036,26 +1043,24 @@ export default function ManuscriptWorkspace() {
                             : "저장됨"}
                     </button>
                   ) : (
-                    <>
-                      <button
-                        type="button"
-                        className="ms-button ms-button--primary"
-                        disabled={!dirty || saving || autoSaving}
-                        onClick={() => saveNode()}
-                      >
-                        {saving
-                          ? "저장 중…"
-                          : autoSaving
-                            ? "자동 저장 중…"
-                            : dirty
-                              ? "저장"
-                              : "저장됨"}
-                      </button>
-                      <button type="button" className="ms-button--danger" onClick={deleteSelected}>
-                        삭제
-                      </button>
-                    </>
+                    <button
+                      type="button"
+                      className="ms-button ms-button--primary"
+                      disabled={!dirty || saving || autoSaving}
+                      onClick={() => saveNode()}
+                    >
+                      {saving
+                        ? "저장 중…"
+                        : autoSaving
+                          ? "자동 저장 중…"
+                          : dirty
+                            ? "저장"
+                            : "저장됨"}
+                    </button>
                   )}
+                  <button type="button" className="ms-button--danger" onClick={deleteSelected}>
+                    삭제
+                  </button>
                 </div>
                 {selected.node_type === "chapter" ? (
                   <label className="ms-inspector__field">
