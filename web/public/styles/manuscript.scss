@@ -317,6 +317,8 @@ html[data-workspace='manuscript'] body {
 }
 
 .ms-editor {
+  width: 100%;
+  max-width: none;
   background: var(--ms-bg);
   overflow-y: auto;
 }
@@ -413,9 +415,16 @@ html[data-workspace='manuscript'] body {
 }
 
 .ms-editor__body {
+  width: 100%;
+  max-width: none;
   padding: 0 1.25rem 1rem;
 
   .admin-editor {
+    width: 100%;
+    max-width: none;
+  }
+
+  .admin-editor__content {
     max-width: none;
   }
 }
