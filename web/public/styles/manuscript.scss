@@ -525,6 +525,13 @@ html[data-workspace='manuscript'] .ms-editor--workspace .ms-editor__surface .tip
   border-bottom: 1px solid var(--ms-border);
 }
 
+.ms-inspector__actions-right {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-left: auto;
+}
+
 .ms-inspector__field {
   display: flex;
   flex-direction: column;

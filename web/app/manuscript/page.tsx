@@ -117,6 +117,11 @@ const BLOCK_TAGS = new Set([
 const SOFT_BREAK = "\u0000";
 
 function countText(html: string): { withSpaces: number; plain: number } {
+  // This component is also rendered on the server. Counts are recalculated
+  // after hydration, so avoid touching DOMParser during SSR.
+  if (typeof DOMParser === "undefined") {
+    return { withSpaces: 0, plain: 0 };
+  }
   let text = "";
   const parser = new DOMParser().parseFromString(html || "", "text/html");
   const walk = (node: globalThis.Node) => {
@@ -268,6 +273,9 @@ function highlightSnippet(text: string, query: string): ReactNode[] {
 
 /** Split the combined folder document back into per-chapter bodies. */
 function splitCombinedHtml(html: string): string[] {
+  if (typeof DOMParser === "undefined" || typeof document === "undefined") {
+    return [html || "<p></p>"];
+  }
   const parsed = new DOMParser().parseFromString(html || "", "text/html");
   const segments: string[] = [];
   let buffer: globalThis.Node[] = [];
@@ -1271,7 +1279,8 @@ export default function ManuscriptWorkspace() {
                   <button type="button" className="ms-button--danger" onClick={deleteSelected}>
                     삭제
                   </button>
-                  {selected.node_type === "chapter" ? (
+                  <div className="ms-inspector__actions-right">
+                    {selected.node_type === "chapter" ? (
                     <button
                       type="button"
                       className="ms-button ms-button--primary"
@@ -1312,6 +1321,7 @@ export default function ManuscriptWorkspace() {
                             : "저장됨"}
                     </button>
                   )}
+                  </div>
                 </div>
                 {selected.node_type === "chapter" ? (
                   <label className="ms-inspector__field">
