@@ -106,6 +106,13 @@
   }
 }
 
+.books-search-error {
+  margin: 0.35rem 0 0;
+  color: #d9534f;
+  font-size: 0.72rem;
+  line-height: 1.4;
+}
+
 .books-search-active {
   display: flex;
   align-items: center;

@@ -282,6 +282,9 @@ export default function BooksClient({
     page: number;
   } | null>(null);
   const [bodySearchLoading, setBodySearchLoading] = useState(false);
+  const [bodySearchError, setBodySearchError] = useState<
+    "initial" | "more" | null
+  >(null);
   const bodySearchRequestRef = useRef<AbortController | null>(null);
   const [chapterPage, setChapterPage] = useState(1);
   const [isMobile, setIsMobile] = useState(initialIsMobile);
@@ -315,6 +318,7 @@ export default function BooksClient({
       bodySearchRequestRef.current?.abort();
       setBodySearch(null);
       setBodySearchLoading(false);
+      setBodySearchError(null);
       return;
     }
 
@@ -322,6 +326,7 @@ export default function BooksClient({
     const controller = new AbortController();
     bodySearchRequestRef.current = controller;
     setBodySearchLoading(true);
+    setBodySearchError(null);
     const timer = window.setTimeout(() => {
       fetchChapterSearchPage(searchQuery, 1, controller.signal)
         .then(({ ids, total }) => {
@@ -332,17 +337,19 @@ export default function BooksClient({
             total,
             page: 1,
           });
+          setBodySearchError(null);
         })
         .catch(() => {
           if (controller.signal.aborted) return;
-          // Body search is an enhancement; failed requests simply leave the
-          // local title/tag matches in place.
+          // Title/tag matches still work, but the user must know that body
+          // search did not complete.
           setBodySearch({
             query: searchQuery,
             ids: new Set(),
             total: 0,
             page: 1,
           });
+          setBodySearchError("initial");
         })
         .finally(() => {
           if (!controller.signal.aborted) setBodySearchLoading(false);
@@ -369,6 +376,7 @@ export default function BooksClient({
     const controller = new AbortController();
     bodySearchRequestRef.current = controller;
     setBodySearchLoading(true);
+    setBodySearchError(null);
     fetchChapterSearchPage(current.query, nextPage, controller.signal)
       .then(({ ids, total }) => {
         if (controller.signal.aborted) return;
@@ -382,9 +390,11 @@ export default function BooksClient({
               }
             : previous,
         );
+        setBodySearchError(null);
       })
       .catch(() => {
-        // Keep the pages that already loaded when the next request fails.
+        if (controller.signal.aborted) return;
+        setBodySearchError("more");
       })
       .finally(() => {
         if (!controller.signal.aborted) setBodySearchLoading(false);
@@ -858,6 +868,13 @@ export default function BooksClient({
             ? "본문 검색 중…"
             : `본문 검색 결과 더 보기 (${bodySearch.ids.size}/${bodySearch.total})`}
         </button>
+      ) : null}
+      {bodySearchError ? (
+        <p className="books-search-error" role="alert">
+          {bodySearchError === "initial"
+            ? "본문 검색에 실패했습니다. 제목·태그 검색 결과만 표시됩니다."
+            : "본문 검색 결과를 더 불러오지 못했습니다. 다시 시도해 주세요."}
+        </p>
       ) : null}
       <div className="books-books">
         {groupedBooks.length === 0 ? (
