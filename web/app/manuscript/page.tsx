@@ -823,9 +823,6 @@ export default function ManuscriptWorkspace() {
                       >
                         {saving ? "저장 중…" : dirty ? "저장" : "저장됨"}
                       </button>
-                      <button type="button" onClick={() => void openScrivenings(selected.id)}>
-                        묶어보기
-                      </button>
                       <button type="button" className="ms-button--danger" onClick={deleteSelected}>
                         삭제
                       </button>
