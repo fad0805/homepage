@@ -9,6 +9,7 @@ from crud.books import (
     _body_snippet,
     _serialize_chapter,
     get_all_chapters,
+    get_chapters_page,
     search_chapters_for_owner,
 )
 from db.base import Base
@@ -166,6 +167,75 @@ class ChapterSearchTests(unittest.TestCase):
         )
 
         self.assertEqual(results, [matched.id])
+
+    def test_paginated_search_returns_newest_first_with_total(self) -> None:
+        created = []
+        for day in range(1, 6):
+            created.append(
+                self._chapter(
+                    f"{day}화",
+                    "공통 검색어",
+                    owner_id=self.owner.id,
+                    created_at=datetime(2026, 1, day, tzinfo=timezone.utc),
+                )
+            )
+        self.db.commit()
+
+        first, total = get_chapters_page(
+            self.db,
+            query="검색어",
+            include_body=False,
+            ids_only=True,
+            page=1,
+            page_size=2,
+        )
+        second, second_total = get_chapters_page(
+            self.db,
+            query="검색어",
+            include_body=False,
+            ids_only=True,
+            page=2,
+            page_size=2,
+        )
+
+        self.assertEqual(total, 5)
+        self.assertEqual(second_total, 5)
+        self.assertEqual(first, [created[4].id, created[3].id])
+        self.assertEqual(second, [created[2].id, created[1].id])
+
+    def test_paginated_search_total_excludes_hidden_and_future(self) -> None:
+        self._chapter(
+            "공개 글",
+            "공통 검색어",
+            owner_id=self.owner.id,
+            created_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
+        )
+        hidden = self._chapter(
+            "비공개 글",
+            "공통 검색어",
+            owner_id=self.owner.id,
+            created_at=datetime(2026, 1, 2, tzinfo=timezone.utc),
+        )
+        hidden.visible = False
+        future = self._chapter(
+            "예약 글",
+            "공통 검색어",
+            owner_id=self.owner.id,
+            created_at=datetime(2026, 1, 3, tzinfo=timezone.utc),
+        )
+        future.published_at = datetime(2999, 1, 1)
+        self.db.commit()
+
+        results, total = get_chapters_page(
+            self.db,
+            query="검색어",
+            include_body=False,
+            page=1,
+            page_size=10,
+        )
+
+        self.assertEqual(total, 1)
+        self.assertEqual([item["title"] for item in results], ["공개 글"])
 
     def test_author_filter_is_applied_with_search(self) -> None:
         own = self._chapter(

@@ -22,6 +22,7 @@ import type { Book, BookCategory, Chapter } from "./types";
 import "@/public/styles/books.scss";
 
 const CHAPTERS_PER_PAGE = 15;
+const BODY_SEARCH_PAGE_SIZE = 100;
 
 function createdTime(value: string | null) {
   if (!value) return null;
@@ -36,6 +37,32 @@ function compareChaptersByCreatedDesc(a: Chapter, b: Chapter) {
   if (aTime === null) return 1;
   if (bTime === null) return -1;
   return bTime - aTime || b.id - a.id;
+}
+
+async function fetchChapterSearchPage(
+  query: string,
+  page: number,
+  signal: AbortSignal,
+) {
+  const params = new URLSearchParams({
+    q: query,
+    include_body: "false",
+    ids_only: "true",
+    page: String(page),
+    page_size: String(BODY_SEARCH_PAGE_SIZE),
+  });
+  const response = await fetch(`/api/chapters?${params.toString()}`, {
+    signal,
+    credentials: "include",
+  });
+  if (!response.ok) throw new Error("Failed to search chapters");
+  const ids = (await response.json()) as number[];
+  const rawTotal = response.headers.get("x-total-count");
+  const total = rawTotal === null ? ids.length : Number(rawTotal);
+  return {
+    ids,
+    total: Number.isFinite(total) ? total : ids.length,
+  };
 }
 
 function TagChip({ tag }: { tag: string }) {
@@ -251,7 +278,11 @@ export default function BooksClient({
   const [bodySearch, setBodySearch] = useState<{
     query: string;
     ids: Set<number>;
+    total: number;
+    page: number;
   } | null>(null);
+  const [bodySearchLoading, setBodySearchLoading] = useState(false);
+  const bodySearchRequestRef = useRef<AbortController | null>(null);
   const [chapterPage, setChapterPage] = useState(1);
   const [isMobile, setIsMobile] = useState(initialIsMobile);
   const [now, setNow] = useState(() => Date.now());
@@ -281,45 +312,84 @@ export default function BooksClient({
   // on the client while this request is in flight.
   useEffect(() => {
     if (searchTokens(searchQuery).length === 0) {
+      bodySearchRequestRef.current?.abort();
       setBodySearch(null);
+      setBodySearchLoading(false);
       return;
     }
 
+    bodySearchRequestRef.current?.abort();
     const controller = new AbortController();
+    bodySearchRequestRef.current = controller;
+    setBodySearchLoading(true);
     const timer = window.setTimeout(() => {
-      const params = new URLSearchParams({
-        q: searchQuery,
-        include_body: "false",
-        ids_only: "true",
-      });
-      fetch(`/api/chapters?${params.toString()}`, {
-        signal: controller.signal,
-        credentials: "include",
-      })
-        .then((response) => {
-          if (!response.ok) throw new Error("Failed to search chapters");
-          return response.json() as Promise<number[]>;
-        })
-        .then((ids) => {
+      fetchChapterSearchPage(searchQuery, 1, controller.signal)
+        .then(({ ids, total }) => {
           if (controller.signal.aborted) return;
           setBodySearch({
             query: searchQuery,
             ids: new Set(ids),
+            total,
+            page: 1,
           });
         })
         .catch(() => {
           if (controller.signal.aborted) return;
           // Body search is an enhancement; failed requests simply leave the
           // local title/tag matches in place.
-          setBodySearch({ query: searchQuery, ids: new Set() });
+          setBodySearch({
+            query: searchQuery,
+            ids: new Set(),
+            total: 0,
+            page: 1,
+          });
+        })
+        .finally(() => {
+          if (!controller.signal.aborted) setBodySearchLoading(false);
         });
     }, 250);
 
     return () => {
       window.clearTimeout(timer);
-      controller.abort();
+      bodySearchRequestRef.current?.abort();
     };
   }, [searchQuery]);
+
+  const loadMoreBodySearch = () => {
+    const current = bodySearch;
+    if (!current || current.query !== searchQuery || bodySearchLoading) {
+      return;
+    }
+    const nextPage = current.page + 1;
+    if ((nextPage - 1) * BODY_SEARCH_PAGE_SIZE >= current.total) {
+      return;
+    }
+
+    bodySearchRequestRef.current?.abort();
+    const controller = new AbortController();
+    bodySearchRequestRef.current = controller;
+    setBodySearchLoading(true);
+    fetchChapterSearchPage(current.query, nextPage, controller.signal)
+      .then(({ ids, total }) => {
+        if (controller.signal.aborted) return;
+        setBodySearch((previous) =>
+          previous && previous.query === current.query
+            ? {
+                query: current.query,
+                ids: new Set([...previous.ids, ...ids]),
+                total,
+                page: nextPage,
+              }
+            : previous,
+        );
+      })
+      .catch(() => {
+        // Keep the pages that already loaded when the next request fails.
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setBodySearchLoading(false);
+      });
+  };
 
   // The chapter list is metadata-only, so load the body only for the chapter
   // the reader actually opened. Locked chapters let the unlock form handle it.
@@ -468,6 +538,11 @@ export default function BooksClient({
       [...bodySearch.ids].filter((id) => visibleChapterIds.has(id)),
     );
   }, [bodySearch, searchQuery, visibleChapters]);
+
+  const bodySearchHasMore =
+    bodySearch !== null &&
+    bodySearch.query === searchQuery &&
+    bodySearch.page * BODY_SEARCH_PAGE_SIZE < bodySearch.total;
 
   const filteredBooks = useMemo(() => {
     const tokens = searchTokens(searchQuery);
@@ -772,6 +847,18 @@ export default function BooksClient({
           </button>
         ) : null}
       </div>
+      {bodySearchHasMore ? (
+        <button
+          type="button"
+          className="books-search-more"
+          onClick={loadMoreBodySearch}
+          disabled={bodySearchLoading}
+        >
+          {bodySearchLoading
+            ? "본문 검색 중…"
+            : `본문 검색 결과 더 보기 (${bodySearch.ids.size}/${bodySearch.total})`}
+        </button>
+      ) : null}
       <div className="books-books">
         {groupedBooks.length === 0 ? (
           <p className="books-list-empty">검색 결과가 없습니다.</p>

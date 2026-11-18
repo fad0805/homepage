@@ -75,6 +75,37 @@
   opacity: 0.6;
 }
 
+.books-search-more {
+  display: block;
+  width: 100%;
+  margin: 0.35rem 0 0;
+  padding: 0.35rem 0.5rem;
+  border: 1px solid rgba(0, 0, 0, 0.16);
+  border-radius: 0.45rem;
+  background: transparent;
+  color: var(--title-color);
+  font-family: inherit;
+  font-size: 0.72rem;
+  cursor: pointer;
+
+  &:hover:not(:disabled) {
+    background: rgba(0, 0, 0, 0.06);
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+}
+
+[data-theme='dark'] .books-search-more {
+  border-color: rgba(255, 255, 255, 0.2);
+
+  &:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.08);
+  }
+}
+
 .books-search-active {
   display: flex;
   align-items: center;

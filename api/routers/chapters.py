@@ -1,6 +1,15 @@
 import hashlib
 
-from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    HTTPException,
+    Request,
+    Response,
+    UploadFile,
+    status,
+)
 from sqlalchemy.orm import Session
 
 from core.image_urls import public_url
@@ -10,6 +19,7 @@ from crud.books import (
     delete_chapter,
     get_all_chapters,
     get_chapter,
+    get_chapters_page,
     register_chapter_view,
     reorder_chapters,
     search_chapters_for_owner,
@@ -48,51 +58,63 @@ async def upload_chapter_image(
 @router.get("")
 def get_chapters(
     request: Request,
+    response: Response,
     mine: bool = False,
     q: str | None = None,
     include_body: bool = True,
     ids_only: bool = False,
+    page: int | None = None,
+    page_size: int = 20,
     db: Session = Depends(get_db),
     current_user=Depends(get_optional_user),
 ):
     grants = get_gallery_grants(request, db)
+    filters: dict = {
+        "query": q,
+        "include_body": include_body,
+        "ids_only": ids_only,
+    }
     if mine:
         if current_user is None:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Not authenticated",
             )
-        return get_all_chapters(
-            db,
+        filters.update(
             include_hidden=True,
             owner_user_id=current_user.id,
-            query=q,
-            include_body=include_body,
-            ids_only=ids_only,
         )
-    author_id = get_default_author_id(db)
-    if author_id is None:
-        return []
-    if current_user is not None and is_admin(current_user):
-        return get_all_chapters(
-            db,
-            include_hidden=True,
-            author_user_id=author_id,
-            query=q,
-            include_body=include_body,
-            ids_only=ids_only,
-        )
-    return get_all_chapters(
+    else:
+        author_id = get_default_author_id(db)
+        if author_id is None:
+            return []
+        filters["author_user_id"] = author_id
+        if current_user is not None and is_admin(current_user):
+            filters["include_hidden"] = True
+        else:
+            filters.update(
+                include_hidden=current_user is not None,
+                granted_chapters=grants.chapters,
+                granted_books=grants.books,
+                viewer_user_id=current_user.id if current_user else None,
+            )
+
+    if page is None:
+        # Body/title searches are always paginated so a broad query cannot
+        # return every matching chapter in one payload. Full chapter lists
+        # (for example the books board) still omit page and keep their shape.
+        if not q:
+            return get_all_chapters(db, **filters)
+        page = 1
+
+    chapters, total = get_chapters_page(
         db,
-        include_hidden=current_user is not None,
-        granted_chapters=grants.chapters,
-        granted_books=grants.books,
-        viewer_user_id=current_user.id if current_user else None,
-        author_user_id=author_id,
-        query=q,
-        include_body=include_body,
-        ids_only=ids_only,
+        page=page,
+        page_size=page_size,
+        **filters,
     )
+    response.headers["X-Total-Count"] = str(total)
+    return chapters
 
 
 @router.post("/")

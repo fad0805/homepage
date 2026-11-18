@@ -5,7 +5,7 @@ from datetime import datetime, timedelta, timezone
 
 from fastapi import HTTPException, status
 from sqlalchemy import and_, func, or_
-from sqlalchemy.orm import Session, load_only
+from sqlalchemy.orm import Session, contains_eager, load_only
 
 from core.mastodon import maybe_notify_chapter
 from core.search import like_pattern, search_tokens
@@ -483,7 +483,7 @@ def _chapter_is_locked(
     return bool(chapter.protected) and chapter.id not in granted_chapters
 
 
-def get_all_chapters(
+def _build_chapter_query(
     db: Session,
     *,
     include_hidden: bool = False,
@@ -495,6 +495,8 @@ def get_all_chapters(
     query: str | None = None,
     include_body: bool = True,
     ids_only: bool = False,
+    newest_first: bool = False,
+    published_only: bool = False,
 ):
     chapters_query = db.query(Chapter)
     if ids_only:
@@ -508,28 +510,71 @@ def get_all_chapters(
                 Chapter.published_at,
             )
         )
-    elif not include_body:
-        chapters_query = chapters_query.options(
-            load_only(*CHAPTER_LIST_COLUMNS)
-        )
+    else:
+        # Chapter serialization needs the book title and lock state, so load
+        # the already-joined book in the same query instead of lazily.
+        chapters_query = chapters_query.options(contains_eager(Chapter.book))
+        if not include_body:
+            chapters_query = chapters_query.options(
+                load_only(*CHAPTER_LIST_COLUMNS)
+            )
     chapters_query = chapters_query.join(
         Book, Chapter.book_id == Book.id
-    ).order_by(
-        Book.order,
-        Book.id,
-        Chapter.order,
-        Chapter.id,
     )
+    if newest_first:
+        chapters_query = chapters_query.order_by(
+            Chapter.created_at.desc().nullslast(),
+            Chapter.id.desc(),
+        )
+    else:
+        chapters_query = chapters_query.order_by(
+            Book.order,
+            Book.id,
+            Chapter.order,
+            Chapter.id,
+        )
     if owner_user_id is not None:
         chapters_query = chapters_query.filter(
             Chapter.user_id == owner_user_id
         )
     if author_user_id is not None:
         # Public chapter lists only expose the default author. Filtering here
-        # keeps body searches from scanning every author's rows before the
-        # result is trimmed in Python.
+        # keeps searches from scanning every author's rows.
         chapters_query = chapters_query.filter(
             Chapter.user_id == author_user_id
+        )
+
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    include_all = (
+        include_hidden
+        and owner_user_id is None
+        and viewer_user_id is None
+    )
+    if not include_all and owner_user_id is None:
+        public_condition = and_(
+            Chapter.visible.is_(True),
+            Book.visible.is_(True),
+            or_(
+                Chapter.published_at.is_(None),
+                Chapter.published_at <= now,
+            ),
+        )
+        if viewer_user_id is not None:
+            own_condition = or_(
+                Chapter.user_id == viewer_user_id,
+                Book.user_id == viewer_user_id,
+            )
+            chapters_query = chapters_query.filter(
+                or_(public_condition, own_condition)
+            )
+        else:
+            chapters_query = chapters_query.filter(public_condition)
+    if published_only:
+        chapters_query = chapters_query.filter(
+            or_(
+                Chapter.published_at.is_(None),
+                Chapter.published_at <= now,
+            )
         )
 
     tokens = search_tokens(query)
@@ -537,9 +582,7 @@ def get_all_chapters(
     # returning a locked chapter would reveal that its contents contain the
     # query. Owners, admins, and granted readers may still search the bodies
     # they are allowed to open.
-    body_unrestricted = owner_user_id is not None or (
-        include_hidden and viewer_user_id is None
-    )
+    body_unrestricted = owner_user_id is not None or include_all
     body_access = [
         and_(Book.protected.is_(False), Chapter.protected.is_(False)),
     ]
@@ -581,9 +624,31 @@ def get_all_chapters(
                 body_match,
             )
         )
+    return chapters_query
 
+
+def _serialize_chapter_rows(
+    chapters: list[Chapter],
+    *,
+    include_hidden: bool = False,
+    granted_chapters: frozenset[int] = frozenset(),
+    granted_books: frozenset[int] = frozenset(),
+    viewer_user_id: int | None = None,
+    owner_user_id: int | None = None,
+    include_body: bool = True,
+    ids_only: bool = False,
+):
+    include_all = (
+        include_hidden
+        and owner_user_id is None
+        and viewer_user_id is None
+    )
     result = []
-    for chapter in chapters_query.all():
+    for chapter in chapters:
+        if ids_only:
+            result.append(chapter.id)
+            continue
+
         is_own = (
             viewer_user_id is not None
             and (
@@ -594,23 +659,6 @@ def get_all_chapters(
                 )
             )
         )
-        include_all = (
-            include_hidden
-            and owner_user_id is None
-            and viewer_user_id is None
-        )
-        if (
-            not include_all
-            and owner_user_id is None
-            and not is_own
-            and not _chapter_is_public(chapter)
-        ):
-            continue
-
-        if ids_only:
-            result.append(chapter.id)
-            continue
-
         unlocked = include_all or owner_user_id is not None or (
             include_hidden and is_own
         )
@@ -627,6 +675,95 @@ def get_all_chapters(
             )
         )
     return result
+
+
+def get_all_chapters(
+    db: Session,
+    *,
+    include_hidden: bool = False,
+    granted_chapters: frozenset[int] = frozenset(),
+    granted_books: frozenset[int] = frozenset(),
+    viewer_user_id: int | None = None,
+    owner_user_id: int | None = None,
+    author_user_id: int | None = None,
+    query: str | None = None,
+    include_body: bool = True,
+    ids_only: bool = False,
+):
+    chapters_query = _build_chapter_query(
+        db,
+        include_hidden=include_hidden,
+        granted_chapters=granted_chapters,
+        granted_books=granted_books,
+        viewer_user_id=viewer_user_id,
+        owner_user_id=owner_user_id,
+        author_user_id=author_user_id,
+        query=query,
+        include_body=include_body,
+        ids_only=ids_only,
+    )
+    return _serialize_chapter_rows(
+        chapters_query.all(),
+        include_hidden=include_hidden,
+        granted_chapters=granted_chapters,
+        granted_books=granted_books,
+        viewer_user_id=viewer_user_id,
+        owner_user_id=owner_user_id,
+        include_body=include_body,
+        ids_only=ids_only,
+    )
+
+
+def get_chapters_page(
+    db: Session,
+    *,
+    page: int = 1,
+    page_size: int = 20,
+    include_hidden: bool = False,
+    granted_chapters: frozenset[int] = frozenset(),
+    granted_books: frozenset[int] = frozenset(),
+    viewer_user_id: int | None = None,
+    owner_user_id: int | None = None,
+    author_user_id: int | None = None,
+    query: str | None = None,
+    include_body: bool = True,
+    ids_only: bool = False,
+):
+    page = max(1, page)
+    page_size = max(1, min(page_size, 100))
+    chapters_query = _build_chapter_query(
+        db,
+        include_hidden=include_hidden,
+        granted_chapters=granted_chapters,
+        granted_books=granted_books,
+        viewer_user_id=viewer_user_id,
+        owner_user_id=owner_user_id,
+        author_user_id=author_user_id,
+        query=query,
+        include_body=include_body,
+        ids_only=ids_only,
+        newest_first=True,
+        published_only=True,
+    )
+    total = chapters_query.order_by(None).count()
+    chapters = (
+        chapters_query.offset((page - 1) * page_size)
+        .limit(page_size)
+        .all()
+    )
+    return (
+        _serialize_chapter_rows(
+            chapters,
+            include_hidden=include_hidden,
+            granted_chapters=granted_chapters,
+            granted_books=granted_books,
+            viewer_user_id=viewer_user_id,
+            owner_user_id=owner_user_id,
+            include_body=include_body,
+            ids_only=ids_only,
+        ),
+        total,
+    )
 
 
 def get_chapter(

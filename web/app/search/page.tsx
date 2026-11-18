@@ -1,9 +1,11 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 
 import { formatDate, formatDateTime } from "@/lib/datetime";
 import type { IllustrationItem } from "@/lib/illustration-types";
-import { serverApiFetch } from "@/lib/server-api";
+import { paginationPages } from "@/lib/pagination";
+import { serverApiFetch, serverApiFetchWithTotal } from "@/lib/server-api";
 import { matchesAllTokens, searchTokens } from "@/lib/search";
 import { getCurrentUser } from "@/lib/server-auth";
 import type { Book, Chapter } from "../books/types";
@@ -22,9 +24,18 @@ export const metadata: Metadata = {
 };
 
 const MAX_QUERY_LENGTH = 100;
+const CHAPTERS_PER_PAGE = 10;
 
 function firstParam(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] : value;
+}
+
+function searchHref(q: string, chapterPage = 1) {
+  const params = new URLSearchParams({ q });
+  if (chapterPage > 1) {
+    params.set("chapter_page", String(chapterPage));
+  }
+  return `/search?${params.toString()}`;
 }
 
 function normalize(value: string) {
@@ -78,51 +89,82 @@ function TagLinks({ tags }: { tags: string[] }) {
 export default async function SearchPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string | string[] }>;
+  searchParams: Promise<{
+    q?: string | string[];
+    chapter_page?: string | string[];
+  }>;
 }) {
   const params = await searchParams;
   const q = (firstParam(params.q) ?? "").trim().slice(0, MAX_QUERY_LENGTH);
+  const requestedChapterPage = Number(firstParam(params.chapter_page));
+  const chapterPage =
+    Number.isFinite(requestedChapterPage) && requestedChapterPage > 0
+      ? Math.floor(requestedChapterPage)
+      : 1;
   const normalizedQuery = normalize(q);
   const queryTokens = searchTokens(normalizedQuery);
 
   let books: Book[] = [];
   let chapters: Chapter[] = [];
   let illustrations: IllustrationItem[] = [];
+  let chapterTotal = 0;
   let failed = false;
   const currentUser = await getCurrentUser();
 
   const searchSuffix = q ? `?q=${encodeURIComponent(q)}` : "";
+  const chapterParams = new URLSearchParams({
+    include_body: "false",
+    page: String(chapterPage),
+    page_size: String(CHAPTERS_PER_PAGE),
+  });
+  if (q) chapterParams.set("q", q);
 
   try {
-    [books, chapters, illustrations] = await Promise.all([
-      // Book metadata is needed to resolve every matching chapter's book.
-      // Fetch the full visible list, then filter books below.
-      serverApiFetch<Book[]>("/books", {
-        tags: ["books"],
-        auth: Boolean(currentUser),
-      }),
-      // The API already matches title, subtitle, tags, and body text. Keep
-      // bodies out of this payload; the search page only renders metadata.
-      serverApiFetch<Chapter[]>(
-        `/chapters?include_body=false${
-          q ? `&q=${encodeURIComponent(q)}` : ""
-        }`,
-        {
-          tags: ["chapters"],
+    const [bookList, chapterPageResult, illustrationList] =
+      await Promise.all([
+        // Book metadata is needed to resolve every matching chapter's book.
+        // Fetch the full visible list, then filter books below.
+        serverApiFetch<Book[]>("/books", {
+          tags: ["books"],
           auth: Boolean(currentUser),
-        },
-      ),
-      serverApiFetch<IllustrationItem[]>(
-        `/illustrations?${searchSuffix ? `${searchSuffix.slice(1)}&` : ""}page_size=50`,
-        {
-          tags: ["illustrations"],
-          auth: Boolean(currentUser),
-        },
-      ),
-    ]);
+        }),
+        // The API already matches title, subtitle, tags, and body text. Keep
+        // bodies out of this payload; the search page only renders metadata.
+        serverApiFetchWithTotal<Chapter[]>(
+          `/chapters?${chapterParams.toString()}`,
+          {
+            tags: ["chapters"],
+            auth: Boolean(currentUser),
+          },
+        ),
+        serverApiFetch<IllustrationItem[]>(
+          `/illustrations?${searchSuffix ? `${searchSuffix.slice(1)}&` : ""}page_size=50`,
+          {
+            tags: ["illustrations"],
+            auth: Boolean(currentUser),
+          },
+        ),
+      ]);
+    books = bookList;
+    chapters = chapterPageResult.data;
+    chapterTotal = chapterPageResult.total ?? chapters.length;
+    illustrations = illustrationList;
   } catch (error) {
     console.error(error);
     failed = true;
+  }
+
+  const chapterTotalPages = Math.max(
+    1,
+    Math.ceil(chapterTotal / CHAPTERS_PER_PAGE),
+  );
+  if (
+    !failed &&
+    queryTokens.length > 0 &&
+    chapterTotal > 0 &&
+    chapterPage > chapterTotalPages
+  ) {
+    redirect(searchHref(q, chapterTotalPages));
   }
 
   const visibleBooks = currentUser
@@ -164,9 +206,7 @@ export default async function SearchPage({
   );
 
   const total =
-    matchedBooks.length +
-    matchedChapters.length +
-    matchedIllustrations.length;
+    matchedBooks.length + chapterTotal + matchedIllustrations.length;
 
   return (
     <div id="search-page">
@@ -205,7 +245,7 @@ export default async function SearchPage({
             <section className="search-section">
               <h2>
                 목차 · 게시글
-                <span>{matchedChapters.length}</span>
+                <span>{chapterTotal}</span>
               </h2>
               <div className="search-list">
                 {matchedChapters.map((chapter) => {
@@ -233,6 +273,64 @@ export default async function SearchPage({
                   );
                 })}
               </div>
+              {chapterTotalPages > 1 ? (
+                <nav
+                  className="search-pagination"
+                  aria-label="게시글 검색 페이지 이동"
+                >
+                  {chapterPage > 1 ? (
+                    <Link
+                      className="search-pagination__button"
+                      href={searchHref(q, chapterPage - 1)}
+                      prefetch={false}
+                    >
+                      이전
+                    </Link>
+                  ) : (
+                    <span className="search-pagination__button is-disabled">
+                      이전
+                    </span>
+                  )}
+                  {paginationPages(chapterPage, chapterTotalPages).map(
+                    (value, index) =>
+                      value === "ellipsis" ? (
+                        <span
+                          className="search-pagination__ellipsis"
+                          key={`ellipsis-${index}`}
+                        >
+                          …
+                        </span>
+                      ) : (
+                        <Link
+                          className={`search-pagination__button${
+                            value === chapterPage ? " is-active" : ""
+                          }`}
+                          href={searchHref(q, value)}
+                          aria-current={
+                            value === chapterPage ? "page" : undefined
+                          }
+                          prefetch={false}
+                          key={value}
+                        >
+                          {value}
+                        </Link>
+                      ),
+                  )}
+                  {chapterPage < chapterTotalPages ? (
+                    <Link
+                      className="search-pagination__button"
+                      href={searchHref(q, chapterPage + 1)}
+                      prefetch={false}
+                    >
+                      다음
+                    </Link>
+                  ) : (
+                    <span className="search-pagination__button is-disabled">
+                      다음
+                    </span>
+                  )}
+                </nav>
+              ) : null}
             </section>
           ) : null}
 
