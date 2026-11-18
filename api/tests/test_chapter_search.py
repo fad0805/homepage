@@ -1,3 +1,4 @@
+import re
 import unittest
 from datetime import datetime, timezone
 
@@ -527,6 +528,48 @@ class ChapterSearchTests(unittest.TestCase):
 
         event.listen(self.engine, "before_cursor_execute", record)
         return statements, record
+
+    def test_list_query_only_selects_needed_book_columns(self) -> None:
+        self._chapter(
+            "목차",
+            "본문",
+            owner_id=self.owner.id,
+            created_at=datetime(2026, 2, 1, tzinfo=timezone.utc),
+        )
+        self.db.commit()
+
+        statements, record = self._record_statements()
+        try:
+            get_all_chapters(
+                self.db,
+                include_hidden=True,
+                owner_user_id=self.owner.id,
+                include_body=False,
+            )
+        finally:
+            event.remove(self.engine, "before_cursor_execute", record)
+
+        self.assertTrue(statements)
+        chapter_selects = [
+            statement
+            for statement in statements
+            if "from chapters" in statement.lower()
+        ]
+        self.assertTrue(chapter_selects)
+        select_clause = re.split(
+            r"\bfrom\b", chapter_selects[0].lower(), maxsplit=1
+        )[0]
+        for column in ("id", "user_id", "title", "protected"):
+            self.assertIn(f"books.{column}", select_clause)
+        for column in (
+            "description",
+            "category_id",
+            "tags",
+            "visible",
+            "created_at",
+            "updated_at",
+        ):
+            self.assertNotIn(f"books.{column}", select_clause)
 
     def test_list_query_eager_loads_books(self) -> None:
         for day in range(1, 4):

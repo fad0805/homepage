@@ -624,9 +624,17 @@ def _build_chapter_query(
             )
         )
     else:
-        # Chapter serialization needs the book title and lock state, so load
-        # the already-joined book in the same query instead of lazily.
-        chapters_query = chapters_query.options(contains_eager(Chapter.book))
+        # Chapter serialization only needs the book id/title for the response,
+        # plus owner/protected to resolve locks. Loading the whole book row here
+        # would read columns the chapter list never uses.
+        chapters_query = chapters_query.options(
+            contains_eager(Chapter.book).load_only(
+                Book.id,
+                Book.title,
+                Book.user_id,
+                Book.protected,
+            )
+        )
         if not include_body:
             chapters_query = chapters_query.options(
                 load_only(*CHAPTER_LIST_COLUMNS)
