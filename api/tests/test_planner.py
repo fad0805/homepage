@@ -3,6 +3,7 @@ from datetime import date, datetime, timedelta
 from unittest.mock import patch
 
 from fastapi import HTTPException
+from pydantic import ValidationError
 
 from schemas.planner import (
     PlannerColorReorder,
@@ -111,10 +112,14 @@ class PlannerDateTests(unittest.TestCase):
                 )
 
         self.assertEqual(_validate_deadline_days(None), 7)
-        self.assertEqual(_validate_deadline_days(30), 30)
-        for value in (0, 366):
+        self.assertEqual(_validate_deadline_days(14), 14)
+        for value in (0, 15):
             with self.assertRaises(HTTPException):
                 _validate_deadline_days(value)
+        with self.assertRaises(ValidationError):
+            PlannerTaskCreate(title="마감 초과", deadline_days=15)
+        with self.assertRaises(ValidationError):
+            PlannerTaskUpdate(title="마감 초과", deadline_days=15)
 
     def test_color_normalization(self) -> None:
         self.assertEqual(_clean_color("#AABBCC"), "#aabbcc")
@@ -323,6 +328,84 @@ class PlannerCrudTests(
             trash_task(self.db, task.id, 1)
             self.assertTrue(
                 delete_task_permanently(self.db, task.id, 1)["success"]
+            )
+
+    def test_get_tasks_window_keeps_other_tabs_and_overlaps(self) -> None:
+        now = datetime(2026, 11, 17, 0, 0)
+        crossing_start = self.make_task(
+            title="창 시작을 넘는 range",
+            schedule_type="range",
+            start_date=date(2026, 10, 20),
+            end_date=date(2026, 11, 10),
+        )
+        crossing_end = self.make_task(
+            title="창 끝을 넘는 range",
+            schedule_type="range",
+            start_date=date(2026, 12, 10),
+            end_date=date(2026, 12, 20),
+        )
+        enclosing = self.make_task(
+            title="창을 감싸는 range",
+            schedule_type="range",
+            start_date=date(2026, 10, 1),
+            end_date=date(2027, 1, 31),
+        )
+        outside = self.make_task(
+            title="창 밖 active",
+            start_date=date(2027, 1, 1),
+            end_date=date(2027, 1, 10),
+        )
+        old_inactive = self.make_task(
+            title="오래된 비활성",
+            start_date=date(2026, 1, 1),
+            end_date=date(2026, 1, 5),
+            status="inactive",
+            inactive_at=now,
+        )
+        old_trashed = self.make_task(
+            title="오래된 휴지통",
+            status="trashed",
+            trashed_at=datetime(2026, 11, 16, 0, 0),
+        )
+
+        with patch(
+            "crud.planner.tasks.kst_today",
+            return_value=date(2026, 11, 17),
+        ), patch(
+            "crud.planner.tasks._utc_naive_now",
+            return_value=now,
+        ):
+            result = get_tasks(
+                self.db,
+                1,
+                start_date=date(2026, 11, 2),
+                end_date=date(2026, 12, 13),
+            )
+            all_result = get_tasks(self.db, 1)
+
+        ids = {task["id"] for task in result["tasks"]}
+        self.assertEqual(
+            ids,
+            {
+                crossing_start.id,
+                crossing_end.id,
+                enclosing.id,
+                old_inactive.id,
+                old_trashed.id,
+            },
+        )
+        self.assertNotIn(outside.id, ids)
+        self.assertEqual(result["today"], date(2026, 11, 17))
+        self.assertIn(outside.id, {t["id"] for t in all_result["tasks"]})
+
+        with self.assertRaises(HTTPException):
+            get_tasks(self.db, 1, start_date=date(2026, 11, 1))
+        with self.assertRaises(HTTPException):
+            get_tasks(
+                self.db,
+                1,
+                start_date=date(2026, 1, 1),
+                end_date=date(2027, 6, 1),
             )
 
     def test_maintain_tasks_lifecycle(self) -> None:

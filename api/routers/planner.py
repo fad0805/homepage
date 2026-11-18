@@ -125,11 +125,13 @@ def read_search(
 @router.get("/tasks", response_model=PlannerTasksResponse)
 def read_tasks(
     response: Response,
+    start: date | None = None,
+    end: date | None = None,
     db: Session = Depends(get_db),
     user=Depends(require_auth),
 ):
     _no_store(response)
-    return get_tasks(db, user.id)
+    return get_tasks(db, user.id, start_date=start, end_date=end)
 
 
 @router.post("/tasks", response_model=PlannerTaskRead)

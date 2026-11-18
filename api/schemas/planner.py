@@ -20,7 +20,7 @@ class PlannerTaskCreate(BaseModel):
     schedule_type: ScheduleType = "single"
     start_date: date | None = None
     end_date: date | None = None
-    deadline_days: int | None = Field(default=7, ge=1, le=365)
+    deadline_days: int | None = Field(default=7, ge=1, le=14)
     pinned: bool = False
     inactive: bool = False
 
@@ -32,7 +32,7 @@ class PlannerTaskUpdate(BaseModel):
     schedule_type: ScheduleType | None = None
     start_date: date | None = None
     end_date: date | None = None
-    deadline_days: int | None = Field(default=None, ge=1, le=365)
+    deadline_days: int | None = Field(default=None, ge=1, le=14)
     pinned: bool | None = None
 
 

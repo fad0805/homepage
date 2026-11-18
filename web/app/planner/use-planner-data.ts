@@ -58,47 +58,59 @@ export function usePlannerData({
   const [dayBookmark, setDayBookmark] =
     useState<BookmarkPeriod | null>(null);
   const initializedToday = useRef(false);
+  const tasksRequestRef = useRef(0);
   const eventsRequestRef = useRef(0);
 
-  const loadTasks = useCallback(async () => {
-    try {
-      const data = await apiFetch<PlannerTasksResponse>(
-        "/api/planner/tasks",
-        { cache: "no-store" },
-      );
-      setToday(data.today);
-      setTasks(sortTasks(data.tasks));
-      if (!initializedToday.current) {
-        initializedToday.current = true;
-        const bounds = monthBounds(data.today.slice(0, 7));
-        setSelectedDate(data.today);
-        setViewMonth(data.today.slice(0, 7));
-        setSearchFrom(bounds.start);
-        setSearchTo(bounds.end);
-        setForm((previous) =>
-          previous.title || previous.notes
-            ? previous
-            : emptyForm(data.today),
+  const loadTasks = useCallback(
+    async (monthKey: string) => {
+      const requestId = ++tasksRequestRef.current;
+      const visibleCells = monthCells(monthKey);
+      const start = visibleCells[0].date;
+      const end = visibleCells[visibleCells.length - 1].date;
+      try {
+        const data = await apiFetch<PlannerTasksResponse>(
+          `/api/planner/tasks?start=${start}&end=${end}`,
+          { cache: "no-store" },
         );
+        if (requestId !== tasksRequestRef.current) return;
+        setToday(data.today);
+        setTasks(sortTasks(data.tasks));
+        if (!initializedToday.current) {
+          initializedToday.current = true;
+          const bounds = monthBounds(data.today.slice(0, 7));
+          setSelectedDate(data.today);
+          setViewMonth(data.today.slice(0, 7));
+          setSearchFrom(bounds.start);
+          setSearchTo(bounds.end);
+          setForm((previous) =>
+            previous.title || previous.notes
+              ? previous
+              : emptyForm(data.today),
+          );
+        }
+        onError(null);
+      } catch (reason) {
+        if (requestId !== tasksRequestRef.current) return;
+        onError(
+          reason instanceof Error
+            ? reason.message
+            : "일정을 불러오지 못했습니다.",
+        );
+      } finally {
+        if (requestId === tasksRequestRef.current) {
+          setLoading(false);
+        }
       }
-      onError(null);
-    } catch (reason) {
-      onError(
-        reason instanceof Error
-          ? reason.message
-          : "일정을 불러오지 못했습니다.",
-      );
-    } finally {
-      setLoading(false);
-    }
-  }, [
-    onError,
-    setForm,
-    setSearchFrom,
-    setSearchTo,
-    setSelectedDate,
-    setViewMonth,
-  ]);
+    },
+    [
+      onError,
+      setForm,
+      setSearchFrom,
+      setSearchTo,
+      setSelectedDate,
+      setViewMonth,
+    ],
+  );
 
   const loadColors = useCallback(async () => {
     try {
@@ -159,8 +171,8 @@ export function usePlannerData({
   }, []);
 
   useEffect(() => {
-    void loadTasks();
-  }, [loadTasks]);
+    void loadTasks(viewMonth);
+  }, [loadTasks, viewMonth]);
 
   useEffect(() => {
     void loadColors();
@@ -176,7 +188,7 @@ export function usePlannerData({
 
   const refreshData = useCallback(async () => {
     await Promise.all([
-      loadTasks(),
+      loadTasks(viewMonth),
       loadEvents(viewMonth),
       loadColors(),
     ]);

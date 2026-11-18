@@ -63,19 +63,55 @@ def maintain_tasks(db: Session, user_id: int) -> None:
         db.commit()
 
 
-def get_tasks(db: Session, user_id: int) -> dict:
+def get_tasks(
+    db: Session,
+    user_id: int,
+    *,
+    start_date: date | None = None,
+    end_date: date | None = None,
+) -> dict:
+    if (start_date is None) != (end_date is None):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="조회 시작일과 종료일을 함께 지정해주세요.",
+        )
+    if start_date is not None and end_date is not None:
+        if end_date < start_date:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="조회 종료일은 시작일보다 빠를 수 없습니다.",
+            )
+        if (end_date - start_date).days > 366:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="한 번에 1년까지만 조회할 수 있습니다.",
+            )
+
     maintain_tasks(db, user_id)
-    tasks = (
+    query = (
         db.query(PlannerTask)
         .options(selectinload(PlannerTask.color_relation))
         .filter(PlannerTask.user_id == user_id)
-        .order_by(
-            PlannerTask.status.asc(),
-            PlannerTask.end_date.asc(),
-            PlannerTask.id.asc(),
-        )
-        .all()
     )
+    if start_date is not None and end_date is not None:
+        # Inactive/trashed rows have no calendar period and are always kept
+        # for their dedicated tabs. Active rows only need to overlap the
+        # requested window, so ranges crossing a month boundary still show.
+        query = query.filter(
+            or_(
+                PlannerTask.status.in_(("inactive", "trashed")),
+                and_(
+                    PlannerTask.status == "active",
+                    PlannerTask.start_date <= end_date,
+                    PlannerTask.end_date >= start_date,
+                ),
+            )
+        )
+    tasks = query.order_by(
+        PlannerTask.status.asc(),
+        PlannerTask.end_date.asc(),
+        PlannerTask.id.asc(),
+    ).all()
     return {
         "today": kst_today(),
         "tasks": [_serialize_task(task) for task in tasks],

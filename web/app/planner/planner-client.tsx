@@ -318,7 +318,6 @@ export default function PlannerClient({ username }: { username: string }) {
   } = usePlannerColors({
     activeTab,
     activeTasks,
-    tasks,
     savedColors,
     setSavedColors,
     refreshData,
@@ -884,6 +883,15 @@ export default function PlannerClient({ username }: { username: string }) {
         return;
       }
     }
+    if (
+      !recordCompleted &&
+      !form.undated &&
+      form.scheduleType === "single" &&
+      form.deadlineDays > 14
+    ) {
+      setError("마감 기간은 14일 이하로 입력해주세요.");
+      return;
+    }
 
     const key = editingId ? `update-${editingId}` : "create";
     setBusyKey(key);
@@ -902,7 +910,7 @@ export default function PlannerClient({ username }: { username: string }) {
         closeTaskModal();
         selectDate(completedOn);
         await Promise.all([
-          loadTasks(),
+          loadTasks(viewMonth),
           loadEvents(completedOn.slice(0, 7)),
         ]);
         return;

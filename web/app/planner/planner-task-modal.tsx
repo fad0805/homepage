@@ -225,7 +225,7 @@ export function PlannerTaskModal({
                   <input
                     type="number"
                     min={1}
-                    max={365}
+                    max={14}
                     value={form.deadlineDays}
                     onChange={(event) =>
                       setForm((previous) => ({

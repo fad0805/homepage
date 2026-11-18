@@ -29,7 +29,6 @@ import { sortColorGroupTasks } from "./planner-utils";
 interface UsePlannerColorsOptions {
   activeTab: PlannerTab;
   activeTasks: PlannerTask[];
-  tasks: PlannerTask[];
   savedColors: PlannerColor[];
   setSavedColors: Dispatch<SetStateAction<PlannerColor[]>>;
   refreshData: () => Promise<void>;
@@ -40,7 +39,6 @@ interface UsePlannerColorsOptions {
 export function usePlannerColors({
   activeTab,
   activeTasks,
-  tasks,
   savedColors,
   setSavedColors,
   refreshData,
@@ -383,29 +381,10 @@ export function usePlannerColors({
 
   const handleDeleteColor = async (saved: PlannerColor) => {
     if (deletingColorId !== null) return;
-    const chipTasks = tasks.filter(
-      (task) => task.color_id === saved.id,
-    );
-    const activeInactiveCount = chipTasks.filter(
-      (task) =>
-        task.status === "active" || task.status === "inactive",
-    ).length;
-    const trashedCount = chipTasks.filter(
-      (task) => task.status === "trashed",
-    ).length;
     const message = [
       `"${saved.name || saved.color}" 색상 칩을 삭제할까요?`,
+      "이 칩을 사용하던 활성/비활성 일정은 미등록으로 바뀌고, 휴지통 일정은 함께 삭제됩니다.",
     ];
-    if (activeInactiveCount > 0) {
-      message.push(
-        `활성/비활성 일정 ${activeInactiveCount}개가 전부 미지정으로 바뀝니다.`,
-      );
-    }
-    if (trashedCount > 0) {
-      message.push(
-        `휴지통 일정 ${trashedCount}개는 함께 영구 삭제됩니다.`,
-      );
-    }
     if (!window.confirm(message.join("\n"))) return;
 
     setDeletingColorId(saved.id);

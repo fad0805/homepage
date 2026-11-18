@@ -101,10 +101,10 @@ def _validate_color_id(
 
 def _validate_deadline_days(value: int | None) -> int:
     days = 7 if value is None else value
-    if days < 1 or days > 365:
+    if days < 1 or days > 14:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="마감 기간은 1일 이상 365일 이하로 입력해주세요.",
+            detail="마감 기간은 1일 이상 14일 이하로 입력해주세요.",
         )
     return days
 
