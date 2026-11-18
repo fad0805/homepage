@@ -145,22 +145,29 @@ export function usePlannerDateMarkers({
     );
   };
 
-  const buildMarkerIntervals = ():
-    | PlannerDateMarkerInterval[]
-    | null => {
-    const intervals: PlannerDateMarkerInterval[] = [];
-    const seen = new Set<string>();
+  const validateMarkerIntervals = (): string | null => {
     for (const item of markerIntervals) {
       const raw = item.value.trim();
-      if (!raw) continue;
+      if (!raw) {
+        return "달력 표시 간격을 입력해주세요.";
+      }
       const value = Number(raw);
       if (
         !Number.isInteger(value) ||
         value < 1 ||
         value > 3650
       ) {
-        return null;
+        return "달력 표시 간격은 1 이상 3650 이하의 정수로 입력해주세요.";
       }
+    }
+    return null;
+  };
+
+  const buildMarkerIntervals = (): PlannerDateMarkerInterval[] => {
+    const intervals: PlannerDateMarkerInterval[] = [];
+    const seen = new Set<string>();
+    for (const item of markerIntervals) {
+      const value = Number(item.value.trim());
       const key = `${item.unit}:${value}`;
       if (seen.has(key)) continue;
       seen.add(key);
@@ -174,17 +181,19 @@ export function usePlannerDateMarkers({
   ): Promise<boolean> => {
     event.preventDefault();
     if (!markerTitle.trim() || markerSaving) return false;
+
+    const intervalError = markerIsDday
+      ? validateMarkerIntervals()
+      : null;
+    if (intervalError) {
+      window.alert(intervalError);
+      return false;
+    }
+
     setMarkerSaving(true);
     onError(null);
 
     const intervals = markerIsDday ? buildMarkerIntervals() : [];
-    if (intervals === null) {
-      onError(
-        "달력 표시 간격은 1 이상 3650 이하의 정수로 입력해주세요.",
-      );
-      setMarkerSaving(false);
-      return false;
-    }
 
     const payload = {
       title: markerTitle,

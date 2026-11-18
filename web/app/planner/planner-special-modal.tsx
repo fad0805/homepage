@@ -357,8 +357,8 @@ export function PlannerSpecialModal({
                     + 간격 추가
                   </button>
                   <p className="planner-marker-hint">
-                    여러 간격을 추가하면 모두 달력에 표시됩니다. 비우면
-                    저장한 날짜에만 표시합니다.
+                    여러 간격을 추가하면 모두 달력에 표시됩니다. 간격을
+                    추가하지 않으면 저장한 날짜에만 표시됩니다.
                   </p>
                 </div>
               </>
