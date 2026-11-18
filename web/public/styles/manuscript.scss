@@ -336,6 +336,44 @@ html[data-workspace='manuscript'] body {
   overflow-y: auto;
 }
 
+/* The workspace variant is the editor itself, not a box nested in a panel. */
+.ms-editor--workspace {
+  overflow: hidden;
+  border: 0;
+  border-radius: 0;
+
+  .admin-editor__toolbar {
+    flex: 0 0 auto;
+    border-radius: 0;
+    border-bottom: 1px solid var(--ms-border);
+  }
+
+  .ms-editor__surface {
+    flex: 1 1 auto;
+    height: 100%;
+    min-height: 0;
+    max-height: none;
+    border-radius: 0;
+    overflow-y: auto;
+
+    hr {
+      border: 0;
+      border-top: 1px dashed color-mix(in srgb, var(--ms-text) 35%, transparent);
+      margin: 2.5rem 0;
+    }
+  }
+}
+
+.ms-editor--placeholder .admin-editor__toolbar {
+  pointer-events: none;
+  opacity: 0.5;
+}
+
+.ms-editor--reader {
+  padding: 0;
+  overflow-y: auto;
+}
+
 .ms-editor__header {
   display: flex;
   align-items: flex-start;
@@ -477,6 +515,14 @@ html[data-workspace='manuscript'] body {
     padding-bottom: 0.5rem;
     font-size: 1.2rem;
   }
+}
+
+.ms-inspector__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  padding: 0.7rem 0.85rem;
+  border-bottom: 1px solid var(--ms-border);
 }
 
 .ms-inspector__field {

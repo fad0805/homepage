@@ -47,7 +47,9 @@ interface RichTextEditorProps {
   /** Show the highlight toggle in the toolbar. */
   enableHighlight?: boolean;
   /** Match the editor's content typography to the public chapter view. */
-  variant?: "default" | "chapter";
+  variant?: "default" | "chapter" | "workspace";
+  /** Render as a read-only surface (used before a node is selected). */
+  readOnly?: boolean;
 }
 
 function ToolbarButton({
@@ -162,6 +164,7 @@ export function RichTextEditor({
   enableFontSize = false,
   enableHighlight = false,
   variant = "default",
+  readOnly = false,
 }: RichTextEditorProps) {
   const onChangeRef = useRef(onChange);
   const onNoticeRef = useRef(onNotice);
@@ -210,6 +213,7 @@ export function RichTextEditor({
       Placeholder.configure({ placeholder }),
     ],
     content: value || "<p></p>",
+    editable: !readOnly,
     immediatelyRender: false,
     shouldRerenderOnTransaction: true,
     editorProps: {
@@ -249,6 +253,10 @@ export function RichTextEditor({
       editor.commands.setContent(value || "<p></p>");
     }
   }, [editor, htmlMode, value]);
+
+  useEffect(() => {
+    editor?.setEditable(!readOnly);
+  }, [editor, readOnly]);
 
   const toggleHtmlMode = useCallback(() => {
     if (!editor) return;
@@ -634,6 +642,12 @@ export function RichTextEditor({
     <div
       className={`admin-editor${compact ? " admin-editor--compact" : ""}${
         variant === "chapter" ? " admin-editor--chapter" : ""
+      }${
+        variant === "workspace"
+          ? " ms-editor ms-editor--workspace admin-editor--chapter"
+          : ""
+      }${
+        readOnly ? " ms-editor--placeholder" : ""
       }`}
     >
       <div className="admin-editor__toolbar">
@@ -1019,7 +1033,9 @@ export function RichTextEditor({
         </div>
       ) : null}
       <div
-        className="admin-editor__content"
+        className={`admin-editor__content${
+          variant === "workspace" ? " ms-editor__surface" : ""
+        }`}
         onClick={
           htmlMode ? undefined : () => editor?.chain().focus().run()
         }

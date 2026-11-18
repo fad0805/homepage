@@ -148,6 +148,31 @@ const EMPTY_FORM = {
   body: "",
 };
 
+/** Split the combined folder document back into per-chapter bodies. */
+function splitCombinedHtml(html: string): string[] {
+  const parsed = new DOMParser().parseFromString(html || "", "text/html");
+  const segments: string[] = [];
+  let buffer: globalThis.Node[] = [];
+  const flush = () => {
+    const wrapper = document.createElement("div");
+    buffer.forEach((node) => wrapper.appendChild(node.cloneNode(true)));
+    segments.push(wrapper.innerHTML || "<p></p>");
+    buffer = [];
+  };
+  parsed.body.childNodes.forEach((node) => {
+    if (
+      node.nodeType === globalThis.Node.ELEMENT_NODE &&
+      (node as HTMLElement).tagName === "HR"
+    ) {
+      flush();
+      return;
+    }
+    buffer.push(node);
+  });
+  flush();
+  return segments;
+}
+
 export default function ManuscriptWorkspace() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [projectId, setProjectId] = useState<number | null>(null);
@@ -168,6 +193,8 @@ export default function ManuscriptWorkspace() {
   const [trashOpen, setTrashOpen] = useState(false);
   const [trash, setTrash] = useState<TrashItem[]>([]);
   const [scrivenings, setScrivenings] = useState<ScrivDoc[] | null>(null);
+  const [scrivCombinedHtml, setScrivCombinedHtml] = useState("");
+  const [scrivDirty, setScrivDirty] = useState(false);
   const [notice, setNotice] = useState<Notice | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -293,6 +320,10 @@ export default function ManuscriptWorkspace() {
   }, [tree]);
 
   const counts = useMemo(() => countText(form.body), [form.body]);
+  const scrivCounts = useMemo(
+    () => countText(scrivCombinedHtml),
+    [scrivCombinedHtml],
+  );
 
   const refresh = useCallback(async () => {
     if (projectId) await loadTree(projectId);
@@ -439,8 +470,42 @@ export default function ManuscriptWorkspace() {
         `/api/manuscript/scrivenings?root_id=${rootId}`,
       );
       setScrivenings(docs);
+      setScrivCombinedHtml(
+        docs.map((doc) => doc.body || "<p></p>").join("<hr>"),
+      );
+      setScrivDirty(false);
     } catch (error) {
       notify((error as Error).message, "error");
+    }
+  };
+
+  const saveCombined = async () => {
+    if (!scrivenings || !selected || !projectId) return;
+    const bodies = splitCombinedHtml(scrivCombinedHtml);
+    if (bodies.length !== scrivenings.length) {
+      notify(
+        `구분선이 ${scrivenings.length - 1}개여야 합니다. 지금은 ${bodies.length - 1}개입니다.`,
+        "error",
+      );
+      return;
+    }
+    setSaving(true);
+    try {
+      await Promise.all(
+        bodies.map((body, index) =>
+          apiFetch(`/api/manuscript/nodes/${scrivenings[index].id}`, {
+            method: "PATCH",
+            body: JSON.stringify({ body }),
+          }),
+        ),
+      );
+      await loadTree(projectId);
+      await openScrivenings(selected.id);
+      notify("폴더 본문을 저장했습니다.");
+    } catch (error) {
+      notify((error as Error).message, "error");
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -694,78 +759,43 @@ export default function ManuscriptWorkspace() {
             </div>
           </aside>
 
-          <section className="ms-editor">
-            {scrivenings ? (
-              <>
-                <div className="ms-scrivenings">
-                  {scrivenings.map((doc) => (
-                    <article key={doc.id} className="ms-scrivenings__doc">
-                      <div dangerouslySetInnerHTML={{ __html: doc.body ?? "" }} />
-                    </article>
-                  ))}
-                </div>
-              </>
-            ) : (
-              <>
-                <div className="ms-editor__header">
-                  <div className="ms-editor__actions">
-                    <button
-                      type="button"
-                      className="ms-button ms-button--primary"
-                      disabled={isPlaceholder || !dirty || saving}
-                      onClick={saveNode}
-                    >
-                      {saving ? "저장 중…" : dirty ? "저장" : "저장됨"}
-                    </button>
-                    <button
-                      type="button"
-                      disabled={isPlaceholder}
-                      onClick={() => {
-                        if (selected) void openScrivenings(selected.id);
-                      }}
-                    >
-                      묶어보기
-                    </button>
-                    <button
-                      type="button"
-                      className="ms-button--danger"
-                      disabled={isPlaceholder}
-                      onClick={deleteSelected}
-                    >
-                      삭제
-                    </button>
-                  </div>
-                </div>
-
-                {!selected || selected.node_type === "chapter" ? (
-                  <div className={`ms-editor__body${isPlaceholder ? " is-placeholder" : ""}`}>
-                    <RichTextEditor
-                      value={form.body}
-                      onChange={(html) => {
-                        if (isPlaceholder) return;
-                        setForm({ ...form, body: html });
-                        setDirty(true);
-                      }}
-                      uploadUrl="/api/chapters/upload"
-                      onNotice={(editorNotice: EditorNotice) =>
-                        notify(editorNotice.text, editorNotice.type)
-                      }
-                      variant="chapter"
-                    />
-                  </div>
-                ) : (
-                  <div className="ms-empty">
-                    <p>폴더 내용을 불러오는 중…</p>
-                  </div>
-                )}
-
-                <footer className="ms-statusbar">
-                  <span>공백 포함 {counts.withSpaces.toLocaleString()}자</span>
-                  <span>순수 {counts.plain.toLocaleString()}자</span>
-                </footer>
-              </>
-            )}
-          </section>
+          {scrivenings ? (
+            <RichTextEditor
+              variant="workspace"
+              placeholder="폴더 본문을 입력해주세요."
+              value={scrivCombinedHtml}
+              onChange={(html) => {
+                setScrivCombinedHtml(html);
+                setScrivDirty(true);
+              }}
+              uploadUrl="/api/chapters/upload"
+              onNotice={(editorNotice: EditorNotice) =>
+                notify(editorNotice.text, editorNotice.type)
+              }
+            />
+          ) : !selected || selected.node_type === "chapter" ? (
+            <RichTextEditor
+              variant="workspace"
+              readOnly={isPlaceholder}
+              placeholder="본문을 입력해주세요."
+              value={form.body}
+              onChange={(html) => {
+                if (isPlaceholder) return;
+                setForm({ ...form, body: html });
+                setDirty(true);
+              }}
+              uploadUrl="/api/chapters/upload"
+              onNotice={(editorNotice: EditorNotice) =>
+                notify(editorNotice.text, editorNotice.type)
+              }
+            />
+          ) : (
+            <section className="ms-editor ms-editor--reader">
+              <div className="ms-empty">
+                <p>폴더 내용을 불러오는 중…</p>
+              </div>
+            </section>
+          )}
 
           <aside className="ms-inspector">
             <div className="ms-panel-title">
@@ -773,6 +803,35 @@ export default function ManuscriptWorkspace() {
             </div>
             {selected ? (
               <>
+                <div className="ms-inspector__actions">
+                  {scrivenings ? (
+                    <button
+                      type="button"
+                      className="ms-button ms-button--primary"
+                      disabled={!scrivDirty || saving}
+                      onClick={saveCombined}
+                    >
+                      {saving ? "저장 중…" : scrivDirty ? "폴더 본문 저장" : "저장됨"}
+                    </button>
+                  ) : (
+                    <>
+                      <button
+                        type="button"
+                        className="ms-button ms-button--primary"
+                        disabled={!dirty || saving}
+                        onClick={saveNode}
+                      >
+                        {saving ? "저장 중…" : dirty ? "저장" : "저장됨"}
+                      </button>
+                      <button type="button" onClick={() => void openScrivenings(selected.id)}>
+                        묶어보기
+                      </button>
+                      <button type="button" className="ms-button--danger" onClick={deleteSelected}>
+                        삭제
+                      </button>
+                    </>
+                  )}
+                </div>
                 {selected.node_type === "chapter" ? (
                   <label className="ms-inspector__field">
                     부제
@@ -849,6 +908,12 @@ export default function ManuscriptWorkspace() {
             ) : (
               <p className="ms-inspector__empty">선택된 노드가 없습니다.</p>
             )}
+            <footer className="ms-statusbar">
+              <span>
+                공백 포함 {(scrivenings ? scrivCounts : counts).withSpaces.toLocaleString()}자
+              </span>
+              <span>순수 {(scrivenings ? scrivCounts : counts).plain.toLocaleString()}자</span>
+            </footer>
           </aside>
         </div>
       )}
