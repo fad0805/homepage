@@ -141,6 +141,13 @@ const STATE_LABEL: Record<ManuscriptNode["published_state"], string> = {
   published_missing: "발행본 없음",
 };
 
+const EMPTY_FORM = {
+  subtitle: "",
+  synopsis: "",
+  notes: "",
+  body: "",
+};
+
 export default function ManuscriptWorkspace() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [projectId, setProjectId] = useState<number | null>(null);
@@ -149,16 +156,10 @@ export default function ManuscriptWorkspace() {
   const [expanded, setExpanded] = useState<Set<number>>(new Set());
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [selected, setSelected] = useState<ManuscriptNode | null>(null);
-  const [form, setForm] = useState({
-    title: "",
-    subtitle: "",
-    synopsis: "",
-    status: "",
-    notes: "",
-    targetChars: "",
-    body: "",
-  });
+  const [form, setForm] = useState({ ...EMPTY_FORM });
   const [dirty, setDirty] = useState(false);
+  const [renamingId, setRenamingId] = useState<number | null>(null);
+  const [renameValue, setRenameValue] = useState("");
   const [books, setBooks] = useState<Book[]>([]);
   const [publishBookId, setPublishBookId] = useState<number | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -172,6 +173,7 @@ export default function ManuscriptWorkspace() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const dragId = useRef<number | null>(null);
+  const cancelRename = useRef(false);
 
   const notify = useCallback((text: string, type: Notice["type"] = "success") => {
     setNotice({ type, text });
@@ -232,6 +234,9 @@ export default function ManuscriptWorkspace() {
   useEffect(() => {
     if (!selectedId) {
       setSelected(null);
+      setForm({ ...EMPTY_FORM });
+      setDirty(false);
+      setScrivenings(null);
       return;
     }
     let active = true;
@@ -240,12 +245,9 @@ export default function ManuscriptWorkspace() {
         if (!active) return;
         setSelected(node);
         setForm({
-          title: node.title,
           subtitle: node.subtitle ?? "",
           synopsis: node.synopsis ?? "",
-          status: node.status ?? "",
           notes: node.notes ?? "",
-          targetChars: node.target_chars === null ? "" : String(node.target_chars),
           body: node.body ?? "",
         });
         setDirty(false);
@@ -351,12 +353,9 @@ export default function ManuscriptWorkspace() {
       await apiFetch(`/api/manuscript/nodes/${selectedId}`, {
         method: "PATCH",
         body: JSON.stringify({
-          title: form.title,
           subtitle: form.subtitle || null,
           synopsis: form.synopsis || null,
-          status: form.status || null,
           notes: form.notes || null,
-          target_chars: form.targetChars ? Number(form.targetChars) : null,
           body: form.body,
         }),
       });
@@ -481,6 +480,31 @@ export default function ManuscriptWorkspace() {
     });
   };
 
+  const commitRename = async (id: number) => {
+    setRenamingId(null);
+    if (cancelRename.current) {
+      cancelRename.current = false;
+      return;
+    }
+    const title = renameValue.trim();
+    if (!title || !projectId) return;
+    try {
+      await apiFetch(`/api/manuscript/nodes/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ title }),
+      });
+      await loadTree(projectId);
+      if (selectedId === id) {
+        setSelected((current) =>
+          current ? { ...current, title } : current,
+        );
+      }
+      notify("이름을 변경했습니다.");
+    } catch (error) {
+      notify((error as Error).message, "error");
+    }
+  };
+
   const renderRows = (parentId: number | null, depth: number): ReactElement[] => {
     const items = childrenMap.get(parentId) ?? [];
     return items.map((node) => {
@@ -491,7 +515,7 @@ export default function ManuscriptWorkspace() {
           <div
             className={`ms-node${selectedId === node.id ? " is-selected" : ""}`}
             style={{ paddingLeft: `${0.65 + depth * 1.05}rem` }}
-            draggable
+            draggable={renamingId !== node.id}
             onDragStart={() => {
               dragId.current = node.id;
             }}
@@ -522,7 +546,40 @@ export default function ManuscriptWorkspace() {
             <span className={`ms-node__icon ms-node__icon--${node.node_type}`}>
               {node.node_type === "folder" ? "▣" : "▤"}
             </span>
-            <span className="ms-node__title">{node.title}</span>
+            {renamingId === node.id ? (
+              <input
+                autoFocus
+                className="ms-node__rename"
+                value={renameValue}
+                onClick={(event) => event.stopPropagation()}
+                onChange={(event) => setRenameValue(event.target.value)}
+                onBlur={() => commitRename(node.id)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    event.currentTarget.blur();
+                  }
+                  if (event.key === "Escape") {
+                    event.preventDefault();
+                    cancelRename.current = true;
+                    setRenamingId(null);
+                  }
+                }}
+              />
+            ) : (
+              <span
+                className="ms-node__title"
+                title="더블클릭하여 이름 변경"
+                onDoubleClick={(event) => {
+                  event.stopPropagation();
+                  cancelRename.current = false;
+                  setRenameValue(node.title);
+                  setRenamingId(node.id);
+                }}
+              >
+                {node.title}
+              </span>
+            )}
             <span className="ms-node__count">{node.char_count_with_spaces}</span>
             {node.published_chapter_id ? (
               <span
@@ -542,6 +599,8 @@ export default function ManuscriptWorkspace() {
   if (loading) {
     return <div className="ms-loading">원고 워크스페이스를 불러오는 중…</div>;
   }
+
+  const isPlaceholder = !selected;
 
   return (
     <div className="ms-app">
@@ -655,73 +714,68 @@ export default function ManuscriptWorkspace() {
                   ))}
                 </div>
               </>
-            ) : selected ? (
+            ) : (
               <>
                 <div className="ms-editor__header">
                   <div>
                     <div className="ms-eyebrow">
-                      {selected.node_type === "folder" ? "폴더" : "챕터"} ·{" "}
-                      {STATE_LABEL[selected.published_state]}
+                      {selected
+                        ? selected.node_type === "folder"
+                          ? "폴더"
+                          : "챕터"
+                        : "새 챕터"}{" "}
+                      · {selected ? STATE_LABEL[selected.published_state] : STATE_LABEL.unpublished}
                     </div>
-                    <h1>{selected.title}</h1>
+                    <h1>{selected ? selected.title : "챕터를 선택해 주세요"}</h1>
+                    {isPlaceholder ? (
+                      <p>왼쪽 바인더에서 챕터를 선택하거나 새 챕터를 추가하세요.</p>
+                    ) : null}
                   </div>
                   <div className="ms-editor__actions">
                     <button
                       type="button"
                       className="ms-button ms-button--primary"
-                      disabled={!dirty || saving}
+                      disabled={isPlaceholder || !dirty || saving}
                       onClick={saveNode}
                     >
                       {saving ? "저장 중…" : dirty ? "저장" : "저장됨"}
                     </button>
-                    <button type="button" onClick={openScrivenings}>
+                    <button type="button" disabled={isPlaceholder} onClick={openScrivenings}>
                       묶어보기
                     </button>
-                    <button type="button" className="ms-button--danger" onClick={deleteSelected}>
+                    <button
+                      type="button"
+                      className="ms-button--danger"
+                      disabled={isPlaceholder}
+                      onClick={deleteSelected}
+                    >
                       삭제
                     </button>
                   </div>
                 </div>
 
-                <div className="ms-editor__fields">
-                  <label>
-                    제목
-                    <input
-                      value={form.title}
-                      onChange={(event) => {
-                        setForm({ ...form, title: event.target.value });
-                        setDirty(true);
-                      }}
-                    />
-                  </label>
-                  <label>
-                    부제
-                    <input
-                      value={form.subtitle}
-                      onChange={(event) => {
-                        setForm({ ...form, subtitle: event.target.value });
-                        setDirty(true);
-                      }}
-                    />
-                  </label>
-                  <label>
-                    시놉시스
-                    <textarea
-                      value={form.synopsis}
-                      rows={2}
-                      onChange={(event) => {
-                        setForm({ ...form, synopsis: event.target.value });
-                        setDirty(true);
-                      }}
-                    />
-                  </label>
-                </div>
+                {selected?.node_type === "folder" ? (
+                  <div className="ms-editor__fields">
+                    <label>
+                      시놉시스
+                      <textarea
+                        value={form.synopsis}
+                        rows={2}
+                        onChange={(event) => {
+                          setForm({ ...form, synopsis: event.target.value });
+                          setDirty(true);
+                        }}
+                      />
+                    </label>
+                  </div>
+                ) : null}
 
-                {selected.node_type === "chapter" ? (
-                  <div className="ms-editor__body">
+                {!selected || selected.node_type === "chapter" ? (
+                  <div className={`ms-editor__body${isPlaceholder ? " is-placeholder" : ""}`}>
                     <RichTextEditor
                       value={form.body}
                       onChange={(html) => {
+                        if (isPlaceholder) return;
                         setForm({ ...form, body: html });
                         setDirty(true);
                       }}
@@ -741,19 +795,8 @@ export default function ManuscriptWorkspace() {
                 <footer className="ms-statusbar">
                   <span>공백 포함 {counts.withSpaces.toLocaleString()}자</span>
                   <span>순수 {counts.plain.toLocaleString()}자</span>
-                  {form.targetChars ? (
-                    <span>
-                      목표 {Number(form.targetChars).toLocaleString()}자 ·{" "}
-                      {Math.round((counts.withSpaces / Number(form.targetChars)) * 100)}%
-                    </span>
-                  ) : null}
                 </footer>
               </>
-            ) : (
-              <div className="ms-empty">
-                <h1>노드를 선택해 주세요</h1>
-                <p>왼쪽 바인더에서 챕터를 선택하면 편집기가 열립니다.</p>
-              </div>
             )}
           </section>
 
@@ -763,29 +806,19 @@ export default function ManuscriptWorkspace() {
             </div>
             {selected ? (
               <>
-                <label className="ms-inspector__field">
-                  상태
-                  <input
-                    value={form.status}
-                    placeholder="초안 / 수정 중 / 완료"
-                    onChange={(event) => {
-                      setForm({ ...form, status: event.target.value });
-                      setDirty(true);
-                    }}
-                  />
-                </label>
-                <label className="ms-inspector__field">
-                  목표 글자수
-                  <input
-                    type="number"
-                    min={0}
-                    value={form.targetChars}
-                    onChange={(event) => {
-                      setForm({ ...form, targetChars: event.target.value });
-                      setDirty(true);
-                    }}
-                  />
-                </label>
+                {selected.node_type === "chapter" ? (
+                  <label className="ms-inspector__field">
+                    부제
+                    <input
+                      value={form.subtitle}
+                      placeholder="부제를 입력하세요"
+                      onChange={(event) => {
+                        setForm({ ...form, subtitle: event.target.value });
+                        setDirty(true);
+                      }}
+                    />
+                  </label>
+                ) : null}
                 <label className="ms-inspector__field">
                   작가 메모
                   <textarea

@@ -280,6 +280,18 @@ html[data-workspace='manuscript'] body {
   white-space: nowrap;
 }
 
+.ms-node__rename {
+  flex: 1;
+  min-width: 0;
+  border: 1px solid var(--ms-accent);
+  border-radius: 0.3rem;
+  background: var(--ms-bg);
+  color: var(--ms-text);
+  font-family: inherit;
+  font-size: 0.78rem;
+  padding: 0.1rem 0.3rem;
+}
+
 .ms-node__count {
   color: var(--ms-muted);
   font-size: 0.68rem;
@@ -397,7 +409,7 @@ html[data-workspace='manuscript'] body {
 
 .ms-editor__fields {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr;
   gap: 0.6rem 1rem;
   padding: 0.9rem 1.25rem;
 
@@ -407,10 +419,6 @@ html[data-workspace='manuscript'] body {
     gap: 0.25rem;
     font-size: 0.72rem;
     color: var(--ms-muted);
-  }
-
-  label:nth-child(3) {
-    grid-column: 1 / -1;
   }
 }
 
@@ -426,6 +434,11 @@ html[data-workspace='manuscript'] body {
 
   .admin-editor__content {
     max-width: none;
+  }
+
+  &.is-placeholder {
+    pointer-events: none;
+    opacity: 0.55;
   }
 }
 
