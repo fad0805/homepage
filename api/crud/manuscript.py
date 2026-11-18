@@ -427,14 +427,18 @@ def get_trash(
     if project_id is not None:
         query = query.filter(ManuscriptNode.project_id == project_id)
     nodes = query.order_by(
-        ManuscriptNode.deleted_at.desc(), ManuscriptNode.id.desc()
+        ManuscriptNode.deleted_at.desc(),
+        ManuscriptNode.position.asc(),
+        ManuscriptNode.id.asc(),
     ).all()
     return [
         {
             "id": node.id,
             "project_id": node.project_id,
+            "parent_id": node.parent_id,
             "title": node.title,
             "node_type": node.node_type,
+            "position": node.position,
             "deleted_at": _iso(node.deleted_at),
             "expires_at": _iso(
                 node.deleted_at + timedelta(days=TRASH_RETENTION_DAYS)

@@ -178,6 +178,20 @@ class ManuscriptTests(unittest.TestCase):
         self.assertEqual(crud.purge_expired(self.db, project_id=project_a.id), 0)
         self.assertEqual(crud.purge_expired(self.db, project_id=project_b.id), 1)
 
+    def test_trash_keeps_parent_structure(self) -> None:
+        project = self._project()
+        folder_id = self._node(project, "폴더", node_type="folder").id
+        child_id = self._node(project, "챕터", parent_id=folder_id).id
+
+        crud.delete_node(self.db, folder_id, self.owner.id)
+
+        items = {
+            item["id"]: item
+            for item in crud.get_trash(self.db, self.owner.id, project_id=project.id)
+        }
+        self.assertIsNone(items[folder_id]["parent_id"])
+        self.assertEqual(items[child_id]["parent_id"], folder_id)
+
     def test_search_covers_title_synopsis_notes_and_body(self) -> None:
         project = self._project()
         self._node(project, "찾을말 제목", body="相关内容")

@@ -315,6 +315,11 @@ html[data-workspace='manuscript'] body {
   &--diverged {
     background: color-mix(in srgb, #d97706 22%, transparent);
   }
+
+  &--deleted {
+    color: var(--ms-muted);
+    background: color-mix(in srgb, var(--ms-muted) 18%, transparent);
+  }
 }
 
 .ms-binder__hint {
@@ -715,50 +720,11 @@ html[data-workspace='manuscript'] .ms-editor--workspace .ms-editor__surface .tip
 .ms-trash-binder {
   display: flex;
   flex-direction: column;
-  gap: 0.2rem;
-  padding: 0.15rem 0.5rem 0.4rem 1.6rem;
-}
+  gap: 0;
+  padding: 0.15rem 0 0.4rem;
 
-.ms-trash-row {
-  display: flex;
-  align-items: center;
-  gap: 0.35rem;
-  min-height: 1.6rem;
-  border-radius: 0.3rem;
-  padding: 0.15rem 0.3rem;
-  font-size: 0.72rem;
-
-  &:hover {
-    background: color-mix(in srgb, var(--ms-text) 6%, transparent);
-  }
-
-  &__title {
-    flex: 1;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  &__meta {
+  .ms-node {
     color: var(--ms-muted);
-    font-size: 0.62rem;
-  }
-
-  button {
-    flex: 0 0 auto;
-    border: 1px solid color-mix(in srgb, var(--ms-accent) 50%, var(--ms-border));
-    border-radius: 0.3rem;
-    background: color-mix(in srgb, var(--ms-accent) 16%, var(--ms-panel));
-    color: var(--ms-text);
-    font-size: 0.68rem;
-    font-weight: 600;
-    line-height: 1.4;
-    padding: 0.12rem 0.35rem;
-    cursor: pointer;
-
-    &:hover {
-      background: color-mix(in srgb, var(--ms-accent) 28%, var(--ms-panel));
-    }
   }
 }
 

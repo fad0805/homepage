@@ -69,8 +69,22 @@ interface SearchResult {
 interface TrashItem {
   id: number;
   project_id: number;
+  parent_id: number | null;
   title: string;
   node_type: "folder" | "chapter";
+  position: number;
+  deleted_at: string | null;
+  expires_at: string | null;
+}
+
+interface TrashPreview {
+  id: number;
+  title: string;
+  node_type: "folder" | "chapter";
+  body: string | null;
+  subtitle: string | null;
+  synopsis: string | null;
+  notes: string | null;
   deleted_at: string | null;
   expires_at: string | null;
 }
@@ -157,8 +171,18 @@ function chapterSignature(nodeId: number, form: ChapterForm): string {
   return JSON.stringify({ nodeId, ...form });
 }
 
-function folderSignature(folderId: number, html: string): string {
-  return JSON.stringify({ folderId, html });
+function folderSignature(
+  folderId: number,
+  html: string,
+  form: ChapterForm,
+): string {
+  return JSON.stringify({
+    folderId,
+    html,
+    subtitle: form.subtitle,
+    synopsis: form.synopsis,
+    notes: form.notes,
+  });
 }
 
 /** Collect chapter ids in exactly the order the binder renders them. */
@@ -221,6 +245,8 @@ export default function ManuscriptWorkspace() {
   const [results, setResults] = useState<SearchResult[]>([]);
   const [trashExpanded, setTrashExpanded] = useState(false);
   const [trash, setTrash] = useState<TrashItem[]>([]);
+  const [trashFoldersOpen, setTrashFoldersOpen] = useState<Set<number>>(new Set());
+  const [trashPreview, setTrashPreview] = useState<TrashPreview | null>(null);
   const [scrivenings, setScrivenings] = useState<ScrivDoc[] | null>(null);
   const [scrivCombinedHtml, setScrivCombinedHtml] = useState("");
   const [scrivDirty, setScrivDirty] = useState(false);
@@ -380,6 +406,23 @@ export default function ManuscriptWorkspace() {
     return map;
   }, [tree]);
 
+  const trashChildrenMap = useMemo(() => {
+    const ids = new Set(trash.map((item) => item.id));
+    const map = new Map<number | null, TrashItem[]>();
+    trash.forEach((item) => {
+      const parentId = item.parent_id !== null && ids.has(item.parent_id)
+        ? item.parent_id
+        : null;
+      const siblings = map.get(parentId) ?? [];
+      siblings.push(item);
+      map.set(parentId, siblings);
+    });
+    map.forEach((siblings) =>
+      siblings.sort((a, b) => a.position - b.position || a.id - b.id),
+    );
+    return map;
+  }, [trash]);
+
   const counts = useMemo(() => countText(form.body), [form.body]);
   const scrivCounts = useMemo(
     () => countText(scrivCombinedHtml),
@@ -473,6 +516,7 @@ export default function ManuscriptWorkspace() {
     try {
       await apiFetch(`/api/manuscript/nodes/${selectedId}`, { method: "DELETE" });
       setSelectedId(null);
+      setTrashPreview(null);
       setScrivenings(null);
       setScrivCombinedHtml("");
       setScrivDirty(false);
@@ -578,27 +622,38 @@ export default function ManuscriptWorkspace() {
       }
       return;
     }
-    const signature = folderSignature(folderId, scrivCombinedHtml);
+    const signature = folderSignature(folderId, scrivCombinedHtml, form);
     if (silent) setAutoSaving(true);
     else setSaving(true);
     try {
-      await Promise.all(
-        bodies.map((body, index) =>
+      await Promise.all([
+        ...bodies.map((body, index) =>
           apiFetch(`/api/manuscript/nodes/${docs[index].id}`, {
             method: "PATCH",
             body: JSON.stringify({ body }),
           }),
         ),
-      );
+        apiFetch(`/api/manuscript/nodes/${folderId}`, {
+          method: "PATCH",
+          body: JSON.stringify({
+            subtitle: form.subtitle || null,
+            synopsis: form.synopsis || null,
+            notes: form.notes || null,
+          }),
+        }),
+      ]);
       autosaveRef.current.signature = signature;
-      if (latestSignatureRef.current === signature) setScrivDirty(false);
+      if (latestSignatureRef.current === signature) {
+        setScrivDirty(false);
+        setDirty(false);
+      }
       if (!silent) {
         await loadTree(projectId);
         const reloaded = await openScrivenings(folderId);
         if (reloaded !== null) {
-          autosaveRef.current.signature = folderSignature(folderId, reloaded);
+          autosaveRef.current.signature = folderSignature(folderId, reloaded, form);
         }
-        notify("폴더 본문을 저장했습니다.");
+        notify("폴더를 저장했습니다.");
       }
     } catch (error) {
       if (!silent) notify((error as Error).message, "error");
@@ -611,18 +666,49 @@ export default function ManuscriptWorkspace() {
   const flushAutosave = async () => {
     if (loading) return;
     if (scrivenings && selected) {
-      if (scrivDirty) await saveCombined(true);
+      if (scrivDirty || dirty) await saveCombined(true);
       return;
     }
     if (dirty && selectedId) await saveNode(true);
   };
 
+  const toggleTrashFolder = (id: number) => {
+    setTrashFoldersOpen((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const openTrashPreview = async (item: TrashItem) => {
+    await flushAutosave();
+    try {
+      const node = await apiFetch<ManuscriptNode>(
+        `/api/manuscript/nodes/${item.id}?include_deleted=true`,
+      );
+      setTrashPreview({
+        id: node.id,
+        title: node.title,
+        node_type: node.node_type,
+        body: node.body ?? null,
+        subtitle: node.subtitle,
+        synopsis: node.synopsis,
+        notes: node.notes,
+        deleted_at: item.deleted_at,
+        expires_at: item.expires_at,
+      });
+    } catch (error) {
+      notify((error as Error).message, "error");
+    }
+  };
+
   useEffect(() => {
-    if (loading || saving || autoSaving) return;
+    if (loading || saving || autoSaving || trashPreview) return;
 
     const folderActive = scrivenings !== null && selected !== null;
     const signature = folderActive
-      ? folderSignature(selected!.id, scrivCombinedHtml)
+      ? folderSignature(selected!.id, scrivCombinedHtml, form)
       : selectedId
         ? chapterSignature(selectedId, form)
         : null;
@@ -638,7 +724,7 @@ export default function ManuscriptWorkspace() {
       return;
     }
     if (autosaveRef.current.signature === signature) return;
-    if (folderActive ? !scrivDirty : !dirty) return;
+    if (folderActive ? !scrivDirty && !dirty : !dirty) return;
 
     const timer = window.setTimeout(() => {
       if (folderActive) void saveCombined(true);
@@ -656,11 +742,13 @@ export default function ManuscriptWorkspace() {
     scrivenings,
     selected,
     selectedId,
+    trashPreview,
   ]);
 
   const restoreFromTrash = async (id: number) => {
     try {
       await apiFetch(`/api/manuscript/nodes/${id}/restore`, { method: "POST" });
+      setTrashPreview((current) => (current?.id === id ? null : current));
       await loadTrash();
       if (projectId) await loadTree(projectId);
       notify("복원했습니다.");
@@ -675,6 +763,7 @@ export default function ManuscriptWorkspace() {
         `/api/manuscript/trash/purge?project_id=${projectId}`,
         { method: "POST" },
       );
+      setTrashPreview(null);
       await loadTrash();
       notify(`${result.purged}개를 영구 삭제했습니다.`);
     } catch (error) {
@@ -742,6 +831,7 @@ export default function ManuscriptWorkspace() {
             }}
             onClick={() => {
               void flushAutosave().finally(() => {
+                setTrashPreview(null);
                 setSelectedId(node.id);
                 if (node.node_type === "folder") {
                   setScrivenings(null);
@@ -817,6 +907,49 @@ export default function ManuscriptWorkspace() {
     });
   };
 
+  const renderTrashRows = (
+    parentId: number | null,
+    depth: number,
+  ): ReactElement[] =>
+    (trashChildrenMap.get(parentId) ?? []).map((item) => {
+      const isFolder = item.node_type === "folder";
+      const isOpen = trashFoldersOpen.has(item.id);
+      return (
+        <Fragment key={item.id}>
+          <div
+            className={`ms-node${trashPreview?.id === item.id ? " is-selected" : ""}`}
+            style={{ paddingLeft: `${0.65 + depth * 1.05}rem` }}
+            title={`삭제: ${item.deleted_at}\n영구 삭제: ${item.expires_at}`}
+            onClick={() => void openTrashPreview(item)}
+          >
+            <button
+              type="button"
+              className="ms-node__toggle"
+              disabled={!isFolder || !(trashChildrenMap.get(item.id) ?? []).length}
+              onClick={(event) => {
+                event.stopPropagation();
+                toggleTrashFolder(item.id);
+              }}
+              aria-label={isOpen ? "접기" : "펼치기"}
+            >
+              {isFolder ? (isOpen ? "▾" : "▸") : "·"}
+            </button>
+            <span className={`ms-node__icon ms-node__icon--${item.node_type}`}>
+              {isFolder ? "▣" : "▤"}
+            </span>
+            <span className="ms-node__title">{item.title}</span>
+            <span
+              className="ms-node__badge ms-node__badge--deleted"
+              title="휴지통에 있는 항목"
+            >
+              삭제됨
+            </span>
+          </div>
+          {isFolder && isOpen ? renderTrashRows(item.id, depth + 1) : null}
+        </Fragment>
+      );
+    });
+
   if (loading) {
     return <div className="ms-loading">원고 워크스페이스를 불러오는 중…</div>;
   }
@@ -835,6 +968,7 @@ export default function ManuscriptWorkspace() {
           value={projectId ?? ""}
           onChange={(event) => {
             void flushAutosave().finally(() => {
+              setTrashPreview(null);
               setProjectId(Number(event.target.value) || null);
               setSelectedId(null);
             });
@@ -934,27 +1068,7 @@ export default function ManuscriptWorkspace() {
               </div>
               {trashExpanded ? (
                 <div className="ms-trash-binder">
-                  {trash.map((item) => (
-                    <div
-                      key={item.id}
-                      className="ms-trash-row"
-                      title={`삭제: ${item.deleted_at}\n영구 삭제: ${item.expires_at}`}
-                    >
-                      <span className="ms-trash-row__title">{item.title}</span>
-                      <span className="ms-trash-row__meta">
-                        {item.node_type === "folder" ? "폴더" : "챕터"}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          void restoreFromTrash(item.id);
-                        }}
-                      >
-                        복원
-                      </button>
-                    </div>
-                  ))}
+                  {renderTrashRows(null, 0)}
                   {trash.length === 0 ? (
                     <p className="ms-trash-empty">휴지통이 비어 있습니다.</p>
                   ) : null}
@@ -978,7 +1092,16 @@ export default function ManuscriptWorkspace() {
             </div>
           </aside>
 
-          {scrivenings ? (
+          {trashPreview ? (
+            <RichTextEditor
+              variant="workspace"
+              readOnly
+              value={trashPreview.body ?? ""}
+              onChange={() => {}}
+              placeholder="삭제된 원고"
+              uploadUrl="/api/chapters/upload"
+            />
+          ) : scrivenings ? (
             <RichTextEditor
               variant="workspace"
               enableFontSize
@@ -1024,22 +1147,66 @@ export default function ManuscriptWorkspace() {
             <div className="ms-panel-title">
               <span>정보</span>
             </div>
-            {selected ? (
+            {trashPreview ? (
+              <>
+                <div className="ms-inspector__actions">
+                  <button
+                    type="button"
+                    className="ms-button ms-button--primary"
+                    onClick={() => void restoreFromTrash(trashPreview.id)}
+                  >
+                    복원
+                  </button>
+                  <button type="button" onClick={() => setTrashPreview(null)}>
+                    닫기
+                  </button>
+                </div>
+                <label className="ms-inspector__field">
+                  제목
+                  <input value={trashPreview.title} readOnly />
+                </label>
+                <label className="ms-inspector__field">
+                  유형
+                  <input
+                    value={trashPreview.node_type === "folder" ? "폴더" : "챕터"}
+                    readOnly
+                  />
+                </label>
+                <label className="ms-inspector__field">
+                  삭제 시각
+                  <input value={trashPreview.deleted_at ?? ""} readOnly />
+                </label>
+                <label className="ms-inspector__field">
+                  영구 삭제 예정
+                  <input value={trashPreview.expires_at ?? ""} readOnly />
+                </label>
+                {trashPreview.synopsis ? (
+                  <label className="ms-inspector__field">
+                    시놉시스
+                    <textarea value={trashPreview.synopsis} rows={4} readOnly />
+                  </label>
+                ) : null}
+                <label className="ms-inspector__field">
+                  작가 메모
+                  <textarea value={trashPreview.notes ?? ""} rows={6} readOnly />
+                </label>
+              </>
+            ) : selected ? (
               <>
                 <div className="ms-inspector__actions">
                   {scrivenings ? (
                     <button
                       type="button"
                       className="ms-button ms-button--primary"
-                      disabled={!scrivDirty || saving || autoSaving}
+                      disabled={(!scrivDirty && !dirty) || saving || autoSaving}
                       onClick={() => saveCombined()}
                     >
                       {saving
                         ? "저장 중…"
                         : autoSaving
                           ? "자동 저장 중…"
-                          : scrivDirty
-                            ? "폴더 본문 저장"
+                          : scrivDirty || dirty
+                            ? "폴더 저장"
                             : "저장됨"}
                     </button>
                   ) : (
