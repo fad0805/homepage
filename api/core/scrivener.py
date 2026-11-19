@@ -188,11 +188,12 @@ def _prepare_rtf(
     images: list[bytes] = []
     sizes: list[tuple[int | None, int | None]] = []
     last = 0
-    index = 0
-    while index < len(raw):
-        if not raw.startswith("{\\pict", index):
-            index += 1
-            continue
+    search = 0
+    while True:
+        index = raw.find("{\\pict", search)
+        if index < 0:
+            break
+        search = index + 1
         depth = 0
         end = index
         while end < len(raw):
@@ -214,7 +215,7 @@ def _prepare_rtf(
             images.append(image)
             sizes.append(_pict_size(group))
             last = end + 1
-        index = end + 1
+        search = end + 1
     pieces.append(raw[last:])
     return "".join(pieces), images, sizes
 
