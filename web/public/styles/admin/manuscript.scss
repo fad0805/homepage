@@ -233,9 +233,12 @@
 
 .admin-manuscript-row-actions {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   justify-content: flex-start;
   gap: 0.25rem;
+  width: max-content;
+  max-width: 100%;
+  justify-self: start;
   min-width: 0;
 }
 
