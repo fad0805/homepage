@@ -1169,7 +1169,12 @@ export default function ManuscriptWorkspace() {
       </header>
 
       {notice ? (
-        <div className={`ms-notice ms-notice--${notice.type}`}>{notice.text}</div>
+        <div
+          className={`ms-notice ms-notice--${notice.type}`}
+          role={notice.type === "error" ? "alert" : "status"}
+        >
+          {notice.text}
+        </div>
       ) : null}
 
       {!projectId ? (
