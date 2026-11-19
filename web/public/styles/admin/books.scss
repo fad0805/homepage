@@ -83,6 +83,19 @@
   width: min(760px, 100%);
 }
 
+.admin-books-toc-modal {
+  .admin-modal-body {
+    min-height: 0;
+  }
+
+  .admin-books-toc-panel {
+    max-height: min(68vh, 40rem);
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+}
+
 .admin-books-draft-preview-heading {
   display: flex;
   flex-direction: column;

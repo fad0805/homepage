@@ -1,3 +1,19 @@
+@mixin toc-control {
+  box-sizing: border-box;
+  padding: 0.4rem 0.55rem;
+  border: 1px solid var(--admin-border, rgba(0, 0, 0, 0.2));
+  border-radius: 0.45rem;
+  background: var(--input-background);
+  color: var(--input-text);
+  font-family: inherit;
+  font-size: 0.78rem;
+
+  &:focus {
+    outline: 2px solid var(--admin-primary, var(--title-color));
+    outline-offset: 1px;
+  }
+}
+
 .admin-books-toc-panel {
   padding: 0;
   overflow: hidden;
@@ -121,23 +137,25 @@
   }
 
   input {
+    @include toc-control;
     flex: 1;
     min-width: 6rem;
   }
 
   select {
+    @include toc-control;
     width: auto;
     max-width: 11rem;
   }
 
   &.is-drop-inside {
-    background: color-mix(in srgb, var(--admin-primary) 16%, transparent);
-    outline: 1px dashed var(--admin-primary);
+    background: color-mix(in srgb, var(--admin-primary, var(--title-color)) 16%, transparent);
+    outline: 1px dashed var(--admin-primary, var(--title-color));
   }
 
   &.is-selected-parent {
-    background: color-mix(in srgb, var(--admin-primary) 12%, transparent);
-    outline: 1px solid color-mix(in srgb, var(--admin-primary) 55%, transparent);
+    background: color-mix(in srgb, var(--admin-primary, var(--title-color)) 12%, transparent);
+    outline: 1px solid color-mix(in srgb, var(--admin-primary, var(--title-color)) 55%, transparent);
   }
 
   &.is-selected-post .admin-books-toc__label {
@@ -153,7 +171,7 @@
     right: 0.2rem;
     height: 2px;
     border-radius: 2px;
-    background: var(--admin-primary);
+    background: var(--admin-primary, var(--title-color));
   }
 
   &.is-drop-before::before {
@@ -195,14 +213,14 @@
 .admin-books-toc__root-drop {
   margin-top: 0.25rem;
   padding: 0.45rem 0.6rem;
-  border: 1px dashed color-mix(in srgb, var(--admin-primary) 45%, transparent);
+  border: 1px dashed color-mix(in srgb, var(--admin-primary, var(--title-color)) 45%, transparent);
   border-radius: 0.45rem;
   color: color-mix(in srgb, var(--foreground) 60%, transparent);
   font-size: 0.72rem;
   text-align: center;
 
   &.is-active {
-    background: color-mix(in srgb, var(--admin-primary) 16%, transparent);
+    background: color-mix(in srgb, var(--admin-primary, var(--title-color)) 16%, transparent);
     color: var(--title-color);
   }
 }
@@ -215,11 +233,13 @@
   padding: 0.4rem 0.9rem;
 
   input {
+    @include toc-control;
     flex: 1;
     min-width: 8rem;
   }
 
   select {
+    @include toc-control;
     width: auto;
     max-width: 14rem;
   }

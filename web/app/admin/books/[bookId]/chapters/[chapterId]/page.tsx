@@ -1223,7 +1223,7 @@ export default function AdminChapterEdit() {
           }}
         >
           <div
-            className="admin-modal"
+            className="admin-modal admin-books-toc-modal"
             role="dialog"
             aria-modal="true"
             aria-labelledby="chapter-toc-modal-title"
