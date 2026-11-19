@@ -5,9 +5,11 @@ import {
   useEffect,
   useRef,
   useState,
+  type CSSProperties,
   type ChangeEvent,
   type ReactNode,
 } from "react";
+import { createPortal } from "react-dom";
 import { EditorContent, useEditor } from "@tiptap/react";
 import type { Editor } from "@tiptap/core";
 import StarterKit from "@tiptap/starter-kit";
@@ -21,6 +23,7 @@ import { PagePreview } from "@/components/page-preview";
 import { AUTHOR_IMAGE_MAX_HEIGHT_REM } from "@/config/author";
 import { apiFetch } from "@/lib/api";
 import { findLinkTokens } from "@/lib/linkify";
+import { useHorizontalScrollFade } from "@/lib/use-horizontal-scroll-fade";
 
 import "@/public/styles/admin/author.scss";
 
@@ -103,22 +106,50 @@ function ToolbarMenu({
   disabled?: boolean;
 }) {
   const [open, setOpen] = useState(false);
+  const [panelStyle, setPanelStyle] = useState<CSSProperties | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  const positionPanel = useCallback(() => {
+    const rect = triggerRef.current?.getBoundingClientRect();
+    if (!rect) return;
+
+    setPanelStyle({
+      position: "fixed",
+      top: rect.bottom + 4,
+      left: Math.min(rect.left, Math.max(8, window.innerWidth - 152)),
+    });
+  }, []);
 
   useEffect(() => {
     if (!open) return;
+
+    positionPanel();
     const close = (event: PointerEvent) => {
-      if (!rootRef.current?.contains(event.target as Node)) {
+      const target = event.target as Node;
+      if (
+        !rootRef.current?.contains(target) &&
+        !panelRef.current?.contains(target)
+      ) {
         setOpen(false);
       }
     };
+
     document.addEventListener("pointerdown", close);
-    return () => document.removeEventListener("pointerdown", close);
-  }, [open]);
+    window.addEventListener("resize", positionPanel);
+    window.addEventListener("scroll", positionPanel, true);
+    return () => {
+      document.removeEventListener("pointerdown", close);
+      window.removeEventListener("resize", positionPanel);
+      window.removeEventListener("scroll", positionPanel, true);
+    };
+  }, [open, positionPanel]);
 
   return (
     <div className="admin-editor__menu" ref={rootRef}>
       <button
+        ref={triggerRef}
         type="button"
         className={`admin-editor__button admin-editor__menu-trigger${
           active ? " is-active" : ""
@@ -133,26 +164,59 @@ function ToolbarMenu({
           ▾
         </span>
       </button>
-      {open ? (
-        <div className="admin-editor__menu-panel" role="menu">
-          {items.map((item) => (
-            <button
-              key={item.label}
-              type="button"
-              role="menuitem"
-              className={`admin-editor__menu-item${
-                item.active ? " is-active" : ""
-              }`}
-              onClick={() => {
-                item.onSelect();
-                setOpen(false);
-              }}
+      {open && panelStyle
+        ? createPortal(
+            <div
+              ref={panelRef}
+              style={panelStyle}
+              className="admin-editor__menu-panel"
+              role="menu"
             >
-              {item.label}
-            </button>
-          ))}
-        </div>
-      ) : null}
+              {items.map((item) => (
+                <button
+                  key={item.label}
+                  type="button"
+                  role="menuitem"
+                  className={`admin-editor__menu-item${
+                    item.active ? " is-active" : ""
+                  }`}
+                  onClick={() => {
+                    item.onSelect();
+                    setOpen(false);
+                  }}
+                >
+                  {item.label}
+                </button>
+              ))}
+            </div>,
+            document.body,
+          )
+        : null}
+    </div>
+  );
+}
+
+function ToolbarRow({
+  children,
+  secondary = false,
+}: {
+  children: ReactNode;
+  secondary?: boolean;
+}) {
+  const { ref, fadeClassName } = useHorizontalScrollFade<HTMLDivElement>();
+
+  return (
+    <div
+      ref={ref}
+      className={[
+        "admin-editor__toolbar-row",
+        secondary ? "admin-editor__toolbar-row--secondary" : "",
+        fadeClassName,
+      ]
+        .filter(Boolean)
+        .join(" ")}
+    >
+      {children}
     </div>
   );
 }
@@ -661,7 +725,7 @@ export function RichTextEditor({
       }`}
     >
       <div className="admin-editor__toolbar">
-        <div className="admin-editor__toolbar-row">
+        <ToolbarRow>
           {enableFontSize ? (
             <label className="admin-editor__font-size">
               <span>크기</span>
@@ -806,8 +870,8 @@ export function RichTextEditor({
           >
             HTML
           </ToolbarButton>
-        </div>
-        <div className="admin-editor__toolbar-row admin-editor__toolbar-row--secondary">
+        </ToolbarRow>
+        <ToolbarRow secondary>
           <div className="admin-editor__color">
             <span>색</span>
             <input
@@ -917,7 +981,7 @@ export function RichTextEditor({
             hidden
             onChange={handleImageFile}
           />
-        </div>
+        </ToolbarRow>
       </div>
       {editor?.isActive("image") ? (
         <div className="admin-editor__image-controls">

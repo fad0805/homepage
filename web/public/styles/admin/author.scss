@@ -1,5 +1,6 @@
 @use 'links';
 @use '../variables' as *;
+@use '../mixins' as *;
 
 #admin-author {
   display: flex;
@@ -158,10 +159,22 @@
 }
 
 .admin-editor__toolbar-row {
+  @include horizontal-scroll-fade(0.85rem);
+
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
   gap: 0.25rem;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
 }
 
 .admin-editor__html-view {
