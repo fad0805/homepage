@@ -1033,6 +1033,27 @@ def get_public_toc(db: Session, book_id: int) -> list[dict]:
     return [build(node) for node in children.get(None, [])]
 
 
+def _numbered_title(title: str, existing: set[str]) -> str:
+    """Return ``title`` or ``title 2``/``title 3`` like a filesystem."""
+    if title not in existing:
+        return title
+
+    counter = 2
+    while f"{title} {counter}" in existing:
+        counter += 1
+    return f"{title} {counter}"
+
+
+def _unique_project_title(db: Session, user_id: int, title: str) -> str:
+    existing = {
+        value
+        for (value,) in db.query(ManuscriptProject.title)
+        .filter(ManuscriptProject.user_id == user_id)
+        .all()
+    }
+    return _numbered_title(title, existing)
+
+
 def import_scrivener(
     db: Session,
     user_id: int,
@@ -1047,15 +1068,21 @@ def import_scrivener(
             detail=str(exc),
         ) from exc
 
-    project = ManuscriptProject(user_id=user_id, title=source_title)
+    project = ManuscriptProject(
+        user_id=user_id,
+        title=_unique_project_title(db, user_id, source_title),
+    )
     db.add(project)
     db.flush()
 
     ids: list[int | None] = []
+    used_titles: dict[int | None, set[str]] = defaultdict(set)
     for position, item in enumerate(parsed):
         parent_id = (
             ids[item.parent_index] if item.parent_index is not None else None
         )
+        title = _numbered_title(item.title, used_titles[parent_id])
+        used_titles[parent_id].add(title)
         body = item.body or ""
         for image_index, image in enumerate(item.images):
             placeholder = (
@@ -1089,7 +1116,7 @@ def import_scrivener(
             user_id=user_id,
             parent_id=parent_id,
             node_type=item.node_type,
-            title=item.title,
+            title=title,
             body=body or None,
             synopsis=item.synopsis or None,
             notes=item.notes or None,
@@ -1104,7 +1131,7 @@ def import_scrivener(
     db.commit()
     return {
         "project_id": project.id,
-        "project_title": source_title,
+        "project_title": project.title,
         "imported_count": len(parsed),
     }
 

@@ -514,6 +514,62 @@ class ManuscriptTests(unittest.TestCase):
             .deleted_at
         )
 
+    def test_import_scrivener_numbers_duplicate_project_titles(self) -> None:
+        manifest = """<?xml version="1.0" encoding="UTF-8"?>
+<ScrivenerProject Version="2.0">
+  <ProjectProperties><ProjectTitle>같은 원고</ProjectTitle></ProjectProperties>
+  <Binder>
+    <BinderItem UUID="D" Type="DraftFolder">
+      <Title>Draft</Title>
+      <Children>
+        <BinderItem UUID="T1" Type="Text"><Title>본문</Title></BinderItem>
+      </Children>
+    </BinderItem>
+  </Binder>
+</ScrivenerProject>"""
+        buffer = BytesIO()
+        with ZipFile(buffer, "w") as archive:
+            archive.writestr("duplicate.scrivx", manifest)
+
+        first = crud.import_scrivener(
+            self.db, self.owner.id, buffer.getvalue()
+        )
+        second = crud.import_scrivener(
+            self.db, self.owner.id, buffer.getvalue()
+        )
+        third = crud.import_scrivener(
+            self.db, self.owner.id, buffer.getvalue()
+        )
+
+        self.assertEqual(first["project_title"], "같은 원고")
+        self.assertEqual(second["project_title"], "같은 원고 2")
+        self.assertEqual(third["project_title"], "같은 원고 3")
+
+    def test_import_scrivener_numbers_duplicate_sibling_titles(self) -> None:
+        manifest = """<?xml version="1.0" encoding="UTF-8"?>
+<ScrivenerProject Version="2.0">
+  <Binder>
+    <BinderItem UUID="D" Type="DraftFolder">
+      <Children>
+        <BinderItem UUID="T1" Type="Text"><Title>같은 문서</Title></BinderItem>
+        <BinderItem UUID="T2" Type="Text"><Title>같은 문서</Title></BinderItem>
+      </Children>
+    </BinderItem>
+  </Binder>
+</ScrivenerProject>"""
+        buffer = BytesIO()
+        with ZipFile(buffer, "w") as archive:
+            archive.writestr("titles.scrivx", manifest)
+
+        result = crud.import_scrivener(
+            self.db, self.owner.id, buffer.getvalue()
+        )
+        tree = crud.get_tree(self.db, result["project_id"], self.owner.id)
+        self.assertEqual(
+            [node["title"] for node in tree],
+            ["같은 문서", "같은 문서 2"],
+        )
+
     def test_import_scrivener_extracts_inline_and_image_documents(self) -> None:
         png = base64.b64decode(
             "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk"
