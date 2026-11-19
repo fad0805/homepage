@@ -105,6 +105,30 @@ nav#admin-navbar a {
   );
 }
 
+nav#admin-navbar a.admin-navbar__icon-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  padding: 0.3rem;
+  border-radius: 0.55rem;
+  transition: background-color 0.15s ease;
+
+  &:hover {
+    background: color-mix(in srgb, var(--title-color) 10%, transparent);
+  }
+
+  &.active {
+    background: color-mix(in srgb, var(--title-color) 18%, transparent);
+  }
+}
+
+.admin-navbar__note-icon {
+  width: 1.15rem;
+  height: 1.15rem;
+}
+
 
 div#content > .admin-layout > .admin-account-bar {
   display: flex;

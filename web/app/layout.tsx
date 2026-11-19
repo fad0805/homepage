@@ -79,6 +79,7 @@ export default async function RootLayout({
   const requestHeaders = await headers();
   const authorSlug = requestHeaders.get("x-author-slug");
   const nonce = requestHeaders.get("x-nonce") ?? undefined;
+
   let layoutKey: LayoutKey = DEFAULT_LAYOUT;
   let sidePosition: SidePosition = DEFAULT_SIDE_POSITION;
   let defaultTheme: ThemeMode = DEFAULT_THEME_MODE;
@@ -161,6 +162,30 @@ export default async function RootLayout({
 
   const colorStyle = buildColorThemeStyle(colorTheme, colorOverrides);
   const themeColors = getThemeMetaColors(colorTheme, colorOverrides);
+
+  // The manuscript workspace skips the public site shell but still follows
+  // the same appearance palette and light/dark preference.
+  if (requestHeaders.get("x-workspace-route") === "1") {
+    return (
+      <html
+        lang="ko"
+        data-workspace="manuscript"
+        data-color-theme={colorTheme}
+        style={colorStyle}
+        suppressHydrationWarning
+      >
+        <body>
+          <ThemeProvider
+            themeColors={themeColors}
+            defaultTheme={defaultTheme}
+            nonce={nonce}
+          >
+            <AuthProvider>{children}</AuthProvider>
+          </ThemeProvider>
+        </body>
+      </html>
+    );
+  }
 
   return (
     <html

@@ -3,6 +3,7 @@ interface NavItem {
   label: string
   authOnly?: boolean
   adminOnly?: boolean
+  iconOnly?: boolean
 }
 
 interface NaviSection {
@@ -54,6 +55,7 @@ const navigation: Navigation = {
         { href: "/admin/appearance", label: "외관 관리" },
         { href: "/admin/account", label: "계정 관리" },
         { href: "/admin/export", label: "내보내기" },
+        { href: "/admin/manuscript", label: "원고 관리" },
       ],
     ],
   },

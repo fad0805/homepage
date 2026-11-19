@@ -12,6 +12,7 @@ from core import audit as _planner_audit  # noqa: F401 - registers history hooks
 from core.bookmark_retention import bookmark_retention_loop
 from core.chapter_draft_cleanup import chapter_draft_cleanup_loop
 from core.config import API_DOCS_ENABLED, ENVIRONMENT
+from core.manuscript_trash_cleanup import manuscript_trash_cleanup_loop
 from core.mastodon import mastodon_publish_loop
 from core.tag_cleanup import tag_cleanup_loop
 from core.uploads import UPLOAD_DIR, ensure_upload_dir
@@ -30,6 +31,7 @@ from routers import (
     illustrations,
     index_page,
     links,
+    manuscript,
     memos,
     planner,
     profiles,
@@ -60,6 +62,7 @@ async def lifespan(app:FastAPI):
     chapter_draft_cleanup_task = asyncio.create_task(
         chapter_draft_cleanup_loop()
     )
+    manuscript_trash_task = asyncio.create_task(manuscript_trash_cleanup_loop())
     try:
         yield
     finally:
@@ -67,6 +70,7 @@ async def lifespan(app:FastAPI):
         bookmark_retention_task.cancel()
         tag_cleanup_task.cancel()
         chapter_draft_cleanup_task.cancel()
+        manuscript_trash_task.cancel()
         with suppress(asyncio.CancelledError):
             await mastodon_task
         with suppress(asyncio.CancelledError):
@@ -75,6 +79,8 @@ async def lifespan(app:FastAPI):
             await tag_cleanup_task
         with suppress(asyncio.CancelledError):
             await chapter_draft_cleanup_task
+        with suppress(asyncio.CancelledError):
+            await manuscript_trash_task
 
 app = FastAPI(
     lifespan=lifespan,
@@ -138,6 +144,8 @@ app.include_router(memos.router, prefix="/memos", tags=["memos"])
 app.include_router(planner.router, prefix="/planner", tags=["planner"])
 app.include_router(profiles.router, prefix="/profiles", tags=["profiles"])
 app.include_router(books.router, prefix="/books", tags=["books"])
+app.include_router(manuscript.public_router, prefix="/books", tags=["manuscript"])
+app.include_router(manuscript.router, prefix="/manuscript", tags=["manuscript"])
 app.include_router(chapters.router, prefix="/chapters", tags=["chapters"])
 app.include_router(
     chapter_drafts.router,

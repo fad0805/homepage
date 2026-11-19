@@ -9,6 +9,7 @@ import {
   type ReactNode,
 } from "react";
 import { EditorContent, useEditor } from "@tiptap/react";
+import type { Editor } from "@tiptap/core";
 import StarterKit from "@tiptap/starter-kit";
 import Highlight from "@tiptap/extension-highlight";
 import Placeholder from "@tiptap/extension-placeholder";
@@ -47,7 +48,11 @@ interface RichTextEditorProps {
   /** Show the highlight toggle in the toolbar. */
   enableHighlight?: boolean;
   /** Match the editor's content typography to the public chapter view. */
-  variant?: "default" | "chapter";
+  variant?: "default" | "chapter" | "workspace";
+  /** Render as a read-only surface (used before a node is selected). */
+  readOnly?: boolean;
+  /** Receive the live editor instance for programmatic navigation. */
+  onEditorReady?: (editor: Editor | null) => void;
 }
 
 function ToolbarButton({
@@ -162,6 +167,8 @@ export function RichTextEditor({
   enableFontSize = false,
   enableHighlight = false,
   variant = "default",
+  readOnly = false,
+  onEditorReady,
 }: RichTextEditorProps) {
   const onChangeRef = useRef(onChange);
   const onNoticeRef = useRef(onNotice);
@@ -210,6 +217,7 @@ export function RichTextEditor({
       Placeholder.configure({ placeholder }),
     ],
     content: value || "<p></p>",
+    editable: !readOnly,
     immediatelyRender: false,
     shouldRerenderOnTransaction: true,
     editorProps: {
@@ -243,12 +251,22 @@ export function RichTextEditor({
   });
 
   useEffect(() => {
-    if (!editor) return;
-    if (htmlMode) return;
+    if (!editor || htmlMode) return;
     if (value !== editor.getHTML()) {
       editor.commands.setContent(value || "<p></p>");
     }
-  }, [editor, htmlMode, value]);
+    onEditorReady?.(editor);
+  }, [editor, htmlMode, value, onEditorReady]);
+
+  useEffect(() => {
+    if (!editor) return;
+    onEditorReady?.(editor);
+    return () => onEditorReady?.(null);
+  }, [editor, onEditorReady]);
+
+  useEffect(() => {
+    editor?.setEditable(!readOnly);
+  }, [editor, readOnly]);
 
   const toggleHtmlMode = useCallback(() => {
     if (!editor) return;
@@ -634,6 +652,12 @@ export function RichTextEditor({
     <div
       className={`admin-editor${compact ? " admin-editor--compact" : ""}${
         variant === "chapter" ? " admin-editor--chapter" : ""
+      }${
+        variant === "workspace"
+          ? " ms-editor ms-editor--workspace admin-editor--chapter"
+          : ""
+      }${
+        readOnly ? " ms-editor--placeholder" : ""
       }`}
     >
       <div className="admin-editor__toolbar">
@@ -1019,7 +1043,9 @@ export function RichTextEditor({
         </div>
       ) : null}
       <div
-        className="admin-editor__content"
+        className={`admin-editor__content${
+          variant === "workspace" ? " ms-editor__surface" : ""
+        }`}
         onClick={
           htmlMode ? undefined : () => editor?.chain().focus().run()
         }
