@@ -1,8 +1,13 @@
 import unittest
-from datetime import date
+from datetime import date, time
 
 from crud.bookmark.journal import get_journal_tree
-from models.bookmark import BookmarkGoal, BookmarkRating, BookmarkReview
+from models.bookmark import (
+    BookmarkGoal,
+    BookmarkMoodTag,
+    BookmarkRating,
+    BookmarkReview,
+)
 from models.users import User
 from tests.bookmark_test_base import BookmarkDatabaseTestCase
 
@@ -207,3 +212,37 @@ class BookmarkJournalTreeTests(
             decade_start=date(2026, 1, 1),
         )
         self.assertEqual(tree["years"], [])
+
+    def test_day_meta_only_record_is_kept(self):
+        tag = BookmarkMoodTag(
+            user_id=self.user_id,
+            name="상쾌",
+        )
+        self.db.add(tag)
+        self.db.commit()
+        self.db.add(
+            BookmarkGoal(
+                user_id=self.user_id,
+                period_type="day",
+                period_start=date(2026, 11, 4),
+                content="",
+                wake_time=time(7, 5),
+                mood_tag_id=tag.id,
+            )
+        )
+        self.db.commit()
+
+        tree = get_journal_tree(
+            self.db,
+            self.user_id,
+            decade_start=date(2026, 1, 1),
+        )
+
+        self.assertEqual(len(tree["years"]), 1)
+        quarter = tree["years"][0]["children"][0]
+        month = quarter["children"][0]
+        week = month["children"][0]
+        day = week["children"][0]
+        self.assertEqual(day["level"], "day")
+        self.assertEqual(day["goal"].wake_time, time(7, 5))
+        self.assertEqual(day["goal"].mood_tag_id, tag.id)

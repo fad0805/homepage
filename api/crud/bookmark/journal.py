@@ -218,6 +218,13 @@ def get_journal_tree(
         review = node["review"]
         return bool(
             (goal is not None and goal.content.strip())
+            or (
+                goal is not None
+                and (
+                    goal.wake_time is not None
+                    or goal.mood_tag_id is not None
+                )
+            )
             or node["rating"] is not None
             or (review is not None and review.content.strip())
         )

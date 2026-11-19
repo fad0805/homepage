@@ -69,6 +69,8 @@ function renderRating(node: BookmarkJournalNode) {
 function hasOwnRecord(node: BookmarkJournalNode) {
   return (
     Boolean(node.goal?.content) ||
+    Boolean(node.goal?.wake_time) ||
+    node.goal?.mood_tag_id != null ||
     Boolean(node.review?.content) ||
     (node.rating?.rating ?? 0) > 0
   );
@@ -105,6 +107,19 @@ function renderRecord(
           : undefined
       }
     >
+      {node.goal?.wake_time || node.goal?.mood_tag_name ? (
+        <div className="bookmark-journal-block">
+          <span className="bookmark-journal-label">기상/기분</span>
+          <p>
+            {[
+              formatTime24h(node.goal?.wake_time),
+              node.goal?.mood_tag_name,
+            ]
+              .filter(Boolean)
+              .join(" · ")}
+          </p>
+        </div>
+      ) : null}
       {node.goal?.content ? (
         <div className="bookmark-journal-block">
           <span className="bookmark-journal-label">목표</span>
@@ -130,6 +145,8 @@ function textOrDash(value: string | null | undefined) {
 function hasAnyRecord(node: BookmarkJournalNode) {
   return (
     node.goal_count > 0 ||
+    Boolean(node.goal?.wake_time) ||
+    node.goal?.mood_tag_id != null ||
     node.review_count > 0 ||
     node.rating_count > 0
   );
@@ -679,7 +696,7 @@ export function BookmarkJournalPanel() {
             onClick={() => setEditingNode(targetNode)}
           >
             {hasAnyRecord(targetNode)
-              ? "이 기간에 직접 작성한 목표·별점·후기가 없습니다. 클릭해서 기록하기"
+              ? "이 기간에 직접 작성한 목표·기상·기분·별점·후기가 없습니다. 클릭해서 기록하기"
               : `${EMPTY_LABELS[level]} 클릭해서 기록하기`}
           </button>
         )}
