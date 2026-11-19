@@ -23,6 +23,7 @@ from core.scrivener import (
 from core.search import like_pattern, search_tokens
 from core.text_stats import count_characters, html_to_plain
 from core.uploads import open_uploaded_file, save_image_bytes
+from crud.books import _category_is_visible_to
 from models.books import Book, Chapter
 from models.manuscript import ManuscriptNode, ManuscriptProject, SerialNode
 from schemas import manuscript as schemas
@@ -1066,17 +1067,35 @@ def _next_chapter_order(db: Session, book_id: int) -> int:
     return (db.query(func.max(Chapter.order)).filter(Chapter.book_id == book_id).scalar() or 0) + 1
 
 
-def get_public_toc(db: Session, book_id: int) -> list[dict]:
+def get_public_toc(
+    db: Session,
+    book_id: int,
+    *,
+    author_id: int | None,
+) -> list[dict]:
+    """Return the anonymous reader's TOC using the public book rules."""
+    not_found = HTTPException(
+        status_code=status.HTTP_404_NOT_FOUND,
+        detail="Does not exist book",
+    )
+    if author_id is None:
+        raise not_found
     book = (
         db.query(Book)
-        .filter(Book.id == book_id, Book.visible.is_(True))
+        .options(joinedload(Book.category_relation))
+        .filter(
+            Book.id == book_id,
+            Book.visible.is_(True),
+            Book.user_id == author_id,
+        )
         .first()
     )
-    if book is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Does not exist book",
-        )
+    if book is None or not _category_is_visible_to(
+        book,
+        viewer_user_id=None,
+        can_view_hidden=False,
+    ):
+        raise not_found
 
     chapters = {
         chapter.id: chapter
@@ -1092,7 +1111,14 @@ def get_public_toc(db: Session, book_id: int) -> list[dict]:
                 Chapter.order,
             )
         )
-        .filter(Chapter.book_id == book_id, Chapter.visible.is_(True))
+        .filter(
+            Chapter.book_id == book_id,
+            Chapter.visible.is_(True),
+            or_(
+                Chapter.published_at.is_(None),
+                Chapter.published_at <= _utcnow(),
+            ),
+        )
         .order_by(Chapter.order.asc(), Chapter.id.asc())
         .all()
     }
@@ -1112,7 +1138,7 @@ def get_public_toc(db: Session, book_id: int) -> list[dict]:
             "id": chapter.id,
             "title": chapter.title,
             "subtitle": chapter.subtitle,
-            "locked": bool(chapter.protected),
+            "locked": bool(book.protected or chapter.protected),
             "published_at": _iso(chapter.published_at),
             "updated_at": _iso(chapter.updated_at),
         }

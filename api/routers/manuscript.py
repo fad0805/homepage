@@ -8,7 +8,7 @@ from crud import manuscript as crud
 from db.session import get_db
 from schemas import manuscript as schemas
 
-from .utils import require_auth
+from .utils import get_default_author_id, require_auth
 
 router = APIRouter()
 public_router = APIRouter()
@@ -235,4 +235,4 @@ def get_public_toc(
     book_id: int,
     db: Session = Depends(get_db),
 ):
-    return crud.get_public_toc(db, book_id)
+    return crud.get_public_toc(db, book_id, author_id=get_default_author_id(db))

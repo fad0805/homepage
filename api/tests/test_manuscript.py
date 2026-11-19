@@ -15,7 +15,7 @@ from core.scrivener import parse_scrivener_zip
 from core.text_stats import count_characters
 from crud import manuscript as crud
 from db.base import Base
-from models.books import Book, Chapter
+from models.books import Book, BookCategory, Chapter
 from models.illustrations import Illustration, IllustrationImage  # noqa: F401
 from models.manuscript import ManuscriptNode, ManuscriptProject, SerialNode
 from models.users import User
@@ -459,7 +459,7 @@ class ManuscriptTests(unittest.TestCase):
         self.assertEqual(chapter.tags, [])
         self.assertIsNone(chapter.published_at)
 
-        toc = crud.get_public_toc(self.db, self.book.id)
+        toc = crud.get_public_toc(self.db, self.book.id, author_id=self.owner.id)
         self.assertEqual(len(toc), 1)
         self.assertEqual(toc[0]["label"], "1권")
         self.assertEqual(toc[0]["children"][0]["chapter"]["title"], "도입")
@@ -508,9 +508,105 @@ class ManuscriptTests(unittest.TestCase):
         self.assertFalse(result["linked"])
         self.db.refresh(node)
         self.assertIsNone(node.published_chapter_id)
-        toc = crud.get_public_toc(self.db, other_book.id)
+        toc = crud.get_public_toc(
+            self.db, other_book.id, author_id=self.owner.id
+        )
         self.assertEqual(len(toc), 1)
         self.assertEqual(toc[0]["chapter"]["title"], "1화")
+
+    def test_public_toc_hides_books_in_hidden_categories(self) -> None:
+        category = BookCategory(
+            user_id=self.owner.id, name="숨김 카테고리", visible=False
+        )
+        self.db.add(category)
+        self.db.flush()
+        self.book.category_id = category.id
+        project = self._project()
+        node = self._node(project, "1화", body="<p>본문</p>")
+        crud.publish_node(
+            self.db,
+            node.id,
+            schemas.PublishRequest(target_book_id=self.book.id),
+            self.owner.id,
+        )
+
+        with self.assertRaises(HTTPException):
+            crud.get_public_toc(
+                self.db, self.book.id, author_id=self.owner.id
+            )
+
+    def test_public_toc_hides_future_chapters(self) -> None:
+        project = self._project()
+        node = self._node(project, "예약", body="<p>본문</p>")
+        published = crud.publish_node(
+            self.db,
+            node.id,
+            schemas.PublishRequest(target_book_id=self.book.id),
+            self.owner.id,
+        )
+        chapter = (
+            self.db.query(Chapter).filter(Chapter.id == published["chapter_id"]).one()
+        )
+        chapter.published_at = datetime.now(timezone.utc).replace(
+            tzinfo=None
+        ) + timedelta(days=1)
+        self.db.commit()
+
+        toc = crud.get_public_toc(
+            self.db, self.book.id, author_id=self.owner.id
+        )
+        self.assertEqual(toc, [])
+
+    def test_public_toc_is_limited_to_default_author(self) -> None:
+        other_book = Book(user_id=self.other.id, title="남의 책", tags=[])
+        self.db.add(other_book)
+        self.db.flush()
+        chapter = Chapter(
+            user_id=self.other.id,
+            book_id=other_book.id,
+            title="비밀",
+            tags=[],
+            visible=True,
+        )
+        self.db.add(chapter)
+        self.db.flush()
+        self.db.add(
+            SerialNode(
+                user_id=self.other.id,
+                book_id=other_book.id,
+                node_type="post",
+                chapter_id=chapter.id,
+                position=0,
+            )
+        )
+        self.db.commit()
+
+        with self.assertRaises(HTTPException):
+            crud.get_public_toc(
+                self.db, other_book.id, author_id=self.owner.id
+            )
+
+    def test_public_toc_locks_chapters_when_book_is_protected(self) -> None:
+        project = self._project()
+        node = self._node(project, "1화", body="<p>본문</p>")
+        crud.publish_node(
+            self.db,
+            node.id,
+            schemas.PublishRequest(target_book_id=self.book.id),
+            self.owner.id,
+        )
+
+        toc = crud.get_public_toc(
+            self.db, self.book.id, author_id=self.owner.id
+        )
+        self.assertFalse(toc[0]["chapter"]["locked"])
+
+        self.book.protected = True
+        self.db.commit()
+        toc = crud.get_public_toc(
+            self.db, self.book.id, author_id=self.owner.id
+        )
+        self.assertTrue(toc[0]["chapter"]["locked"])
 
     def test_deleted_chapter_falls_back_to_fresh_publish(self) -> None:
         project = self._project()
