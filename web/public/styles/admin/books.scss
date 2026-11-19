@@ -1141,6 +1141,10 @@ p.admin-books-draft-preview-empty {
     .admin-books-chapter-link {
       flex: 1 1 auto;
       min-width: max-content;
+
+      .admin-books-chapter-meta {
+        margin-left: 1.5rem;
+      }
     }
   }
 }
