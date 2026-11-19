@@ -605,7 +605,9 @@ export function TocManager({
           {loading ? (
             <p className="admin-books-empty">목차를 불러오는 중…</p>
           ) : visibleTree.length === 0 ? (
-            <p className="admin-books-empty">등록된 목차가 없습니다.</p>
+            <p className="admin-books-empty admin-books-toc__empty">
+              등록된 목차가 없습니다.
+            </p>
           ) : (
             <div className="admin-books-toc__tree">
               {visibleTree.map((node) => renderNode(node, 0))}

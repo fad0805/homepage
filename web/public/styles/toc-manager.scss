@@ -218,6 +218,11 @@
   }
 }
 
+.admin-books-empty.admin-books-toc__empty {
+  margin: 1rem;
+  font-size: 0.8rem;
+}
+
 .admin-books-toc__chapter-count {
   display: inline-block;
   flex: 0 0 auto;
