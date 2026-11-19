@@ -1,18 +1,13 @@
 "use client";
 
-import {
-  Fragment,
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type ReactElement,
-  type ReactNode,
-} from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { Editor } from "@tiptap/core";
 import { RichTextEditor, type EditorNotice } from "@/components/rich-text-editor";
 import { apiFetch } from "@/lib/api";
+
+import { ManuscriptBinder } from "./manuscript-binder";
+import { ManuscriptBinderMenu } from "./manuscript-binder-menu";
+import type { MobilePanel, ManuscriptNode, TrashItem } from "./manuscript-types";
 
 import "@/public/styles/manuscript.scss";
 
@@ -55,33 +50,6 @@ interface Project {
   node_count: number;
 }
 
-interface ManuscriptNode {
-  id: number;
-  project_id: number;
-  parent_id: number | null;
-  node_type: "folder" | "chapter";
-  title: string;
-  subtitle: string | null;
-  synopsis: string | null;
-  status: string | null;
-  notes: string | null;
-  target_chars: number | null;
-  position: number;
-  char_count_with_spaces: number;
-  char_count_plain: number;
-  published_chapter_id: number | null;
-  published_chapter_exists?: boolean;
-  published_state:
-    | "unpublished"
-    | "published"
-    | "needs_republish"
-    | "chapter_edited"
-    | "diverged"
-    | "published_missing";
-  body?: string | null;
-  deleted_at?: string | null;
-}
-
 interface SearchResult {
   id: number;
   project_id: number;
@@ -90,17 +58,6 @@ interface SearchResult {
   path: { id: number; title: string }[];
   snippet: string;
   char_count_with_spaces: number;
-}
-
-interface TrashItem {
-  id: number;
-  project_id: number;
-  parent_id: number | null;
-  title: string;
-  node_type: "folder" | "chapter";
-  position: number;
-  deleted_at: string | null;
-  expires_at: string | null;
 }
 
 interface TrashPreview {
@@ -336,14 +293,12 @@ export default function ManuscriptWorkspace() {
   const [selected, setSelected] = useState<ManuscriptNode | null>(null);
   const [form, setForm] = useState({ ...EMPTY_FORM });
   const [dirty, setDirty] = useState(false);
-  const [renamingId, setRenamingId] = useState<number | null>(null);
-  const [renameValue, setRenameValue] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchResult[]>([]);
   const [trashExpanded, setTrashExpanded] = useState(false);
+  const [mobilePanel, setMobilePanel] = useState<MobilePanel>(null);
   const [trash, setTrash] = useState<TrashItem[]>([]);
-  const [trashFoldersOpen, setTrashFoldersOpen] = useState<Set<number>>(new Set());
   const [trashPreview, setTrashPreview] = useState<TrashPreview | null>(null);
   const [trashScrivenings, setTrashScrivenings] = useState<ScrivDoc[] | null>(null);
   const [trashCombinedHtml, setTrashCombinedHtml] = useState("");
@@ -354,8 +309,6 @@ export default function ManuscriptWorkspace() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [autoSaving, setAutoSaving] = useState(false);
-  const dragId = useRef<number | null>(null);
-  const cancelRename = useRef(false);
   const autosaveRef = useRef<{ key: string | null; signature: string | null }>({
     key: null,
     signature: null,
@@ -374,6 +327,7 @@ export default function ManuscriptWorkspace() {
   const selectNode = useCallback(
     (id: number | null) => {
       setSelectedId(id);
+      setMobilePanel(null);
       if (projectId !== null) rememberLastNodeId(projectId, id);
     },
     [projectId],
@@ -424,6 +378,29 @@ export default function ManuscriptWorkspace() {
       }
       return next;
     });
+  };
+
+  const toggleMobilePanel = (panel: Exclude<MobilePanel, null>) => {
+    setMobilePanel((current) => (current === panel ? null : panel));
+  };
+
+  const handleSelectNode = (node: ManuscriptNode) => {
+    void flushAutosave().finally(() => {
+      setTrashPreview(null);
+      setTrashScrivenings(null);
+      setTrashCombinedHtml("");
+      setMobilePanel(null);
+      selectNode(node.id);
+      setScrivenings(null);
+      if (node.node_type === "folder") void openScrivenings(node.id);
+    });
+  };
+
+  const handleOpenTrashItem = (item: TrashItem) => {
+    setMobilePanel(null);
+    void (item.node_type === "folder"
+      ? openTrashFolderPreview(item)
+      : openTrashPreview(item));
   };
 
   const loadProjects = useCallback(async () => {
@@ -830,15 +807,6 @@ export default function ManuscriptWorkspace() {
     return () => window.removeEventListener("keydown", handleSaveShortcut);
   }, [selected, trashPreview]);
 
-  const toggleTrashFolder = (id: number) => {
-    setTrashFoldersOpen((current) => {
-      const next = new Set(current);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  };
-
   const openTrashPreview = async (item: TrashItem) => {
     await flushAutosave();
     try {
@@ -984,23 +952,18 @@ export default function ManuscriptWorkspace() {
     });
   };
 
-  const commitRename = async (id: number) => {
-    setRenamingId(null);
-    if (cancelRename.current) {
-      cancelRename.current = false;
-      return;
-    }
-    const title = renameValue.trim();
-    if (!title || !projectId) return;
+  const commitRename = async (id: number, title: string) => {
+    const trimmed = title.trim();
+    if (!trimmed || !projectId) return;
     try {
       await apiFetch(`/api/manuscript/nodes/${id}`, {
         method: "PATCH",
-        body: JSON.stringify({ title }),
+        body: JSON.stringify({ title: trimmed }),
       });
       await loadTree(projectId);
       if (selectedId === id) {
         setSelected((current) =>
-          current ? { ...current, title } : current,
+          current ? { ...current, title: trimmed } : current,
         );
       }
       notify("이름을 변경했습니다.");
@@ -1008,143 +971,6 @@ export default function ManuscriptWorkspace() {
       notify((error as Error).message, "error");
     }
   };
-
-  const renderRows = (parentId: number | null, depth: number): ReactElement[] => {
-    const items = childrenMap.get(parentId) ?? [];
-    return items.map((node) => {
-      const hasChildren = (childrenMap.get(node.id) ?? []).length > 0;
-      const isOpen = expanded.has(node.id);
-      return (
-        <Fragment key={node.id}>
-          <div
-            className={`ms-node${selectedId === node.id ? " is-selected" : ""}`}
-            style={{ paddingLeft: `${0.65 + depth * 1.05}rem` }}
-            draggable={renamingId !== node.id}
-            onDragStart={() => {
-              dragId.current = node.id;
-            }}
-            onDragOver={(event) => event.preventDefault()}
-            onDrop={(event) => {
-              event.preventDefault();
-              const movingId = dragId.current;
-              dragId.current = null;
-              if (!movingId || movingId === node.id) return;
-              const targetParent =
-                node.node_type === "folder" ? node.id : node.parent_id;
-              moveNode(movingId, targetParent);
-            }}
-            onClick={() => {
-              void flushAutosave().finally(() => {
-                setTrashPreview(null);
-                setTrashScrivenings(null);
-                setTrashCombinedHtml("");
-                selectNode(node.id);
-                if (node.node_type === "folder") {
-                  setScrivenings(null);
-                  void openScrivenings(node.id);
-                } else {
-                  setScrivenings(null);
-                }
-              });
-            }}
-          >
-            <button
-              type="button"
-              className="ms-node__toggle"
-              disabled={!hasChildren}
-              onClick={(event) => {
-                event.stopPropagation();
-                toggle(node.id);
-              }}
-              aria-label={isOpen ? "접기" : "펼치기"}
-            >
-              {hasChildren ? (isOpen ? "▾" : "▸") : "·"}
-            </button>
-            <span className={`ms-node__icon ms-node__icon--${node.node_type}`}>
-              {node.node_type === "folder" ? "▣" : "▤"}
-            </span>
-            {renamingId === node.id ? (
-              <input
-                autoFocus
-                className="ms-node__rename"
-                value={renameValue}
-                onClick={(event) => event.stopPropagation()}
-                onChange={(event) => setRenameValue(event.target.value)}
-                onBlur={() => commitRename(node.id)}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter") {
-                    event.preventDefault();
-                    event.currentTarget.blur();
-                  }
-                  if (event.key === "Escape") {
-                    event.preventDefault();
-                    cancelRename.current = true;
-                    setRenamingId(null);
-                  }
-                }}
-              />
-            ) : (
-              <span
-                className="ms-node__title"
-                title="더블클릭하여 이름 변경"
-                onDoubleClick={(event) => {
-                  event.stopPropagation();
-                  cancelRename.current = false;
-                  setRenameValue(node.title);
-                  setRenamingId(node.id);
-                }}
-              >
-                {node.title}
-              </span>
-            )}
-            {node.node_type === "chapter" ? (
-              <span className="ms-node__count">{node.char_count_with_spaces}</span>
-            ) : null}
-          </div>
-          {isOpen ? renderRows(node.id, depth + 1) : null}
-        </Fragment>
-      );
-    });
-  };
-
-  const renderTrashRows = (
-    parentId: number | null,
-    depth: number,
-  ): ReactElement[] =>
-    (trashChildrenMap.get(parentId) ?? []).map((item) => {
-      const isFolder = item.node_type === "folder";
-      const isOpen = trashFoldersOpen.has(item.id);
-      return (
-        <Fragment key={item.id}>
-          <div
-            className={`ms-node${trashPreview?.id === item.id ? " is-selected" : ""}`}
-            style={{ paddingLeft: `${0.65 + depth * 1.05}rem` }}
-            title={`삭제: ${item.deleted_at}\n영구 삭제: ${item.expires_at}`}
-            onClick={() =>
-              void (isFolder ? openTrashFolderPreview(item) : openTrashPreview(item))
-            }
-          >
-            <button
-              type="button"
-              className="ms-node__toggle"
-              disabled={!isFolder || !(trashChildrenMap.get(item.id) ?? []).length}
-              onClick={(event) => {
-                event.stopPropagation();
-                toggleTrashFolder(item.id);
-              }}
-              aria-label={isOpen ? "접기" : "펼치기"}
-            >
-              {isFolder ? (isOpen ? "▾" : "▸") : "·"}
-            </button>
-            <span className={`ms-node__icon ms-node__icon--${item.node_type}`}>
-              {isFolder ? "▣" : "▤"}
-            </span>
-            <span className="ms-node__title">{item.title}</span>
-          </div>
-          {isFolder && isOpen ? renderTrashRows(item.id, depth + 1) : null}
-        </Fragment>
-      );
-    });
 
   if (loading) {
     return <div className="ms-loading">원고 워크스페이스를 불러오는 중…</div>;
@@ -1184,79 +1010,42 @@ export default function ManuscriptWorkspace() {
         </div>
       ) : (
         <div className="ms-layout">
-          <aside className="ms-binder">
-            <div className="ms-panel-title">
-              <span>바인더</span>
-              <div className="ms-panel-title__actions">
-                <button type="button" onClick={() => createNode("folder")} title="폴더 추가">
-                  + 폴더
-                </button>
-                <button type="button" onClick={() => createNode("chapter")} title="문서 추가">
-                  + 문서
-                </button>
-              </div>
-            </div>
+          <ManuscriptBinderMenu
+            activePanel={mobilePanel}
+            onSelect={toggleMobilePanel}
+          />
+          {mobilePanel ? (
             <div
-              className="ms-node-list"
-              onDragOver={(event) => event.preventDefault()}
-              onDrop={(event) => {
-                event.preventDefault();
-                const movingId = dragId.current;
-                dragId.current = null;
-                if (movingId) moveNode(movingId, null);
-              }}
-            >
-              {renderRows(null, 0)}
-              <div
-                className="ms-node ms-node--trash"
-                onClick={toggleTrash}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter" || event.key === " ") {
-                    event.preventDefault();
-                    toggleTrash();
-                  }
-                }}
-                role="button"
-                tabIndex={0}
-                aria-expanded={trashExpanded}
-              >
-                <button
-                  type="button"
-                  className="ms-node__toggle"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    toggleTrash();
-                  }}
-                  aria-label={trashExpanded ? "휴지통 접기" : "휴지통 펼치기"}
-                >
-                  {trashExpanded ? "▾" : "▸"}
-                </button>
-                <span className="ms-node__icon">⌫</span>
-                <span className="ms-node__title">휴지통</span>
-                <span className="ms-node__count">{trash.length}</span>
-              </div>
-              {trashExpanded ? (
-                <div className="ms-trash-binder">
-                  {renderTrashRows(null, 0)}
-                  {trash.length === 0 ? (
-                    <p className="ms-trash-empty">휴지통이 비어 있습니다.</p>
-                  ) : null}
-                  {trash.length ? (
-                    <button
-                      type="button"
-                      className="ms-trash-purge"
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        void purgeTrash();
-                      }}
-                    >
-                      만료 항목 영구 삭제
-                    </button>
-                  ) : null}
-                </div>
-              ) : null}
-            </div>
-          </aside>
+              className="ms-binder-backdrop"
+              onClick={() => setMobilePanel(null)}
+            />
+          ) : null}
+          <ManuscriptBinder
+            childrenMap={childrenMap}
+            trashChildrenMap={trashChildrenMap}
+            expanded={expanded}
+            selectedId={selectedId}
+            trashPreviewId={trashPreview?.id ?? null}
+            trashExpanded={trashExpanded}
+            trashCount={trash.length}
+            isOpen={mobilePanel === "nav"}
+            onSelectNode={handleSelectNode}
+            onCreateNode={(type) => {
+              void createNode(type);
+            }}
+            onMoveNode={(id, parentId) => {
+              void moveNode(id, parentId);
+            }}
+            onToggleFolder={toggle}
+            onRename={(id, title) => {
+              void commitRename(id, title);
+            }}
+            onToggleTrash={toggleTrash}
+            onOpenTrashItem={handleOpenTrashItem}
+            onPurgeTrash={() => {
+              void purgeTrash();
+            }}
+          />
 
           {trashPreview ? (
             <RichTextEditor
@@ -1311,7 +1100,9 @@ export default function ManuscriptWorkspace() {
             </section>
           )}
 
-          <aside className="ms-inspector">
+          <aside
+            className={`ms-inspector${mobilePanel === "info" ? " is-open" : ""}`}
+          >
             <div className="ms-panel-title">
               <span>정보</span>
             </div>
