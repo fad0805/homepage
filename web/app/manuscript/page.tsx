@@ -298,6 +298,9 @@ function splitCombinedHtml(html: string): string[] {
 export default function ManuscriptWorkspace() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [projectId, setProjectId] = useState<number | null>(null);
+  const [editingProjectTitle, setEditingProjectTitle] = useState(false);
+  const [projectTitleDraft, setProjectTitleDraft] = useState("");
+  const [savingProjectTitle, setSavingProjectTitle] = useState(false);
   const [tree, setTree] = useState<ManuscriptNode[]>([]);
   const [expanded, setExpanded] = useState<Set<number>>(new Set());
   const [selectedId, setSelectedId] = useState<number | null>(null);
@@ -1061,6 +1064,33 @@ export default function ManuscriptWorkspace() {
     }
   };
 
+  const saveProjectTitle = async () => {
+    const title = projectTitleDraft.trim();
+    const current = projects.find((project) => project.id === projectId)?.title;
+    if (!projectId || !title || title === current) {
+      setEditingProjectTitle(false);
+      return;
+    }
+    setSavingProjectTitle(true);
+    try {
+      await apiFetch(`/api/manuscript/projects/${projectId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ title }),
+      });
+      setProjects((items) =>
+        items.map((project) =>
+          project.id === projectId ? { ...project, title } : project,
+        ),
+      );
+      setEditingProjectTitle(false);
+      notify("프로젝트 이름을 변경했습니다.");
+    } catch (error) {
+      notify((error as Error).message, "error");
+    } finally {
+      setSavingProjectTitle(false);
+    }
+  };
+
   if (loading) {
     return <div className="ms-loading">원고 워크스페이스를 불러오는 중…</div>;
   }
@@ -1073,9 +1103,46 @@ export default function ManuscriptWorkspace() {
         <div className="ms-brand">
           <span className="ms-brand__mark">✎</span>
         </div>
-        <span className="ms-topbar__project">
-          {projects.find((project) => project.id === projectId)?.title ?? ""}
-        </span>
+        {editingProjectTitle ? (
+          <>
+            <input
+              className="ms-topbar__project-input"
+              value={projectTitleDraft}
+              autoFocus
+              aria-label="프로젝트 이름"
+              onChange={(event) => setProjectTitleDraft(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  void saveProjectTitle();
+                } else if (event.key === "Escape") {
+                  event.preventDefault();
+                  setEditingProjectTitle(false);
+                }
+              }}
+            />
+            <button
+              type="button"
+              onClick={() => void saveProjectTitle()}
+              disabled={savingProjectTitle || !projectTitleDraft.trim()}
+            >
+              저장
+            </button>
+          </>
+        ) : (
+          <span
+            className="ms-topbar__project"
+            title="더블클릭하여 프로젝트 이름 변경"
+            onDoubleClick={() => {
+              const current =
+                projects.find((project) => project.id === projectId)?.title ?? "";
+              setProjectTitleDraft(current);
+              setEditingProjectTitle(true);
+            }}
+          >
+            {projects.find((project) => project.id === projectId)?.title ?? ""}
+          </span>
+        )}
         <div className="ms-topbar__actions">
           <button type="button" onClick={() => setSearchOpen(true)}>
             전체 검색

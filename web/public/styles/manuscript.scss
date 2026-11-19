@@ -92,8 +92,15 @@ html[data-workspace='manuscript'] body {
   font-size: 0.85rem;
   font-weight: 600;
   opacity: 0.85;
+  cursor: text;
 }
 
+.ms-topbar__project-input {
+  width: min(20rem, 46vw);
+  min-width: 0;
+}
+
+.ms-topbar__project-input,
 .ms-select,
 .ms-editor__fields input,
 .ms-editor__fields textarea,

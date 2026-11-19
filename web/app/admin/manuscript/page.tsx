@@ -318,7 +318,12 @@ export default function AdminManuscriptPage() {
           {filtered.map((project) => {
             const busy = fileBusyId === project.id;
             return (
-              <div key={project.id} className="admin-manuscript-row">
+              <div
+                key={project.id}
+                className={`admin-manuscript-row${
+                  project.import_status === "importing" ? " is-importing" : ""
+                }`}
+              >
                 <span
                   className="admin-manuscript-title"
                   role="button"
@@ -330,9 +335,7 @@ export default function AdminManuscriptPage() {
                       openProject(project);
                     }
                   }}
-                  title={
-                    project.import_error ?? "클릭하여 편집기에서 열기"
-                  }
+                  title={project.import_error ?? "클릭하여 편집기에서 열기"}
                 >
                   <span className="admin-manuscript-title-text">
                     {project.title}
@@ -382,8 +385,9 @@ export default function AdminManuscriptPage() {
                       openProject(project);
                     }
                   }}
+                  title={project.updated_at ?? undefined}
                 >
-                  {project.updated_at ?? "—"}
+                  {project.updated_at?.slice(11, 19) ?? "—"}
                 </span>
                 <div className="admin-manuscript-row-actions">
                   <button

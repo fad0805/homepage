@@ -219,6 +219,14 @@
   &:not(.is-head) > span:nth-child(4) {
     font-size: 0.8em;
   }
+
+  &.is-importing {
+    color: color-mix(in srgb, var(--foreground) 45%, var(--background));
+
+    .admin-manuscript-title:hover {
+      color: inherit;
+    }
+  }
 }
 
 .admin-manuscript-row-actions {
