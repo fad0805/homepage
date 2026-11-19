@@ -387,7 +387,9 @@ export default function AdminManuscriptPage() {
                   }}
                   title={project.updated_at ?? undefined}
                 >
-                  {project.updated_at?.slice(11, 19) ?? "—"}
+                  {project.updated_at
+                    ? project.updated_at.slice(0, 19).replace("T", " ")
+                    : "—"}
                 </span>
                 <div className="admin-manuscript-row-actions">
                   <button
