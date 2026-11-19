@@ -24,6 +24,8 @@ from crud.illustrations import (
     delete_illustration,
     delete_illustration_image,
     get_all_illustrations,
+    get_illustration_stats,
+    get_popular_illustrations,
     get_visible_illustration,
     get_visible_illustrations,
     register_illustration_view,
@@ -36,6 +38,7 @@ from db.session import get_db
 from models.illustrations import Illustration
 from schemas.illustrations import (
     IllustrationAdminListItem,
+    IllustrationAdminStats,
     IllustrationBulkDelete,
     IllustrationBulkUpdate,
     IllustrationDetail,
@@ -158,6 +161,28 @@ def read_all_illustrations(
     )
     response.headers["X-Total-Count"] = str(total)
     return illustrations
+
+
+@router.get("/admin/stats", response_model=IllustrationAdminStats)
+def read_illustration_stats(
+    db: Session = Depends(get_db),
+    user=Depends(require_auth),
+):
+    """Return illustration totals and accumulated views for the dashboard."""
+    return get_illustration_stats(db, user.id)
+
+
+@router.get(
+    "/admin/popular",
+    response_model=list[IllustrationAdminListItem],
+)
+def read_popular_illustrations(
+    limit: int = Query(10, ge=1, le=50),
+    db: Session = Depends(get_db),
+    user=Depends(require_auth),
+):
+    """Return the user's most viewed illustrations for the dashboard."""
+    return get_popular_illustrations(db, user.id, limit=limit)
 
 
 @router.post("/bulk", response_model=IllustrationDetail)

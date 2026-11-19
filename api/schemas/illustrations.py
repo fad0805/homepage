@@ -69,6 +69,14 @@ class IllustrationAdminListItem(IllustrationSummary):
     view_count: int = 0
 
 
+class IllustrationAdminStats(BaseModel):
+    """Aggregate counters for the admin dashboard."""
+
+    count: int = 0
+    visible: int = 0
+    total_views: int = 0
+
+
 class IllustrationUpdate(BaseModel):
     """Fields the admin can change after uploading an illustration."""
 

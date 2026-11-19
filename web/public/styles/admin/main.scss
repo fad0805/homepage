@@ -141,6 +141,16 @@ a.admin-dashboard-stat:visited {
     border-color: var(--admin-primary);
     box-shadow: 0 8px 20px rgba(0, 0, 0, 0.08);
   }
+
+  &.is-static {
+    cursor: default;
+
+    &:hover {
+      transform: none;
+      border-color: var(--admin-border);
+      box-shadow: none;
+    }
+  }
 }
 
 .admin-dashboard-stat__label {
@@ -160,6 +170,56 @@ a.admin-dashboard-stat:visited {
     color: var(--admin-muted);
     font-family: GowunDodum, Arial, Helvetica, sans-serif;
     font-size: 0.72rem;
+    font-weight: normal;
+  }
+}
+
+.admin-dashboard-stat__value-sep {
+  margin: 0 0.25rem;
+  color: var(--admin-muted);
+  font-size: 1rem;
+}
+
+.admin-dashboard-stat__segments {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.3rem;
+  margin-top: 0.15rem;
+}
+
+.admin-dashboard-stat__segment {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+  min-width: 0;
+
+  & + & {
+    padding-top: 0.3rem;
+    border-top: 1px solid var(--admin-border);
+  }
+}
+
+.admin-dashboard-stat__segment-label {
+  overflow: hidden;
+  color: var(--admin-muted);
+  font-size: 0.6rem;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.admin-dashboard-stat__segment-value {
+  color: var(--title-color);
+  font-family: Eulyoo1945-SemiBold, Arial, Helvetica, sans-serif;
+  font-size: 1.05rem;
+  line-height: 1.1;
+  overflow-wrap: anywhere;
+
+  small {
+    margin-left: 0.1rem;
+    color: var(--admin-muted);
+    font-family: GowunDodum, Arial, Helvetica, sans-serif;
+    font-size: 0.6rem;
     font-weight: normal;
   }
 }
@@ -416,7 +476,8 @@ a.admin-dashboard-stat:visited {
 /* Lower content */
 .admin-dashboard-lower {
   display: grid;
-  grid-template-columns: minmax(0, 1.35fr) minmax(0, 0.95fr);
+  grid-template-columns:
+    minmax(0, 0.9fr) minmax(0, 1.2fr) minmax(0, 0.9fr);
   gap: 1rem;
   align-items: start;
 }
@@ -427,6 +488,11 @@ a.admin-dashboard-stat:visited {
   border: 1px solid var(--admin-border);
   border-radius: 1rem;
   background: rgba(255, 255, 255, 0.3);
+}
+
+.admin-dashboard-illustration-views,
+.admin-dashboard-post-views {
+  align-self: stretch;
 }
 
 [data-theme='dark'] .admin-dashboard-panel {

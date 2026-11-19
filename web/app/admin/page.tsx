@@ -85,12 +85,48 @@ interface VisitStats {
   searches: VisitSearch[];
 }
 
+interface IllustrationStats {
+  count: number;
+  visible: number;
+  total_views: number;
+}
+
+interface PopularIllustration {
+  id: number;
+  title: string;
+  view_count: number;
+  representative_url: string | null;
+}
+
 interface DashboardData {
   books: Book[];
   chapters: ChapterItem[];
   characters: CharacterItem[];
   links: LinkItem[];
+  illustrationStats: IllustrationStats;
+  popularIllustrations: PopularIllustration[];
   visits: VisitStats;
+}
+
+interface StatSegment {
+  label: string;
+  value: number;
+  unit: string;
+}
+
+interface StatValuePart {
+  value: number;
+  unit: string;
+}
+
+interface DashboardStat {
+  href?: string;
+  label: string;
+  value?: number | string;
+  unit?: string;
+  valueParts?: StatValuePart[];
+  note?: string;
+  segments?: StatSegment[];
 }
 
 interface BookStat {
@@ -138,15 +174,34 @@ export default function AdminHome() {
     setLoading(true);
     setError(null);
     try {
-      const [books, chapters, characters, links, visits] =
-        await Promise.all([
-          apiFetch<Book[]>("/api/books?mine=true"),
-          apiFetch<ChapterItem[]>("/api/chapters?mine=true"),
-          apiFetch<CharacterItem[]>("/api/characters"),
-          apiFetch<LinkItem[]>("/api/links?mine=true"),
-          apiFetch<VisitStats>("/api/visits/stats"),
-        ]);
-      setData({ books, chapters, characters, links, visits });
+      const [
+        books,
+        chapters,
+        characters,
+        links,
+        illustrationStats,
+        popularIllustrations,
+        visits,
+      ] = await Promise.all([
+        apiFetch<Book[]>("/api/books?mine=true"),
+        apiFetch<ChapterItem[]>("/api/chapters?mine=true"),
+        apiFetch<CharacterItem[]>("/api/characters"),
+        apiFetch<LinkItem[]>("/api/links?mine=true"),
+        apiFetch<IllustrationStats>("/api/illustrations/admin/stats"),
+        apiFetch<PopularIllustration[]>(
+          "/api/illustrations/admin/popular?limit=10",
+        ),
+        apiFetch<VisitStats>("/api/visits/stats"),
+      ]);
+      setData({
+        books,
+        chapters,
+        characters,
+        links,
+        illustrationStats,
+        popularIllustrations,
+        visits,
+      });
     } catch (reason) {
       setError(
         reason instanceof Error
@@ -189,7 +244,7 @@ export default function AdminHome() {
       }));
   }, [data]);
 
-  const stats = useMemo(() => {
+  const stats = useMemo<DashboardStat[]>(() => {
     if (!data) return [];
     const publicBooks = data.books.filter(
       (book) => book.visible !== false,
@@ -206,32 +261,35 @@ export default function AdminHome() {
         .map((link) => link.category?.id)
         .filter((id): id is number => typeof id === "number"),
     ).size;
-    const totalViews = data.chapters.reduce(
+    const chapterViews = data.chapters.reduce(
       (sum, chapter) => sum + (chapter.view_count ?? 0),
       0,
     );
+    const illustrationViews = data.illustrationStats.total_views;
 
     return [
-      {
-        href: "/admin/books",
-        label: "책",
-        value: data.books.length,
-        unit: "권",
-        note: `공개 ${publicBooks}권`,
-      },
-      {
-        href: "/admin/books",
-        label: "챕터",
-        value: data.chapters.length,
-        unit: "개",
-        note: `공개 ${publicChapters}개`,
-      },
       {
         href: "/admin/characters",
         label: "등장인물",
         value: data.characters.length,
         unit: "명",
         note: `공개 ${publicCharacters}명`,
+      },
+      {
+        href: "/admin/books",
+        label: "책 / 챕터",
+        valueParts: [
+          { value: data.books.length, unit: "권" },
+          { value: data.chapters.length, unit: "장" },
+        ],
+        note: `공개 책 ${publicBooks}권 · 공개 챕터 ${publicChapters}장`,
+      },
+      {
+        href: "/admin/illustrations",
+        label: "삽화",
+        value: data.illustrationStats.count,
+        unit: "점",
+        note: `공개 ${data.illustrationStats.visible}점 · 조회 ${illustrationViews.toLocaleString("ko-KR")}회`,
       },
       {
         href: "/admin/links",
@@ -241,11 +299,24 @@ export default function AdminHome() {
         note: `카테고리 ${categoryCount}개`,
       },
       {
-        href: "/admin/books",
-        label: "총 조회수",
-        value: totalViews,
-        unit: "회",
-        note: "챕터 조회 합계",
+        label: "조회수 현황",
+        segments: [
+          {
+            label: "총 조회수",
+            value: chapterViews + illustrationViews,
+            unit: "회",
+          },
+          {
+            label: "챕터 조회수",
+            value: chapterViews,
+            unit: "회",
+          },
+          {
+            label: "삽화 조회수",
+            value: illustrationViews,
+            unit: "회",
+          },
+        ],
       },
     ];
   }, [data, now]);
@@ -300,7 +371,7 @@ export default function AdminHome() {
           <p className="admin-dashboard-eyebrow">Missing Island · Admin</p>
           <h1 className="admin-dashboard-title">대시보드</h1>
           <p className="admin-dashboard-subtitle">
-            책과 챕터, 등장인물과 링크의 현황을 한눈에 확인하세요.
+            등장인물과 책·챕터, 삽화와 링크의 현황을 한눈에 확인하세요.
           </p>
         </div>
       </header>
@@ -321,30 +392,86 @@ export default function AdminHome() {
       ) : data ? (
         <>
           <section className="admin-dashboard-stats" aria-label="콘텐츠 현황">
-            {stats.map((stat) => (
-              <Link
-                key={stat.label}
-                className="admin-dashboard-stat"
-                href={stat.href}
-              >
-                <span className="admin-dashboard-stat__label">
-                  {stat.label}
-                </span>
-                <span className="admin-dashboard-stat__value">
-                  {stat.value}
-                  <small>{stat.unit}</small>
-                </span>
-                <span className="admin-dashboard-stat__note">
-                  {stat.note}
-                </span>
-                <span
-                  className="admin-dashboard-stat__arrow"
-                  aria-hidden="true"
+            {stats.map((stat) =>
+              stat.segments ? (
+                <div
+                  key={stat.label}
+                  className="admin-dashboard-stat is-static"
                 >
-                  ↗
-                </span>
-              </Link>
-            ))}
+                  <span className="admin-dashboard-stat__label">
+                    {stat.label}
+                  </span>
+                  <div className="admin-dashboard-stat__segments">
+                    {stat.segments.map((segment) => (
+                      <div
+                        className="admin-dashboard-stat__segment"
+                        key={segment.label}
+                      >
+                        <span className="admin-dashboard-stat__segment-label">
+                          {segment.label}
+                        </span>
+                        <span className="admin-dashboard-stat__segment-value">
+                          {segment.value.toLocaleString("ko-KR")}
+                          <small>{segment.unit}</small>
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                  {stat.note ? (
+                    <span className="admin-dashboard-stat__note">
+                      {stat.note}
+                    </span>
+                  ) : null}
+                </div>
+              ) : (
+                <Link
+                  key={stat.label}
+                  className="admin-dashboard-stat"
+                  href={stat.href ?? "#"}
+                >
+                  <span className="admin-dashboard-stat__label">
+                    {stat.label}
+                  </span>
+                  <span className="admin-dashboard-stat__value">
+                    {stat.valueParts ? (
+                      stat.valueParts.map((part, index) => (
+                        <span
+                          className="admin-dashboard-stat__value-part"
+                          key={part.unit}
+                        >
+                          {index > 0 ? (
+                            <span
+                              className="admin-dashboard-stat__value-sep"
+                              aria-hidden="true"
+                            >
+                              ·
+                            </span>
+                          ) : null}
+                          {part.value}
+                          <small>{part.unit}</small>
+                        </span>
+                      ))
+                    ) : (
+                      <>
+                        {stat.value}
+                        <small>{stat.unit}</small>
+                      </>
+                    )}
+                  </span>
+                  {stat.note ? (
+                    <span className="admin-dashboard-stat__note">
+                      {stat.note}
+                    </span>
+                  ) : null}
+                  <span
+                    className="admin-dashboard-stat__arrow"
+                    aria-hidden="true"
+                  >
+                    ↗
+                  </span>
+                </Link>
+              ),
+            )}
           </section>
 
           <section className="admin-dashboard-panel admin-dashboard-visitors">
@@ -526,6 +653,44 @@ export default function AdminHome() {
           </section>
 
           <div className="admin-dashboard-lower">
+            <section className="admin-dashboard-panel admin-dashboard-illustration-views">
+              <header className="admin-dashboard-panel__head">
+                <div>
+                  <h2>삽화 조회수</h2>
+                  <p>조회수 기준 상위 10개 삽화입니다.</p>
+                </div>
+              </header>
+              {data.popularIllustrations.length ? (
+                <ul className="admin-dashboard-post-list">
+                  {data.popularIllustrations.map((illustration, index) => (
+                    <li key={illustration.id}>
+                      <Link
+                        className="admin-dashboard-post"
+                        href={`/admin/illustrations?edit=${illustration.id}`}
+                      >
+                        <span className="admin-dashboard-post__rank">
+                          {String(index + 1).padStart(2, "0")}
+                        </span>
+                        <span className="admin-dashboard-post__copy">
+                          <strong>{illustration.title}</strong>
+                        </span>
+                        <span className="admin-dashboard-post__views">
+                          {(illustration.view_count ?? 0).toLocaleString(
+                            "ko-KR",
+                          )}
+                          <small>회</small>
+                        </span>
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="admin-dashboard-empty">
+                  등록된 삽화가 없습니다.
+                </p>
+              )}
+            </section>
+
             <section className="admin-dashboard-panel admin-dashboard-post-views">
               <header className="admin-dashboard-panel__head">
                 <div>

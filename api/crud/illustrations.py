@@ -457,6 +457,80 @@ def get_all_illustrations(
     return items, total
 
 
+def get_popular_illustrations(
+    db: Session,
+    owner_user_id: int | None,
+    *,
+    limit: int = 10,
+) -> list[dict]:
+    """Return the most viewed illustrations for the dashboard ranking."""
+    illustrations_query = _list_query(
+        db,
+        viewer_user_id=owner_user_id,
+        include_hidden=True,
+        author_user_id=owner_user_id,
+        query=None,
+        sort="order",
+        filter_basis="taken",
+        date_from=None,
+        date_to=None,
+        include_undated=True,
+    )
+    illustrations = (
+        illustrations_query.order_by(None)
+        .order_by(
+            Illustration.view_count.desc().nullslast(),
+            Illustration.id.desc(),
+        )
+        .limit(limit)
+        .all()
+    )
+    items = [
+        _serialize_list_item(illustration)
+        for illustration in illustrations
+    ]
+    _attach_list_image_info(db, items)
+    return items
+
+
+def get_illustration_stats(
+    db: Session,
+    owner_user_id: int | None,
+) -> dict:
+    """Return illustration totals and accumulated views for the dashboard."""
+    illustrations_query = _list_query(
+        db,
+        viewer_user_id=owner_user_id,
+        include_hidden=True,
+        author_user_id=owner_user_id,
+        query=None,
+        sort="order",
+        filter_basis="taken",
+        date_from=None,
+        date_to=None,
+        include_undated=True,
+    )
+    count = illustrations_query.order_by(None).count()
+    visible = (
+        illustrations_query.order_by(None)
+        .filter(Illustration.visible.is_(True))
+        .count()
+    )
+    total_views = (
+        illustrations_query.order_by(None)
+        .with_entities(
+            func.coalesce(func.sum(Illustration.view_count), 0)
+        )
+        .scalar()
+        or 0
+    )
+    return {
+        "count": count,
+        "visible": visible,
+        "total_views": int(total_views),
+    }
+
+
 def _get_illustration_or_404(db: Session, illustration_id: int):
     illustration = (
         _group_query(db)
