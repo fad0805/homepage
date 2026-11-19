@@ -448,11 +448,11 @@ def _rtf_image(data: bytes, width: int | None, height: int | None) -> str:
     width_goal = max(1, round(width * 15))
     height_goal = max(1, round(height * 15))
     return (
-        "{\\*\\shppict{\\pict"
-        f"\\{kind}"
+        "{\\*\\shppict{\\pict {\\*\\nisusfilename image}"
         f"\\picw{natural_width}\\pich{natural_height}"
-        f"\\picwgoal{width_goal}\\pichgoal{height_goal} "
-        f"{data.hex()}}}"
+        f"\\picwgoal{width_goal}\\pichgoal{height_goal}"
+        f"\\{kind} "
+        f"{data.hex()}" + "}}"
     )
 
 

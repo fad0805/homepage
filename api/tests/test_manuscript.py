@@ -699,6 +699,17 @@ class ManuscriptTests(unittest.TestCase):
                 self.db, project.id, self.owner.id
             )
 
+        with ZipFile(BytesIO(data)) as archive:
+            rtf_name = next(
+                name
+                for name in archive.namelist()
+                if name.endswith("/content.rtf")
+            )
+            rtf = archive.read(rtf_name).decode("utf-8")
+        self.assertEqual(rtf.count("{"), rtf.count("}"))
+        self.assertIn("\\pngblip", rtf)
+        self.assertIn("\\picwgoal1800", rtf)
+
         _, parsed = parse_scrivener_zip(data)
         chapter = next(node for node in parsed if node.images)
         self.assertEqual(chapter.images, [png])
