@@ -10,7 +10,10 @@ from sqlalchemy import or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from core.image_urls import public_url
 from core.scrivener import (
+    IMAGE_PLACEHOLDER_PREFIX,
+    IMAGE_PLACEHOLDER_SUFFIX,
     ExportNode,
     build_scrivener_zip,
     parse_scrivener_zip,
@@ -18,6 +21,7 @@ from core.scrivener import (
 )
 from core.search import like_pattern, search_tokens
 from core.text_stats import count_characters, html_to_plain
+from core.uploads import save_image_bytes
 from models.books import Book, Chapter
 from models.manuscript import ManuscriptNode, ManuscriptProject, SerialNode
 from schemas import manuscript as schemas
@@ -1051,14 +1055,31 @@ def import_scrivener(
         parent_id = (
             ids[item.parent_index] if item.parent_index is not None else None
         )
-        with_spaces, plain = count_characters(item.body)
+        body = item.body or ""
+        for image_index, image in enumerate(item.images):
+            placeholder = (
+                f"{IMAGE_PLACEHOLDER_PREFIX}{image_index}"
+                f"{IMAGE_PLACEHOLDER_SUFFIX}"
+            )
+            try:
+                url = public_url(save_image_bytes(image))
+            except Exception:
+                # A corrupt or unsupported attachment must not block the import.
+                body = body.replace(placeholder, "")
+                continue
+            image_html = f'<img src="{url}" alt="" />'
+            if placeholder in body:
+                body = body.replace(placeholder, image_html)
+            else:
+                body += f"<p>{image_html}</p>"
+        with_spaces, plain = count_characters(body)
         node = ManuscriptNode(
             project_id=project.id,
             user_id=user_id,
             parent_id=parent_id,
             node_type=item.node_type,
             title=item.title,
-            body=item.body or None,
+            body=body or None,
             synopsis=item.synopsis or None,
             notes=item.notes or None,
             position=position,

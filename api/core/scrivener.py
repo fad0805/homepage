@@ -9,7 +9,7 @@ project bundle is ignored.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from html import escape
 from io import BytesIO
@@ -66,6 +66,7 @@ class ScrivenerNode:
     synopsis: str = ""
     notes: str = ""
     parent_index: int | None = None
+    images: list[bytes] = field(default_factory=list)
 
 
 @dataclass
@@ -97,8 +98,47 @@ def _meta_text(item: ET.Element, name: str) -> str:
     return ""
 
 
-def _rtf_to_html(data: bytes) -> str:
+IMAGE_PLACEHOLDER_PREFIX = "@@SCRIVENER_IMAGE_"
+IMAGE_PLACEHOLDER_SUFFIX = "@@"
+
+
+def _prepare_rtf(raw: str) -> tuple[str, list[bytes]]:
+    """Replace inline image groups with placeholders and return their bytes."""
+    pieces: list[str] = []
+    images: list[bytes] = []
+    last = 0
+    index = 0
+    while index < len(raw):
+        if not raw.startswith("{\\pict", index):
+            index += 1
+            continue
+        depth = 0
+        end = index
+        while end < len(raw):
+            if raw[end] == "{":
+                depth += 1
+            elif raw[end] == "}":
+                depth -= 1
+                if depth == 0:
+                    break
+            end += 1
+        image = _decode_pict_group(raw[index : end + 1])
+        if image:
+            pieces.append(raw[last:index])
+            pieces.append(
+                f"{IMAGE_PLACEHOLDER_PREFIX}{len(images)}"
+                f"{IMAGE_PLACEHOLDER_SUFFIX}"
+            )
+            images.append(image)
+            last = end + 1
+        index = end + 1
+    pieces.append(raw[last:])
+    return "".join(pieces), images
+
+
+def _rtf_to_html_with_images(data: bytes) -> tuple[str, list[bytes]]:
     raw = data.decode("latin-1", errors="replace")
+    raw, images = _prepare_rtf(raw)
     codepage = re.search(r"\\ansicpg(\d+)", raw)
     encoding = f"cp{codepage.group(1)}" if codepage else "cp1252"
     uc_match = re.search(r"\\uc(\d+)", raw)
@@ -109,6 +149,16 @@ def _rtf_to_html(data: bytes) -> str:
     index = 0
     while index < len(raw):
         char = raw[index]
+        if raw.startswith(IMAGE_PLACEHOLDER_PREFIX, index):
+            end = raw.find(
+                IMAGE_PLACEHOLDER_SUFFIX,
+                index + len(IMAGE_PLACEHOLDER_PREFIX),
+            )
+            if end != -1:
+                end += len(IMAGE_PLACEHOLDER_SUFFIX)
+                out.append(raw[index:end])
+                index = end
+                continue
         if char == "{":
             skip_group = False
             look = index + 1
@@ -229,7 +279,42 @@ def _rtf_to_html(data: bytes) -> str:
         lines.pop(0)
     while lines and not lines[-1].strip():
         lines.pop()
-    return "".join(f"<p>{escape(line)}</p>" for line in lines if line.strip())
+    html = "".join(
+        f"<p>{escape(line)}</p>" for line in lines if line.strip()
+    )
+    return html, images
+
+
+def _rtf_to_html(data: bytes) -> str:
+    return _rtf_to_html_with_images(data)[0]
+
+
+def _decode_pict_group(group: str) -> bytes | None:
+    marker = next(
+        (
+            item
+            for item in ("\\pngblip", "\\jpegblip")
+            if item in group
+        ),
+        None,
+    )
+    if marker is None:
+        return None
+    rest = group.split(marker, 1)[1]
+    binary = re.search(r"\\bin(\d+)\s", rest)
+    if binary:
+        size = int(binary.group(1))
+        return rest[binary.end() : binary.end() + size].encode("latin-1")
+    rest = re.sub(r"\\[a-zA-Z]+-?\d* ?", "", rest)
+    digits = re.sub(r"[^0-9a-fA-F]", "", rest)
+    if len(digits) % 2:
+        digits = digits[:-1]
+    if not digits:
+        return None
+    try:
+        return bytes.fromhex(digits)
+    except ValueError:
+        return None
 
 
 RTF_HEADER = "\n".join(
@@ -318,6 +403,25 @@ def parse_scrivener_zip(data: bytes) -> tuple[str, list[ScrivenerNode]]:
                         return archive.read(name)
                 return None
 
+            image_names = {
+                "content.png",
+                "content.jpg",
+                "content.jpeg",
+                "content.webp",
+                "content.gif",
+            }
+
+            def read_image_document(identifier: str) -> bytes | None:
+                suffix = f"/{identifier.lower()}/"
+                for name in names:
+                    lowered = name.lower()
+                    if (
+                        suffix in lowered
+                        and lowered.rsplit("/", 1)[-1] in image_names
+                    ):
+                        return archive.read(name)
+                return None
+
             node_list: list[ScrivenerNode] = []
 
             def walk(item: ET.Element, parent_index: int | None) -> None:
@@ -345,14 +449,36 @@ def parse_scrivener_zip(data: bytes) -> tuple[str, list[ScrivenerNode]]:
                         notes_rtf = read_document(identifier, "notes.rtf")
                         if notes_rtf:
                             notes = html_to_plain(_rtf_to_html(notes_rtf))
+                    body, images = (
+                        _rtf_to_html_with_images(rtf)
+                        if rtf
+                        else ("", [])
+                    )
                     node_list.append(
                         ScrivenerNode(
                             node_type="chapter",
                             title=_child_text(item, "title") or "제목 없는 문서",
-                            body=_rtf_to_html(rtf) if rtf else "",
+                            body=body,
                             synopsis=synopsis_text,
                             notes=notes,
                             parent_index=parent_index,
+                            images=images,
+                        )
+                    )
+                    child_parent = None
+                elif kind in {"image", "pdf"}:
+                    identifier = item.get("UUID") or item.get("ID") or ""
+                    image = (
+                        read_image_document(identifier)
+                        if kind == "image" and identifier
+                        else None
+                    )
+                    node_list.append(
+                        ScrivenerNode(
+                            node_type="chapter",
+                            title=_child_text(item, "title") or "첨부 이미지",
+                            parent_index=parent_index,
+                            images=[image] if image else [],
                         )
                     )
                     child_parent = None

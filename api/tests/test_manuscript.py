@@ -1,6 +1,8 @@
+import base64
 import unittest
 from datetime import datetime, timedelta, timezone
 from io import BytesIO
+from unittest.mock import patch
 from zipfile import ZipFile
 
 from fastapi import HTTPException
@@ -509,6 +511,65 @@ class ManuscriptTests(unittest.TestCase):
             .filter(ManuscriptNode.id == old_node.id)
             .first()
             .deleted_at
+        )
+
+    def test_import_scrivener_extracts_inline_and_image_documents(self) -> None:
+        png = base64.b64decode(
+            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk"
+            "+A8AAQUBAScY42YAAAAASUVORK5CYII="
+        )
+        manifest = """<?xml version="1.0" encoding="UTF-8"?>
+<ScrivenerProject Version="2.0">
+  <Binder>
+    <BinderItem UUID="D" Type="DraftFolder">
+      <Children>
+        <BinderItem UUID="T1" Type="Text"><Title>본문</Title></BinderItem>
+        <BinderItem UUID="I1" Type="Image"><Title>첨부 이미지</Title></BinderItem>
+      </Children>
+    </BinderItem>
+  </Binder>
+</ScrivenerProject>"""
+        rtf = (
+            "{\\rtf1\\ansi\\ansicpg1252\\uc1"
+            "{\\pict {\\*\\nisusfilename unnamed}"
+            "\\pngblip\\picw1\\pich1 " + png.hex() + "}"
+            "text\\par}"
+        )
+        buffer = BytesIO()
+        with ZipFile(buffer, "w") as archive:
+            archive.writestr("images.scrivx", manifest)
+            archive.writestr("Files/Data/T1/content.rtf", rtf)
+            archive.writestr("Files/Data/I1/content.png", png)
+
+        _, parsed = parse_scrivener_zip(buffer.getvalue())
+        self.assertEqual(parsed[0].images, [png])
+        self.assertEqual(parsed[1].images, [png])
+        self.assertEqual(
+            parsed[0].body,
+            '<p>@@SCRIVENER_IMAGE_0@@text</p>',
+        )
+
+        with (
+            patch(
+                "crud.manuscript.save_image_bytes",
+                return_value="images/attached.png",
+            ),
+            patch(
+                "crud.manuscript.public_url",
+                side_effect=lambda key: f"/uploads/{key}",
+            ),
+        ):
+            result = crud.import_scrivener(
+                self.db, self.owner.id, buffer.getvalue()
+            )
+        tree = crud.get_tree(self.db, result["project_id"], self.owner.id)
+        first = crud.get_node(self.db, tree[0]["id"], self.owner.id)
+        second = crud.get_node(self.db, tree[1]["id"], self.owner.id)
+        self.assertIn('<img src="/uploads/images/attached.png"', first["body"])
+        self.assertIn('<img src="/uploads/images/attached.png"', second["body"])
+        self.assertLess(
+            first["body"].index("<img"),
+            first["body"].index("text"),
         )
 
     def test_export_scrivener_round_trips_body_and_tree(self) -> None:

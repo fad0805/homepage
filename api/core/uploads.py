@@ -386,6 +386,35 @@ def _sanitize_image(content: bytes) -> tuple[bytes, str, str]:
         ) from exc
 
 
+def save_image_bytes(content: bytes, folder: str = "chapters") -> str:
+    """Store an image that already exists in memory.
+
+    Used by importers that extract images from a document archive.
+    """
+    if not content:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="이미지 데이터가 비어 있습니다.",
+        )
+    if len(content) > MAX_UPLOAD_SIZE:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail=(
+                f"이미지 크기는 {MAX_UPLOAD_SIZE // (1024 * 1024)}MB 이하여야 "
+                "합니다."
+            ),
+        )
+    content, content_type, extension = _sanitize_image(content)
+    if _s3_is_configured():
+        return _save_to_s3(content, content_type, extension, folder)
+    if S3_BUCKET or S3_PUBLIC_BASE_URL:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="S3 설정이 불완전합니다.",
+        )
+    return _save_to_local(content, extension, folder)
+
+
 async def save_banner(file: UploadFile, folder: str = "banners") -> str:
     """Upload an image and return its storage key.
 
