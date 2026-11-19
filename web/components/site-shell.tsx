@@ -351,7 +351,6 @@ export function SiteShell({
             onClick={() =>
               openDrawer(true, drawerTriggerRef.current)
             }
-            onMouseEnter={() => openDrawer(false)}
             aria-label="메뉴 열기"
             aria-expanded={drawerOpen}
             aria-haspopup="dialog"
