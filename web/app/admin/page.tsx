@@ -166,6 +166,7 @@ export default function AdminHome() {
   const [error, setError] = useState<string | null>(null);
   const [now, setNow] = useState<number | null>(null);
   const [showAllPosts, setShowAllPosts] = useState(false);
+  const [showAllIllustrations, setShowAllIllustrations] = useState(false);
   const [selectedTrafficDate, setSelectedTrafficDate] = useState<
     string | null
   >(null);
@@ -657,11 +658,25 @@ export default function AdminHome() {
               <header className="admin-dashboard-panel__head">
                 <div>
                   <h2>삽화 조회수</h2>
-                  <p>조회수 기준 상위 10개 삽화입니다.</p>
+                  <p>
+                    <span className="admin-dashboard-rank-copy is-desktop">
+                      조회수 기준 상위 10개 삽화입니다.
+                    </span>
+                    <span className="admin-dashboard-rank-copy is-mobile">
+                      {showAllIllustrations
+                        ? "조회수 기준 상위 10개 삽화입니다."
+                        : "조회수 기준 상위 5개 삽화입니다."}
+                    </span>
+                  </p>
                 </div>
               </header>
               {data.popularIllustrations.length ? (
-                <ul className="admin-dashboard-post-list">
+                <>
+                <ul
+                  className={`admin-dashboard-post-list${
+                    showAllIllustrations ? " is-expanded" : ""
+                  }`}
+                >
                   {data.popularIllustrations.map((illustration, index) => (
                     <li key={illustration.id}>
                       <Link
@@ -684,6 +699,22 @@ export default function AdminHome() {
                     </li>
                   ))}
                 </ul>
+                {data.popularIllustrations.length > 5 ? (
+                  <button
+                    type="button"
+                    className="admin-button admin-dashboard-post-more admin-dashboard-illustration-more"
+                    onClick={() =>
+                      setShowAllIllustrations((prev) => !prev)
+                    }
+                  >
+                    {showAllIllustrations
+                      ? "접기"
+                      : `더보기 (${
+                          data.popularIllustrations.length - 5
+                        })`}
+                  </button>
+                ) : null}
+                </>
               ) : (
                 <p className="admin-dashboard-empty">
                   등록된 삽화가 없습니다.

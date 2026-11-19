@@ -495,6 +495,11 @@ a.admin-dashboard-stat:visited {
   align-self: stretch;
 }
 
+.admin-dashboard-rank-copy.is-mobile,
+.admin-dashboard-illustration-more {
+  display: none;
+}
+
 [data-theme='dark'] .admin-dashboard-panel {
   background: rgba(255, 255, 255, 0.04);
 }
@@ -937,6 +942,24 @@ a.admin-dashboard-book:visited {
 }
 
 @media (max-width: 560px) {
+  .admin-dashboard-illustration-views
+    .admin-dashboard-post-list:not(.is-expanded)
+    li:nth-child(n + 6) {
+    display: none;
+  }
+
+  .admin-dashboard-rank-copy.is-desktop {
+    display: none;
+  }
+
+  .admin-dashboard-rank-copy.is-mobile {
+    display: inline;
+  }
+
+  .admin-dashboard-illustration-more {
+    display: inline-block;
+  }
+
   .admin-dashboard-stats {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
