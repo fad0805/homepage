@@ -722,6 +722,21 @@
     margin-bottom: 0;
   }
 
+  [data-ms-tab="true"] {
+    display: inline-block;
+    width: 2em;
+    vertical-align: baseline;
+  }
+
+  p,
+  h2,
+  h3,
+  li,
+  blockquote {
+    white-space: pre-wrap;
+    tab-size: 4;
+  }
+
   p {
     margin: 0 0 0.7rem;
     font-size: 0.92rem;
