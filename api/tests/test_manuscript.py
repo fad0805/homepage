@@ -711,6 +711,27 @@ class ManuscriptTests(unittest.TestCase):
         )["body"]
         self.assertEqual(imported_body, parsed[1].body)
 
+    def test_export_scrivener_preserves_styles(self) -> None:
+        project = self._project()
+        body = (
+            '<p style="text-align: center; padding-left: 24px; '
+            'text-indent: -12px"><strong><span style="color: #ff0000">'
+            '<span style="font-size: 13pt">Center</span></span></strong></p>'
+            "<p>plain</p>"
+        )
+        self._node(project, "서식", body=body)
+        self.db.commit()
+
+        data, _ = crud.export_scrivener(self.db, project.id, self.owner.id)
+        _, parsed = parse_scrivener_zip(data)
+        exported = parsed[0].body
+        self.assertIn("text-align: center", exported)
+        self.assertIn("padding-left: 24px", exported)
+        self.assertIn("text-indent: -12px", exported)
+        self.assertIn("<strong>", exported)
+        self.assertIn("font-size: 13pt", exported)
+        self.assertIn("color: #ff0000", exported)
+
     def test_export_scrivener_embeds_body_images(self) -> None:
         png = base64.b64decode(
             "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk"

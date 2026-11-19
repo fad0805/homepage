@@ -94,6 +94,14 @@ class _RtfStyle:
     color: str | None = None
 
 
+@dataclass
+class _ExportParagraph:
+    align: str = "left"
+    indent_left: int = 0
+    indent_right: int = 0
+    indent_first: int = 0
+
+
 def _local(tag: str) -> str:
     return tag.rsplit("}", 1)[-1].lower()
 
@@ -512,19 +520,29 @@ def _decode_pict_group(group: str) -> bytes | None:
         return None
 
 
-RTF_HEADER = "\n".join(
-    [
-        "{\\rtf1\\ansi\\ansicpg1252\\cocoartf2761",
-        "{\\fonttbl\\f0\\fswiss\\fcharset0 Helvetica;}",
-        "{\\colortbl;\\red255\\green255\\blue255;}",
-        "\\paperw11900\\paperh16840\\margl1440\\margr1440"
-        "\\vieww11520\\viewh8400\\viewkind0",
-        "\\pard\\tx566\\tx1133\\tx1700\\tx2267\\tx2834"
-        "\\tx3401\\tx3968\\tx4535\\tx5102\\tx5669"
-        "\\tx6236\\tx6803\\pardirnatural\\partightenfactor0",
-        "\\f0\\fs20 \\cf0 ",
-    ]
-)
+def _rtf_header(colors: list[str]) -> str:
+    color_table = "".join(
+        f"\\red{int(color[1:3], 16)}"
+        f"\\green{int(color[3:5], 16)}"
+        f"\\blue{int(color[5:7], 16)};"
+        for color in colors
+    )
+    return "\n".join(
+        [
+            "{\\rtf1\\ansi\\ansicpg1252\\cocoartf2761",
+            "{\\fonttbl\\f0\\fswiss\\fcharset0 Helvetica;}",
+            f"{{\\colortbl;{color_table}}}",
+            "\\paperw11900\\paperh16840\\margl1440\\margr1440"
+            "\\vieww11520\\viewh8400\\viewkind0",
+            "\\pard\\tx566\\tx1133\\tx1700\\tx2267\\tx2834"
+            "\\tx3401\\tx3968\\tx4535\\tx5102\\tx5669"
+            "\\tx6236\\tx6803\\pardirnatural\\partightenfactor0",
+            "\\f0\\fs20 \\cf0 ",
+        ]
+    )
+
+
+RTF_HEADER = _rtf_header(["#ffffff"])
 
 
 def _rtf_text(text: str) -> str:
@@ -622,16 +640,156 @@ def _rtf_image(data: bytes, width: int | None, height: int | None) -> str:
     )
 
 
+def _style_map(style: str | None) -> dict[str, str]:
+    if not style:
+        return {}
+    return {
+        match.group(1).lower(): match.group(2).strip()
+        for match in re.finditer(r"([\w-]+)\s*:\s*([^;]+)", style)
+    }
+
+
+def _parse_signed_px(value: str | None) -> int:
+    if not value:
+        return 0
+    match = re.search(r"-?\d+(?:\.\d+)?", value)
+    return round(float(match.group(0))) if match else 0
+
+
+def _parse_css_color(value: str | None) -> str | None:
+    if not value:
+        return None
+    value = value.strip().lower()
+    match = re.fullmatch(r"#([0-9a-f]{6})", value)
+    if match:
+        return f"#{match.group(1)}"
+    match = re.fullmatch(r"#([0-9a-f]{3})", value)
+    if match:
+        return "#" + "".join(char * 2 for char in match.group(1))
+    match = re.match(
+        r"rgba?\(\s*(\d+)[,\s]+(\d+)[,\s]+(\d+)",
+        value,
+    )
+    if match:
+        return "#" + "".join(
+            f"{min(255, int(part)):02x}" for part in match.groups()
+        )
+    return None
+
+
+def _parse_font_size(value: str | None) -> float | None:
+    if not value:
+        return None
+    match = re.search(r"(\d+(?:\.\d+)?)\s*(pt|px)?", value)
+    if not match:
+        return None
+    size = float(match.group(1))
+    if (match.group(2) or "pt") == "px":
+        size *= 0.75
+    return size if size > 0 else None
+
+
 class _RtfBodyParser(HTMLParser):
     def __init__(self, load_image: Callable[[str], bytes | None]) -> None:
         super().__init__(convert_charrefs=True)
         self.parts: list[str] = []
+        self.colors: list[str] = ["#ffffff"]
+        self._color_index = {"#ffffff": 1}
         self._skip_depth = 0
         self._load_image = load_image
+        self._style = _RtfStyle()
+        self._emitted_style = _RtfStyle()
+        self._style_stack: list[_RtfStyle] = []
+        self._paragraph = _ExportParagraph()
+        self._paragraph_open = False
 
-    def _paragraph_break(self) -> None:
-        if self.parts and not self.parts[-1].endswith("\\par\n"):
+    def _color_number(self, color: str | None) -> int:
+        if not color:
+            return 0
+        number = self._color_index.get(color)
+        if number is None:
+            self.colors.append(color)
+            number = len(self.colors)
+            self._color_index[color] = number
+        return number
+
+    def _ensure_style(self) -> None:
+        current = self._style
+        previous = self._emitted_style
+        controls: list[str] = []
+        if current.bold != previous.bold:
+            controls.append("\\b " if current.bold else "\\b0 ")
+        if current.italic != previous.italic:
+            controls.append("\\i " if current.italic else "\\i0 ")
+        if current.underline != previous.underline:
+            controls.append("\\ul " if current.underline else "\\ulnone ")
+        if current.strike != previous.strike:
+            controls.append("\\strike " if current.strike else "\\strike0 ")
+        current_size = round((current.size or 10) * 2)
+        previous_size = round((previous.size or 10) * 2)
+        if current_size != previous_size:
+            controls.append(f"\\fs{current_size} ")
+        if current.color != previous.color:
+            controls.append(f"\\cf{self._color_number(current.color)} ")
+        if controls:
+            self.parts.append("".join(controls))
+        self._emitted_style = replace(current)
+
+    def _open_paragraph(
+        self,
+        tag: str,
+        attrs: list[tuple[str, str | None]],
+    ) -> None:
+        if self._paragraph_open:
+            self._close_paragraph()
+        values = {key: value for key, value in attrs}
+        styles = _style_map(values.get("style"))
+        align = styles.get("text-align", "left").lower()
+        if align not in {"left", "center", "right", "justify"}:
+            align = "left"
+        self._paragraph = _ExportParagraph(
+            align=align,
+            indent_left=_parse_signed_px(
+                styles.get("padding-left") or styles.get("margin-left")
+            ),
+            indent_right=_parse_signed_px(
+                styles.get("padding-right") or styles.get("margin-right")
+            ),
+            indent_first=_parse_signed_px(styles.get("text-indent")),
+        )
+        self._paragraph_open = True
+        controls = ["\\pard"]
+        controls.append(
+            {
+                "left": "\\ql ",
+                "center": "\\qc ",
+                "right": "\\qr ",
+                "justify": "\\qj ",
+            }[align]
+        )
+        if self._paragraph.indent_left:
+            controls.append(f"\\li{self._paragraph.indent_left * 15} ")
+        if self._paragraph.indent_right:
+            controls.append(f"\\ri{self._paragraph.indent_right * 15} ")
+        if self._paragraph.indent_first:
+            controls.append(f"\\fi{self._paragraph.indent_first * 15} ")
+        controls.append("\\fs20\\cf0\\b0\\i0\\ulnone\\strike0 ")
+        self.parts.append("".join(controls))
+        self._style = _RtfStyle()
+        self._emitted_style = _RtfStyle()
+        if tag in {"h1", "h2", "h3", "h4", "h5", "h6"}:
+            size = {"h1": 24, "h2": 20, "h3": 16}.get(tag, 13)
+            self._style = _RtfStyle(bold=True, size=size)
+
+    def _close_paragraph(self) -> None:
+        if not self._paragraph_open:
+            return
+        if not self.parts or not self.parts[-1].endswith("\\par\n"):
             self.parts.append("\\par\n")
+        self._paragraph_open = False
+        self._paragraph = _ExportParagraph()
+        self._style = _RtfStyle()
+        self._emitted_style = _RtfStyle()
 
     def _append_image(self, attrs: list[tuple[str, str | None]]) -> None:
         values = {key: value for key, value in attrs}
@@ -641,6 +799,8 @@ class _RtfBodyParser(HTMLParser):
         data = self._load_image(src)
         if not data:
             return
+        if not self._paragraph_open:
+            self._open_paragraph("p", [])
         style = values.get("style") or ""
         width = _parse_dimension(values.get("width"))
         height = _parse_dimension(values.get("height"))
@@ -663,13 +823,45 @@ class _RtfBodyParser(HTMLParser):
             return
         if self._skip_depth:
             return
-        if tag in {"br", "hr"}:
-            self._paragraph_break()
+        if tag == "br":
+            if not self._paragraph_open:
+                self._open_paragraph("p", [])
+            self._ensure_style()
+            self.parts.append("\\line ")
             return
-        if tag in _RTF_BLOCK_TAGS:
-            self._paragraph_break()
+        if tag == "hr":
+            self._close_paragraph()
+            self.parts.append("\\pard\\par\n")
+            return
         if tag == "img":
             self._append_image(attrs)
+            return
+        if tag in _RTF_BLOCK_TAGS:
+            if tag in {"p", "div", "blockquote", "section", "article", "pre"}:
+                self._open_paragraph(tag, attrs)
+            elif tag.startswith("h"):
+                self._open_paragraph(tag, attrs)
+            return
+
+        values = {key: value for key, value in attrs}
+        if tag in {"strong", "b", "em", "i", "u", "s", "strike", "del", "span"}:
+            self._style_stack.append(replace(self._style))
+            if tag in {"strong", "b"}:
+                self._style.bold = True
+            elif tag in {"em", "i"}:
+                self._style.italic = True
+            elif tag == "u":
+                self._style.underline = True
+            elif tag in {"s", "strike", "del"}:
+                self._style.strike = True
+            elif tag == "span":
+                styles = _style_map(values.get("style"))
+                color = _parse_css_color(styles.get("color"))
+                size = _parse_font_size(styles.get("font-size"))
+                if color:
+                    self._style.color = color
+                if size:
+                    self._style.size = size
 
     def handle_endtag(self, tag: str) -> None:
         tag = tag.lower()
@@ -679,11 +871,34 @@ class _RtfBodyParser(HTMLParser):
         if self._skip_depth:
             return
         if tag in _RTF_BLOCK_TAGS:
-            self._paragraph_break()
+            self._close_paragraph()
+            return
+        if tag in {
+            "strong",
+            "b",
+            "em",
+            "i",
+            "u",
+            "s",
+            "strike",
+            "del",
+            "span",
+        }:
+            if self._style_stack:
+                self._style = self._style_stack.pop()
 
     def handle_data(self, data: str) -> None:
-        if not self._skip_depth:
-            self.parts.append(_rtf_text(data))
+        if self._skip_depth:
+            return
+        if not self._paragraph_open:
+            if not data.strip():
+                return
+            self._open_paragraph("p", [])
+        self._ensure_style()
+        self.parts.append(_rtf_text(data))
+
+    def finish(self) -> None:
+        self._close_paragraph()
 
 
 def html_to_rtf_with_images(
@@ -695,7 +910,8 @@ def html_to_rtf_with_images(
     parser = _RtfBodyParser(load_image)
     parser.feed(body)
     parser.close()
-    return RTF_HEADER + "".join(parser.parts) + "}"
+    parser.finish()
+    return _rtf_header(parser.colors) + "".join(parser.parts) + "}"
 
 
 def _html_to_rtf(body: str | None) -> str:
