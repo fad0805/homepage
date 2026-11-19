@@ -1,4 +1,5 @@
 import base64
+from contextlib import contextmanager
 import unittest
 from datetime import datetime, timedelta, timezone
 from io import BytesIO
@@ -616,6 +617,36 @@ class ManuscriptTests(unittest.TestCase):
             self.db, target_tree[1]["id"], self.owner.id
         )["body"]
         self.assertEqual(imported_body, parsed[1].body)
+
+    def test_export_scrivener_embeds_body_images(self) -> None:
+        png = base64.b64decode(
+            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk"
+            "+A8AAQUBAScY42YAAAAASUVORK5CYII="
+        )
+        project = self._project()
+        self._node(
+            project,
+            "그림",
+            body=(
+                '<p>앞</p><p><img src="/uploads/images/a.png" '
+                'width="120" height="80" alt="" /></p><p>뒤</p>'
+            ),
+        )
+        self.db.commit()
+
+        @contextmanager
+        def fake_open(_src: str):
+            yield BytesIO(png), "image/png", len(png)
+
+        with patch("crud.manuscript.open_uploaded_file", side_effect=fake_open):
+            data, _ = crud.export_scrivener(
+                self.db, project.id, self.owner.id
+            )
+
+        _, parsed = parse_scrivener_zip(data)
+        chapter = next(node for node in parsed if node.images)
+        self.assertEqual(chapter.images, [png])
+        self.assertEqual(chapter.image_sizes, [(120, 80)])
 
 
 if __name__ == "__main__":

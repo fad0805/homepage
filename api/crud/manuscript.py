@@ -16,12 +16,13 @@ from core.scrivener import (
     IMAGE_PLACEHOLDER_SUFFIX,
     ExportNode,
     build_scrivener_zip,
+    html_to_rtf_with_images,
     parse_scrivener_zip,
     safe_filename,
 )
 from core.search import like_pattern, search_tokens
 from core.text_stats import count_characters, html_to_plain
-from core.uploads import save_image_bytes
+from core.uploads import open_uploaded_file, save_image_bytes
 from models.books import Book, Chapter
 from models.manuscript import ManuscriptNode, ManuscriptProject, SerialNode
 from schemas import manuscript as schemas
@@ -1126,6 +1127,15 @@ def export_scrivener(
         .all()
     )
     live_ids = {node.id for node in nodes}
+
+    def load_body_image(src: str) -> bytes | None:
+        try:
+            with open_uploaded_file(src) as (handle, _content_type, _size):
+                return handle.read()
+        except Exception:
+            # External or missing images should not block the export.
+            return None
+
     export_nodes = [
         ExportNode(
             id=node.id,
@@ -1135,6 +1145,11 @@ def export_scrivener(
             body=node.body,
             synopsis=node.synopsis,
             notes=node.notes,
+            body_rtf=(
+                html_to_rtf_with_images(node.body, load_body_image)
+                if node.node_type == "chapter" and node.body
+                else None
+            ),
         )
         for node in nodes
     ]

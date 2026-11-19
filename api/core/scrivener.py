@@ -9,9 +9,11 @@ project bundle is ignored.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from html import escape
+from html.parser import HTMLParser
 from io import BytesIO
 import re
 import unicodedata
@@ -79,6 +81,7 @@ class ExportNode:
     body: str | None
     synopsis: str | None
     notes: str | None
+    body_rtf: str | None = None
 
 
 def _local(tag: str) -> str:
@@ -358,7 +361,7 @@ RTF_HEADER = "\n".join(
 )
 
 
-def _rtf_escape(text: str) -> str:
+def _rtf_text(text: str) -> str:
     parts: list[str] = []
     for char in text:
         if char == "\\":
@@ -379,7 +382,154 @@ def _rtf_escape(text: str) -> str:
             if code > 32767:
                 code -= 65536
             parts.append(f"\\uc1\\u{code}?")
-    return RTF_HEADER + "".join(parts) + "}"
+    return "".join(parts)
+
+
+def _rtf_escape(text: str) -> str:
+    return RTF_HEADER + _rtf_text(text) + "}"
+
+
+_RTF_BLOCK_TAGS = {
+    "p",
+    "div",
+    "h1",
+    "h2",
+    "h3",
+    "h4",
+    "h5",
+    "h6",
+    "blockquote",
+    "li",
+    "tr",
+    "section",
+    "article",
+    "pre",
+}
+
+
+def _parse_dimension(value: str | None) -> int | None:
+    if not value:
+        return None
+    match = re.search(r"\d+(?:\.\d+)?", value)
+    if not match:
+        return None
+    parsed = round(float(match.group(0)))
+    return parsed if parsed > 0 else None
+
+
+def _rtf_image(data: bytes, width: int | None, height: int | None) -> str:
+    from PIL import Image
+
+    kind: str | None = None
+    natural_width = width or 0
+    natural_height = height or 0
+    if data.startswith(b"\x89PNG\r\n\x1a\n"):
+        kind = "pngblip"
+    elif data.startswith(b"\xff\xd8"):
+        kind = "jpegblip"
+
+    try:
+        with Image.open(BytesIO(data)) as image:
+            natural_width, natural_height = image.size
+            if kind is None:
+                converted = BytesIO()
+                image.convert("RGBA").save(converted, format="PNG")
+                data = converted.getvalue()
+                kind = "pngblip"
+    except Exception:
+        if kind is None or not natural_width or not natural_height:
+            return ""
+
+    width = width or natural_width
+    height = height or natural_height
+    if not width or not height:
+        return ""
+
+    width_goal = max(1, round(width * 15))
+    height_goal = max(1, round(height * 15))
+    return (
+        "{\\*\\shppict{\\pict"
+        f"\\{kind}"
+        f"\\picw{natural_width}\\pich{natural_height}"
+        f"\\picwgoal{width_goal}\\pichgoal{height_goal} "
+        f"{data.hex()}}}"
+    )
+
+
+class _RtfBodyParser(HTMLParser):
+    def __init__(self, load_image: Callable[[str], bytes | None]) -> None:
+        super().__init__(convert_charrefs=True)
+        self.parts: list[str] = []
+        self._skip_depth = 0
+        self._load_image = load_image
+
+    def _paragraph_break(self) -> None:
+        if self.parts and not self.parts[-1].endswith("\\par\n"):
+            self.parts.append("\\par\n")
+
+    def _append_image(self, attrs: list[tuple[str, str | None]]) -> None:
+        values = {key: value for key, value in attrs}
+        src = values.get("src")
+        if not src:
+            return
+        data = self._load_image(src)
+        if not data:
+            return
+        style = values.get("style") or ""
+        width = _parse_dimension(values.get("width"))
+        height = _parse_dimension(values.get("height"))
+        if width is None:
+            match = re.search(r"width\s*:\s*([^;]+)", style)
+            width = _parse_dimension(match.group(1) if match else None)
+        if height is None:
+            match = re.search(r"height\s*:\s*([^;]+)", style)
+            height = _parse_dimension(match.group(1) if match else None)
+        image = _rtf_image(data, width, height)
+        if image:
+            self.parts.append(image)
+
+    def handle_starttag(
+        self, tag: str, attrs: list[tuple[str, str | None]]
+    ) -> None:
+        tag = tag.lower()
+        if tag in {"script", "style"}:
+            self._skip_depth += 1
+            return
+        if self._skip_depth:
+            return
+        if tag in {"br", "hr"}:
+            self._paragraph_break()
+            return
+        if tag in _RTF_BLOCK_TAGS:
+            self._paragraph_break()
+        if tag == "img":
+            self._append_image(attrs)
+
+    def handle_endtag(self, tag: str) -> None:
+        tag = tag.lower()
+        if tag in {"script", "style"}:
+            self._skip_depth = max(0, self._skip_depth - 1)
+            return
+        if self._skip_depth:
+            return
+        if tag in _RTF_BLOCK_TAGS:
+            self._paragraph_break()
+
+    def handle_data(self, data: str) -> None:
+        if not self._skip_depth:
+            self.parts.append(_rtf_text(data))
+
+
+def html_to_rtf_with_images(
+    body: str | None,
+    load_image: Callable[[str], bytes | None],
+) -> str:
+    if not body:
+        return RTF_HEADER + "}"
+    parser = _RtfBodyParser(load_image)
+    parser.feed(body)
+    parser.close()
+    return RTF_HEADER + "".join(parser.parts) + "}"
 
 
 def _html_to_rtf(body: str | None) -> str:
@@ -643,9 +793,10 @@ def build_scrivener_zip(project_title: str, nodes: list[ExportNode]) -> bytes:
         text_settings = ET.SubElement(item, "TextSettings")
         ET.SubElement(text_settings, "TextSelection").text = "0,0"
         if is_chapter:
-            files[f"Files/Data/{identifier}/content.rtf"] = _html_to_rtf(
-                node.body
-            ).encode("utf-8")
+            body_rtf = node.body_rtf or _html_to_rtf(node.body)
+            files[f"Files/Data/{identifier}/content.rtf"] = body_rtf.encode(
+                "utf-8"
+            )
             if node.synopsis:
                 files[f"Files/Data/{identifier}/synopsis.txt"] = (
                     node.synopsis.encode("utf-8")
