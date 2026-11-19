@@ -1107,8 +1107,16 @@ p.admin-books-draft-preview-empty {
   }
 
   .admin-book-card__header {
-    flex: 0 0 auto;
+    flex: 1 1 auto;
     min-width: max-content;
+  }
+
+  .admin-book-card__meta {
+    position: sticky;
+    right: 0;
+    z-index: 1;
+    padding-left: 0.5rem;
+    background: var(--background);
   }
 
   .admin-book-card__chips {
