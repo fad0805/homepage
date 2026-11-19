@@ -2418,6 +2418,12 @@
 
 .bookmark-journal-day-meta {
   margin-top: 0.45rem;
+
+  input[type='time'],
+  select {
+    box-sizing: border-box;
+    height: 2rem;
+  }
 }
 
 .bookmark-journal-edit-rating {
