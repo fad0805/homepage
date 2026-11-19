@@ -1067,7 +1067,17 @@ def import_scrivener(
                 # A corrupt or unsupported attachment must not block the import.
                 body = body.replace(placeholder, "")
                 continue
-            image_html = f'<img src="{url}" alt="" />'
+            width, height = (
+                item.image_sizes[image_index]
+                if image_index < len(item.image_sizes)
+                else (None, None)
+            )
+            size_attrs = ""
+            if width:
+                size_attrs += f' width="{width}"'
+            if height:
+                size_attrs += f' height="{height}"'
+            image_html = f'<img src="{url}" alt=""{size_attrs} />'
             if placeholder in body:
                 body = body.replace(placeholder, image_html)
             else:

@@ -67,6 +67,7 @@ class ScrivenerNode:
     notes: str = ""
     parent_index: int | None = None
     images: list[bytes] = field(default_factory=list)
+    image_sizes: list[tuple[int | None, int | None]] = field(default_factory=list)
 
 
 @dataclass
@@ -102,10 +103,31 @@ IMAGE_PLACEHOLDER_PREFIX = "@@SCRIVENER_IMAGE_"
 IMAGE_PLACEHOLDER_SUFFIX = "@@"
 
 
-def _prepare_rtf(raw: str) -> tuple[str, list[bytes]]:
+def _pict_size(group: str) -> tuple[int | None, int | None]:
+    """Return the display size Scrivener recorded for an inline image, in px."""
+
+    def goal_twips(name: str) -> int | None:
+        match = re.search(rf"\\{name}(\d+)", group)
+        return int(match.group(1)) if match else None
+
+    def source_pixels(name: str) -> int | None:
+        match = re.search(rf"\\{name}(\d+)", group)
+        return int(match.group(1)) if match else None
+
+    width_goal = goal_twips("picwgoal")
+    height_goal = goal_twips("pichgoal")
+    width = round(width_goal / 15) if width_goal else source_pixels("picw")
+    height = round(height_goal / 15) if height_goal else source_pixels("pich")
+    return width, height
+
+
+def _prepare_rtf(
+    raw: str,
+) -> tuple[str, list[bytes], list[tuple[int | None, int | None]]]:
     """Replace inline image groups with placeholders and return their bytes."""
     pieces: list[str] = []
     images: list[bytes] = []
+    sizes: list[tuple[int | None, int | None]] = []
     last = 0
     index = 0
     while index < len(raw):
@@ -122,7 +144,8 @@ def _prepare_rtf(raw: str) -> tuple[str, list[bytes]]:
                 if depth == 0:
                     break
             end += 1
-        image = _decode_pict_group(raw[index : end + 1])
+        group = raw[index : end + 1]
+        image = _decode_pict_group(group)
         if image:
             pieces.append(raw[last:index])
             pieces.append(
@@ -130,15 +153,18 @@ def _prepare_rtf(raw: str) -> tuple[str, list[bytes]]:
                 f"{IMAGE_PLACEHOLDER_SUFFIX}"
             )
             images.append(image)
+            sizes.append(_pict_size(group))
             last = end + 1
         index = end + 1
     pieces.append(raw[last:])
-    return "".join(pieces), images
+    return "".join(pieces), images, sizes
 
 
-def _rtf_to_html_with_images(data: bytes) -> tuple[str, list[bytes]]:
+def _rtf_to_html_with_images(
+    data: bytes,
+) -> tuple[str, list[bytes], list[tuple[int | None, int | None]]]:
     raw = data.decode("latin-1", errors="replace")
-    raw, images = _prepare_rtf(raw)
+    raw, images, image_sizes = _prepare_rtf(raw)
     codepage = re.search(r"\\ansicpg(\d+)", raw)
     encoding = f"cp{codepage.group(1)}" if codepage else "cp1252"
     uc_match = re.search(r"\\uc(\d+)", raw)
@@ -282,7 +308,7 @@ def _rtf_to_html_with_images(data: bytes) -> tuple[str, list[bytes]]:
     html = "".join(
         f"<p>{escape(line)}</p>" for line in lines if line.strip()
     )
-    return html, images
+    return html, images, image_sizes
 
 
 def _rtf_to_html(data: bytes) -> str:
@@ -449,10 +475,10 @@ def parse_scrivener_zip(data: bytes) -> tuple[str, list[ScrivenerNode]]:
                         notes_rtf = read_document(identifier, "notes.rtf")
                         if notes_rtf:
                             notes = html_to_plain(_rtf_to_html(notes_rtf))
-                    body, images = (
+                    body, images, image_sizes = (
                         _rtf_to_html_with_images(rtf)
                         if rtf
-                        else ("", [])
+                        else ("", [], [])
                     )
                     node_list.append(
                         ScrivenerNode(
@@ -463,6 +489,7 @@ def parse_scrivener_zip(data: bytes) -> tuple[str, list[ScrivenerNode]]:
                             notes=notes,
                             parent_index=parent_index,
                             images=images,
+                            image_sizes=image_sizes,
                         )
                     )
                     child_parent = None

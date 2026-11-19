@@ -532,7 +532,9 @@ class ManuscriptTests(unittest.TestCase):
         rtf = (
             "{\\rtf1\\ansi\\ansicpg1252\\uc1"
             "{\\pict {\\*\\nisusfilename unnamed}"
-            "\\pngblip\\picw1\\pich1 " + png.hex() + "}"
+            "\\pngblip\\picw1\\pich1\\picwgoal7240\\pichgoal7240 "
+            + png.hex()
+            + "}"
             "text\\par}"
         )
         buffer = BytesIO()
@@ -544,6 +546,7 @@ class ManuscriptTests(unittest.TestCase):
         _, parsed = parse_scrivener_zip(buffer.getvalue())
         self.assertEqual(parsed[0].images, [png])
         self.assertEqual(parsed[1].images, [png])
+        self.assertEqual(parsed[0].image_sizes, [(483, 483)])
         self.assertEqual(
             parsed[0].body,
             '<p>@@SCRIVENER_IMAGE_0@@text</p>',
@@ -567,6 +570,7 @@ class ManuscriptTests(unittest.TestCase):
         second = crud.get_node(self.db, tree[1]["id"], self.owner.id)
         self.assertIn('<img src="/uploads/images/attached.png"', first["body"])
         self.assertIn('<img src="/uploads/images/attached.png"', second["body"])
+        self.assertIn('width="483" height="483"', first["body"])
         self.assertLess(
             first["body"].index("<img"),
             first["body"].index("text"),
