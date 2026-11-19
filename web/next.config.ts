@@ -23,6 +23,9 @@ const nextConfig: NextConfig = {
     // Illustration uploads are proxied through Next.js to the API. Keep
     // enough headroom for a batch of high-resolution photos.
     middlewareClientMaxBodySize: "100mb",
+    // Next.js rewrites time out after 30s by default. A large Scrivener
+    // import can take longer than that even though the API still succeeds.
+    proxyTimeout: 5 * 60 * 1000,
   },
   async rewrites() {
     return [
