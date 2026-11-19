@@ -3,7 +3,6 @@
 import {
   useCallback,
   useEffect,
-  useMemo,
   useRef,
   useState,
   type FormEvent,
@@ -11,7 +10,6 @@ import {
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 
-import { MastodonShare } from "@/components/mastodon-share";
 import { RichTextEditor } from "@/components/rich-text-editor";
 import { TagInput } from "@/components/tag-input";
 import { TocManager } from "@/components/toc-manager";
@@ -338,28 +336,6 @@ export default function AdminChapterEdit() {
   useEffect(() => {
     load();
   }, [load]);
-
-  // Navigation spans every chapter the author owns, newest first, regardless
-  // of which book it belongs to. The metadata-only list is enough for this.
-  const orderedChapters = useMemo(
-    () =>
-      [...allChapters].sort((a, b) => {
-        const aTime = a.created_at ? Date.parse(a.created_at) : 0;
-        const bTime = b.created_at ? Date.parse(b.created_at) : 0;
-        return bTime - aTime || b.id - a.id;
-      }),
-    [allChapters],
-  );
-
-  const currentIndex = isNew
-    ? -1
-    : orderedChapters.findIndex((item) => item.id === chapterId);
-  const newerChapter =
-    currentIndex > 0 ? orderedChapters[currentIndex - 1] : null;
-  const olderChapter =
-    currentIndex >= 0 && currentIndex < orderedChapters.length - 1
-      ? orderedChapters[currentIndex + 1]
-      : null;
 
   const navigateToChapter = useCallback(
     (target: { id: number; book_id: number }) => {
@@ -954,31 +930,6 @@ export default function AdminChapterEdit() {
                 </div>
               ) : null}
             </div>
-            {!isNew && chapter && orderedChapters.length > 0 ? (
-              <div className="admin-books-chapter-nav">
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (newerChapter) navigateToChapter(newerChapter);
-                  }}
-                  disabled={!newerChapter}
-                >
-                  ← 이전 글
-                </button>
-                <span>
-                  {currentIndex + 1} / {orderedChapters.length}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (olderChapter) navigateToChapter(olderChapter);
-                  }}
-                  disabled={!olderChapter}
-                >
-                  다음 글 →
-                </button>
-              </div>
-            ) : null}
             <div className="admin-books-actions">
               <button
                 type="button"
@@ -987,15 +938,6 @@ export default function AdminChapterEdit() {
               >
                 전체 검색
               </button>
-              {!isNew && chapter && book ? (
-                <MastodonShare
-                  title={chapter.title}
-                  bookTitle={book.title}
-                  bookId={bookId}
-                  chapterId={chapter.id}
-                  triggerClassName="admin-button"
-                />
-              ) : null}
             </div>
           </header>
 
