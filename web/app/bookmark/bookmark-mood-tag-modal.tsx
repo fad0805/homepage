@@ -52,7 +52,7 @@ export function BookmarkMoodTagModal({
         onClick={onClose}
       >
         <div
-          className="bookmark-modal bookmark-category-modal"
+          className="bookmark-modal bookmark-category-modal bookmark-mood-tag-modal"
           role="dialog"
           aria-modal="true"
           aria-label="기분 태그 관리"
