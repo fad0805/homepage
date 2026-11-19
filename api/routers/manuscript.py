@@ -151,7 +151,10 @@ def purge_trash(
 ):
     return {
         "purged": crud.purge_expired(
-            db, retention_days=retention_days, project_id=project_id
+            db,
+            retention_days=retention_days,
+            project_id=project_id,
+            user_id=user.id,
         )
     }
 

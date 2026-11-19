@@ -465,6 +465,7 @@ def purge_expired(
     *,
     retention_days: int = TRASH_RETENTION_DAYS,
     project_id: int | None = None,
+    user_id: int | None = None,
 ) -> int:
     cutoff = _utcnow() - timedelta(days=retention_days)
     query = db.query(ManuscriptNode).filter(
@@ -473,6 +474,8 @@ def purge_expired(
     )
     if project_id is not None:
         query = query.filter(ManuscriptNode.project_id == project_id)
+    if user_id is not None:
+        query = query.filter(ManuscriptNode.user_id == user_id)
     count = query.delete(synchronize_session=False)
     db.commit()
     return count

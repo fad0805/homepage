@@ -84,6 +84,27 @@ class ManuscriptTests(unittest.TestCase):
             .first()
         )
 
+    def test_linked_book_must_belong_to_owner(self) -> None:
+        other_book = Book(user_id=self.other.id, title="남의 책", tags=[])
+        self.db.add(other_book)
+        self.db.flush()
+
+        with self.assertRaises(HTTPException):
+            crud.create_project(
+                self.db,
+                schemas.ProjectCreate(title="원고", linked_book_id=other_book.id),
+                self.owner.id,
+            )
+
+        project = self._project(linked_book=False)
+        with self.assertRaises(HTTPException):
+            crud.update_project(
+                self.db,
+                project.id,
+                schemas.ProjectUpdate(linked_book_id=other_book.id),
+                self.owner.id,
+            )
+
     def test_character_counts_include_spaces_and_separate_plain(self) -> None:
         self.assertEqual(
             count_characters("<p>가 나다</p><p>라</p>"),
@@ -165,6 +186,36 @@ class ManuscriptTests(unittest.TestCase):
             self.db.query(ManuscriptNode)
             .filter(ManuscriptNode.id == node_id)
             .first()
+        )
+
+    def test_purge_expired_trash_is_scoped_to_owner(self) -> None:
+        project = self._project()
+        other_project = ManuscriptProject(
+            user_id=self.other.id, title="다른 사용자 원고"
+        )
+        self.db.add(other_project)
+        self.db.flush()
+
+        owner_node_id = self._node(project, "내 오래된 노드").id
+        other_node = self._node(other_project, "남의 오래된 노드")
+        other_node.user_id = self.other.id
+        other_node_id = other_node.id
+        expired = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=31)
+        for node_id in (owner_node_id, other_node_id):
+            self.db.query(ManuscriptNode).filter(ManuscriptNode.id == node_id).one().deleted_at = expired
+        self.db.commit()
+
+        self.assertEqual(crud.purge_expired(self.db, user_id=self.owner.id), 1)
+        self.assertIsNone(
+            self.db.query(ManuscriptNode).filter(ManuscriptNode.id == owner_node_id).first()
+        )
+        self.assertIsNotNone(
+            self.db.query(ManuscriptNode).filter(ManuscriptNode.id == other_node_id).first()
+        )
+
+        self.assertEqual(crud.purge_expired(self.db, user_id=self.other.id), 1)
+        self.assertIsNone(
+            self.db.query(ManuscriptNode).filter(ManuscriptNode.id == other_node_id).first()
         )
 
     def test_trash_and_purge_can_be_scoped_to_project(self) -> None:
