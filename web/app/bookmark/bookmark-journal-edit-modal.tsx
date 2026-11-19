@@ -3,7 +3,8 @@
 import { useEffect, useState } from "react";
 
 import { apiFetch } from "@/lib/api";
-import type { BookmarkJournalNode } from "@/lib/bookmark";
+import type { BookmarkJournalNode, BookmarkMoodTag } from "@/lib/bookmark";
+import { formatTime24h } from "@/lib/bookmark";
 
 import { CloverRating } from "./clover-rating";
 
@@ -25,13 +26,38 @@ export function BookmarkJournalEditModal({
   const [reviewContent, setReviewContent] = useState(
     node.review?.content ?? "",
   );
+  const [wakeTime, setWakeTime] = useState(
+    formatTime24h(node.goal?.wake_time),
+  );
+  const [moodTagId, setMoodTagId] = useState<number | null>(
+    node.goal?.mood_tag_id ?? null,
+  );
+  const [moodTags, setMoodTags] = useState<BookmarkMoodTag[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    apiFetch<BookmarkMoodTag[]>("/api/bookmark/mood-tags", {
+      cache: "no-store",
+    })
+      .then((tags) => {
+        if (!cancelled) setMoodTags(tags);
+      })
+      .catch(() => {
+        // Mood can still be cleared if tags fail to load.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     setGoalContent(node.goal?.content ?? "");
     setRating(node.rating?.rating ?? 0);
     setReviewContent(node.review?.content ?? "");
+    setWakeTime(formatTime24h(node.goal?.wake_time));
+    setMoodTagId(node.goal?.mood_tag_id ?? null);
     setError(null);
   }, [node]);
 
@@ -78,8 +104,23 @@ export function BookmarkJournalEditModal({
         }),
       );
     }
+    let dayMetaRequest: Promise<unknown> | null = null;
+    if (
+      node.level === "day" &&
+      (wakeTime !== formatTime24h(node.goal?.wake_time) ||
+        moodTagId !== (node.goal?.mood_tag_id ?? null))
+    ) {
+      dayMetaRequest = apiFetch<unknown>("/api/bookmark/day-meta", {
+        method: "PUT",
+        body: JSON.stringify({
+          period_start: node.period_start,
+          wake_time: wakeTime || null,
+          mood_tag_id: moodTagId,
+        }),
+      });
+    }
 
-    if (requests.length === 0) {
+    if (requests.length === 0 && !dayMetaRequest) {
       onClose();
       return;
     }
@@ -88,6 +129,7 @@ export function BookmarkJournalEditModal({
     setError(null);
     try {
       await Promise.all(requests);
+      if (dayMetaRequest) await dayMetaRequest;
       onSaved();
     } catch (reason) {
       setError(
@@ -147,6 +189,41 @@ export function BookmarkJournalEditModal({
               }
             />
           </label>
+
+          {node.level === "day" ? (
+            <div className="bookmark-day-meta-fields bookmark-journal-day-meta">
+              <label>
+                <span>기상</span>
+                <input
+                  type="time"
+                  value={wakeTime}
+                  disabled={saving}
+                  onChange={(event) => setWakeTime(event.target.value)}
+                />
+              </label>
+              <label>
+                <span>기분</span>
+                <select
+                  value={moodTagId ?? ""}
+                  disabled={saving}
+                  onChange={(event) =>
+                    setMoodTagId(
+                      event.target.value
+                        ? Number(event.target.value)
+                        : null,
+                    )
+                  }
+                >
+                  <option value="">선택 안 함</option>
+                  {moodTags.map((tag) => (
+                    <option value={tag.id} key={tag.id}>
+                      {tag.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+          ) : null}
 
           <div className="bookmark-journal-edit-rating">
             <span>별점</span>

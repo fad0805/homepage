@@ -6,6 +6,7 @@ import type {
   BookmarkJournalNodeLevel,
   BookmarkJournalTree,
 } from "@/lib/bookmark";
+import { formatTime24h } from "@/lib/bookmark";
 import { todayDateInputValue } from "@/lib/datetime";
 
 import { BookmarkCalendarModal } from "./bookmark-calendar-modal";
@@ -534,9 +535,11 @@ export function BookmarkJournalPanel() {
     <div className="bookmark-journal-section">
       <h3>일간 기록</h3>
       <div className="bookmark-journal-table-wrap">
-        <table className="bookmark-journal-table">
+        <table className="bookmark-journal-table has-day-meta">
           <colgroup>
             <col className="is-date" />
+            <col className="is-wake" />
+            <col className="is-mood" />
             <col className="is-goal" />
             <col className="is-rating" />
             <col className="is-review" />
@@ -544,6 +547,8 @@ export function BookmarkJournalPanel() {
           <thead>
             <tr>
               <th scope="col">날짜</th>
+              <th scope="col">기상</th>
+              <th scope="col">기분</th>
               <th scope="col">목표</th>
               <th scope="col">별점</th>
               <th scope="col">회고</th>
@@ -569,6 +574,8 @@ export function BookmarkJournalPanel() {
                 }}
               >
                 <th scope="row">{withoutYear(day.label)}</th>
+                <td>{textOrDash(formatTime24h(day.goal?.wake_time))}</td>
+                <td>{textOrDash(day.goal?.mood_tag_name)}</td>
                 <td>{textOrDash(day.goal?.content)}</td>
                 <td>{renderRating(day) ?? "-"}</td>
                 <td>{textOrDash(day.review?.content)}</td>

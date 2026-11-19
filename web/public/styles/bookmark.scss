@@ -2330,6 +2330,18 @@
     width: 7.5rem;
   }
 
+  col.is-wake {
+    width: 5rem;
+  }
+
+  col.is-mood {
+    width: 6rem;
+  }
+
+  &.has-day-meta {
+    min-width: 41rem;
+  }
+
   col.is-goal {
     width: 26%;
   }
@@ -2402,6 +2414,10 @@
 
 .bookmark-journal-edit-form {
   margin-top: 0.75rem;
+}
+
+.bookmark-journal-day-meta {
+  margin-top: 0.45rem;
 }
 
 .bookmark-journal-edit-rating {
