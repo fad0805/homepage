@@ -8,7 +8,8 @@ import json
 from fastapi import HTTPException, status
 from sqlalchemy import or_
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload, load_only
+from sqlalchemy.orm.attributes import set_committed_value
 
 from core.image_urls import public_url
 from core.scrivener import (
@@ -183,6 +184,7 @@ def get_projects(db: Session, user_id: int) -> list[dict]:
 
     projects = (
         db.query(ManuscriptProject)
+        .options(joinedload(ManuscriptProject.book))
         .filter(ManuscriptProject.user_id == user_id)
         .order_by(ManuscriptProject.id.asc())
         .all()
@@ -258,6 +260,29 @@ def get_tree(db: Session, project_id: int, user_id: int) -> list[dict]:
     _get_project_or_404(db, project_id, user_id)
     nodes = (
         db.query(ManuscriptNode)
+        .options(
+            load_only(
+                ManuscriptNode.id,
+                ManuscriptNode.project_id,
+                ManuscriptNode.parent_id,
+                ManuscriptNode.node_type,
+                ManuscriptNode.title,
+                ManuscriptNode.subtitle,
+                ManuscriptNode.synopsis,
+                ManuscriptNode.status,
+                ManuscriptNode.notes,
+                ManuscriptNode.target_chars,
+                ManuscriptNode.position,
+                ManuscriptNode.char_count_with_spaces,
+                ManuscriptNode.char_count_plain,
+                ManuscriptNode.published_chapter_id,
+                ManuscriptNode.published_manuscript_hash,
+                ManuscriptNode.published_chapter_hash,
+                ManuscriptNode.deleted_at,
+                ManuscriptNode.created_at,
+                ManuscriptNode.updated_at,
+            )
+        )
         .filter(
             ManuscriptNode.project_id == project_id,
             ManuscriptNode.user_id == user_id,
@@ -266,12 +291,34 @@ def get_tree(db: Session, project_id: int, user_id: int) -> list[dict]:
         .order_by(ManuscriptNode.position.asc(), ManuscriptNode.id.asc())
         .all()
     )
+    published_ids = [
+        node.id for node in nodes if node.published_chapter_id
+    ]
+    if published_ids:
+        bodies = dict(
+            db.query(ManuscriptNode.id, ManuscriptNode.body)
+            .filter(ManuscriptNode.id.in_(published_ids))
+            .all()
+        )
+        for node in nodes:
+            if node.id in bodies:
+                set_committed_value(node, "body", bodies[node.id])
     chapter_ids = [
         node.published_chapter_id for node in nodes if node.published_chapter_id
     ]
     chapters = {
         chapter.id: chapter
-        for chapter in db.query(Chapter).filter(Chapter.id.in_(chapter_ids)).all()
+        for chapter in db.query(Chapter)
+        .options(
+            load_only(
+                Chapter.id,
+                Chapter.title,
+                Chapter.subtitle,
+                Chapter.body,
+            )
+        )
+        .filter(Chapter.id.in_(chapter_ids))
+        .all()
     } if chapter_ids else {}
     return [
         _serialize_node(node, chapter=chapters.get(node.published_chapter_id))
@@ -651,14 +698,17 @@ def search_nodes(
     if not nodes:
         return []
 
-    all_nodes = (
-        db.query(ManuscriptNode.id, ManuscriptNode.parent_id, ManuscriptNode.title)
-        .filter(
-            ManuscriptNode.user_id == user_id,
-            ManuscriptNode.deleted_at.is_(None),
-        )
-        .all()
+    path_query = db.query(
+        ManuscriptNode.id, ManuscriptNode.parent_id, ManuscriptNode.title
+    ).filter(
+        ManuscriptNode.user_id == user_id,
+        ManuscriptNode.deleted_at.is_(None),
     )
+    if project_id is not None:
+        path_query = path_query.filter(
+            ManuscriptNode.project_id == project_id
+        )
+    all_nodes = path_query.all()
     by_id = {node_id: (parent_id, title) for node_id, parent_id, title in all_nodes}
     results = []
     for node in nodes:
@@ -979,10 +1029,31 @@ def get_public_toc(db: Session, book_id: int) -> list[dict]:
     chapters = {
         chapter.id: chapter
         for chapter in db.query(Chapter)
+        .options(
+            load_only(
+                Chapter.id,
+                Chapter.title,
+                Chapter.subtitle,
+                Chapter.protected,
+                Chapter.published_at,
+                Chapter.updated_at,
+                Chapter.order,
+            )
+        )
         .filter(Chapter.book_id == book_id, Chapter.visible.is_(True))
+        .order_by(Chapter.order.asc(), Chapter.id.asc())
         .all()
     }
-    nodes = db.query(SerialNode).filter(SerialNode.book_id == book_id).all()
+    nodes = (
+        db.query(SerialNode)
+        .filter(SerialNode.book_id == book_id)
+        .order_by(
+            SerialNode.parent_id.asc().nullsfirst(),
+            SerialNode.position.asc(),
+            SerialNode.id.asc(),
+        )
+        .all()
+    )
 
     def chapter_summary(chapter: Chapter) -> dict:
         return {

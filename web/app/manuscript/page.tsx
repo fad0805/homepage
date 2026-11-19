@@ -486,19 +486,27 @@ export default function ManuscriptWorkspace() {
   }, [selectedId, notify]);
 
   useEffect(() => {
-    if (!searchOpen || !query.trim()) {
+    const trimmed = query.trim();
+    if (!searchOpen || trimmed.length < 2) {
       setResults([]);
       return;
     }
+    const controller = new AbortController();
     const timer = window.setTimeout(() => {
       const projectParam = projectId ? `&project_id=${projectId}` : "";
       apiFetch<SearchResult[]>(
-        `/api/manuscript/search?q=${encodeURIComponent(query.trim())}${projectParam}`,
+        `/api/manuscript/search?q=${encodeURIComponent(trimmed)}${projectParam}`,
+        { signal: controller.signal },
       )
         .then(setResults)
-        .catch((error: Error) => notify(error.message, "error"));
+        .catch((error: Error) => {
+          if (error.name !== "AbortError") notify(error.message, "error");
+        });
     }, 250);
-    return () => window.clearTimeout(timer);
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+    };
   }, [query, searchOpen, projectId, notify]);
 
   useEffect(() => {
