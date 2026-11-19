@@ -2558,3 +2558,107 @@
 [data-theme='dark'] .bookmark-journal-rating .is-filled {
   color: #8fd39a;
 }
+
+/* Slightly larger body copy for the bookmark workspace. Page and panel
+   headings keep their existing scale. */
+#bookmark-page {
+  .bookmark-period-tab {
+    font-size: 0.76rem;
+  }
+
+  .bookmark-period-menu button {
+    font-size: 0.78rem;
+  }
+
+  .bookmark-period-label,
+  .bookmark-today-date,
+  .bookmark-view-label {
+    font-size: 0.8rem;
+  }
+
+  .bookmark-text-button {
+    font-size: 0.72rem;
+  }
+
+  .bookmark-panel-eyebrow {
+    font-size: 0.62rem;
+  }
+
+  .bookmark-routine-title {
+    font-size: 0.84rem;
+  }
+
+  .bookmark-item-schedule,
+  .bookmark-routine-next {
+    font-size: 0.66rem;
+  }
+
+  .bookmark-routine-kind-header > span {
+    font-size: 0.64rem;
+  }
+
+  .bookmark-routine-progress {
+    font-size: 0.68rem;
+
+    strong {
+      font-size: 0.82rem;
+    }
+
+    span {
+      font-size: 0.61rem;
+    }
+  }
+
+  .bookmark-record-textarea,
+  .bookmark-review-textarea {
+    font-size: 0.81rem;
+  }
+
+  .bookmark-stat-title {
+    font-size: 0.82rem;
+  }
+
+  .bookmark-stat-caption {
+    font-size: 0.64rem;
+  }
+
+  .bookmark-stat-value {
+    font-size: 0.78rem;
+
+    small {
+      font-size: 0.62rem;
+    }
+  }
+
+  .bookmark-journal-table {
+    font-size: 0.76rem;
+
+    thead th {
+      font-size: 0.63rem;
+    }
+
+    tbody th {
+      font-size: 0.72rem;
+    }
+  }
+
+  .bookmark-journal-block p {
+    font-size: 0.78rem;
+  }
+
+  .bookmark-journal-label {
+    font-size: 0.64rem;
+  }
+
+  .bookmark-item-form > label > span,
+  .bookmark-routine-fields > label > span {
+    font-size: 0.73rem;
+  }
+
+  .bookmark-item-form input[type='text'],
+  .bookmark-item-form input[type='number'],
+  .bookmark-item-form select,
+  .bookmark-item-form textarea {
+    font-size: 0.83rem;
+  }
+}
