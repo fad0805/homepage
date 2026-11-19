@@ -142,6 +142,64 @@ class ManuscriptTests(unittest.TestCase):
         self.assertEqual(updated["char_count_with_spaces"], 3)
         self.assertEqual(updated["char_count_plain"], 3)
 
+    def test_save_combined_commits_all_bodies(self) -> None:
+        project = self._project()
+        folder = self._node(project, "폴더", node_type="folder")
+        first = self._node(project, "1", parent_id=folder.id, body="<p>old1</p>")
+        second = self._node(project, "2", parent_id=folder.id, body="<p>old2</p>")
+
+        result = crud.save_combined(
+            self.db,
+            folder.id,
+            schemas.CombinedSaveRequest(
+                bodies={first.id: "<p>new1</p>", second.id: "<p>새 본문</p>"},
+                notes="작가 메모",
+            ),
+            self.owner.id,
+        )
+        self.assertEqual(result["saved"], 2)
+
+        self.db.refresh(first)
+        self.db.refresh(second)
+        self.db.refresh(folder)
+        self.assertEqual(first.body, "<p>new1</p>")
+        self.assertEqual(second.body, "<p>새 본문</p>")
+        self.assertEqual(second.char_count_plain, 3)
+        self.assertEqual(folder.notes, "작가 메모")
+
+    def test_save_combined_does_not_partially_write(self) -> None:
+        project = self._project()
+        folder = self._node(project, "폴더", node_type="folder")
+        first = self._node(project, "1", parent_id=folder.id, body="<p>old1</p>")
+        other_project = self._project(linked_book=False)
+        foreign = self._node(other_project, "남의 문서")
+
+        with self.assertRaises(HTTPException):
+            crud.save_combined(
+                self.db,
+                folder.id,
+                schemas.CombinedSaveRequest(
+                    bodies={first.id: "<p>new1</p>", foreign.id: "<p>실패</p>"}
+                ),
+                self.owner.id,
+            )
+        self.db.refresh(first)
+        self.assertEqual(first.body, "<p>old1</p>")
+        self.db.commit()
+
+        with patch.object(self.db, "commit", side_effect=RuntimeError("db down")):
+            with self.assertRaises(RuntimeError):
+                crud.save_combined(
+                    self.db,
+                    folder.id,
+                    schemas.CombinedSaveRequest(
+                        bodies={first.id: "<p>커밋 실패</p>"}
+                    ),
+                    self.owner.id,
+                )
+        fresh = self.db.get(ManuscriptNode, first.id)
+        self.assertEqual(fresh.body, "<p>old1</p>")
+
     def test_tree_move_rejects_cycles(self) -> None:
         project = self._project()
         root = self._node(project, "1권", node_type="folder")

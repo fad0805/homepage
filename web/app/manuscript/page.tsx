@@ -306,6 +306,7 @@ export default function ManuscriptWorkspace() {
   const [scrivCombinedHtml, setScrivCombinedHtml] = useState("");
   const [scrivDirty, setScrivDirty] = useState(false);
   const [notice, setNotice] = useState<Notice | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [autoSaving, setAutoSaving] = useState(false);
@@ -319,10 +320,52 @@ export default function ManuscriptWorkspace() {
   const treeProjectIdRef = useRef<number | null>(null);
   const restoredProjectIdRef = useRef<number | null>(null);
   const saveShortcutRef = useRef<() => void>(() => {});
+  const savePromiseRef = useRef<Promise<boolean> | null>(null);
+  const saveViewRef = useRef({
+    selectedId,
+    folderActive: scrivenings !== null,
+    dirty,
+    scrivDirty,
+  });
+  saveViewRef.current = {
+    selectedId,
+    folderActive: scrivenings !== null,
+    dirty,
+    scrivDirty,
+  };
 
   const notify = useCallback((text: string, type: Notice["type"] = "success") => {
     setNotice({ type, text });
   }, []);
+
+  const waitForPendingSave = async () => {
+    const pending = savePromiseRef.current;
+    if (pending) await pending;
+  };
+
+  const trackSave = (promise: Promise<boolean>) => {
+    savePromiseRef.current = promise;
+    void promise.finally(() => {
+      if (savePromiseRef.current === promise) savePromiseRef.current = null;
+    });
+    return promise;
+  };
+
+  const markSaveFailed = (error: unknown, silent: boolean) => {
+    const message = error instanceof Error ? error.message : String(error);
+    setSaveError(message);
+    if (!silent) notify(message, "error");
+  };
+
+  const markSaved = (folder: boolean) => {
+    setSaveError(null);
+    setDirty(false);
+    saveViewRef.current.dirty = false;
+    if (folder) {
+      setScrivDirty(false);
+      saveViewRef.current.scrivDirty = false;
+    }
+  };
 
   const selectNode = useCallback(
     (id: number | null) => {
@@ -384,16 +427,15 @@ export default function ManuscriptWorkspace() {
     setMobilePanel((current) => (current === panel ? null : panel));
   };
 
-  const handleSelectNode = (node: ManuscriptNode) => {
-    void flushAutosave().finally(() => {
-      setTrashPreview(null);
-      setTrashScrivenings(null);
-      setTrashCombinedHtml("");
-      setMobilePanel(null);
-      selectNode(node.id);
-      setScrivenings(null);
-      if (node.node_type === "folder") void openScrivenings(node.id);
-    });
+  const handleSelectNode = async (node: ManuscriptNode) => {
+    if (!(await flushAutosave())) return;
+    setTrashPreview(null);
+    setTrashScrivenings(null);
+    setTrashCombinedHtml("");
+    setMobilePanel(null);
+    selectNode(node.id);
+    setScrivenings(null);
+    if (node.node_type === "folder") void openScrivenings(node.id);
   };
 
   const handleOpenTrashItem = (item: TrashItem) => {
@@ -561,7 +603,7 @@ export default function ManuscriptWorkspace() {
   }, [projectId, selectedId, loadTree]);
 
   const createNode = async (nodeType: "folder" | "chapter") => {
-    if (!projectId) return;
+    if (!projectId || !(await flushAutosave())) return;
     const parentId =
       selected?.node_type === "folder" ? selected.id : (selected?.parent_id ?? null);
     try {
@@ -583,40 +625,48 @@ export default function ManuscriptWorkspace() {
     }
   };
 
-  const saveNode = async (silent = false) => {
-    if (!selectedId) return;
+  const saveNode = async (silent = false): Promise<boolean> => {
+    if (!selectedId) return true;
+    await waitForPendingSave();
     const nodeId = selectedId;
     const signature = chapterSignature(nodeId, form);
     if (silent) setAutoSaving(true);
     else setSaving(true);
-    try {
-      await apiFetch(`/api/manuscript/nodes/${nodeId}`, {
-        method: "PATCH",
-        body: JSON.stringify({
-          subtitle: form.subtitle || null,
-          synopsis: form.synopsis || null,
-          notes: form.notes || null,
-          body: form.body,
-        }),
-      });
-      autosaveRef.current.signature = signature;
-      if (latestSignatureRef.current === signature) setDirty(false);
-      if (!silent) {
-        await refresh();
-        notify("원고를 저장했습니다.");
-      }
-    } catch (error) {
-      if (!silent) notify((error as Error).message, "error");
-    } finally {
-      if (silent) setAutoSaving(false);
-      else setSaving(false);
-    }
+    return trackSave(
+      (async () => {
+        try {
+          await apiFetch(`/api/manuscript/nodes/${nodeId}`, {
+            method: "PATCH",
+            body: JSON.stringify({
+              subtitle: form.subtitle || null,
+              synopsis: form.synopsis || null,
+              notes: form.notes || null,
+              body: form.body,
+            }),
+          });
+          autosaveRef.current.signature = signature;
+          if (latestSignatureRef.current === signature) markSaved(false);
+          if (!silent) {
+            await refresh();
+            notify("원고를 저장했습니다.");
+          }
+          return true;
+        } catch (error) {
+          markSaveFailed(error, silent);
+          return false;
+        } finally {
+          if (silent) setAutoSaving(false);
+          else setSaving(false);
+        }
+      })(),
+    );
   };
 
   const deleteSelected = async () => {
     if (!selectedId || !window.confirm("선택한 노드와 하위 노드를 휴지통으로 이동할까요?")) {
       return;
     }
+    if (!(await flushAutosave())) return;
     try {
       await apiFetch(`/api/manuscript/nodes/${selectedId}`, { method: "DELETE" });
       selectNode(null);
@@ -638,7 +688,7 @@ export default function ManuscriptWorkspace() {
   };
 
   const moveNode = async (id: number, parentId: number | null) => {
-    if (!projectId) return;
+    if (!projectId || !(await flushAutosave())) return;
     const siblings = childrenMap.get(parentId) ?? [];
     try {
       await apiFetch(`/api/manuscript/nodes/${id}/move`, {
@@ -665,6 +715,7 @@ export default function ManuscriptWorkspace() {
       notify("프로젝트에 연결된 책이 없습니다.", "error");
       return;
     }
+    if (!(await flushAutosave())) return;
     const wasRepublish = hasLinkedPost;
     try {
       await apiFetch(`/api/manuscript/nodes/${selectedId}/publish`, {
@@ -720,68 +771,78 @@ export default function ManuscriptWorkspace() {
     if (lastNode.node_type === "folder") void openScrivenings(lastId);
   }, [projectId, tree, selectNode, openScrivenings]);
 
-  const saveCombined = async (silent = false) => {
-    if (!scrivenings || !selected || !projectId) return;
+  const saveCombined = async (silent = false): Promise<boolean> => {
+    if (!scrivenings || !selected || !projectId) return true;
+    await waitForPendingSave();
     const folderId = selected.id;
     const docs = scrivenings;
     const bodies = splitCombinedHtml(scrivCombinedHtml);
     if (bodies.length !== docs.length) {
-      if (!silent) {
-        notify(
-          `구분선이 ${docs.length - 1}개여야 합니다. 지금은 ${bodies.length - 1}개입니다.`,
-          "error",
-        );
-      }
-      return;
+      const message = `구분선이 ${docs.length - 1}개여야 합니다. 지금은 ${bodies.length - 1}개입니다.`;
+      markSaveFailed(message, silent);
+      return false;
     }
     const signature = folderSignature(folderId, scrivCombinedHtml, form);
+    const bodiesById = Object.fromEntries(
+      bodies.map((body, index) => [docs[index].id, body]),
+    );
     if (silent) setAutoSaving(true);
     else setSaving(true);
-    try {
-      await Promise.all([
-        ...bodies.map((body, index) =>
-          apiFetch(`/api/manuscript/nodes/${docs[index].id}`, {
-            method: "PATCH",
-            body: JSON.stringify({ body }),
-          }),
-        ),
-        apiFetch(`/api/manuscript/nodes/${folderId}`, {
-          method: "PATCH",
-          body: JSON.stringify({
-            subtitle: form.subtitle || null,
-            synopsis: form.synopsis || null,
-            notes: form.notes || null,
-          }),
-        }),
-      ]);
-      autosaveRef.current.signature = signature;
-      if (latestSignatureRef.current === signature) {
-        setScrivDirty(false);
-        setDirty(false);
-      }
-      if (!silent) {
-        await loadTree(projectId);
-        const reloaded = await openScrivenings(folderId);
-        if (reloaded !== null) {
-          autosaveRef.current.signature = folderSignature(folderId, reloaded, form);
+    return trackSave(
+      (async () => {
+        try {
+          await apiFetch(`/api/manuscript/nodes/${folderId}/save-combined`, {
+            method: "POST",
+            body: JSON.stringify({
+              bodies: bodiesById,
+              subtitle: form.subtitle || null,
+              synopsis: form.synopsis || null,
+              notes: form.notes || null,
+            }),
+          });
+          autosaveRef.current.signature = signature;
+          if (latestSignatureRef.current === signature) markSaved(true);
+          if (!silent) {
+            await loadTree(projectId);
+            const reloaded = await openScrivenings(folderId);
+            if (reloaded !== null) {
+              autosaveRef.current.signature = folderSignature(
+                folderId,
+                reloaded,
+                form,
+              );
+            }
+            notify("폴더를 저장했습니다.");
+          }
+          return true;
+        } catch (error) {
+          markSaveFailed(error, silent);
+          return false;
+        } finally {
+          if (silent) setAutoSaving(false);
+          else setSaving(false);
         }
-        notify("폴더를 저장했습니다.");
-      }
-    } catch (error) {
-      if (!silent) notify((error as Error).message, "error");
-    } finally {
-      if (silent) setAutoSaving(false);
-      else setSaving(false);
-    }
+      })(),
+    );
   };
 
-  const flushAutosave = async () => {
-    if (loading) return;
-    if (scrivenings && selected) {
-      if (scrivDirty || dirty) await saveCombined(true);
-      return;
+  const flushAutosave = async (): Promise<boolean> => {
+    if (loading) return true;
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      const pending = savePromiseRef.current;
+      if (pending && !(await pending)) return false;
+
+      const view = saveViewRef.current;
+      if (view.folderActive) {
+        if (!view.scrivDirty && !view.dirty) return true;
+        if (!(await saveCombined(true))) return false;
+      } else {
+        if (!view.dirty || !view.selectedId) return true;
+        if (!(await saveNode(true))) return false;
+      }
     }
-    if (dirty && selectedId) await saveNode(true);
+    notify("변경 사항이 계속 발생해 저장을 완료하지 못했습니다.", "error");
+    return false;
   };
 
   // Keep the shortcut pointed at the latest save handler without rebinding
@@ -816,7 +877,7 @@ export default function ManuscriptWorkspace() {
   }, [selected, trashPreview]);
 
   const openTrashPreview = async (item: TrashItem) => {
-    await flushAutosave();
+    if (!(await flushAutosave())) return;
     try {
       const node = await apiFetch<ManuscriptNode>(
         `/api/manuscript/nodes/${item.id}?include_deleted=true`,
@@ -840,7 +901,7 @@ export default function ManuscriptWorkspace() {
   };
 
   const openTrashFolderPreview = async (item: TrashItem) => {
-    await flushAutosave();
+    if (!(await flushAutosave())) return;
     try {
       const [node, docs] = await Promise.all([
         apiFetch<ManuscriptNode>(
@@ -922,6 +983,7 @@ export default function ManuscriptWorkspace() {
   ]);
 
   const restoreFromTrash = async (id: number) => {
+    if (!(await flushAutosave())) return;
     try {
       await apiFetch(`/api/manuscript/nodes/${id}/restore`, { method: "POST" });
       setTrashPreview((current) => (current?.id === id ? null : current));
@@ -936,6 +998,7 @@ export default function ManuscriptWorkspace() {
   };
 
   const purgeTrash = async () => {
+    if (!(await flushAutosave())) return;
     try {
       const result = await apiFetch<{ purged: number }>(
         `/api/manuscript/trash/purge?project_id=${projectId}`,
@@ -1008,6 +1071,22 @@ export default function ManuscriptWorkspace() {
           role={notice.type === "error" ? "alert" : "status"}
         >
           {notice.text}
+        </div>
+      ) : null}
+
+      {saveError ? (
+        <div className="ms-notice ms-notice--save" role="alert">
+          <span>저장 실패: {saveError}</span>
+          <button
+            type="button"
+            className="ms-button ms-button--small"
+            onClick={() => {
+              if (scrivenings) void saveCombined();
+              else void saveNode();
+            }}
+          >
+            다시 저장
+          </button>
         </div>
       ) : null}
 

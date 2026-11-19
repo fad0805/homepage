@@ -391,6 +391,56 @@ def update_node(
     return get_node(db, node.id, user_id)
 
 
+def save_combined(
+    db: Session,
+    folder_id: int,
+    payload: schemas.CombinedSaveRequest,
+    user_id: int,
+) -> dict:
+    """Save every document body plus the folder metadata in one commit.
+
+    Validating all nodes before writing prevents a partial save when one id is
+    stale or belongs to another project. A database error still triggers a
+    rollback so the folder view cannot show bodies that were never persisted.
+    """
+    folder = _get_node_or_404(db, folder_id, user_id)
+    if folder.node_type != "folder":
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "합본 저장은 폴더에서만 가능합니다.")
+
+    data = payload.model_dump(exclude_unset=True)
+    bodies = data.pop("bodies", {})
+    folder_fields = {
+        key: data[key] for key in ("subtitle", "synopsis", "notes") if key in data
+    }
+    if not bodies and not folder_fields:
+        return {"saved": 0}
+
+    updates: list[tuple[ManuscriptNode, str]] = []
+    for node_id, body in bodies.items():
+        node = _get_node_or_404(db, node_id, user_id)
+        if node.project_id != folder.project_id:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST, "다른 프로젝트의 문서는 저장할 수 없습니다."
+            )
+        if node.node_type != "chapter":
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST, "문서 본문만 합본으로 저장할 수 있습니다."
+            )
+        updates.append((node, body))
+
+    try:
+        for node, body in updates:
+            node.body = body
+            node.char_count_with_spaces, node.char_count_plain = count_characters(body)
+        for key, value in folder_fields.items():
+            setattr(folder, key, value)
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+    return {"saved": len(updates)}
+
+
 def _descendant_ids(db: Session, node: ManuscriptNode) -> list[int]:
     rows = (
         db.query(ManuscriptNode.id, ManuscriptNode.parent_id)

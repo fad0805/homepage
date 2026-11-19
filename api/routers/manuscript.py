@@ -126,6 +126,16 @@ def patch_node(
     return crud.update_node(db, node_id, payload, user.id)
 
 
+@router.post("/nodes/{node_id}/save-combined")
+def post_save_combined(
+    node_id: int,
+    payload: schemas.CombinedSaveRequest,
+    db: Session = Depends(get_db),
+    user=Depends(require_auth),
+):
+    return crud.save_combined(db, node_id, payload, user.id)
+
+
 @router.post("/nodes/{node_id}/move")
 def post_move(
     node_id: int,

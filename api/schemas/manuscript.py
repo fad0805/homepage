@@ -47,6 +47,15 @@ class NodeMoveRequest(BaseModel):
     position: int = 0
 
 
+class CombinedSaveRequest(BaseModel):
+    """Persist a folder's combined view in one atomic database commit."""
+
+    bodies: dict[int, str] = Field(default_factory=dict)
+    subtitle: str | None = None
+    synopsis: str | None = None
+    notes: str | None = None
+
+
 class NodeReorderItem(BaseModel):
     id: int
     parent_id: int | None = None
