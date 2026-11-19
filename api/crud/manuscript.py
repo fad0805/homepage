@@ -621,8 +621,51 @@ def move_node(
         db, node.project_id, user_id, payload.parent_id, node_id=node.id
     )
 
-    node.parent_id = payload.parent_id
-    node.position = payload.position
+    old_parent_id = node.parent_id
+
+    def siblings(
+        parent_id: int | None, *, include_node: bool = False
+    ) -> list[ManuscriptNode]:
+        query = db.query(ManuscriptNode).filter(
+            ManuscriptNode.project_id == node.project_id,
+            ManuscriptNode.user_id == user_id,
+            ManuscriptNode.deleted_at.is_(None),
+        )
+        if not include_node:
+            query = query.filter(ManuscriptNode.id != node.id)
+        if parent_id is None:
+            query = query.filter(ManuscriptNode.parent_id.is_(None))
+        else:
+            query = query.filter(ManuscriptNode.parent_id == parent_id)
+        return query.order_by(
+            ManuscriptNode.position.asc(), ManuscriptNode.id.asc()
+        ).all()
+
+    old_index = next(
+        (
+            index
+            for index, sibling in enumerate(
+                siblings(old_parent_id, include_node=True)
+            )
+            if sibling.id == node.id
+        ),
+        0,
+    )
+
+    index = max(0, payload.position)
+    if old_parent_id == payload.parent_id and old_index < index:
+        index -= 1
+    target_siblings = siblings(payload.parent_id)
+    index = min(index, len(target_siblings))
+    target_siblings.insert(index, node)
+    for position, sibling in enumerate(target_siblings):
+        sibling.parent_id = payload.parent_id
+        sibling.position = position
+
+    if old_parent_id != payload.parent_id:
+        for position, sibling in enumerate(siblings(old_parent_id)):
+            sibling.position = position
+
     db.commit()
     return get_node(db, node.id, user_id)
 

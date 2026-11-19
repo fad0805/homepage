@@ -710,13 +710,16 @@ export default function ManuscriptWorkspace() {
     }
   };
 
-  const moveNode = async (id: number, parentId: number | null) => {
+  const moveNode = async (
+    id: number,
+    parentId: number | null,
+    position: number,
+  ) => {
     if (!projectId || !(await flushAutosave())) return;
-    const siblings = childrenMap.get(parentId) ?? [];
     try {
       await apiFetch(`/api/manuscript/nodes/${id}/move`, {
         method: "POST",
-        body: JSON.stringify({ parent_id: parentId, position: siblings.length }),
+        body: JSON.stringify({ parent_id: parentId, position }),
       });
       if (parentId) setExpanded((current) => new Set(current).add(parentId));
       await loadTree(projectId);
@@ -1232,8 +1235,8 @@ export default function ManuscriptWorkspace() {
             onCreateNode={(type) => {
               void createNode(type);
             }}
-            onMoveNode={(id, parentId) => {
-              void moveNode(id, parentId);
+            onMoveNode={(id, parentId, position) => {
+              void moveNode(id, parentId, position);
             }}
             onToggleFolder={toggle}
             onRename={(id, title) => {

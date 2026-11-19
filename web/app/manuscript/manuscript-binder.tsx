@@ -1,10 +1,19 @@
 "use client";
 
-import { Fragment, useRef, useState, type ReactElement } from "react";
+import {
+  Fragment,
+  useRef,
+  useState,
+  type DragEvent as ReactDragEvent,
+  type ReactElement,
+} from "react";
 import type { ManuscriptNode, TrashItem } from "./manuscript-types";
 
+type ChildrenMap = Map<number | null, ManuscriptNode[]>;
+type DropMode = "before" | "after" | "inside";
+
 interface ManuscriptBinderProps {
-  childrenMap: Map<number | null, ManuscriptNode[]>;
+  childrenMap: ChildrenMap;
   trashChildrenMap: Map<number | null, TrashItem[]>;
   expanded: Set<number>;
   selectedId: number | null;
@@ -14,12 +23,59 @@ interface ManuscriptBinderProps {
   isOpen: boolean;
   onSelectNode: (node: ManuscriptNode) => void;
   onCreateNode: (type: "folder" | "chapter") => void;
-  onMoveNode: (id: number, parentId: number | null) => void;
+  onMoveNode: (id: number, parentId: number | null, position: number) => void;
   onToggleFolder: (id: number) => void;
   onRename: (id: number, title: string) => void;
   onToggleTrash: () => void;
   onOpenTrashItem: (item: TrashItem) => void;
   onPurgeTrash: () => void;
+}
+
+function dropMode(
+  event: ReactDragEvent<HTMLElement>,
+  node: ManuscriptNode,
+): DropMode {
+  const rect = event.currentTarget.getBoundingClientRect();
+  const offset = event.clientY - rect.top;
+  if (offset < rect.height * 0.28) return "before";
+  if (offset > rect.height * 0.72) return "after";
+  return node.node_type === "folder" ? "inside" : "after";
+}
+
+function targetForNode(
+  node: ManuscriptNode,
+  mode: DropMode,
+  childrenMap: ChildrenMap,
+): { parentId: number | null; position: number } {
+  if (mode === "inside") {
+    return {
+      parentId: node.id,
+      position: (childrenMap.get(node.id) ?? []).length,
+    };
+  }
+  const siblings = childrenMap.get(node.parent_id) ?? [];
+  const index = siblings.findIndex((sibling) => sibling.id === node.id);
+  return {
+    parentId: node.parent_id,
+    position: Math.max(0, index) + (mode === "after" ? 1 : 0),
+  };
+}
+
+function isDescendant(
+  sourceId: number,
+  targetId: number,
+  childrenMap: ChildrenMap,
+): boolean {
+  const parentOf = new Map<number, number | null>();
+  for (const [parentId, items] of childrenMap) {
+    for (const item of items) parentOf.set(item.id, parentId);
+  }
+  let current = parentOf.get(targetId) ?? null;
+  while (current !== null) {
+    if (current === sourceId) return true;
+    current = parentOf.get(current) ?? null;
+  }
+  return false;
 }
 
 export function ManuscriptBinder({
@@ -44,9 +100,15 @@ export function ManuscriptBinder({
   const cancelRename = useRef(false);
   const [renamingId, setRenamingId] = useState<number | null>(null);
   const [renameValue, setRenameValue] = useState("");
+  const [dropKey, setDropKey] = useState<string | null>(null);
   const [trashFoldersOpen, setTrashFoldersOpen] = useState<Set<number>>(
     new Set(),
   );
+
+  const clearDrag = () => {
+    dragId.current = null;
+    setDropKey(null);
+  };
 
   const toggleTrashFolder = (id: number) => {
     setTrashFoldersOpen((current) => {
@@ -74,22 +136,59 @@ export function ManuscriptBinder({
       return (
         <Fragment key={node.id}>
           <div
-            className={`ms-node${selectedId === node.id ? " is-selected" : ""}`}
+            className={`ms-node${selectedId === node.id ? " is-selected" : ""}${
+              dropKey === `before:${node.id}` ? " is-drop-before" : ""
+            }${dropKey === `after:${node.id}` ? " is-drop-after" : ""}${
+              dropKey === `inside:${node.id}` ? " is-drop-inside" : ""
+            }`}
             style={{ paddingLeft: `${0.65 + depth * 1.05}rem` }}
             draggable={renamingId !== node.id}
-            onDragStart={() => {
+            onDragStart={(event) => {
               dragId.current = node.id;
+              event.dataTransfer.effectAllowed = "move";
+              event.dataTransfer.setData("text/plain", String(node.id));
             }}
-            onDragOver={(event) => event.preventDefault()}
+            onDragOver={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              const movingId = dragId.current;
+              if (
+                movingId === null ||
+                movingId === node.id ||
+                isDescendant(movingId, node.id, childrenMap)
+              ) {
+                setDropKey(null);
+                return;
+              }
+              setDropKey(`${dropMode(event, node)}:${node.id}`);
+            }}
+            onDragLeave={(event) => {
+              if (
+                !event.currentTarget.contains(event.relatedTarget as Node | null)
+              ) {
+                setDropKey(null);
+              }
+            }}
             onDrop={(event) => {
               event.preventDefault();
+              event.stopPropagation();
               const movingId = dragId.current;
-              dragId.current = null;
-              if (!movingId || movingId === node.id) return;
-              const targetParent =
-                node.node_type === "folder" ? node.id : node.parent_id;
-              onMoveNode(movingId, targetParent);
+              clearDrag();
+              if (
+                movingId === null ||
+                movingId === node.id ||
+                isDescendant(movingId, node.id, childrenMap)
+              ) {
+                return;
+              }
+              const target = targetForNode(
+                node,
+                dropMode(event, node),
+                childrenMap,
+              );
+              onMoveNode(movingId, target.parentId, target.position);
             }}
+            onDragEnd={clearDrag}
             onClick={() => onSelectNode(node)}
           >
             <button
@@ -206,15 +305,32 @@ export function ManuscriptBinder({
       </div>
       <div
         className="ms-node-list"
-        onDragOver={(event) => event.preventDefault()}
+        onDragOver={(event) => {
+          event.preventDefault();
+          if (dragId.current !== null) setDropKey("root");
+        }}
+        onDragLeave={(event) => {
+          if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+            setDropKey(null);
+          }
+        }}
         onDrop={(event) => {
           event.preventDefault();
           const movingId = dragId.current;
-          dragId.current = null;
-          if (movingId) onMoveNode(movingId, null);
+          clearDrag();
+          if (movingId) {
+            onMoveNode(
+              movingId,
+              null,
+              (childrenMap.get(null) ?? []).length,
+            );
+          }
         }}
       >
         {renderRows(null, 0)}
+        <div
+          className={`ms-node-drop-root${dropKey === "root" ? " is-active" : ""}`}
+        />
         <div
           className="ms-node ms-node--trash"
           onClick={onToggleTrash}
