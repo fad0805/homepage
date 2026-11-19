@@ -25,6 +25,13 @@ interface TocManagerProps {
   bookId: number;
   chapters: TocManagerChapter[];
   notify: (type: "success" | "error", text: string) => void;
+  title?: string;
+  collapsible?: boolean;
+  defaultOpen?: boolean;
+  showChapterRegister?: boolean;
+  selectedChapterId?: number | null;
+  selectedParentId?: number | null;
+  onSelectParent?: (parentId: number | null) => void;
 }
 
 interface FolderOption {
@@ -75,10 +82,7 @@ function dropMode(event: DragEvent<HTMLElement>, node: ManageTocNode): DropMode 
   return node.node_type === "folder" ? "inside" : "after";
 }
 
-function targetForNode(
-  node: ManageTocNode,
-  mode: DropMode,
-): DropTarget {
+function targetForNode(node: ManageTocNode, mode: DropMode): DropTarget {
   if (mode === "inside") {
     return {
       parentId: node.id,
@@ -93,9 +97,20 @@ function targetForNode(
   };
 }
 
-export function TocManager({ bookId, chapters, notify }: TocManagerProps) {
+export function TocManager({
+  bookId,
+  chapters,
+  notify,
+  title = "공개 목차",
+  collapsible = true,
+  defaultOpen = false,
+  showChapterRegister = true,
+  selectedChapterId = null,
+  selectedParentId = null,
+  onSelectParent,
+}: TocManagerProps) {
   const [tree, setTree] = useState<ManageTocNode[]>([]);
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(defaultOpen || !collapsible);
   const [loading, setLoading] = useState(true);
   const [working, setWorking] = useState(false);
   const [dropKey, setDropKey] = useState<string | null>(null);
@@ -111,6 +126,8 @@ export function TocManager({ bookId, chapters, notify }: TocManagerProps) {
   const dragRef = useRef<{ kind: "node" | "chapter"; id: number } | null>(
     null,
   );
+  const onSelectParentRef = useRef(onSelectParent);
+  onSelectParentRef.current = onSelectParent;
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -119,12 +136,19 @@ export function TocManager({ bookId, chapters, notify }: TocManagerProps) {
         `/api/books/${bookId}/toc/manage`,
       );
       setTree(next);
+      if (selectedChapterId !== null) {
+        const post = flattenNodes(next).find(
+          (node) =>
+            node.node_type === "post" && node.chapter_id === selectedChapterId,
+        );
+        if (post) onSelectParentRef.current?.(post.parent_id);
+      }
     } catch (caught) {
       notify("error", (caught as Error).message);
     } finally {
       setLoading(false);
     }
-  }, [bookId, notify]);
+  }, [bookId, notify, selectedChapterId]);
 
   useEffect(() => {
     void load();
@@ -162,6 +186,10 @@ export function TocManager({ bookId, chapters, notify }: TocManagerProps) {
     }
   };
 
+  const selectParent = (parentId: number | null) => {
+    onSelectParentRef.current?.(parentId);
+  };
+
   const createFolder = async (parentId: number | null, label: string) => {
     const title = label.trim();
     if (!title) return;
@@ -175,6 +203,7 @@ export function TocManager({ bookId, chapters, notify }: TocManagerProps) {
     );
     setFolderParentId(undefined);
     setFolderLabel("");
+    selectParent(parentId);
   };
 
   const createPost = async (
@@ -197,6 +226,7 @@ export function TocManager({ bookId, chapters, notify }: TocManagerProps) {
     setPostOpen(false);
     setPostChapterId(null);
     setPostParentId(null);
+    if (chapterId === selectedChapterId) selectParent(parentId);
   };
 
   const renameFolder = async (node: ManageTocNode) => {
@@ -221,6 +251,7 @@ export function TocManager({ bookId, chapters, notify }: TocManagerProps) {
     parentId: number | null,
     position: number,
   ) => {
+    const movedNode = allNodes.find((node) => node.id === nodeId);
     await run(
       () =>
         apiFetch<ManageTocNode[]>(
@@ -232,6 +263,12 @@ export function TocManager({ bookId, chapters, notify }: TocManagerProps) {
         ),
       "목차 위치를 변경했습니다.",
     );
+    if (
+      selectedChapterId !== null &&
+      movedNode?.chapter_id === selectedChapterId
+    ) {
+      selectParent(parentId);
+    }
   };
 
   const moveViaSelect = async (node: ManageTocNode, parentId: number | null) => {
@@ -281,19 +318,27 @@ export function TocManager({ bookId, chapters, notify }: TocManagerProps) {
 
   const renderNode = (node: ManageTocNode, depth: number) => {
     const blocked = new Set(
-      node.node_type === "folder"
-        ? [node.id, ...descendantIds(node)]
-        : [],
+      node.node_type === "folder" ? [node.id, ...descendantIds(node)] : [],
     );
     const options = [ROOT_OPTION, ...collectFolderOptions(tree, blocked)];
     const indent = { marginLeft: `${depth * 1.1}rem` };
+    const selectedParent =
+      onSelectParent !== undefined &&
+      node.node_type === "folder" &&
+      selectedParentId === node.id;
+    const selectedPost =
+      selectedChapterId !== null && node.chapter_id === selectedChapterId;
 
     return (
       <div className="admin-books-toc__branch" key={node.id}>
         <div
           className={[
             "admin-books-toc__row",
-            dropKey?.startsWith(`${node.id}:`) ? dropKey.replace(`${node.id}:`, "is-drop-") : "",
+            dropKey?.startsWith(`${node.id}:`)
+              ? dropKey.replace(`${node.id}:`, "is-drop-")
+              : "",
+            selectedParent ? "is-selected-parent" : "",
+            selectedPost ? "is-selected-post" : "",
           ]
             .filter(Boolean)
             .join(" ")}
@@ -373,6 +418,15 @@ export function TocManager({ bookId, chapters, notify }: TocManagerProps) {
               ) : null}
               {node.locked ? (
                 <span className="admin-books-pin-badge">보호</span>
+              ) : null}
+              {onSelectParent && node.node_type === "folder" ? (
+                <button
+                  type="button"
+                  className="admin-button"
+                  onClick={() => selectParent(node.id)}
+                >
+                  여기에 배치
+                </button>
               ) : null}
               {node.node_type === "folder" ? (
                 <button
@@ -474,7 +528,7 @@ export function TocManager({ bookId, chapters, notify }: TocManagerProps) {
       className={[
         "admin-books-panel",
         "admin-books-toc-panel",
-        open ? "" : "is-collapsed",
+        collapsible && !open ? "is-collapsed" : "",
       ]
         .filter(Boolean)
         .join(" ")}
@@ -490,22 +544,31 @@ export function TocManager({ bookId, chapters, notify }: TocManagerProps) {
       onDrop={(event) => void applyDrop(event, rootTarget)}
     >
       <header className="admin-books-toc__head">
-        <button
-          type="button"
-          className="admin-books-toc__toggle"
-          onClick={() => setOpen((current) => !current)}
-          aria-expanded={open}
-        >
-          <span className="admin-books-toc__chevron" aria-hidden="true">
-            {open ? "▾" : "▸"}
-          </span>
-          <span>
-            <strong>공개 목차</strong>
+        {collapsible ? (
+          <button
+            type="button"
+            className="admin-books-toc__toggle"
+            onClick={() => setOpen((current) => !current)}
+            aria-expanded={open}
+          >
+            <span className="admin-books-toc__chevron" aria-hidden="true">
+              {open ? "▾" : "▸"}
+            </span>
+            <span>
+              <strong>{title}</strong>
+              <span className="admin-books-toc__count">
+                {allNodes.length}개 항목
+              </span>
+            </span>
+          </button>
+        ) : (
+          <div className="admin-books-toc__static-title">
+            <strong>{title}</strong>
             <span className="admin-books-toc__count">
               {allNodes.length}개 항목
             </span>
-          </span>
-        </button>
+          </div>
+        )}
       </header>
 
       {open ? (
@@ -521,18 +584,20 @@ export function TocManager({ bookId, chapters, notify }: TocManagerProps) {
             >
               + 폴더
             </button>
-            <button
-              type="button"
-              className="admin-button"
-              onClick={() => {
-                setPostOpen((current) => !current);
-                setPostParentId(null);
-                setPostChapterId(availableChapters[0]?.id ?? null);
-              }}
-              disabled={availableChapters.length === 0}
-            >
-              + 챕터 등록
-            </button>
+            {showChapterRegister ? (
+              <button
+                type="button"
+                className="admin-button"
+                onClick={() => {
+                  setPostOpen((current) => !current);
+                  setPostParentId(null);
+                  setPostChapterId(availableChapters[0]?.id ?? null);
+                }}
+                disabled={availableChapters.length === 0}
+              >
+                + 챕터 등록
+              </button>
+            ) : null}
             <button
               type="button"
               className="admin-button"
@@ -542,6 +607,36 @@ export function TocManager({ bookId, chapters, notify }: TocManagerProps) {
               새로고침
             </button>
           </div>
+
+          {onSelectParent ? (
+            <div className="admin-books-toc__select-actions">
+              <button
+                type="button"
+                className={[
+                  "admin-button",
+                  selectedParentId === null ? "primary" : "",
+                ]
+                  .filter(Boolean)
+                  .join(" ")}
+                onClick={() => selectParent(null)}
+              >
+                목차 최상위에 배치
+              </button>
+              {selectedChapterId !== null &&
+              chapters.some((chapter) => chapter.id === selectedChapterId) &&
+              !placedChapterIds.has(selectedChapterId) ? (
+                <button
+                  type="button"
+                  className="admin-button"
+                  onClick={() =>
+                    void createPost(selectedChapterId, selectedParentId)
+                  }
+                >
+                  이 챕터를 목차에 등록
+                </button>
+              ) : null}
+            </div>
+          ) : null}
 
           {folderParentId === null ? (
             <div className="admin-books-toc__inline-form">
@@ -577,7 +672,7 @@ export function TocManager({ bookId, chapters, notify }: TocManagerProps) {
             </div>
           ) : null}
 
-          {postOpen && availableChapters.length > 0 ? (
+          {postOpen && showChapterRegister && availableChapters.length > 0 ? (
             <div className="admin-books-toc__inline-form">
               <select
                 value={postChapterId ?? ""}

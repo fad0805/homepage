@@ -14,7 +14,7 @@ import { useParams, useRouter } from "next/navigation";
 import { MastodonShare } from "@/components/mastodon-share";
 import { RichTextEditor } from "@/components/rich-text-editor";
 import { TagInput } from "@/components/tag-input";
-import { TocPicker } from "@/components/toc-picker";
+import { TocManager } from "@/components/toc-manager";
 import { apiFetch } from "@/lib/api";
 import { formatDateTime } from "@/lib/datetime";
 
@@ -1298,10 +1298,18 @@ export default function AdminChapterEdit() {
               </button>
             </header>
             <div className="admin-modal-body">
-              <TocPicker
+              <TocManager
                 bookId={targetBookId}
-                chapterId={isNew ? null : chapter?.id ?? null}
-                onChange={setTocParentId}
+                chapters={allChapters.filter(
+                  (item) => item.book_id === targetBookId,
+                )}
+                notify={notify}
+                title="공개 목차 위치"
+                collapsible={false}
+                showChapterRegister={false}
+                selectedChapterId={isNew ? null : chapter?.id ?? null}
+                selectedParentId={tocParentId}
+                onSelectParent={setTocParentId}
               />
             </div>
             <footer className="admin-modal-footer">

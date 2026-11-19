@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { Editor } from "@tiptap/core";
 import { RichTextEditor, type EditorNotice } from "@/components/rich-text-editor";
-import { TocPicker } from "@/components/toc-picker";
+import { TocManager } from "@/components/toc-manager";
 import { apiFetch } from "@/lib/api";
 
 import { ManuscriptBinder } from "./manuscript-binder";
@@ -355,6 +355,11 @@ export default function ManuscriptWorkspace() {
   const notify = useCallback((text: string, type: Notice["type"] = "success") => {
     setNotice({ type, text });
   }, []);
+
+  const tocNotify = useCallback(
+    (type: "success" | "error", text: string) => notify(text, type),
+    [notify],
+  );
 
   const waitForPendingSave = async () => {
     const pending = savePromiseRef.current;
@@ -1527,10 +1532,16 @@ export default function ManuscriptWorkspace() {
             <p className="ms-modal__hint">
               이 문서를 공개 목차의 어디에 놓을지 선택하세요.
             </p>
-            <TocPicker
+            <TocManager
               bookId={linkedBookId}
-              chapterId={selected?.published_chapter_id ?? null}
-              onChange={setPublishParentId}
+              chapters={[]}
+              notify={tocNotify}
+              title="공개 목차 위치"
+              collapsible={false}
+              showChapterRegister={false}
+              selectedChapterId={selected?.published_chapter_id ?? null}
+              selectedParentId={publishParentId}
+              onSelectParent={setPublishParentId}
             />
             <div className="ms-modal__footer">
               <button type="button" onClick={() => setPublishOpen(false)}>
