@@ -485,7 +485,7 @@ class ManuscriptTests(unittest.TestCase):
         rtf = (
             "{\\rtf1\\ansi\\ansicpg65001\\uc0"
             "{\\fonttbl\\f0\\fnil\\fcharset0 Arial;}"
-            "\\pard\\f0\\fs24 Hello \\u44032\\\n"
+            "\\pard\\f0\\fs20 Hello \\u44032\\\n"
             "\\ulnone \\\n"
             "second\\par}"
         )
@@ -512,6 +512,40 @@ class ManuscriptTests(unittest.TestCase):
             .filter(ManuscriptNode.id == old_node.id)
             .first()
             .deleted_at
+        )
+
+    def test_import_scrivener_preserves_alignment_and_inline_style(self) -> None:
+        manifest = """<?xml version="1.0" encoding="UTF-8"?>
+<ScrivenerProject Version="2.0">
+  <Binder>
+    <BinderItem UUID="D" Type="DraftFolder">
+      <Children>
+        <BinderItem UUID="T1" Type="Text"><Title>본문</Title></BinderItem>
+      </Children>
+    </BinderItem>
+  </Binder>
+</ScrivenerProject>"""
+        rtf = (
+            "{\\rtf1\\ansi\\ansicpg1252\\uc1"
+            "\\pard\\qc\\b Center\\b0\\par"
+            "\\pard\\ql before \\i italic\\i0 "
+            "\\ul underline\\ulnone \\strike strike\\strike0\\par}"
+        )
+        buffer = BytesIO()
+        with ZipFile(buffer, "w") as archive:
+            archive.writestr("formatted.scrivx", manifest)
+            archive.writestr("Files/Data/T1/content.rtf", rtf)
+
+        result = crud.import_scrivener(
+            self.db, self.owner.id, buffer.getvalue()
+        )
+        tree = crud.get_tree(self.db, result["project_id"], self.owner.id)
+        body = crud.get_node(self.db, tree[0]["id"], self.owner.id)["body"]
+        self.assertEqual(
+            body,
+            '<p style="text-align: center"><strong>Center</strong></p>'
+            "<p>before <em>italic</em><u>underline</u>"
+            "<s>strike</s></p>",
         )
 
     def test_import_scrivener_numbers_duplicate_project_titles(self) -> None:

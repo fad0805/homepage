@@ -10,7 +10,7 @@ project bundle is ignored.
 from __future__ import annotations
 
 from collections.abc import Callable
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
 from html import escape
 from html.parser import HTMLParser
@@ -82,6 +82,15 @@ class ExportNode:
     synopsis: str | None
     notes: str | None
     body_rtf: str | None = None
+
+
+@dataclass
+class _RtfStyle:
+    bold: bool = False
+    italic: bool = False
+    underline: bool = False
+    strike: bool = False
+    size: float | None = None
 
 
 def _local(tag: str) -> str:
@@ -163,6 +172,30 @@ def _prepare_rtf(
     return "".join(pieces), images, sizes
 
 
+def _render_rtf_segment(content: str, style: _RtfStyle) -> str:
+    if style.size is not None and style.size != 10:
+        size = f"{style.size:g}"
+        content = f'<span style="font-size: {size}pt">{content}</span>'
+    if style.strike:
+        content = f"<s>{content}</s>"
+    if style.underline:
+        content = f"<u>{content}</u>"
+    if style.italic:
+        content = f"<em>{content}</em>"
+    if style.bold:
+        content = f"<strong>{content}</strong>"
+    return content
+
+
+def _render_rtf_paragraph(align: str, content: str) -> str:
+    style = (
+        f' style="text-align: {align}"'
+        if align in {"center", "right", "justify"}
+        else ""
+    )
+    return f"<p{style}>{content}</p>"
+
+
 def _rtf_to_html_with_images(
     data: bytes,
 ) -> tuple[str, list[bytes], list[tuple[int | None, int | None]]]:
@@ -173,8 +206,32 @@ def _rtf_to_html_with_images(
     uc_match = re.search(r"\\uc(\d+)", raw)
     uc_count = int(uc_match.group(1)) if uc_match else 1
 
-    out: list[str] = []
-    skipped: list[bool] = []
+    style = _RtfStyle()
+    align = "left"
+    stack: list[tuple[_RtfStyle, str, bool]] = []
+    skip = False
+    paragraphs: list[tuple[str, str]] = []
+    segments: list[tuple[str, _RtfStyle]] = []
+
+    def append(html: str, text_style: _RtfStyle | None = None) -> None:
+        if not html:
+            return
+        target = text_style or style
+        if segments and segments[-1][1] == target:
+            segments[-1] = (segments[-1][0] + html, segments[-1][1])
+        else:
+            segments.append((html, replace(target)))
+
+    def flush(force: bool = False) -> None:
+        if not segments and not force:
+            return
+        content = "".join(
+            _render_rtf_segment(part, part_style)
+            for part, part_style in segments
+        )
+        paragraphs.append((align, content))
+        segments.clear()
+
     index = 0
     while index < len(raw):
         char = raw[index]
@@ -185,7 +242,7 @@ def _rtf_to_html_with_images(
             )
             if end != -1:
                 end += len(IMAGE_PLACEHOLDER_SUFFIX)
-                out.append(raw[index:end])
+                append(raw[index:end], _RtfStyle())
                 index = end
                 continue
         if char == "{":
@@ -204,15 +261,17 @@ def _rtf_to_html_with_images(
                     word = raw[word_start:word_end].lower()
                     if word in IGNORED_RTF_GROUPS:
                         skip_group = True
-            skipped.append(skip_group)
+            stack.append((replace(style), align, skip))
+            if skip_group:
+                skip = True
             index += 1
             continue
         if char == "}":
-            if skipped:
-                skipped.pop()
+            if stack:
+                style, align, skip = stack.pop()
             index += 1
             continue
-        if any(skipped):
+        if skip:
             index += 1
             continue
         if char == "\\":
@@ -221,7 +280,7 @@ def _rtf_to_html_with_images(
                 continue
             following = raw[index + 1]
             if following in "\r\n":
-                out.append("\n")
+                flush()
                 index += 2
                 if (
                     following == "\r"
@@ -231,7 +290,18 @@ def _rtf_to_html_with_images(
                     index += 1
                 continue
             if following in "\\{}":
-                out.append(following)
+                append(escape(following))
+                index += 2
+                continue
+            if following == "~":
+                append("&nbsp;")
+                index += 2
+                continue
+            if following == "_":
+                append("_")
+                index += 2
+                continue
+            if following == "-":
                 index += 2
                 continue
             if following == "'":
@@ -251,9 +321,10 @@ def _rtf_to_html_with_images(
                     index += 4
                     continue
                 try:
-                    out.append(hex_bytes.decode(encoding))
+                    text = hex_bytes.decode(encoding)
                 except (LookupError, UnicodeDecodeError):
-                    out.append(hex_bytes.decode("latin-1"))
+                    text = hex_bytes.decode("latin-1")
+                append(escape(text))
                 index = cursor
                 continue
             if following == "u":
@@ -262,7 +333,7 @@ def _rtf_to_html_with_images(
                     code = int(match.group(1))
                     if code < 0:
                         code += 65536
-                    out.append(chr(code))
+                    append(escape(chr(code)))
                     index += match.end()
                     for _ in range(uc_count):
                         if index >= len(raw):
@@ -287,29 +358,53 @@ def _rtf_to_html_with_images(
             match = re.match(r"\\([a-zA-Z]+)(-?\d+)? ?", raw[index:])
             if match:
                 word = match.group(1).lower()
-                if word in {"par", "line"}:
-                    out.append("\n")
+                param = match.group(2)
+                if word == "par":
+                    flush(force=True)
+                elif word == "line":
+                    append("<br>")
                 elif word == "tab":
-                    out.append("\t")
+                    append("\t")
                 elif word in RTF_SYMBOLS:
-                    out.append(RTF_SYMBOLS[word])
+                    append(escape(RTF_SYMBOLS[word]))
+                elif word == "pard":
+                    align = "left"
+                elif word in {"ql", "qc", "qr", "qj"}:
+                    align = {
+                        "ql": "left",
+                        "qc": "center",
+                        "qr": "right",
+                        "qj": "justify",
+                    }[word]
+                elif word == "b":
+                    style.bold = param != "0"
+                elif word == "i":
+                    style.italic = param != "0"
+                elif word in {"ul", "ulnone"}:
+                    style.underline = word == "ul" and param != "0"
+                elif word in {"strike", "striked"}:
+                    style.strike = param != "0"
+                elif word == "fs" and param:
+                    size = int(param) / 2
+                    style.size = size if size > 0 else None
+                elif word == "plain":
+                    style = _RtfStyle()
                 index += match.end()
                 continue
             index += 2
             continue
-        out.append(char)
+        if char in "\r\n":
+            index += 1
+            continue
+        append(escape(char))
         index += 1
 
-    lines = [
-        line.rstrip()
-        for line in "".join(out).replace("\r\n", "\n").replace("\r", "\n").split("\n")
-    ]
-    while lines and not lines[0].strip():
-        lines.pop(0)
-    while lines and not lines[-1].strip():
-        lines.pop()
+    flush()
+    while paragraphs and not paragraphs[-1][1].strip():
+        paragraphs.pop()
     html = "".join(
-        f"<p>{escape(line)}</p>" for line in lines if line.strip()
+        _render_rtf_paragraph(paragraph_align, content)
+        for paragraph_align, content in paragraphs
     )
     return html, images, image_sizes
 
@@ -356,7 +451,7 @@ RTF_HEADER = "\n".join(
         "\\pard\\tx566\\tx1133\\tx1700\\tx2267\\tx2834"
         "\\tx3401\\tx3968\\tx4535\\tx5102\\tx5669"
         "\\tx6236\\tx6803\\pardirnatural\\partightenfactor0",
-        "\\f0\\fs24 \\cf0 ",
+        "\\f0\\fs20 \\cf0 ",
     ]
 )
 
