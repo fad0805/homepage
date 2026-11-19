@@ -212,6 +212,10 @@
     font-size: 0.9em;
   }
 
+  &:not(.is-head) > span {
+    cursor: pointer;
+  }
+
   &:not(.is-head) > span:nth-child(4) {
     font-size: 0.8em;
   }

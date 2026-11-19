@@ -303,7 +303,15 @@ export default function AdminManuscriptPage() {
               <div key={project.id} className="admin-manuscript-row">
                 <span
                   className="admin-manuscript-title"
+                  role="button"
+                  tabIndex={0}
                   onClick={() => openProject(project)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      openProject(project);
+                    }
+                  }}
                   title="클릭하여 편집기에서 열기"
                 >
                   {project.title}
@@ -316,8 +324,32 @@ export default function AdminManuscriptPage() {
                 >
                   {project.linked_book_title ?? "연결된 책 없음"}
                 </button>
-                <span>{project.node_count}</span>
-                <span>{project.updated_at ?? "—"}</span>
+                <span
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => openProject(project)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      openProject(project);
+                    }
+                  }}
+                >
+                  {project.node_count}
+                </span>
+                <span
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => openProject(project)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      openProject(project);
+                    }
+                  }}
+                >
+                  {project.updated_at ?? "—"}
+                </span>
                 <div className="admin-manuscript-row-actions">
                   <button
                     type="button"
