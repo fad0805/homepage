@@ -642,7 +642,13 @@ export default function ManuscriptWorkspace() {
       });
       if (parentId) setExpanded((current) => new Set(current).add(parentId));
       await loadTree(projectId);
+      setTrashPreview(null);
+      setTrashScrivenings(null);
+      setTrashCombinedHtml("");
       selectNode(node.id);
+      setScrivenings(nodeType === "folder" ? [] : null);
+      setScrivCombinedHtml("");
+      setScrivDirty(false);
     } catch (error) {
       notify((error as Error).message, "error");
     }
@@ -817,7 +823,9 @@ export default function ManuscriptWorkspace() {
     await waitForPendingSave();
     const folderId = selected.id;
     const docs = scrivenings;
-    const bodies = splitCombinedHtml(scrivCombinedHtml);
+    // An empty folder has no bodies to split. Keep it empty and only save its
+    // metadata so the editor can stay disabled until a document is added.
+    const bodies = docs.length === 0 ? [] : splitCombinedHtml(scrivCombinedHtml);
     if (bodies.length !== docs.length) {
       const message = `구분선이 ${docs.length - 1}개여야 합니다. 지금은 ${bodies.length - 1}개입니다.`;
       markSaveFailed(message, silent);
@@ -1259,6 +1267,12 @@ export default function ManuscriptWorkspace() {
               uploadUrl="/api/chapters/upload"
               scrollResetKey={editorScrollKey}
             />
+          ) : scrivenings && scrivenings.length === 0 ? (
+            <section className="ms-editor ms-editor--reader">
+              <div className="ms-empty">
+                <p>빈 폴더입니다. 문서를 추가하면 본문을 편집할 수 있습니다.</p>
+              </div>
+            </section>
           ) : scrivenings ? (
             <RichTextEditor
               variant="workspace"
