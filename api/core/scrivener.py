@@ -275,13 +275,70 @@ def _parse_rtf_color_table(raw: str) -> list[str | None]:
     return colors
 
 
+def _rtf_encoding(raw: str, declared: str) -> str:
+    """Pick the byte encoding actually used by RTF ``\\'hh`` escapes.
+
+    Scrivener sometimes writes Korean documents with ``\\ansicpg1252`` while
+    the text is CP949 and the font table says ``\\fcharset129``. Trusting the
+    declared page in that case turns every Hangul character into mojibake.
+    """
+    candidates = [declared]
+    charset_encodings = {
+        128: "cp932",
+        129: "cp949",
+        134: "cp936",
+        136: "cp950",
+    }
+    for charset, encoding in charset_encodings.items():
+        if re.search(rf"\\fcharset{charset}\b", raw):
+            candidates.append(encoding)
+
+    runs: list[bytes] = []
+    for match in re.finditer(r"(?:\\'[0-9a-fA-F]{2})+", raw):
+        runs.append(
+            bytes(int(value, 16) for value in re.findall(r"'([0-9a-fA-F]{2})", match.group()))
+        )
+    if not runs:
+        return declared
+
+    def score(encoding: str) -> tuple[int, int]:
+        decoded = 0
+        meaningful = 0
+        for run in runs:
+            try:
+                text = run.decode(encoding)
+            except (LookupError, UnicodeDecodeError):
+                continue
+            decoded += len(text)
+            meaningful += sum(
+                1
+                for char in text
+                if "\uac00" <= char <= "\ud7a3"
+                or "\u3040" <= char <= "\u30ff"
+                or "\u4e00" <= char <= "\u9fff"
+            )
+        return decoded, meaningful
+
+    best = declared
+    best_score = score(declared)
+    for encoding in candidates[1:]:
+        candidate_score = score(encoding)
+        if candidate_score[1] > best_score[1] or (
+            candidate_score[1] == best_score[1]
+            and candidate_score[0] > best_score[0]
+        ):
+            best, best_score = encoding, candidate_score
+    return best
+
+
 def _rtf_to_html_with_images(
     data: bytes,
 ) -> tuple[str, list[bytes], list[tuple[int | None, int | None]]]:
     raw = data.decode("latin-1", errors="replace")
     raw, images, image_sizes = _prepare_rtf(raw)
     codepage = re.search(r"\\ansicpg(\d+)", raw)
-    encoding = f"cp{codepage.group(1)}" if codepage else "cp1252"
+    declared = f"cp{codepage.group(1)}" if codepage else "cp1252"
+    encoding = _rtf_encoding(raw, declared)
     uc_match = re.search(r"\\uc(\d+)", raw)
     uc_count = int(uc_match.group(1)) if uc_match else 1
     colors = _parse_rtf_color_table(raw)
