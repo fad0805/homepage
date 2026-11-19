@@ -1538,7 +1538,6 @@ export default function ManuscriptWorkspace() {
               notify={tocNotify}
               title="공개 목차 위치"
               collapsible={false}
-              showChapterRegister={false}
               selectedChapterId={selected?.published_chapter_id ?? null}
               selectedParentId={publishParentId}
               onSelectParent={setPublishParentId}

@@ -1248,7 +1248,6 @@ export default function AdminChapterEdit() {
                 notify={notify}
                 title="공개 목차 위치"
                 collapsible={false}
-                showChapterRegister={false}
                 selectedChapterId={isNew ? null : chapter?.id ?? null}
                 selectedParentId={tocParentId}
                 onSelectParent={setTocParentId}
