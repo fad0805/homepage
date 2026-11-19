@@ -222,6 +222,64 @@ class ManuscriptTests(unittest.TestCase):
         )
         self.assertIsNone(moved["parent_id"])
 
+    def test_update_node_rejects_cycles(self) -> None:
+        project = self._project()
+        first = self._node(project, "A", node_type="folder")
+        second = self._node(project, "B", node_type="folder")
+
+        crud.update_node(
+            self.db,
+            first.id,
+            schemas.NodeUpdate(parent_id=second.id),
+            self.owner.id,
+        )
+        with self.assertRaises(HTTPException):
+            crud.update_node(
+                self.db,
+                second.id,
+                schemas.NodeUpdate(parent_id=first.id),
+                self.owner.id,
+            )
+        self.db.refresh(second)
+        self.assertIsNone(second.parent_id)
+
+    def test_reorder_nodes_rejects_cycles(self) -> None:
+        project = self._project()
+        first = self._node(project, "A", node_type="folder")
+        second = self._node(project, "B", node_type="folder")
+
+        with self.assertRaises(HTTPException):
+            crud.reorder_nodes(
+                self.db,
+                project.id,
+                schemas.NodeReorderRequest(
+                    items=[
+                        schemas.NodeReorderItem(
+                            id=first.id, parent_id=second.id, position=0
+                        ),
+                        schemas.NodeReorderItem(
+                            id=second.id, parent_id=first.id, position=1
+                        ),
+                    ]
+                ),
+                self.owner.id,
+            )
+        self.db.refresh(first)
+        self.db.refresh(second)
+        self.assertIsNone(first.parent_id)
+        self.assertIsNone(second.parent_id)
+
+    def test_descendant_ids_survives_a_preexisting_cycle(self) -> None:
+        project = self._project()
+        first = self._node(project, "A", node_type="folder")
+        second = self._node(project, "B", node_type="folder")
+        first.parent_id = second.id
+        second.parent_id = first.id
+        self.db.commit()
+
+        result = crud.delete_node(self.db, first.id, self.owner.id)
+        self.assertEqual(result["moved_to_trash"], 2)
+
     def test_delete_moves_subtree_to_trash_and_restore(self) -> None:
         project = self._project()
         root = self._node(project, "1권", node_type="folder")

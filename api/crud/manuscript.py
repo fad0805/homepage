@@ -297,14 +297,33 @@ def get_tree(db: Session, project_id: int, user_id: int) -> list[dict]:
     ]
 
 
+def _parent_map(db: Session, project_id: int, user_id: int) -> dict[int, int | None]:
+    rows = (
+        db.query(ManuscriptNode.id, ManuscriptNode.parent_id)
+        .filter(
+            ManuscriptNode.project_id == project_id,
+            ManuscriptNode.user_id == user_id,
+            ManuscriptNode.deleted_at.is_(None),
+        )
+        .all()
+    )
+    return {node_id: parent_id for node_id, parent_id in rows}
+
+
 def _validate_parent(
     db: Session,
     project_id: int,
     user_id: int,
     parent_id: int | None,
     *,
-    exclude_id: int | None = None,
+    node_id: int | None = None,
+    parent_map: dict[int, int | None] | None = None,
 ) -> None:
+    """Validate a parent change, including cycles for an existing node.
+
+    ``parent_map`` can describe the *final* hierarchy for a batch reorder; when
+    omitted the current database state is used.
+    """
     if parent_id is None:
         return
     query = db.query(ManuscriptNode).filter(
@@ -313,13 +332,28 @@ def _validate_parent(
         ManuscriptNode.user_id == user_id,
         ManuscriptNode.deleted_at.is_(None),
     )
-    if exclude_id is not None:
-        query = query.filter(ManuscriptNode.id != exclude_id)
+    if node_id is not None:
+        query = query.filter(ManuscriptNode.id != node_id)
     if query.first() is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Invalid parent node",
         )
+    if node_id is None:
+        return
+
+    if parent_map is None:
+        parent_map = _parent_map(db, project_id, user_id)
+    seen = {node_id}
+    current = parent_id
+    while current is not None:
+        if current in seen:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Cannot move a node into its own descendant",
+            )
+        seen.add(current)
+        current = parent_map.get(current)
 
 
 def create_node(db: Session, payload: schemas.NodeCreate, user_id: int) -> dict:
@@ -378,7 +412,7 @@ def update_node(
             node.project_id,
             user_id,
             data["parent_id"],
-            exclude_id=node.id,
+            node_id=node.id,
         )
     if "body" in data:
         data["char_count_with_spaces"], data["char_count_plain"] = count_characters(
@@ -455,11 +489,16 @@ def _descendant_ids(db: Session, node: ManuscriptNode) -> list[int]:
         children[parent_id].append(row_id)
 
     found: list[int] = []
+    seen = {node.id}
     queue = deque([node.id])
     while queue:
         current = queue.popleft()
         found.append(current)
-        queue.extend(children.get(current, []))
+        for child in children.get(current, []):
+            if child in seen:
+                continue
+            seen.add(child)
+            queue.append(child)
     return found
 
 
@@ -567,21 +606,9 @@ def move_node(
     user_id: int,
 ) -> dict:
     node = _get_node_or_404(db, node_id, user_id)
-    _validate_parent(db, node.project_id, user_id, payload.parent_id)
-
-    parent_id = payload.parent_id
-    while parent_id is not None:
-        if parent_id == node.id:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Cannot move a node into itself",
-            )
-        parent = (
-            db.query(ManuscriptNode)
-            .filter(ManuscriptNode.id == parent_id)
-            .first()
-        )
-        parent_id = parent.parent_id if parent else None
+    _validate_parent(
+        db, node.project_id, user_id, payload.parent_id, node_id=node.id
+    )
 
     node.parent_id = payload.parent_id
     node.position = payload.position
@@ -613,13 +640,17 @@ def reorder_nodes(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Does not exist manuscript node",
         )
+    final_parents = _parent_map(db, project_id, user_id)
+    for item in payload.items:
+        final_parents[item.id] = item.parent_id
     for item in payload.items:
         _validate_parent(
             db,
             project_id,
             user_id,
             item.parent_id,
-            exclude_id=item.id,
+            node_id=item.id,
+            parent_map=final_parents,
         )
         nodes[item.id].parent_id = item.parent_id
         nodes[item.id].position = item.position
