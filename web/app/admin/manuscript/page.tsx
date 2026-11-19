@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import { apiFetch } from "@/lib/api";
+import { apiDownload, apiFetch } from "@/lib/api";
 
 import "@/public/styles/admin/manuscript.scss";
 
@@ -34,6 +34,8 @@ export default function AdminManuscriptPage() {
   const [books, setBooks] = useState<Book[]>([]);
   const [bookQuery, setBookQuery] = useState("");
   const [bookLoading, setBookLoading] = useState(false);
+  const [fileBusyId, setFileBusyId] = useState<number | null>(null);
+  const [importing, setImporting] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -142,6 +144,55 @@ export default function AdminManuscriptPage() {
     }
   };
 
+  const importScrivener = async (file: File) => {
+    setImporting(true);
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      const result = await apiFetch<{
+        project_title: string;
+        imported_count: number;
+      }>("/api/manuscript/scrivener/import", {
+        method: "POST",
+        body: form,
+      });
+      setNotice({
+        type: "success",
+        text: `“${result.project_title || file.name}” 프로젝트를 만들었습니다. (${result.imported_count}개 노드)`,
+      });
+      await load();
+    } catch (error) {
+      setNotice({ type: "error", text: (error as Error).message });
+    } finally {
+      setImporting(false);
+    }
+  };
+
+  const exportScrivener = async (project: Project) => {
+    setFileBusyId(project.id);
+    try {
+      const { blob, filename } = await apiDownload(
+        `/api/manuscript/projects/${project.id}/scrivener/export`,
+      );
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename ?? `${project.title}.scriv.zip`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+      setNotice({
+        type: "success",
+        text: "스크리브너 프로젝트 파일을 내려받았습니다.",
+      });
+    } catch (error) {
+      setNotice({ type: "error", text: (error as Error).message });
+    } finally {
+      setFileBusyId(null);
+    }
+  };
+
   const openProject = (project: Project) => {
     window.open(
       `/manuscript?project=${project.id}`,
@@ -209,6 +260,26 @@ export default function AdminManuscriptPage() {
         </div>
       ) : null}
 
+      <div className="admin-manuscript-import">
+        <label className="admin-manuscript-button is-primary">
+          <input
+            type="file"
+            className="admin-manuscript-file-input"
+            accept=".zip,.scriv,application/zip"
+            disabled={importing}
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              event.target.value = "";
+              if (file) void importScrivener(file);
+            }}
+          />
+          {importing ? "불러오는 중..." : "스크리브너 불러오기"}
+        </label>
+        <span className="admin-manuscript-hint">
+          .scriv 프로젝트의 zip 파일을 불러오면 새 원고 프로젝트가 만들어집니다.
+        </span>
+      </div>
+
       {loading ? (
         <p className="admin-manuscript-empty">불러오는 중...</p>
       ) : filtered.length === 0 ? (
@@ -224,36 +295,51 @@ export default function AdminManuscriptPage() {
             <span>연결된 책</span>
             <span>노드</span>
             <span>수정일</span>
-            <span />
+            <span>파일</span>
           </div>
-          {filtered.map((project) => (
-            <div key={project.id} className="admin-manuscript-row">
-              <span
-                className="admin-manuscript-title"
-                onClick={() => openProject(project)}
-                title="클릭하여 편집기에서 열기"
-              >
-                {project.title}
-              </span>
-              <button
-                type="button"
-                className="admin-manuscript-book"
-                onClick={() => void openBookModal(project)}
-                title="연결할 책 선택"
-              >
-                {project.linked_book_title ?? "연결된 책 없음"}
-              </button>
-              <span>{project.node_count}</span>
-              <span>{project.updated_at ?? "—"}</span>
-              <button
-                type="button"
-                className="admin-manuscript-button is-danger"
-                onClick={() => void deleteProject(project)}
-              >
-                삭제
-              </button>
-            </div>
-          ))}
+          {filtered.map((project) => {
+            const busy = fileBusyId === project.id;
+            return (
+              <div key={project.id} className="admin-manuscript-row">
+                <span
+                  className="admin-manuscript-title"
+                  onClick={() => openProject(project)}
+                  title="클릭하여 편집기에서 열기"
+                >
+                  {project.title}
+                </span>
+                <button
+                  type="button"
+                  className="admin-manuscript-book"
+                  onClick={() => void openBookModal(project)}
+                  title="연결할 책 선택"
+                >
+                  {project.linked_book_title ?? "연결된 책 없음"}
+                </button>
+                <span>{project.node_count}</span>
+                <span>{project.updated_at ?? "—"}</span>
+                <div className="admin-manuscript-row-actions">
+                  <button
+                    type="button"
+                    className="admin-manuscript-button is-compact"
+                    onClick={() => void exportScrivener(project)}
+                    disabled={busy}
+                    title="스크리브너 프로젝트 ZIP 내려받기"
+                  >
+                    내려받기
+                  </button>
+                  <button
+                    type="button"
+                    className="admin-manuscript-button is-compact is-danger"
+                    onClick={() => void deleteProject(project)}
+                    disabled={busy}
+                  >
+                    삭제
+                  </button>
+                </div>
+              </div>
+            );
+          })}
         </div>
       )}
 

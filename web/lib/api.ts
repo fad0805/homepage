@@ -83,3 +83,46 @@ export async function apiFetchWithTotal<T>(
     total: total !== null && Number.isFinite(total) ? total : null,
   };
 }
+
+/** Download a binary response while sharing the API's auth/error handling. */
+export async function apiDownload(
+  url: string,
+): Promise<{ blob: Blob; filename: string | null }> {
+  let response = await fetch(url, { credentials: "include" });
+  if (response.status === 401) {
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    response = await fetch(url, { credentials: "include" });
+  }
+  if (response.status === 401) {
+    window.location.href = "/signin";
+    throw new Error("로그인이 필요합니다.");
+  }
+  if (!response.ok) {
+    let detail = `요청에 실패했습니다. (${response.status})`;
+    try {
+      const data = await response.json();
+      if (typeof data?.detail === "string") {
+        detail = data.detail;
+      }
+    } catch {
+      // Ignore malformed error bodies.
+    }
+    throw new Error(detail);
+  }
+
+  const disposition = response.headers.get("content-disposition");
+  let filename: string | null = null;
+  if (disposition) {
+    const encoded = /filename\*=UTF-8''([^;]+)/i.exec(disposition);
+    if (encoded) {
+      try {
+        filename = decodeURIComponent(encoded[1]);
+      } catch {
+        filename = encoded[1];
+      }
+    } else {
+      filename = /filename="?([^";]+)"?/i.exec(disposition)?.[1] ?? null;
+    }
+  }
+  return { blob: await response.blob(), filename };
+}

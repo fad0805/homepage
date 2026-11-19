@@ -10,6 +10,12 @@ from sqlalchemy import or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from core.scrivener import (
+    ExportNode,
+    build_scrivener_zip,
+    parse_scrivener_zip,
+    safe_filename,
+)
 from core.search import like_pattern, search_tokens
 from core.text_stats import count_characters, html_to_plain
 from models.books import Book, Chapter
@@ -1020,3 +1026,88 @@ def get_public_toc(db: Session, book_id: int) -> list[dict]:
         }
 
     return [build(node) for node in children.get(None, [])]
+
+
+def import_scrivener(
+    db: Session,
+    user_id: int,
+    data: bytes,
+) -> dict:
+    """Create a new manuscript project from a Scrivener project archive."""
+    try:
+        source_title, parsed = parse_scrivener_zip(data)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
+
+    project = ManuscriptProject(user_id=user_id, title=source_title)
+    db.add(project)
+    db.flush()
+
+    ids: list[int | None] = []
+    for position, item in enumerate(parsed):
+        parent_id = (
+            ids[item.parent_index] if item.parent_index is not None else None
+        )
+        with_spaces, plain = count_characters(item.body)
+        node = ManuscriptNode(
+            project_id=project.id,
+            user_id=user_id,
+            parent_id=parent_id,
+            node_type=item.node_type,
+            title=item.title,
+            body=item.body or None,
+            synopsis=item.synopsis or None,
+            notes=item.notes or None,
+            position=position,
+            char_count_with_spaces=with_spaces,
+            char_count_plain=plain,
+        )
+        db.add(node)
+        db.flush()
+        ids.append(node.id)
+
+    db.commit()
+    return {
+        "project_id": project.id,
+        "project_title": source_title,
+        "imported_count": len(parsed),
+    }
+
+
+def export_scrivener(
+    db: Session,
+    project_id: int,
+    user_id: int,
+) -> tuple[bytes, str]:
+    """Return a zipped Scrivener project for the given manuscript project."""
+    project = _get_project_or_404(db, project_id, user_id)
+    nodes = (
+        db.query(ManuscriptNode)
+        .filter(
+            ManuscriptNode.project_id == project_id,
+            ManuscriptNode.user_id == user_id,
+            ManuscriptNode.deleted_at.is_(None),
+        )
+        .order_by(ManuscriptNode.position.asc(), ManuscriptNode.id.asc())
+        .all()
+    )
+    live_ids = {node.id for node in nodes}
+    export_nodes = [
+        ExportNode(
+            id=node.id,
+            parent_id=node.parent_id if node.parent_id in live_ids else None,
+            node_type=node.node_type,
+            title=node.title,
+            body=node.body,
+            synopsis=node.synopsis,
+            notes=node.notes,
+        )
+        for node in nodes
+    ]
+    return (
+        build_scrivener_zip(project.title, export_nodes),
+        safe_filename(project.title),
+    )

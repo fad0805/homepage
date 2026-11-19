@@ -1,4 +1,7 @@
-from fastapi import APIRouter, Depends, Query
+from urllib.parse import quote
+
+from fastapi import APIRouter, Depends, File, Query, UploadFile
+from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
 from crud import manuscript as crud
@@ -45,6 +48,34 @@ def delete_project(
     user=Depends(require_auth),
 ):
     return crud.delete_project(db, project_id, user.id)
+
+
+@router.post("/scrivener/import")
+async def import_scrivener(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    user=Depends(require_auth),
+):
+    data = await file.read()
+    return crud.import_scrivener(db, user.id, data)
+
+
+@router.get("/projects/{project_id}/scrivener/export")
+def export_scrivener(
+    project_id: int,
+    db: Session = Depends(get_db),
+    user=Depends(require_auth),
+):
+    data, filename = crud.export_scrivener(db, project_id, user.id)
+    return Response(
+        content=data,
+        media_type="application/zip",
+        headers={
+            "Content-Disposition": (
+                f"attachment; filename*=UTF-8''{quote(filename)}"
+            )
+        },
+    )
 
 
 @router.get("/projects/{project_id}/tree")

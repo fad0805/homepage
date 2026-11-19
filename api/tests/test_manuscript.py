@@ -1,11 +1,14 @@
 import unittest
 from datetime import datetime, timedelta, timezone
+from io import BytesIO
+from zipfile import ZipFile
 
 from fastapi import HTTPException
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
+from core.scrivener import parse_scrivener_zip
 from core.text_stats import count_characters
 from crud import manuscript as crud
 from db.base import Base
@@ -451,6 +454,103 @@ class ManuscriptTests(unittest.TestCase):
             self.db.add(duplicate)
             self.db.commit()
         self.db.rollback()
+
+    def test_import_scrivener_restores_tree_and_rtf_body(self) -> None:
+        existing = self._project()
+        old_node = self._node(existing, "이전 원고")
+        manifest = """<?xml version="1.0" encoding="UTF-8"?>
+<ScrivenerProject Version="2.0">
+  <ProjectProperties><ProjectTitle>가져온 원고</ProjectTitle></ProjectProperties>
+  <Binder>
+    <BinderItem UUID="DRAFT" Type="DraftFolder">
+      <Title>Draft</Title>
+      <Children>
+        <BinderItem UUID="F1" Type="Folder">
+          <Title>1부</Title>
+          <MetaData><Synopsis>폴더 요약</Synopsis></MetaData>
+          <Children>
+            <BinderItem UUID="T1" Type="Text">
+              <Title>1장</Title>
+              <MetaData><Synopsis>첫 장 요약</Synopsis></MetaData>
+            </BinderItem>
+          </Children>
+        </BinderItem>
+      </Children>
+    </BinderItem>
+  </Binder>
+</ScrivenerProject>"""
+        rtf = (
+            "{\\rtf1\\ansi\\ansicpg65001\\uc0"
+            "{\\fonttbl\\f0\\fnil\\fcharset0 Arial;}"
+            "\\pard\\f0\\fs24 Hello \\u44032\\\n"
+            "\\ulnone \\\n"
+            "second\\par}"
+        )
+        buffer = BytesIO()
+        with ZipFile(buffer, "w") as archive:
+            archive.writestr("imported.scrivx", manifest)
+            archive.writestr("Files/Data/T1/content.rtf", rtf)
+
+        result = crud.import_scrivener(
+            self.db, self.owner.id, buffer.getvalue()
+        )
+
+        self.assertEqual(result["project_title"], "가져온 원고")
+        self.assertEqual(result["imported_count"], 2)
+        self.assertNotEqual(result["project_id"], existing.id)
+        tree = crud.get_tree(self.db, result["project_id"], self.owner.id)
+        self.assertEqual([node["title"] for node in tree], ["1부", "1장"])
+        self.assertEqual(tree[1]["parent_id"], tree[0]["id"])
+        chapter = crud.get_node(self.db, tree[1]["id"], self.owner.id)
+        self.assertEqual(chapter["body"], "<p>Hello 가</p><p>second</p>")
+        self.assertEqual(chapter["synopsis"], "첫 장 요약")
+        self.assertIsNone(
+            self.db.query(ManuscriptNode)
+            .filter(ManuscriptNode.id == old_node.id)
+            .first()
+            .deleted_at
+        )
+
+    def test_export_scrivener_round_trips_body_and_tree(self) -> None:
+        project = self._project()
+        folder = self._node(project, "1권", node_type="folder")
+        body = "<p>가 &amp; 나</p><p>&lt;태그&gt; 포함</p>"
+        self._node(project, "1장", parent_id=folder.id, body=body)
+        self.db.commit()
+
+        data, filename = crud.export_scrivener(
+            self.db, project.id, self.owner.id
+        )
+
+        self.assertTrue(filename.endswith(".scriv.zip"))
+        with ZipFile(BytesIO(data)) as archive:
+            names = archive.namelist()
+        self.assertIn(f"{project.title}.scrivx", names)
+        self.assertIn("Files/version.txt", names)
+        self.assertIn("Settings/compile.xml", names)
+        self.assertTrue(
+            any(
+                name.startswith("Files/Data/")
+                and name.endswith("/content.rtf")
+                and name[11:47].isupper()
+                for name in names
+            )
+        )
+        source_title, parsed = parse_scrivener_zip(data)
+        self.assertEqual(source_title, project.title)
+        self.assertEqual([node.title for node in parsed], ["1권", "1장"])
+        self.assertEqual(parsed[1].parent_index, 0)
+        self.assertEqual(parsed[1].body, body)
+
+        imported = crud.import_scrivener(self.db, self.owner.id, data)
+        target_tree = crud.get_tree(
+            self.db, imported["project_id"], self.owner.id
+        )
+        self.assertEqual([node["title"] for node in target_tree], ["1권", "1장"])
+        imported_body = crud.get_node(
+            self.db, target_tree[1]["id"], self.owner.id
+        )["body"]
+        self.assertEqual(imported_body, parsed[1].body)
 
 
 if __name__ == "__main__":
