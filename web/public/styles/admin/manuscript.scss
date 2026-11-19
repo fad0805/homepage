@@ -170,6 +170,8 @@
 }
 
 .admin-manuscript-table {
+  width: 100%;
+  max-width: 100%;
   border: 1px solid color-mix(in srgb, var(--foreground) 14%, transparent);
   border-radius: 0.4rem;
   overflow: hidden;
@@ -177,7 +179,7 @@
 
 .admin-manuscript-row {
   display: grid;
-  grid-template-columns: minmax(10rem, 2fr) minmax(8rem, 1.2fr) 4rem 11rem minmax(9rem, 1fr);
+  grid-template-columns: minmax(10rem, 2fr) minmax(8rem, 1.2fr) 4rem 11rem 8rem;
   align-items: center;
   gap: 0.75rem;
   padding: 0.55rem 0.75rem;
@@ -422,7 +424,7 @@
 
 @media (width < 900px) {
   .admin-manuscript-row {
-    grid-template-columns: minmax(8rem, 1fr) 3rem minmax(9rem, 1fr);
+    grid-template-columns: minmax(8rem, 1fr) 3rem 8rem;
 
     > :nth-child(2),
     > :nth-child(4) {
@@ -476,8 +478,8 @@
   }
 
   .admin-manuscript-row {
-    grid-template-columns: minmax(9rem, 2fr) minmax(7rem, 1.2fr) 3.5rem 7rem minmax(9rem, 1fr);
-    min-width: 42rem;
+    grid-template-columns: minmax(9rem, 2fr) minmax(7rem, 1.2fr) 3.5rem 7rem 8rem;
+    min-width: 39rem;
 
     > :nth-child(2),
     > :nth-child(4) {
