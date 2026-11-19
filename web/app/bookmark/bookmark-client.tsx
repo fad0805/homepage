@@ -935,7 +935,7 @@ export default function BookmarkClient({ username }: { username: string }) {
                 }
                 onClick={handleOpenPeriodSelector}
               >
-                {compactPeriodLabel(anchorDate, periodType)}
+                {periodLabel(anchorDate, "day")}
               </button>
               <button
                 type="button"
