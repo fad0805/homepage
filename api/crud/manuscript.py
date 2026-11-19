@@ -11,6 +11,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload, load_only
 
 from core.image_urls import public_url
+from core.publish_html import shrink_font_sizes_for_chapter
 from core.scrivener import (
     IMAGE_PLACEHOLDER_PREFIX,
     IMAGE_PLACEHOLDER_SUFFIX,
@@ -1086,6 +1087,7 @@ def publish_node(
             )
             .first()
         )
+    chapter_body = shrink_font_sizes_for_chapter(node.body)
     if chapter is None:
         # The linked post may have been deleted on the bookshelf side. The two
         # tables are independent, so publish a fresh chapter instead.
@@ -1094,7 +1096,7 @@ def publish_node(
             book_id=target_book_id,
             title=node.title,
             subtitle=node.subtitle,
-            body=node.body,
+            body=chapter_body,
             tags=[],
             order=_next_chapter_order(db, target_book_id),
         )
@@ -1104,7 +1106,7 @@ def publish_node(
     # Content ownership only. Publication settings stay in book management.
     chapter.title = node.title
     chapter.subtitle = node.subtitle
-    chapter.body = node.body
+    chapter.body = chapter_body
     db.flush()
 
     _sync_serial_node(
@@ -1116,10 +1118,13 @@ def publish_node(
     )
 
     if is_linked_target:
-        content_hash = _content_hash(node.title, node.subtitle, node.body)
         node.published_chapter_id = chapter.id
-        node.published_manuscript_hash = content_hash
-        node.published_chapter_hash = content_hash
+        node.published_manuscript_hash = _content_hash(
+            node.title, node.subtitle, node.body
+        )
+        node.published_chapter_hash = _content_hash(
+            chapter.title, chapter.subtitle, chapter.body
+        )
         node.published_at = _utcnow()
     db.commit()
     db.refresh(node)

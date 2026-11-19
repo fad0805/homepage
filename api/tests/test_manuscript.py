@@ -515,7 +515,11 @@ class ManuscriptTests(unittest.TestCase):
             self.db.query(Chapter).filter(Chapter.id == published["chapter_id"]).one()
         )
         self.assertEqual(chapter.title, "도입")
-        self.assertEqual(chapter.body, "<p>첫 문장</p>")
+        self.assertEqual(
+            chapter.body,
+            '<div style="font-size: 10pt" data-ms-published-font-size="true">'
+            "<p>첫 문장</p></div>",
+        )
         self.assertEqual(chapter.tags, [])
         self.assertIsNone(chapter.published_at)
 
@@ -548,6 +552,33 @@ class ManuscriptTests(unittest.TestCase):
         self.assertEqual(chapter.title, "원고에서 수정")
         self.assertEqual(
             crud.get_node(self.db, chapter_node.id, self.owner.id)["published_state"],
+            "published",
+        )
+
+    def test_publish_shrinks_font_sizes_in_chapter_html(self) -> None:
+        project = self._project()
+        source = (
+            '<p><span style="font-size: 14pt">큰 글</span> '
+            '<span style="font-size:13.0pt">기본 글</span></p>'
+        )
+        node = self._node(project, "글", body=source)
+
+        published = crud.publish_node(
+            self.db,
+            node.id,
+            schemas.PublishRequest(target_book_id=self.book.id),
+            self.owner.id,
+        )
+        chapter = (
+            self.db.query(Chapter).filter(Chapter.id == published["chapter_id"]).one()
+        )
+
+        self.assertIn("font-size: 11pt", chapter.body)
+        self.assertIn("font-size: 10pt", chapter.body)
+        self.assertNotIn("font-size: 14pt", chapter.body)
+        self.assertEqual(node.body, source)
+        self.assertEqual(
+            crud.get_node(self.db, node.id, self.owner.id)["published_state"],
             "published",
         )
 
