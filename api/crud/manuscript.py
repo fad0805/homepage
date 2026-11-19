@@ -11,7 +11,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload, load_only
 
 from core.image_urls import public_url
-from core.publish_html import shrink_font_sizes_for_chapter
+from core.publish_html import prepare_chapter_html
 from core.scrivener import (
     IMAGE_PLACEHOLDER_PREFIX,
     IMAGE_PLACEHOLDER_SUFFIX,
@@ -1100,7 +1100,7 @@ def publish_node(
             )
             .first()
         )
-    chapter_body = shrink_font_sizes_for_chapter(node.body)
+    chapter_body = prepare_chapter_html(node.body)
     if chapter is None:
         # The linked post may have been deleted on the bookshelf side. The two
         # tables are independent, so publish a fresh chapter instead.

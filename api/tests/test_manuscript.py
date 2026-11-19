@@ -605,6 +605,28 @@ class ManuscriptTests(unittest.TestCase):
             "published",
         )
 
+    def test_publish_normalizes_manuscript_images_for_public_layout(self) -> None:
+        project = self._project()
+        source = (
+            '<p><img src="/uploads/sample.png" width="483" height="483"></p>'
+        )
+        node = self._node(project, "삽화", body=source)
+
+        published = crud.publish_node(
+            self.db,
+            node.id,
+            schemas.PublishRequest(target_book_id=self.book.id),
+            self.owner.id,
+        )
+        chapter = (
+            self.db.query(Chapter).filter(Chapter.id == published["chapter_id"]).one()
+        )
+
+        self.assertIn('data-align="center"', chapter.body)
+        self.assertIn('data-wrap="false"', chapter.body)
+        self.assertIn('width="483"', chapter.body)
+        self.assertIn('height="483"', chapter.body)
+
     def test_publish_to_another_book_stays_unlinked(self) -> None:
         project = self._project()
         other_book = Book(user_id=self.owner.id, title="다른 책", tags=[])

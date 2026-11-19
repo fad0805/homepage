@@ -826,39 +826,44 @@
   }
 
   img {
+    display: block;
     max-width: 100%;
     height: auto;
     max-height: 15.7rem;
     border-radius: 0.7rem;
+    object-fit: contain;
     cursor: zoom-in;
 
+    /* Scrivener images carry explicit width/height; the editor honors those
+       without the default height cap. */
+    &[height] {
+      max-height: none;
+    }
+
     &[data-align='center'] {
-      display: block;
-      margin: 1rem auto;
+      margin: 1.2rem auto;
       clear: both;
     }
 
     &[data-align='left'] {
-      display: block;
-      margin: 1rem auto 1rem 0;
+      margin: 1.2rem auto 1.2rem 0;
       clear: both;
     }
 
     &[data-align='right'] {
-      display: block;
-      margin: 1rem 0 1rem auto;
+      margin: 1.2rem 0 1.2rem auto;
       clear: both;
     }
 
     &[data-wrap='true'][data-align='left'] {
       float: left;
-      margin: 0.3rem 1.1rem 0.2rem 0;
+      margin: 0.3rem 1.2rem 0.2rem 0;
       clear: none;
     }
 
     &[data-wrap='true'][data-align='right'] {
       float: right;
-      margin: 0.3rem 0 0.2rem 1.1rem;
+      margin: 0.3rem 0 0.2rem 1.2rem;
       clear: none;
     }
   }
