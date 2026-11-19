@@ -18,6 +18,34 @@ import "@/public/styles/manuscript.scss";
 
 /** Same debounce window as the board's draft autosave. */
 const AUTOSAVE_DELAY_MS = 2000;
+const LAST_NODE_KEY_PREFIX = "ms-last-node:";
+
+function readLastNodeId(projectId: number): number | null {
+  try {
+    const raw = window.localStorage.getItem(
+      `${LAST_NODE_KEY_PREFIX}${projectId}`,
+    );
+    const id = Number(raw);
+    return raw && Number.isInteger(id) && id > 0 ? id : null;
+  } catch {
+    return null;
+  }
+}
+
+function rememberLastNodeId(projectId: number, nodeId: number | null) {
+  try {
+    if (nodeId === null) {
+      window.localStorage.removeItem(`${LAST_NODE_KEY_PREFIX}${projectId}`);
+    } else {
+      window.localStorage.setItem(
+        `${LAST_NODE_KEY_PREFIX}${projectId}`,
+        String(nodeId),
+      );
+    }
+  } catch {
+    // Local storage can be unavailable; the session still works in memory.
+  }
+}
 
 interface Project {
   id: number;
@@ -335,10 +363,21 @@ export default function ManuscriptWorkspace() {
   const latestSignatureRef = useRef<string | null>(null);
   const editorRef = useRef<Editor | null>(null);
   const pendingSearchRef = useRef<string | null>(null);
+  const treeProjectIdRef = useRef<number | null>(null);
+  const restoredProjectIdRef = useRef<number | null>(null);
+  const saveShortcutRef = useRef<() => void>(() => {});
 
   const notify = useCallback((text: string, type: Notice["type"] = "success") => {
     setNotice({ type, text });
   }, []);
+
+  const selectNode = useCallback(
+    (id: number | null) => {
+      setSelectedId(id);
+      if (projectId !== null) rememberLastNodeId(projectId, id);
+    },
+    [projectId],
+  );
 
   const handleEditorReady = useCallback((editor: Editor | null) => {
     editorRef.current = editor;
@@ -402,6 +441,7 @@ export default function ManuscriptWorkspace() {
     const nodes = await apiFetch<ManuscriptNode[]>(
       `/api/manuscript/projects/${id}/tree`,
     );
+    treeProjectIdRef.current = id;
     setTree(nodes);
     setExpanded((current) => {
       const next = new Set(current);
@@ -552,7 +592,7 @@ export default function ManuscriptWorkspace() {
       });
       if (parentId) setExpanded((current) => new Set(current).add(parentId));
       await loadTree(projectId);
-      setSelectedId(node.id);
+      selectNode(node.id);
     } catch (error) {
       notify((error as Error).message, "error");
     }
@@ -594,7 +634,7 @@ export default function ManuscriptWorkspace() {
     }
     try {
       await apiFetch(`/api/manuscript/nodes/${selectedId}`, { method: "DELETE" });
-      setSelectedId(null);
+      selectNode(null);
       setTrashPreview(null);
       setTrashScrivenings(null);
       setTrashCombinedHtml("");
@@ -653,7 +693,7 @@ export default function ManuscriptWorkspace() {
     }
   };
 
-  const openScrivenings = async (rootId: number): Promise<string | null> => {
+  const openScrivenings = useCallback(async (rootId: number): Promise<string | null> => {
     try {
       const docs = await apiFetch<ScrivDoc[]>(
         `/api/manuscript/scrivenings?root_id=${rootId}`,
@@ -676,7 +716,24 @@ export default function ManuscriptWorkspace() {
       notify((error as Error).message, "error");
       return null;
     }
-  };
+  }, [childrenMap, notify]);
+
+  // Restore the last viewed page once the project's binder has loaded.
+  useEffect(() => {
+    if (!projectId || treeProjectIdRef.current !== projectId) return;
+    if (restoredProjectIdRef.current === projectId) return;
+    restoredProjectIdRef.current = projectId;
+
+    const lastId = readLastNodeId(projectId);
+    if (lastId === null) return;
+    const lastNode = tree.find((node) => node.id === lastId);
+    if (!lastNode) {
+      rememberLastNodeId(projectId, null);
+      return;
+    }
+    selectNode(lastId);
+    if (lastNode.node_type === "folder") void openScrivenings(lastId);
+  }, [projectId, tree, selectNode, openScrivenings]);
 
   const saveCombined = async (silent = false) => {
     if (!scrivenings || !selected || !projectId) return;
@@ -741,6 +798,37 @@ export default function ManuscriptWorkspace() {
     }
     if (dirty && selectedId) await saveNode(true);
   };
+
+  // Keep the shortcut pointed at the latest save handler without rebinding
+  // the window listener on every keystroke.
+  useEffect(() => {
+    saveShortcutRef.current = () => {
+      if (!selected || trashPreview || saving || autoSaving) return;
+      if (scrivenings) {
+        if (scrivDirty || dirty) void saveCombined();
+      } else if (dirty && selectedId) {
+        void saveNode();
+      }
+    };
+  });
+
+  // Ctrl/Cmd+S behaves like the editor's save button while a pane is open.
+  useEffect(() => {
+    const handleSaveShortcut = (event: KeyboardEvent) => {
+      if (
+        !(event.ctrlKey || event.metaKey) ||
+        event.key.toLowerCase() !== "s"
+      ) {
+        return;
+      }
+      if (!selected || trashPreview) return;
+      event.preventDefault();
+      if (event.repeat) return;
+      saveShortcutRef.current();
+    };
+    window.addEventListener("keydown", handleSaveShortcut);
+    return () => window.removeEventListener("keydown", handleSaveShortcut);
+  }, [selected, trashPreview]);
 
   const toggleTrashFolder = (id: number) => {
     setTrashFoldersOpen((current) => {
@@ -950,7 +1038,7 @@ export default function ManuscriptWorkspace() {
                 setTrashPreview(null);
                 setTrashScrivenings(null);
                 setTrashCombinedHtml("");
-                setSelectedId(node.id);
+                selectNode(node.id);
                 if (node.node_type === "folder") {
                   setScrivenings(null);
                   void openScrivenings(node.id);
@@ -1399,7 +1487,7 @@ export default function ManuscriptWorkspace() {
                   key={result.id}
                   onClick={() => {
                     pendingSearchRef.current = query;
-                    setSelectedId(result.id);
+                    selectNode(result.id);
                     setSearchOpen(false);
                     setScrivenings(null);
                     if (result.node_type === "folder") {
