@@ -423,7 +423,7 @@ def _rtf_to_html_with_images(
                 elif word == "line":
                     append("<br>")
                 elif word == "tab":
-                    append("⇥")
+                    append("\t")
                 elif word in RTF_SYMBOLS:
                     append(escape(RTF_SYMBOLS[word]))
                 elif word == "pard":
@@ -471,7 +471,7 @@ def _rtf_to_html_with_images(
             index += 2
             continue
         if char == "\t":
-            append("⇥")
+            append("\t")
             index += 1
             continue
         if char in "\r\n":
