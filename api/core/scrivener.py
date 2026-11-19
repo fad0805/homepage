@@ -335,7 +335,7 @@ def _rtf_to_html_with_images(
                 continue
             following = raw[index + 1]
             if following in "\r\n":
-                flush()
+                flush(force=True)
                 index += 2
                 if (
                     following == "\r"
@@ -350,6 +350,10 @@ def _rtf_to_html_with_images(
                 continue
             if following == "~":
                 append("&nbsp;")
+                index += 2
+                continue
+            if following == " ":
+                append(" ")
                 index += 2
                 continue
             if following == "_":
@@ -473,7 +477,10 @@ def _rtf_to_html_with_images(
         index += 1
 
     flush()
-    while paragraphs and not paragraphs[-1][1].strip():
+    # Scrivener terminates the last paragraph with a line break before the
+    # closing brace. Drop only that artifact so intentional trailing blank
+    # lines are preserved.
+    if paragraphs and not paragraphs[-1][1].strip():
         paragraphs.pop()
     html = "".join(
         _render_rtf_paragraph(

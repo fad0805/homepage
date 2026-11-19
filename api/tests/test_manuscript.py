@@ -505,7 +505,10 @@ class ManuscriptTests(unittest.TestCase):
         self.assertEqual([node["title"] for node in tree], ["1부", "1장"])
         self.assertEqual(tree[1]["parent_id"], tree[0]["id"])
         chapter = crud.get_node(self.db, tree[1]["id"], self.owner.id)
-        self.assertEqual(chapter["body"], "<p>Hello 가</p><p>second</p>")
+        self.assertEqual(
+            chapter["body"],
+            "<p>Hello 가</p><p></p><p>second</p>",
+        )
         self.assertEqual(chapter["synopsis"], "첫 장 요약")
         self.assertIsNone(
             self.db.query(ManuscriptNode)
@@ -550,6 +553,33 @@ class ManuscriptTests(unittest.TestCase):
             'text-indent: -12px">before <em>italic</em><u>underline</u>'
             "<s>strike</s></p>",
         )
+
+    def test_import_scrivener_keeps_blank_lines_and_spaces(self) -> None:
+        manifest = """<?xml version="1.0" encoding="UTF-8"?>
+<ScrivenerProject Version="2.0">
+  <Binder>
+    <BinderItem UUID="D" Type="DraftFolder">
+      <Children>
+        <BinderItem UUID="T1" Type="Text"><Title>본문</Title></BinderItem>
+      </Children>
+    </BinderItem>
+  </Binder>
+</ScrivenerProject>"""
+        rtf = (
+            "{\\rtf1\\ansi\\ansicpg1252\\uc1"
+            "\\pard first\\\n\\\n  second  \\\n}"
+        )
+        buffer = BytesIO()
+        with ZipFile(buffer, "w") as archive:
+            archive.writestr("blank-lines.scrivx", manifest)
+            archive.writestr("Files/Data/T1/content.rtf", rtf)
+
+        result = crud.import_scrivener(
+            self.db, self.owner.id, buffer.getvalue()
+        )
+        tree = crud.get_tree(self.db, result["project_id"], self.owner.id)
+        body = crud.get_node(self.db, tree[0]["id"], self.owner.id)["body"]
+        self.assertEqual(body, "<p>first</p><p></p><p>  second  </p>")
 
     def test_import_scrivener_numbers_duplicate_project_titles(self) -> None:
         manifest = """<?xml version="1.0" encoding="UTF-8"?>
@@ -710,6 +740,16 @@ class ManuscriptTests(unittest.TestCase):
             self.db, target_tree[1]["id"], self.owner.id
         )["body"]
         self.assertEqual(imported_body, parsed[1].body)
+
+    def test_export_scrivener_keeps_blank_lines_and_spaces(self) -> None:
+        project = self._project()
+        body = "<p>앞  공백</p><p></p><p>  뒤  </p>"
+        self._node(project, "빈줄", body=body)
+        self.db.commit()
+
+        data, _ = crud.export_scrivener(self.db, project.id, self.owner.id)
+        _, parsed = parse_scrivener_zip(data)
+        self.assertEqual(parsed[0].body, body)
 
     def test_export_scrivener_preserves_styles(self) -> None:
         project = self._project()
