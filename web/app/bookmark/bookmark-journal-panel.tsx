@@ -453,10 +453,10 @@ export function BookmarkJournalPanel() {
   };
 
   const selectLevel = (next: JournalLevel, start: string) => {
-    setAnchorDate(start);
+    // Changing the view level must not move the user's base date.
     setLevel(next);
     closeSelectors();
-    goToDate(next === "week" ? weekThursday(start) : start);
+    goToDate(next === "week" ? weekThursday(anchorDate) : start);
   };
 
   const movePeriod = (delta: number) => {
@@ -469,12 +469,16 @@ export function BookmarkJournalPanel() {
     goToDate(level === "week" ? weekThursday(next) : next);
   };
 
+  const openDateSelector = () => {
+    setPeriodPickerOpen(false);
+    setCalendarMonth(startOfPeriod(anchorDate, "month"));
+    setCalendarHoverDate(null);
+    setCalendarOpen(true);
+  };
+
   const openPeriodSelector = () => {
     if (level === "week") {
-      setPeriodPickerOpen(false);
-      setCalendarMonth(startOfPeriod(anchorDate, "month"));
-      setCalendarHoverDate(null);
-      setCalendarOpen(true);
+      openDateSelector();
       return;
     }
     setCalendarOpen(false);
@@ -500,13 +504,7 @@ export function BookmarkJournalPanel() {
   const calendarRange = (value: string) =>
     journalPeriodRange(value, level);
 
-  const goToday = () => {
-    const today = todayDateInputValue();
-    setAnchorDate(today);
-    setLevel("week");
-    closeSelectors();
-    goToDate(weekThursday(today));
-  };
+
 
   const renderDecade = () => {
     const goalCount = tree
@@ -721,7 +719,10 @@ export function BookmarkJournalPanel() {
         <button
           type="button"
           className="bookmark-text-button"
-          onClick={goToday}
+          title="기준일 선택"
+          aria-haspopup="dialog"
+          aria-expanded={calendarOpen}
+          onClick={openDateSelector}
         >
           오늘
         </button>
