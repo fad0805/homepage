@@ -484,10 +484,16 @@
   .tiptap {
     min-height: 20rem;
     outline: none;
+    white-space: pre-wrap;
+    white-space: break-spaces;
 
     p {
       margin: 0 0 0.6rem;
       line-height: 1.65;
+
+      &:empty {
+        min-height: 1.65em;
+      }
     }
 
     h2,
