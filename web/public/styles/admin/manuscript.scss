@@ -216,7 +216,7 @@
     cursor: pointer;
   }
 
-  &:not(.is-head) > span:nth-child(4) {
+  &:not(.is-head) > :nth-child(4) {
     font-size: 0.8em;
   }
 
@@ -424,8 +424,8 @@
   .admin-manuscript-row {
     grid-template-columns: minmax(8rem, 1fr) 3rem auto;
 
-    > span:nth-child(2),
-    > span:nth-child(4) {
+    > :nth-child(2),
+    > :nth-child(4) {
       display: none;
     }
   }
@@ -479,13 +479,9 @@
     grid-template-columns: minmax(9rem, 2fr) minmax(7rem, 1.2fr) 3.5rem 7rem auto;
     min-width: 42rem;
 
-    > span:nth-child(2),
-    > span:nth-child(4) {
+    > :nth-child(2),
+    > :nth-child(4) {
       display: block;
-    }
-
-    > span:nth-child(5) {
-      display: none;
     }
   }
 }
