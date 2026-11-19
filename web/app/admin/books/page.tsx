@@ -31,6 +31,7 @@ import { CSS } from "@dnd-kit/utilities";
 
 import { apiFetch } from "@/lib/api";
 import { formatDateTime } from "@/lib/datetime";
+import { useHorizontalScrollFade } from "@/lib/use-horizontal-scroll-fade";
 
 import "@/public/styles/admin/books.scss";
 
@@ -114,6 +115,8 @@ function SortableBookRow({
     },
   });
   const router = useRouter();
+  const { ref: scrollRef, fadeClassName } =
+    useHorizontalScrollFade<HTMLDivElement>();
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -129,41 +132,48 @@ function SortableBookRow({
       className={`admin-book-card${isDragging ? " is-dragging" : ""}`}
       onClick={() => router.push(`/admin/books/${book.id}`)}
     >
-      <button
-        type="button"
-        className="admin-book-card__drag"
-        aria-label={`${book.title} 순서 이동`}
-        onClick={(event) => event.stopPropagation()}
-        {...attributes}
-        {...listeners}
+      <div
+        ref={scrollRef}
+        className={["admin-book-card__scroll", fadeClassName]
+          .filter(Boolean)
+          .join(" ")}
       >
-        ⠿
-      </button>
-      <div className="admin-book-card__header">
-        <div className="admin-book-card__title">
-          <Link
-            href={`/admin/books/${book.id}`}
-            onClick={(event) => event.stopPropagation()}
-          >
-            {book.title}
-          </Link>
-          {book.description ? <p>{book.description}</p> : null}
-        </div>
-        <div className="admin-book-card__meta">
-          <div className="admin-book-card__chips">
-            {book.visible === false ? (
-              <span className="admin-book-badge">비공개</span>
-            ) : book.protected ? (
-              <span className="admin-book-badge">보호</span>
-            ) : null}
-            <span className="admin-book-badge">{chapterCount}챕터</span>
+        <button
+          type="button"
+          className="admin-book-card__drag"
+          aria-label={`${book.title} 순서 이동`}
+          onClick={(event) => event.stopPropagation()}
+          {...attributes}
+          {...listeners}
+        >
+          ⠿
+        </button>
+        <div className="admin-book-card__header">
+          <div className="admin-book-card__title">
+            <Link
+              href={`/admin/books/${book.id}`}
+              onClick={(event) => event.stopPropagation()}
+            >
+              {book.title}
+            </Link>
+            {book.description ? <p>{book.description}</p> : null}
           </div>
-          <p className="admin-book-card__updated">
-            조회 {viewCount}회
-            {latestChapterUpdated
-              ? ` · 최근 게시글 ${formatDateTime(latestChapterUpdated)}`
-              : " · 게시글 없음"}
-          </p>
+          <div className="admin-book-card__meta">
+            <div className="admin-book-card__chips">
+              {book.visible === false ? (
+                <span className="admin-book-badge">비공개</span>
+              ) : book.protected ? (
+                <span className="admin-book-badge">보호</span>
+              ) : null}
+              <span className="admin-book-badge">{chapterCount}챕터</span>
+            </div>
+            <p className="admin-book-card__updated">
+              조회 {viewCount}회
+              {latestChapterUpdated
+                ? ` · 최근 게시글 ${formatDateTime(latestChapterUpdated)}`
+                : " · 게시글 없음"}
+            </p>
+          </div>
         </div>
       </div>
     </article>
@@ -379,6 +389,8 @@ function SortableBookGroup({
     },
     disabled: !category,
   });
+  const { ref: headerRef, fadeClassName: headerFade } =
+    useHorizontalScrollFade<HTMLElement>();
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -393,7 +405,12 @@ function SortableBookGroup({
       style={style}
       className={`admin-books-group${isDragging ? " is-dragging" : ""}`}
     >
-      <header className="admin-books-group-header">
+      <header
+        ref={headerRef}
+        className={["admin-books-group-header", headerFade]
+          .filter(Boolean)
+          .join(" ")}
+      >
         {category && canManageCategory ? (
           <button
             type="button"
