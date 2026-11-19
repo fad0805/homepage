@@ -7,8 +7,8 @@ from crud.books import (
     delete_book,
     delete_book_category,
     get_all_book_categories,
-    get_all_books,
     get_book,
+    get_books_page,
     reorder_book_categories,
     reorder_books,
     update_book,
@@ -24,7 +24,6 @@ from schemas.books import (
     BookUpdate,
 )
 from .utils import (
-    filter_by_author,
     get_default_author_id,
     get_gallery_grants,
     get_optional_user,
@@ -47,41 +46,37 @@ def get_books(
     db: Session = Depends(get_db),
     current_user=Depends(get_optional_user),
 ):
+    filters: dict = {"query": q}
     if mine:
         if current_user is None:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Not authenticated",
             )
-        books = get_all_books(
-            db,
-            include_hidden=True,
-            owner_user_id=current_user.id,
-            query=q,
-        )
+        filters.update(include_hidden=True, owner_user_id=current_user.id)
     elif current_user is not None and is_admin(current_user):
-        books = get_all_books(
-            db, include_hidden=True, is_admin=True, query=q
-        )
+        filters.update(include_hidden=True, is_admin=True)
     else:
         grants = get_gallery_grants(request, db)
-        books = get_all_books(
-            db,
+        filters.update(
             include_hidden=current_user is not None,
             viewer_user_id=current_user.id if current_user else None,
             granted_chapters=grants.chapters,
             granted_books=grants.books,
-            query=q,
         )
 
-    books = filter_by_author(books, get_default_author_id(db))
-    total = len(books)
+    author_id = get_default_author_id(db)
+    if author_id is None:
+        books, total = [], 0
+    else:
+        books, total = get_books_page(
+            db,
+            page=page,
+            page_size=page_size,
+            author_user_id=author_id,
+            **filters,
+        )
     response.headers["X-Total-Count"] = str(total)
-    if page is not None:
-        page_size = max(1, min(page_size, 100))
-        max_page = max(1, (total + page_size - 1) // page_size)
-        page = min(max(1, page), max_page)
-        books = books[(page - 1) * page_size : page * page_size]
     return books
 
 

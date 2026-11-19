@@ -4,7 +4,7 @@ import re
 from datetime import datetime, timedelta, timezone
 
 from fastapi import HTTPException, status
-from sqlalchemy import and_, func, or_
+from sqlalchemy import String, and_, func, or_, select
 from sqlalchemy.orm import Session, contains_eager, load_only
 
 from core.mastodon import maybe_notify_chapter
@@ -358,18 +358,39 @@ def _serialize_chapter(
 
 
 # Book CRUD
-def get_all_books(
+def _book_tag_match(db: Session, pattern: str):
+    """Match a tag substring without materializing book rows in Python."""
+    if db.bind is not None and db.bind.dialect.name == "sqlite":
+        # SQLite's JSON type stores non-ASCII tags as escaped code units, so a
+        # plain text cast cannot match Korean tags. json_each decodes them.
+        tags = func.json_each(Book.tags).table_valued("value").alias("book_tag")
+        return Book.id.in_(
+            select(Book.id)
+            .select_from(tags)
+            .where(func.lower(tags.c.value).like(pattern, escape="\\"))
+        )
+    return func.cast(Book.tags, String).ilike(pattern, escape="\\")
+
+
+def _build_book_query(
     db: Session,
     *,
     include_hidden: bool = False,
     viewer_user_id: int | None = None,
     owner_user_id: int | None = None,
     is_admin: bool = False,
+    author_user_id: int | None = None,
     granted_chapters: frozenset[int] = frozenset(),
     granted_books: frozenset[int] = frozenset(),
     query: str | None = None,
 ):
-    books_query = db.query(Book)
+    books_query = (
+        db.query(Book)
+        .outerjoin(BookCategory, Book.category_id == BookCategory.id)
+        .options(contains_eager(Book.category_relation))
+    )
+    if author_user_id is not None:
+        books_query = books_query.filter(Book.user_id == author_user_id)
     if owner_user_id is not None:
         books_query = books_query.filter(Book.user_id == owner_user_id)
     elif not include_hidden:
@@ -382,9 +403,19 @@ def get_all_books(
                 Book.user_id == viewer_user_id,
             )
         )
+    if owner_user_id is None and not is_admin:
+        visible_category = or_(
+            Book.category_id.is_(None),
+            BookCategory.visible.is_(True),
+        )
+        if viewer_user_id is not None:
+            books_query = books_query.filter(
+                or_(visible_category, Book.user_id == viewer_user_id)
+            )
+        else:
+            books_query = books_query.filter(visible_category)
 
     tokens = search_tokens(query)
-    books = books_query.order_by(Book.order, Book.id).all()
     if tokens:
         chapter_match_query = _build_chapter_query(
             db,
@@ -393,6 +424,7 @@ def get_all_books(
             granted_books=granted_books,
             viewer_user_id=viewer_user_id,
             owner_user_id=owner_user_id,
+            author_user_id=author_user_id,
             query=query,
             include_body=False,
             ids_only=True,
@@ -407,42 +439,55 @@ def get_all_books(
             .distinct()
             .all()
         }
+        for token in tokens:
+            pattern = like_pattern(token)
+            field_match = or_(
+                Book.title.ilike(pattern, escape="\\"),
+                Book.description.ilike(pattern, escape="\\"),
+                BookCategory.name.ilike(pattern, escape="\\"),
+                _book_tag_match(db, pattern),
+            )
+            if chapter_book_ids:
+                field_match = or_(field_match, Book.id.in_(chapter_book_ids))
+            books_query = books_query.filter(field_match)
 
-        def matches(book: Book) -> bool:
-            if book.id in chapter_book_ids:
-                return True
-            category = (
-                book.category_relation.name
-                if book.category_relation is not None
-                else None
-            )
-            values = [
-                book.title,
-                book.description,
-                category,
-                *(book.tags or []),
-            ]
-            haystack = [
-                value.lower()
-                for value in values
-                if isinstance(value, str)
-            ]
-            return all(
-                any(token in value for value in haystack)
-                for token in tokens
-            )
+    return books_query.order_by(Book.order, Book.id)
 
-        books = [book for book in books if matches(book)]
-    if owner_user_id is None and not is_admin:
-        books = [
-            book
-            for book in books
-            if _category_is_visible_to(
-                book,
-                viewer_user_id=viewer_user_id,
-                can_view_hidden=False,
-            )
-        ]
+
+def _get_books_page(
+    db: Session,
+    *,
+    page: int | None,
+    page_size: int,
+    include_hidden: bool = False,
+    viewer_user_id: int | None = None,
+    owner_user_id: int | None = None,
+    is_admin: bool = False,
+    author_user_id: int | None = None,
+    granted_chapters: frozenset[int] = frozenset(),
+    granted_books: frozenset[int] = frozenset(),
+    query: str | None = None,
+) -> tuple[list[dict], int]:
+    books_query = _build_book_query(
+        db,
+        include_hidden=include_hidden,
+        viewer_user_id=viewer_user_id,
+        owner_user_id=owner_user_id,
+        is_admin=is_admin,
+        author_user_id=author_user_id,
+        granted_chapters=granted_chapters,
+        granted_books=granted_books,
+        query=query,
+    )
+    total = books_query.order_by(None).count()
+    if page is not None:
+        page_size = max(1, min(page_size, 100))
+        max_page = max(1, (total + page_size - 1) // page_size)
+        page = min(max(1, page), max_page)
+        books_query = books_query.offset((page - 1) * page_size).limit(
+            page_size
+        )
+    books = books_query.all()
     counts = _chapter_counts_for_books(
         db,
         books,
@@ -450,7 +495,64 @@ def get_all_books(
         owner_user_id=owner_user_id,
         is_admin=is_admin,
     )
-    return _serialize_books_with_counts(books, counts)
+    return _serialize_books_with_counts(books, counts), total
+
+
+def get_all_books(
+    db: Session,
+    *,
+    include_hidden: bool = False,
+    viewer_user_id: int | None = None,
+    owner_user_id: int | None = None,
+    is_admin: bool = False,
+    granted_chapters: frozenset[int] = frozenset(),
+    granted_books: frozenset[int] = frozenset(),
+    query: str | None = None,
+):
+    books, _ = _get_books_page(
+        db,
+        page=None,
+        page_size=20,
+        include_hidden=include_hidden,
+        viewer_user_id=viewer_user_id,
+        owner_user_id=owner_user_id,
+        is_admin=is_admin,
+        author_user_id=None,
+        granted_chapters=granted_chapters,
+        granted_books=granted_books,
+        query=query,
+    )
+    return books
+
+
+def get_books_page(
+    db: Session,
+    *,
+    page: int | None,
+    page_size: int = 20,
+    include_hidden: bool = False,
+    viewer_user_id: int | None = None,
+    owner_user_id: int | None = None,
+    is_admin: bool = False,
+    author_user_id: int | None,
+    granted_chapters: frozenset[int] = frozenset(),
+    granted_books: frozenset[int] = frozenset(),
+    query: str | None = None,
+) -> tuple[list[dict], int]:
+    """Return one page of books and the total, both computed in the database."""
+    return _get_books_page(
+        db,
+        page=page,
+        page_size=page_size,
+        include_hidden=include_hidden,
+        viewer_user_id=viewer_user_id,
+        owner_user_id=owner_user_id,
+        is_admin=is_admin,
+        author_user_id=author_user_id,
+        granted_chapters=granted_chapters,
+        granted_books=granted_books,
+        query=query,
+    )
 
 
 def get_book(

@@ -2,7 +2,7 @@ import unittest
 from datetime import datetime, timedelta, timezone
 
 from fastapi import Response
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 from starlette.requests import Request
@@ -158,6 +158,58 @@ class BookChapterPaginationSupportTests(unittest.TestCase):
             [book["id"] for book in first_page], [self.first.id]
         )
         self.assertEqual(response.headers["x-total-count"], "2")
+
+    def test_book_route_uses_sql_limit_offset_for_pages(self) -> None:
+        from starlette.requests import Request as StarletteRequest
+
+        request = StarletteRequest(
+            {
+                "type": "http",
+                "http_version": "1.1",
+                "method": "GET",
+                "scheme": "http",
+                "path": "/books",
+                "raw_path": b"/books",
+                "query_string": b"",
+                "headers": [],
+                "client": ("test", 123),
+                "server": ("test", 80),
+            }
+        )
+        response = Response()
+        statements: list[str] = []
+
+        @event.listens_for(self.engine, "before_cursor_execute")
+        def record_statement(
+            conn, cursor, statement, parameters, context, executemany
+        ):
+            statements.append(statement)
+
+        try:
+            books = get_books(
+                request,
+                response,
+                page=2,
+                page_size=1,
+                db=self.db,
+                current_user=None,
+            )
+        finally:
+            event.remove(self.engine, "before_cursor_execute", record_statement)
+
+        self.assertEqual([book["id"] for book in books], [self.second.id])
+        self.assertEqual(response.headers["x-total-count"], "2")
+        self.assertTrue(
+            any("LIMIT" in statement and "OFFSET" in statement for statement in statements)
+        )
+
+    def test_book_search_matches_tags_in_database(self) -> None:
+        self.first.tags = ["판타지"]
+        self.db.commit()
+
+        matches = get_all_books(self.db, query="판타지")
+
+        self.assertEqual([book["id"] for book in matches], [self.first.id])
 
 
 if __name__ == "__main__":
