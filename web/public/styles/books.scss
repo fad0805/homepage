@@ -728,6 +728,16 @@
     vertical-align: baseline;
   }
 
+  /* Published chapters keep logical Scrivener sizes but render them 3pt
+     smaller, matching the manuscript editor. */
+  @each $pt in 8, 9, 10, 11, 12, 13, 14, 15, 16, 18, 20, 21, 24, 28, 32, 36, 48, 72
+  {
+    span[style*='font-size: #{$pt}pt'],
+    span[style*='font-size:#{$pt}pt'] {
+      font-size: #{$pt - 3}pt !important;
+    }
+  }
+
   p,
   h2,
   h3,
