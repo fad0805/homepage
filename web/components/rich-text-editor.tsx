@@ -755,7 +755,7 @@ export function RichTextEditor({
               <select
                 value={
                   (editor?.getAttributes("textStyle").fontSize as string) ??
-                  ""
+                  "13pt"
                 }
                 disabled={!editor}
                 onChange={(event) => {
@@ -771,6 +771,7 @@ export function RichTextEditor({
                 <option value="10pt">10pt</option>
                 <option value="11pt">11pt</option>
                 <option value="12pt">12pt</option>
+                <option value="13pt">13pt (기본)</option>
                 <option value="14pt">14pt</option>
                 <option value="16pt">16pt</option>
                 <option value="18pt">18pt</option>

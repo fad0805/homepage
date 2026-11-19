@@ -101,6 +101,17 @@ const BLOCK_TAGS = new Set([
 ]);
 const SOFT_BREAK = "\u0000";
 
+/**
+ * Old imports stored Scrivener's 13pt default as an inline style. 13pt is now
+ * the document default, which the editor renders at its native 10pt, so strip
+ * that mark when loading or saving existing manuscripts.
+ */
+function normalizeManuscriptHtml(html: string): string {
+  return (html ?? "")
+    .replace(/font-size\s*:\s*13(?:\.0+)?pt\s*;?/gi, "")
+    .replace(/style="\s*"/g, "");
+}
+
 function countText(html: string): { withSpaces: number; plain: number } {
   // This component is also rendered on the server. Counts are recalculated
   // after hydration, so avoid touching DOMParser during SSR.
@@ -517,7 +528,7 @@ export default function ManuscriptWorkspace() {
           subtitle: node.subtitle ?? "",
           synopsis: node.synopsis ?? "",
           notes: node.notes ?? "",
-          body: node.body ?? "",
+          body: normalizeManuscriptHtml(node.body ?? ""),
         });
         setDirty(false);
       })
@@ -641,7 +652,7 @@ export default function ManuscriptWorkspace() {
               subtitle: form.subtitle || null,
               synopsis: form.synopsis || null,
               notes: form.notes || null,
-              body: form.body,
+              body: normalizeManuscriptHtml(form.body),
             }),
           });
           autosaveRef.current.signature = signature;
@@ -743,7 +754,9 @@ export default function ManuscriptWorkspace() {
         .filter((doc): doc is ScrivDoc => Boolean(doc));
       const remaining = docs.filter((doc) => !binderIds.includes(doc.id));
       const orderedDocs = [...ordered, ...remaining];
-      const html = orderedDocs.map((doc) => doc.body || "<p></p>").join("<hr>");
+      const html = orderedDocs
+        .map((doc) => normalizeManuscriptHtml(doc.body || "<p></p>"))
+        .join("<hr>");
       setScrivenings(orderedDocs);
       setScrivCombinedHtml(html);
       setScrivDirty(false);
@@ -784,7 +797,10 @@ export default function ManuscriptWorkspace() {
     }
     const signature = folderSignature(folderId, scrivCombinedHtml, form);
     const bodiesById = Object.fromEntries(
-      bodies.map((body, index) => [docs[index].id, body]),
+      bodies.map((body, index) => [
+        docs[index].id,
+        normalizeManuscriptHtml(body),
+      ]),
     );
     if (silent) setAutoSaving(true);
     else setSaving(true);
@@ -888,7 +904,7 @@ export default function ManuscriptWorkspace() {
         id: node.id,
         title: node.title,
         node_type: node.node_type,
-        body: node.body ?? null,
+        body: normalizeManuscriptHtml(node.body ?? ""),
         subtitle: node.subtitle,
         synopsis: node.synopsis,
         notes: node.notes,
@@ -922,13 +938,15 @@ export default function ManuscriptWorkspace() {
       const orderedDocs = [...ordered, ...remaining];
       setTrashScrivenings(orderedDocs);
       setTrashCombinedHtml(
-        orderedDocs.map((doc) => doc.body || "<p></p>").join("<hr>"),
+        orderedDocs
+          .map((doc) => normalizeManuscriptHtml(doc.body || "<p></p>"))
+          .join("<hr>"),
       );
       setTrashPreview({
         id: node.id,
         title: node.title,
         node_type: node.node_type,
-        body: node.body ?? null,
+        body: normalizeManuscriptHtml(node.body ?? ""),
         subtitle: node.subtitle,
         synopsis: node.synopsis,
         notes: node.notes,

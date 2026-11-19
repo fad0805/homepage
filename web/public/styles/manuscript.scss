@@ -383,6 +383,13 @@ html[data-workspace='manuscript'] .ms-editor--workspace .ms-editor__surface .tip
   blockquote {
     font-size: 10pt;
   }
+
+  /* Logical 13pt is the document default (and what Scrivener stores), but it
+     is rendered at the editor's 10pt size. */
+  span[style*='font-size: 13pt'],
+  span[style*='font-size:13pt'] {
+    font-size: 10pt !important;
+  }
 }
 
 .ms-editor--placeholder .admin-editor__toolbar {
