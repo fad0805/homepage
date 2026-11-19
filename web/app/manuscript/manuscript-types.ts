@@ -16,7 +16,7 @@ export interface ManuscriptNode {
   char_count_plain: number;
   published_chapter_id: number | null;
   published_chapter_exists?: boolean;
-  published_state:
+  published_state?:
     | "unpublished"
     | "published"
     | "needs_republish"

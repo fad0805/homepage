@@ -9,7 +9,6 @@ from fastapi import HTTPException, status
 from sqlalchemy import or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload, load_only
-from sqlalchemy.orm.attributes import set_committed_value
 
 from core.image_urls import public_url
 from core.scrivener import (
@@ -139,9 +138,10 @@ def _serialize_node(
     node: ManuscriptNode,
     *,
     include_body: bool = False,
+    include_publication: bool = True,
     chapter: Chapter | None = None,
 ) -> dict:
-    return {
+    data = {
         "id": node.id,
         "project_id": node.project_id,
         "parent_id": node.parent_id,
@@ -156,15 +156,17 @@ def _serialize_node(
         "char_count_with_spaces": node.char_count_with_spaces or 0,
         "char_count_plain": node.char_count_plain or 0,
         "published_chapter_id": node.published_chapter_id,
-        "published_chapter_exists": bool(
-            node.published_chapter_id and chapter is not None
-        ),
-        "published_state": _published_state(node, chapter),
         "deleted_at": _iso(node.deleted_at),
         "created_at": _iso(node.created_at),
         "updated_at": _iso(node.updated_at),
         **({"body": node.body} if include_body else {}),
     }
+    if include_publication:
+        data["published_chapter_exists"] = bool(
+            node.published_chapter_id and chapter is not None
+        )
+        data["published_state"] = _published_state(node, chapter)
+    return data
 
 
 def _serialize_project(project: ManuscriptProject, node_count: int = 0) -> dict:
@@ -276,8 +278,6 @@ def get_tree(db: Session, project_id: int, user_id: int) -> list[dict]:
                 ManuscriptNode.char_count_with_spaces,
                 ManuscriptNode.char_count_plain,
                 ManuscriptNode.published_chapter_id,
-                ManuscriptNode.published_manuscript_hash,
-                ManuscriptNode.published_chapter_hash,
                 ManuscriptNode.deleted_at,
                 ManuscriptNode.created_at,
                 ManuscriptNode.updated_at,
@@ -291,37 +291,8 @@ def get_tree(db: Session, project_id: int, user_id: int) -> list[dict]:
         .order_by(ManuscriptNode.position.asc(), ManuscriptNode.id.asc())
         .all()
     )
-    published_ids = [
-        node.id for node in nodes if node.published_chapter_id
-    ]
-    if published_ids:
-        bodies = dict(
-            db.query(ManuscriptNode.id, ManuscriptNode.body)
-            .filter(ManuscriptNode.id.in_(published_ids))
-            .all()
-        )
-        for node in nodes:
-            if node.id in bodies:
-                set_committed_value(node, "body", bodies[node.id])
-    chapter_ids = [
-        node.published_chapter_id for node in nodes if node.published_chapter_id
-    ]
-    chapters = {
-        chapter.id: chapter
-        for chapter in db.query(Chapter)
-        .options(
-            load_only(
-                Chapter.id,
-                Chapter.title,
-                Chapter.subtitle,
-                Chapter.body,
-            )
-        )
-        .filter(Chapter.id.in_(chapter_ids))
-        .all()
-    } if chapter_ids else {}
     return [
-        _serialize_node(node, chapter=chapters.get(node.published_chapter_id))
+        _serialize_node(node, include_publication=False)
         for node in nodes
     ]
 

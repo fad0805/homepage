@@ -705,6 +705,26 @@ class ManuscriptTests(unittest.TestCase):
             first["body"].index("text"),
         )
 
+    def test_tree_omits_body_and_publication_state(self) -> None:
+        project = self._project()
+        node = self._node(project, "1화", body="<p>본문</p>")
+        crud.publish_node(
+            self.db,
+            node.id,
+            schemas.PublishRequest(target_book_id=self.book.id),
+            self.owner.id,
+        )
+
+        tree = crud.get_tree(self.db, project.id, self.owner.id)
+        item = next(entry for entry in tree if entry["id"] == node.id)
+        self.assertNotIn("body", item)
+        self.assertNotIn("published_state", item)
+        self.assertNotIn("published_chapter_exists", item)
+        self.assertEqual(
+            crud.get_node(self.db, node.id, self.owner.id)["published_state"],
+            "published",
+        )
+
     def test_export_scrivener_round_trips_body_and_tree(self) -> None:
         project = self._project()
         folder = self._node(project, "1권", node_type="folder")
