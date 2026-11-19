@@ -151,12 +151,6 @@
     cursor: pointer;
   }
 
-  select {
-    @include toc-control;
-    width: auto;
-    max-width: 11rem;
-  }
-
   &.is-drop-inside {
     background: color-mix(in srgb, var(--admin-primary, var(--title-color)) 16%, transparent);
     outline: 1px dashed var(--admin-primary, var(--title-color));
@@ -207,11 +201,22 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  cursor: text;
 
   &.is-pinned {
     font-weight: 700;
     color: var(--title-color);
   }
+}
+
+.admin-books-toc__chapter-count {
+  flex: 0 0 auto;
+  padding: 0.05rem 0.35rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--admin-primary, var(--title-color)) 12%, transparent);
+  color: var(--title-color);
+  font-size: 0.62rem;
+  white-space: nowrap;
 }
 
 .admin-books-toc__root-drop {
@@ -242,19 +247,10 @@
     min-width: 8rem;
   }
 
-  select {
-    @include toc-control;
-    width: auto;
-    max-width: 14rem;
-  }
 }
 
 @media (max-width: 768px) {
   .admin-books-toc__row {
     flex-wrap: wrap;
-
-    select {
-      max-width: 100%;
-    }
   }
 }

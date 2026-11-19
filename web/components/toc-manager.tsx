@@ -33,11 +33,6 @@ interface TocManagerProps {
   onSelectParent?: (parentId: number | null) => void;
 }
 
-interface FolderOption {
-  id: number | null;
-  label: string;
-}
-
 interface DropTarget {
   parentId: number | null;
   position: number;
@@ -45,8 +40,6 @@ interface DropTarget {
 }
 
 type DropMode = "before" | "after" | "inside";
-
-const ROOT_OPTION: FolderOption = { id: null, label: "목차 최상위" };
 
 function flattenNodes(nodes: ManageTocNode[]): ManageTocNode[] {
   return nodes.flatMap((node) => [node, ...flattenNodes(node.children)]);
@@ -56,27 +49,6 @@ function folderTree(nodes: ManageTocNode[]): ManageTocNode[] {
   return nodes
     .filter((node) => node.node_type === "folder")
     .map((node) => ({ ...node, children: folderTree(node.children) }));
-}
-
-function collectFolderOptions(
-  nodes: ManageTocNode[],
-  blocked: Set<number> = new Set(),
-  depth = 0,
-): FolderOption[] {
-  const options: FolderOption[] = [];
-  for (const node of nodes) {
-    if (node.node_type !== "folder" || blocked.has(node.id)) continue;
-    options.push({
-      id: node.id,
-      label: `${"　".repeat(depth)}${node.label ?? "폴더"}`,
-    });
-    options.push(...collectFolderOptions(node.children, blocked, depth + 1));
-  }
-  return options;
-}
-
-function descendantIds(node: ManageTocNode): number[] {
-  return node.children.flatMap((child) => [child.id, ...descendantIds(child)]);
 }
 
 function dropMode(event: DragEvent<HTMLElement>, node: ManageTocNode): DropMode {
@@ -158,6 +130,17 @@ export function TocManager({
   const allNodes = useMemo(() => flattenNodes(tree), [tree]);
   const visibleTree = useMemo(() => folderTree(tree), [tree]);
   const visibleCount = flattenNodes(visibleTree).length;
+  const chapterCounts = useMemo(() => {
+    const counts = new Map<number, number>();
+    for (const node of allNodes) {
+      if (node.node_type !== "folder") continue;
+      counts.set(
+        node.id,
+        node.children.filter((child) => child.node_type === "post").length,
+      );
+    }
+    return counts;
+  }, [allNodes]);
   const placedChapterIds = useMemo(
     () =>
       new Set(
@@ -168,8 +151,6 @@ export function TocManager({
       ),
     [allNodes],
   );
-  const folderOptions = useMemo(() => collectFolderOptions(tree), [tree]);
-
   const run = async (
     action: () => Promise<ManageTocNode[]>,
     success: string,
@@ -267,10 +248,6 @@ export function TocManager({
     }
   };
 
-  const moveViaSelect = async (node: ManageTocNode, parentId: number | null) => {
-    await moveNode(node.id, parentId, 10_000);
-  };
-
   const removeNode = async (node: ManageTocNode) => {
     await run(
       () =>
@@ -313,10 +290,6 @@ export function TocManager({
   };
 
   const renderNode = (node: ManageTocNode, depth: number) => {
-    const blocked = new Set(
-      node.node_type === "folder" ? [node.id, ...descendantIds(node)] : [],
-    );
-    const options = [ROOT_OPTION, ...collectFolderOptions(tree, blocked)];
     const indent = { marginLeft: `${depth * 1.1}rem` };
     const selectedParent =
       onSelectParent !== undefined &&
@@ -411,6 +384,11 @@ export function TocManager({
                 ]
                   .filter(Boolean)
                   .join(" ")}
+                title="더블클릭하여 이름 변경"
+                onDoubleClick={() => {
+                  setRenamingId(node.id);
+                  setRenameLabel(node.label ?? "");
+                }}
               >
                 {node.label}
               </span>
@@ -419,6 +397,11 @@ export function TocManager({
               ) : null}
               {node.locked ? (
                 <span className="admin-books-pin-badge">보호</span>
+              ) : null}
+              {node.children.length === 0 ? (
+                <span className="admin-books-toc__chapter-count">
+                  챕터 {chapterCounts.get(node.id) ?? 0}개
+                </span>
               ) : null}
               {node.node_type === "folder" ? (
                 <button
@@ -430,35 +413,6 @@ export function TocManager({
                   }}
                 >
                   하위 폴더
-                </button>
-              ) : null}
-              <select
-                value={node.parent_id ?? ""}
-                aria-label={`${node.label} 위치`}
-                onChange={(event) =>
-                  void moveViaSelect(
-                    node,
-                    event.target.value ? Number(event.target.value) : null,
-                  )
-                }
-                disabled={working}
-              >
-                {options.map((option) => (
-                  <option value={option.id ?? ""} key={option.id ?? "root"}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-              {node.node_type === "folder" ? (
-                <button
-                  type="button"
-                  className="admin-button"
-                  onClick={() => {
-                    setRenamingId(node.id);
-                    setRenameLabel(node.label ?? "");
-                  }}
-                >
-                  이름 변경
                 </button>
               ) : null}
               <button
