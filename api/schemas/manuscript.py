@@ -98,3 +98,9 @@ class TocNodeUpdate(BaseModel):
 class TocPostCreate(BaseModel):
     chapter_id: int
     parent_id: int | None = None
+    position: int | None = None
+
+
+class TocNodeMoveRequest(BaseModel):
+    parent_id: int | None = None
+    position: int

@@ -642,6 +642,42 @@ class ManuscriptTests(unittest.TestCase):
         deleted = toc_crud.delete_node(self.db, child_id, self.owner.id)
         self.assertEqual([node["label"] for node in deleted], ["첫 권"])
 
+    def test_move_toc_node_reorders_and_reparents(self) -> None:
+        for label in ("가", "나", "다"):
+            toc_crud.create_folder(self.db, self.book.id, self.owner.id, label, None)
+        tree = toc_crud.get_manage_toc(self.db, self.book.id, self.owner.id)
+        nodes = {node["label"]: node for node in tree}
+        ga, na, da = nodes["가"]["id"], nodes["나"]["id"], nodes["다"]["id"]
+
+        moved = toc_crud.move_node(self.db, da, self.owner.id, None, 0)
+        self.assertEqual([node["label"] for node in moved], ["다", "가", "나"])
+
+        child = toc_crud.create_folder(
+            self.db, self.book.id, self.owner.id, "하위", ga
+        )
+
+        def flatten(nodes):
+            found = []
+            for item in nodes:
+                found.append(item)
+                found.extend(flatten(item["children"]))
+            return found
+
+        child_id = next(
+            node["id"]
+            for node in flatten(child)
+            if node["node_type"] == "folder" and node["label"] == "하위"
+        )
+        with self.assertRaises(HTTPException) as raised:
+            toc_crud.move_node(self.db, ga, self.owner.id, child_id, 0)
+        self.assertEqual(raised.exception.status_code, 400)
+
+        moved = toc_crud.move_node(self.db, child_id, self.owner.id, na, 0)
+        na_node = next(node for node in moved if node["id"] == na)
+        self.assertEqual(na_node["children"][0]["label"], "하위")
+        ga_node = next(node for node in moved if node["id"] == ga)
+        self.assertEqual(ga_node["children"], [])
+
     def test_add_existing_chapter_to_toc(self) -> None:
         created = books_crud.create_chapter(
             self.db,

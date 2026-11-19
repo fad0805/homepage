@@ -110,6 +110,7 @@ def _serialize_tree(db: Session, book: Book) -> list[dict]:
             "label": node.label or (chapter.title if chapter else None),
             "position": node.position,
             "chapter_id": chapter.id if chapter else node.chapter_id,
+            "pinned": bool(chapter and chapter.pinned),
             "locked": bool(book.protected or (chapter and chapter.protected)),
             "children": [build(child) for child in children.get(node.id, [])],
         }
@@ -281,6 +282,52 @@ def update_node(
     return _serialize_tree(db, book)
 
 
+def move_node(
+    db: Session,
+    node_id: int,
+    user_id: int,
+    parent_id: int | None,
+    position: int,
+) -> list[dict]:
+    """Move a node to ``parent_id`` at ``position`` in one transaction."""
+    node = _node_or_404(db, node_id, user_id)
+    book = _book_or_404(db, node.book_id, user_id)
+    _validate_parent(db, node, parent_id)
+
+    old_parent_id = node.parent_id
+    old_position = node.position
+
+    def siblings(parent: int | None) -> list[SerialNode]:
+        query = db.query(SerialNode).filter(
+            SerialNode.book_id == book.id,
+            SerialNode.id != node.id,
+        )
+        if parent is None:
+            query = query.filter(SerialNode.parent_id.is_(None))
+        else:
+            query = query.filter(SerialNode.parent_id == parent)
+        return query.order_by(
+            SerialNode.position.asc(), SerialNode.id.asc()
+        ).all()
+
+    index = max(0, position)
+    if old_parent_id == parent_id and old_position < index:
+        index -= 1
+    target_siblings = siblings(parent_id)
+    index = min(index, len(target_siblings))
+    target_siblings.insert(index, node)
+    for sibling_position, sibling in enumerate(target_siblings):
+        sibling.parent_id = parent_id
+        sibling.position = sibling_position
+
+    if old_parent_id != parent_id:
+        for sibling_position, sibling in enumerate(siblings(old_parent_id)):
+            sibling.position = sibling_position
+
+    db.commit()
+    return _serialize_tree(db, book)
+
+
 def delete_node(db: Session, node_id: int, user_id: int) -> list[dict]:
     node = _node_or_404(db, node_id, user_id)
     book = _book_or_404(db, node.book_id, user_id)
@@ -361,10 +408,11 @@ def add_post(
     user_id: int,
     chapter_id: int,
     parent_id: int | None,
+    position: int | None = None,
 ) -> list[dict]:
     """Register an existing chapter in the managed table of contents."""
     book = _book_or_404(db, book_id, user_id)
-    ensure_post(
+    post = ensure_post(
         db,
         user_id,
         book_id,
@@ -372,5 +420,8 @@ def add_post(
         parent_id,
         set_parent=True,
     )
-    db.commit()
+    if position is None:
+        db.commit()
+    else:
+        move_node(db, post.id, user_id, parent_id, position)
     return _serialize_tree(db, book)

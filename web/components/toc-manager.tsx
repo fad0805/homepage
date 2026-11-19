@@ -1,9 +1,17 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type DragEvent,
+} from "react";
 
 import type { ManageTocNode } from "@/app/books/types";
 import { apiFetch } from "@/lib/api";
+import { BOOK_CHAPTER_MIME, TOC_NODE_MIME } from "@/lib/drag-types";
 
 import "@/public/styles/toc-manager.scss";
 
@@ -23,6 +31,14 @@ interface FolderOption {
   id: number | null;
   label: string;
 }
+
+interface DropTarget {
+  parentId: number | null;
+  position: number;
+  sourceId?: number;
+}
+
+type DropMode = "before" | "after" | "inside";
 
 const ROOT_OPTION: FolderOption = { id: null, label: "목차 최상위" };
 
@@ -51,10 +67,38 @@ function descendantIds(node: ManageTocNode): number[] {
   return node.children.flatMap((child) => [child.id, ...descendantIds(child)]);
 }
 
+function dropMode(event: DragEvent<HTMLElement>, node: ManageTocNode): DropMode {
+  const rect = event.currentTarget.getBoundingClientRect();
+  const offset = event.clientY - rect.top;
+  if (offset < rect.height * 0.28) return "before";
+  if (offset > rect.height * 0.72) return "after";
+  return node.node_type === "folder" ? "inside" : "after";
+}
+
+function targetForNode(
+  node: ManageTocNode,
+  mode: DropMode,
+): DropTarget {
+  if (mode === "inside") {
+    return {
+      parentId: node.id,
+      position: node.children.length,
+      sourceId: node.id,
+    };
+  }
+  return {
+    parentId: node.parent_id,
+    position: node.position + (mode === "after" ? 1 : 0),
+    sourceId: node.id,
+  };
+}
+
 export function TocManager({ bookId, chapters, notify }: TocManagerProps) {
   const [tree, setTree] = useState<ManageTocNode[]>([]);
+  const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [working, setWorking] = useState(false);
+  const [dropKey, setDropKey] = useState<string | null>(null);
   const [folderParentId, setFolderParentId] = useState<
     number | null | undefined
   >(undefined);
@@ -64,6 +108,9 @@ export function TocManager({ bookId, chapters, notify }: TocManagerProps) {
   const [postOpen, setPostOpen] = useState(false);
   const [postChapterId, setPostChapterId] = useState<number | null>(null);
   const [postParentId, setPostParentId] = useState<number | null>(null);
+  const dragRef = useRef<{ kind: "node" | "chapter"; id: number } | null>(
+    null,
+  );
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -130,15 +177,19 @@ export function TocManager({ bookId, chapters, notify }: TocManagerProps) {
     setFolderLabel("");
   };
 
-  const createPost = async () => {
-    if (postChapterId === null) return;
+  const createPost = async (
+    chapterId: number,
+    parentId: number | null,
+    position?: number,
+  ) => {
     await run(
       () =>
         apiFetch<ManageTocNode[]>(`/api/books/${bookId}/toc/posts`, {
           method: "POST",
           body: JSON.stringify({
-            chapter_id: postChapterId,
-            parent_id: postParentId,
+            chapter_id: chapterId,
+            parent_id: parentId,
+            ...(position === undefined ? {} : { position }),
           }),
         }),
       "게시글을 목차에 등록했습니다.",
@@ -165,18 +216,26 @@ export function TocManager({ bookId, chapters, notify }: TocManagerProps) {
     setRenamingId(null);
   };
 
-  const moveNode = async (node: ManageTocNode, parentId: number | null) => {
+  const moveNode = async (
+    nodeId: number,
+    parentId: number | null,
+    position: number,
+  ) => {
     await run(
       () =>
         apiFetch<ManageTocNode[]>(
-          `/api/books/${bookId}/toc/nodes/${node.id}`,
+          `/api/books/${bookId}/toc/nodes/${nodeId}/move`,
           {
-            method: "PATCH",
-            body: JSON.stringify({ parent_id: parentId }),
+            method: "POST",
+            body: JSON.stringify({ parent_id: parentId, position }),
           },
         ),
-      "위치를 변경했습니다.",
+      "목차 위치를 변경했습니다.",
     );
+  };
+
+  const moveViaSelect = async (node: ManageTocNode, parentId: number | null) => {
+    await moveNode(node.id, parentId, 10_000);
   };
 
   const removeNode = async (node: ManageTocNode) => {
@@ -190,6 +249,36 @@ export function TocManager({ bookId, chapters, notify }: TocManagerProps) {
     );
   };
 
+  const applyDrop = async (event: DragEvent<HTMLElement>, target: DropTarget) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setDropKey(null);
+    const drag = dragRef.current;
+    const nodeValue = event.dataTransfer.getData(TOC_NODE_MIME);
+    const chapterValue = event.dataTransfer.getData(BOOK_CHAPTER_MIME);
+    dragRef.current = null;
+    const nodeId =
+      drag?.kind === "node" ? drag.id : nodeValue ? Number(nodeValue) : null;
+    const chapterId =
+      drag?.kind === "chapter"
+        ? drag.id
+        : chapterValue
+          ? Number(chapterValue)
+          : null;
+
+    if (nodeId !== null && nodeId === target.sourceId) return;
+    if (nodeId !== null) {
+      await moveNode(nodeId, target.parentId, target.position);
+    } else if (chapterId !== null) {
+      await createPost(chapterId, target.parentId, target.position);
+    }
+  };
+
+  const rootTarget: DropTarget = {
+    parentId: null,
+    position: tree.length,
+  };
+
   const renderNode = (node: ManageTocNode, depth: number) => {
     const blocked = new Set(
       node.node_type === "folder"
@@ -201,7 +290,38 @@ export function TocManager({ bookId, chapters, notify }: TocManagerProps) {
 
     return (
       <div className="admin-books-toc__branch" key={node.id}>
-        <div className="admin-books-toc__row" style={indent}>
+        <div
+          className={[
+            "admin-books-toc__row",
+            dropKey?.startsWith(`${node.id}:`) ? dropKey.replace(`${node.id}:`, "is-drop-") : "",
+          ]
+            .filter(Boolean)
+            .join(" ")}
+          style={indent}
+          draggable={!working && renamingId !== node.id}
+          onDragStart={(event) => {
+            dragRef.current = { kind: "node", id: node.id };
+            event.dataTransfer.setData(TOC_NODE_MIME, String(node.id));
+            event.dataTransfer.effectAllowed = "move";
+          }}
+          onDragEnd={() => {
+            dragRef.current = null;
+            setDropKey(null);
+          }}
+          onDragOver={(event) => {
+            event.preventDefault();
+            const mode = dropMode(event, node);
+            setDropKey(`${node.id}:${mode}`);
+          }}
+          onDragLeave={() => setDropKey(null)}
+          onDrop={(event) => {
+            const mode = dropMode(event, node);
+            void applyDrop(event, targetForNode(node, mode));
+          }}
+        >
+          <span className="admin-books-toc__grip" aria-hidden="true">
+            ⠿
+          </span>
           <span className="admin-books-toc__icon" aria-hidden="true">
             {node.node_type === "folder" ? "▣" : "·"}
           </span>
@@ -238,7 +358,19 @@ export function TocManager({ bookId, chapters, notify }: TocManagerProps) {
             </>
           ) : (
             <>
-              <span className="admin-books-toc__label">{node.label}</span>
+              <span
+                className={[
+                  "admin-books-toc__label",
+                  node.pinned ? "is-pinned" : "",
+                ]
+                  .filter(Boolean)
+                  .join(" ")}
+              >
+                {node.label}
+              </span>
+              {node.pinned ? (
+                <span className="admin-books-pin-badge">고정</span>
+              ) : null}
               {node.locked ? (
                 <span className="admin-books-pin-badge">보호</span>
               ) : null}
@@ -258,7 +390,7 @@ export function TocManager({ bookId, chapters, notify }: TocManagerProps) {
                 value={node.parent_id ?? ""}
                 aria-label={`${node.label} 위치`}
                 onChange={(event) =>
-                  void moveNode(
+                  void moveViaSelect(
                     node,
                     event.target.value ? Number(event.target.value) : null,
                   )
@@ -266,10 +398,7 @@ export function TocManager({ bookId, chapters, notify }: TocManagerProps) {
                 disabled={working}
               >
                 {options.map((option) => (
-                  <option
-                    value={option.id ?? ""}
-                    key={option.id ?? "root"}
-                  >
+                  <option value={option.id ?? ""} key={option.id ?? "root"}>
                     {option.label}
                   </option>
                 ))}
@@ -341,137 +470,188 @@ export function TocManager({ bookId, chapters, notify }: TocManagerProps) {
   };
 
   return (
-    <section className="admin-books-panel admin-books-toc-panel">
-      <div className="admin-books-toc__head">
-        <div>
-          <h2>공개 목차</h2>
-          <p className="admin-books-hint">
-            독자에게 보이는 목차 트리를 관리합니다. 챕터를 삭제해도 게시글은
-            남습니다.
-          </p>
-        </div>
-        <div className="admin-books-toc__actions">
-          <button
-            type="button"
-            className="admin-button"
-            onClick={() => {
-              setFolderParentId(null);
-              setFolderLabel("");
-            }}
-          >
-            + 폴더
-          </button>
-          <button
-            type="button"
-            className="admin-button"
-            onClick={() => {
-              setPostOpen((current) => !current);
-              setPostParentId(null);
-              setPostChapterId(availableChapters[0]?.id ?? null);
-            }}
-            disabled={availableChapters.length === 0}
-          >
-            + 챕터 등록
-          </button>
-          <button
-            type="button"
-            className="admin-button"
-            onClick={() => void load()}
-            disabled={loading}
-          >
-            새로고침
-          </button>
-        </div>
-      </div>
+    <section
+      className={[
+        "admin-books-panel",
+        "admin-books-toc-panel",
+        open ? "" : "is-collapsed",
+      ]
+        .filter(Boolean)
+        .join(" ")}
+      onDragOver={(event) => {
+        if (
+          !dragRef.current &&
+          !event.dataTransfer.types.includes(BOOK_CHAPTER_MIME)
+        ) {
+          return;
+        }
+        event.preventDefault();
+      }}
+      onDrop={(event) => void applyDrop(event, rootTarget)}
+    >
+      <header className="admin-books-toc__head">
+        <button
+          type="button"
+          className="admin-books-toc__toggle"
+          onClick={() => setOpen((current) => !current)}
+          aria-expanded={open}
+        >
+          <span className="admin-books-toc__chevron" aria-hidden="true">
+            {open ? "▾" : "▸"}
+          </span>
+          <span>
+            <strong>공개 목차</strong>
+            <span className="admin-books-toc__count">
+              {allNodes.length}개 항목
+            </span>
+          </span>
+        </button>
+      </header>
 
-      {folderParentId === null ? (
-        <div className="admin-books-toc__inline-form">
-          <input
-            value={folderLabel}
-            autoFocus
-            placeholder="새 폴더 이름"
-            aria-label="새 폴더 이름"
-            onChange={(event) => setFolderLabel(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") {
-                event.preventDefault();
-                void createFolder(null, folderLabel);
-              } else if (event.key === "Escape") {
-                setFolderParentId(undefined);
-              }
-            }}
-          />
-          <button
-            type="button"
-            className="admin-button primary"
-            onClick={() => void createFolder(null, folderLabel)}
-          >
-            만들기
-          </button>
-          <button
-            type="button"
-            className="admin-button"
-            onClick={() => setFolderParentId(undefined)}
-          >
-            취소
-          </button>
-        </div>
+      {open ? (
+        <>
+          <div className="admin-books-toc__actions">
+            <button
+              type="button"
+              className="admin-button"
+              onClick={() => {
+                setFolderParentId(null);
+                setFolderLabel("");
+              }}
+            >
+              + 폴더
+            </button>
+            <button
+              type="button"
+              className="admin-button"
+              onClick={() => {
+                setPostOpen((current) => !current);
+                setPostParentId(null);
+                setPostChapterId(availableChapters[0]?.id ?? null);
+              }}
+              disabled={availableChapters.length === 0}
+            >
+              + 챕터 등록
+            </button>
+            <button
+              type="button"
+              className="admin-button"
+              onClick={() => void load()}
+              disabled={loading}
+            >
+              새로고침
+            </button>
+          </div>
+
+          {folderParentId === null ? (
+            <div className="admin-books-toc__inline-form">
+              <input
+                value={folderLabel}
+                autoFocus
+                placeholder="새 폴더 이름"
+                aria-label="새 폴더 이름"
+                onChange={(event) => setFolderLabel(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    void createFolder(null, folderLabel);
+                  } else if (event.key === "Escape") {
+                    setFolderParentId(undefined);
+                  }
+                }}
+              />
+              <button
+                type="button"
+                className="admin-button primary"
+                onClick={() => void createFolder(null, folderLabel)}
+              >
+                만들기
+              </button>
+              <button
+                type="button"
+                className="admin-button"
+                onClick={() => setFolderParentId(undefined)}
+              >
+                취소
+              </button>
+            </div>
+          ) : null}
+
+          {postOpen && availableChapters.length > 0 ? (
+            <div className="admin-books-toc__inline-form">
+              <select
+                value={postChapterId ?? ""}
+                aria-label="등록할 챕터"
+                onChange={(event) => setPostChapterId(Number(event.target.value))}
+              >
+                {availableChapters.map((chapter) => (
+                  <option value={chapter.id} key={chapter.id}>
+                    {chapter.title}
+                  </option>
+                ))}
+              </select>
+              <select
+                value={postParentId ?? ""}
+                aria-label="등록할 목차 위치"
+                onChange={(event) =>
+                  setPostParentId(
+                    event.target.value ? Number(event.target.value) : null,
+                  )
+                }
+              >
+                {folderOptions.map((option) => (
+                  <option value={option.id ?? ""} key={option.id ?? "root"}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+              <button
+                type="button"
+                className="admin-button primary"
+                onClick={() =>
+                  postChapterId !== null &&
+                  void createPost(postChapterId, postParentId)
+                }
+              >
+                등록
+              </button>
+              <button
+                type="button"
+                className="admin-button"
+                onClick={() => setPostOpen(false)}
+              >
+                취소
+              </button>
+            </div>
+          ) : null}
+
+          {loading ? (
+            <p className="admin-books-empty">목차를 불러오는 중…</p>
+          ) : tree.length === 0 ? (
+            <p className="admin-books-empty">등록된 목차가 없습니다.</p>
+          ) : (
+            <div className="admin-books-toc__tree">
+              {tree.map((node) => renderNode(node, 0))}
+              <div
+                className={[
+                  "admin-books-toc__root-drop",
+                  dropKey === "root" ? "is-active" : "",
+                ]
+                  .filter(Boolean)
+                  .join(" ")}
+                onDragOver={(event) => {
+                  event.preventDefault();
+                  setDropKey("root");
+                }}
+                onDragLeave={() => setDropKey(null)}
+                onDrop={(event) => void applyDrop(event, rootTarget)}
+              >
+                여기에 놓으면 목차 최상위로 이동합니다.
+              </div>
+            </div>
+          )}
+        </>
       ) : null}
-
-      {postOpen && availableChapters.length > 0 ? (
-        <div className="admin-books-toc__inline-form">
-          <select
-            value={postChapterId ?? ""}
-            aria-label="등록할 챕터"
-            onChange={(event) => setPostChapterId(Number(event.target.value))}
-          >
-            {availableChapters.map((chapter) => (
-              <option value={chapter.id} key={chapter.id}>
-                {chapter.title}
-              </option>
-            ))}
-          </select>
-          <select
-            value={postParentId ?? ""}
-            aria-label="등록할 목차 위치"
-            onChange={(event) =>
-              setPostParentId(
-                event.target.value ? Number(event.target.value) : null,
-              )
-            }
-          >
-            {folderOptions.map((option) => (
-              <option value={option.id ?? ""} key={option.id ?? "root"}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-          <button
-            type="button"
-            className="admin-button primary"
-            onClick={() => void createPost()}
-          >
-            등록
-          </button>
-          <button
-            type="button"
-            className="admin-button"
-            onClick={() => setPostOpen(false)}
-          >
-            취소
-          </button>
-        </div>
-      ) : null}
-
-      {loading ? (
-        <p className="admin-books-empty">목차를 불러오는 중…</p>
-      ) : tree.length === 0 ? (
-        <p className="admin-books-empty">등록된 목차가 없습니다.</p>
-      ) : (
-        <div className="admin-books-toc__tree">
-          {tree.map((node) => renderNode(node, 0))}
-        </div>
-      )}
     </section>
   );
 }

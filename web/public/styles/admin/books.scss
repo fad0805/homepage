@@ -537,6 +537,11 @@ p.admin-books-draft-preview-empty {
   display: flex;
   align-items: center;
   gap: 0.45rem;
+  cursor: grab;
+
+  &:active {
+    cursor: grabbing;
+  }
 
   .admin-books-chapter-link {
     flex: 1;

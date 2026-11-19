@@ -293,7 +293,12 @@ def post_toc_post(
     user=Depends(require_auth),
 ):
     return toc_crud.add_post(
-        db, book_id, user.id, payload.chapter_id, payload.parent_id
+        db,
+        book_id,
+        user.id,
+        payload.chapter_id,
+        payload.parent_id,
+        payload.position,
     )
 
 
@@ -319,6 +324,25 @@ def patch_toc_node(
         label_set="label" in payload.model_fields_set,
         parent_id=payload.parent_id,
         parent_set="parent_id" in payload.model_fields_set,
+    )
+
+
+@public_router.post("/{book_id}/toc/nodes/{node_id}/move")
+def move_toc_node(
+    book_id: int,
+    node_id: int,
+    payload: schemas.TocNodeMoveRequest,
+    db: Session = Depends(get_db),
+    user=Depends(require_auth),
+):
+    node = toc_crud._node_or_404(db, node_id, user.id)
+    if node.book_id != book_id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Does not exist TOC node",
+        )
+    return toc_crud.move_node(
+        db, node_id, user.id, payload.parent_id, payload.position
     )
 
 

@@ -1,35 +1,83 @@
 .admin-books-toc-panel {
-  margin-top: 1rem;
+  padding: 0;
+  overflow: hidden;
+}
+
+.admin-books-toc-panel.is-collapsed .admin-books-toc__toggle {
+  min-height: 1.7rem;
+  padding: 0.2rem 0.55rem;
+  gap: 0.35rem;
+
+  strong {
+    font-size: 0.75rem;
+  }
+}
+
+.admin-books-toc-panel.is-collapsed .admin-books-toc__chevron {
+  width: 0.7rem;
+  font-size: 0.65rem;
+}
+
+.admin-books-toc-panel.is-collapsed .admin-books-toc__count {
+  margin-left: 0.4rem;
+  font-size: 0.62rem;
 }
 
 .admin-books-toc__head {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
-  gap: 1rem;
-  margin-bottom: 0.8rem;
+}
 
-  h2 {
-    margin: 0;
-    font-size: 1rem;
+.admin-books-toc__toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.75rem 0.9rem;
+  border: 0;
+  background: transparent;
+  color: var(--foreground);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.35);
+  }
+
+  strong {
     color: var(--title-color);
+    font-size: 0.95rem;
   }
+}
 
-  p {
-    margin: 0.2rem 0 0;
-  }
+.admin-books-toc__chevron {
+  flex: 0 0 auto;
+  width: 1rem;
+  color: var(--title-color);
+  font-size: 0.8rem;
+}
+
+.admin-books-toc__count {
+  margin-left: 0.5rem;
+  color: var(--foreground);
+  font-size: 0.7rem;
+  opacity: 0.65;
 }
 
 .admin-books-toc__actions {
   display: flex;
   flex-wrap: wrap;
   gap: 0.4rem;
+  padding: 0 0.9rem 0.7rem;
 }
 
 .admin-books-toc__tree {
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
+  gap: 0.2rem;
+  padding: 0 0.9rem 0.9rem;
 }
 
 .admin-books-toc__branch {
@@ -39,10 +87,18 @@
 }
 
 .admin-books-toc__row {
+  position: relative;
   display: flex;
   align-items: center;
-  gap: 0.4rem;
+  gap: 0.35rem;
   min-height: 2.2rem;
+  padding: 0.15rem 0.3rem;
+  border-radius: 0.45rem;
+  cursor: grab;
+
+  &:active {
+    cursor: grabbing;
+  }
 
   input {
     flex: 1;
@@ -51,8 +107,39 @@
 
   select {
     width: auto;
-    max-width: 12rem;
+    max-width: 11rem;
   }
+
+  &.is-drop-inside {
+    background: color-mix(in srgb, var(--admin-primary) 16%, transparent);
+    outline: 1px dashed var(--admin-primary);
+  }
+
+  &.is-drop-before::before,
+  &.is-drop-after::after {
+    content: "";
+    position: absolute;
+    left: 0.2rem;
+    right: 0.2rem;
+    height: 2px;
+    border-radius: 2px;
+    background: var(--admin-primary);
+  }
+
+  &.is-drop-before::before {
+    top: -1px;
+  }
+
+  &.is-drop-after::after {
+    bottom: -1px;
+  }
+}
+
+.admin-books-toc__grip {
+  flex: 0 0 auto;
+  color: color-mix(in srgb, var(--foreground) 45%, transparent);
+  font-size: 0.8rem;
+  user-select: none;
 }
 
 .admin-books-toc__icon {
@@ -68,6 +155,26 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+
+  &.is-pinned {
+    font-weight: 700;
+    color: var(--title-color);
+  }
+}
+
+.admin-books-toc__root-drop {
+  margin-top: 0.25rem;
+  padding: 0.45rem 0.6rem;
+  border: 1px dashed color-mix(in srgb, var(--admin-primary) 45%, transparent);
+  border-radius: 0.45rem;
+  color: color-mix(in srgb, var(--foreground) 60%, transparent);
+  font-size: 0.72rem;
+  text-align: center;
+
+  &.is-active {
+    background: color-mix(in srgb, var(--admin-primary) 16%, transparent);
+    color: var(--title-color);
+  }
 }
 
 .admin-books-toc__inline-form {
@@ -75,7 +182,7 @@
   flex-wrap: wrap;
   align-items: center;
   gap: 0.4rem;
-  padding: 0.4rem 0;
+  padding: 0.4rem 0.9rem;
 
   input {
     flex: 1;
@@ -89,10 +196,6 @@
 }
 
 @media (max-width: 768px) {
-  .admin-books-toc__head {
-    flex-direction: column;
-  }
-
   .admin-books-toc__row {
     flex-wrap: wrap;
 

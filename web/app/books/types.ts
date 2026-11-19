@@ -27,6 +27,7 @@ export interface ManageTocNode {
   label: string | null;
   position: number;
   chapter_id: number | null;
+  pinned: boolean;
   locked: boolean;
   children: ManageTocNode[];
 }

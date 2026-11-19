@@ -14,6 +14,7 @@ import { useParams, useRouter } from "next/navigation";
 import { Pagination } from "@/components/pagination";
 import { TocManager } from "@/components/toc-manager";
 import { apiFetch } from "@/lib/api";
+import { BOOK_CHAPTER_MIME } from "@/lib/drag-types";
 import { formatDateTime } from "@/lib/datetime";
 import { useHorizontalScrollFade } from "@/lib/use-horizontal-scroll-fade";
 
@@ -603,6 +604,14 @@ export default function AdminBookDetail() {
             </div>
           </header>
 
+          {Number.isFinite(bookId) ? (
+            <TocManager
+              bookId={bookId}
+              chapters={chapters}
+              notify={notify}
+            />
+          ) : null}
+
           <section className="admin-books-panel">
             {chapters.length > 0 ? (
               <div className="admin-books-list-header">
@@ -698,6 +707,14 @@ export default function AdminBookDetail() {
                     <div
                       className="admin-books-chapter-row"
                       key={chapter.id}
+                      draggable={!bulkWorking}
+                      onDragStart={(event) => {
+                        event.dataTransfer.setData(
+                          BOOK_CHAPTER_MIME,
+                          String(chapter.id),
+                        );
+                        event.dataTransfer.effectAllowed = "move";
+                      }}
                     >
                       <input
                         type="checkbox"
@@ -775,14 +792,6 @@ export default function AdminBookDetail() {
               </>
             )}
           </section>
-
-          {Number.isFinite(bookId) ? (
-            <TocManager
-              bookId={bookId}
-              chapters={chapters}
-              notify={notify}
-            />
-          ) : null}
         </>
       )}
 
