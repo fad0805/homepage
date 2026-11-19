@@ -788,6 +788,39 @@ def search_nodes(
     return results
 
 
+def _subtree_ids(
+    db: Session,
+    user_id: int,
+    *,
+    project_id: int,
+    root_id: int | None,
+    include_deleted: bool,
+) -> set[int]:
+    """Collect ids under ``root_id`` using only lightweight id/parent rows."""
+    query = db.query(ManuscriptNode.id, ManuscriptNode.parent_id).filter(
+        ManuscriptNode.user_id == user_id,
+        ManuscriptNode.project_id == project_id,
+    )
+    if not include_deleted:
+        query = query.filter(ManuscriptNode.deleted_at.is_(None))
+    rows = query.all()
+    ids = {row.id for row in rows}
+    children: dict[int | None, list[int]] = defaultdict(list)
+    for row in rows:
+        children[row.parent_id].append(row.id)
+
+    starts = [root_id] if root_id is not None and root_id in ids else children.get(None, [])
+    found: set[int] = set()
+    queue = deque(starts)
+    while queue:
+        current = queue.popleft()
+        if current in found:
+            continue
+        found.add(current)
+        queue.extend(children.get(current, []))
+    return found
+
+
 def _preorder_nodes(
     db: Session,
     user_id: int,
@@ -795,30 +828,78 @@ def _preorder_nodes(
     project_id: int | None,
     root_id: int | None,
     include_deleted: bool = False,
-) -> list[ManuscriptNode]:
-    query = db.query(ManuscriptNode).filter(
-        ManuscriptNode.user_id == user_id,
+) -> list[dict]:
+    if project_id is None:
+        return []
+    subtree_ids = _subtree_ids(
+        db,
+        user_id,
+        project_id=project_id,
+        root_id=root_id,
+        include_deleted=include_deleted,
     )
-    if not include_deleted:
-        query = query.filter(ManuscriptNode.deleted_at.is_(None))
-    if project_id is not None:
-        query = query.filter(ManuscriptNode.project_id == project_id)
-    nodes = query.all()
-    by_id = {node.id: node for node in nodes}
-    children: dict[int | None, list[ManuscriptNode]] = defaultdict(list)
-    for node in nodes:
-        children[node.parent_id].append(node)
-    for siblings in children.values():
-        siblings.sort(key=lambda item: (item.position, item.id))
+    if not subtree_ids:
+        return []
 
-    roots = [by_id[root_id]] if root_id is not None and root_id in by_id else children.get(None, [])
-    ordered: list[ManuscriptNode] = []
-    stack = list(reversed(roots))
+    # Metadata first; body is fetched separately and only for chapters that
+    # will actually be returned. Folders and unrelated documents never load it.
+    rows = (
+        db.query(
+            ManuscriptNode.id,
+            ManuscriptNode.parent_id,
+            ManuscriptNode.position,
+            ManuscriptNode.node_type,
+            ManuscriptNode.title,
+            ManuscriptNode.char_count_with_spaces,
+            ManuscriptNode.char_count_plain,
+        )
+        .filter(
+            ManuscriptNode.id.in_(subtree_ids),
+            ManuscriptNode.user_id == user_id,
+        )
+        .all()
+    )
+    by_id = {row.id: row for row in rows}
+    children: dict[int | None, list[int]] = defaultdict(list)
+    for row in rows:
+        children[row.parent_id].append(row.id)
+    for siblings in children.values():
+        siblings.sort(key=lambda node_id: (by_id[node_id].position, node_id))
+
+    starts = [root_id] if root_id is not None and root_id in by_id else children.get(None, [])
+    ordered_rows: list = []
+    seen: set[int] = set()
+    stack = list(reversed(starts))
     while stack:
-        node = stack.pop()
-        ordered.append(node)
-        stack.extend(reversed(children.get(node.id, [])))
-    return ordered
+        current = stack.pop()
+        if current in seen:
+            continue
+        seen.add(current)
+        row = by_id.get(current)
+        if row is None:
+            continue
+        ordered_rows.append(row)
+        stack.extend(reversed(children.get(current, [])))
+
+    chapter_ids = [row.id for row in ordered_rows if row.node_type == "chapter"]
+    bodies: dict[int, str | None] = {}
+    if chapter_ids:
+        bodies = dict(
+            db.query(ManuscriptNode.id, ManuscriptNode.body)
+            .filter(ManuscriptNode.id.in_(chapter_ids))
+            .all()
+        )
+    return [
+        {
+            "id": row.id,
+            "title": row.title,
+            "node_type": row.node_type,
+            "body": bodies.get(row.id),
+            "char_count_with_spaces": row.char_count_with_spaces or 0,
+            "char_count_plain": row.char_count_plain or 0,
+        }
+        for row in ordered_rows
+    ]
 
 
 def get_scrivenings(
@@ -846,18 +927,7 @@ def get_scrivenings(
         root_id=root_id,
         include_deleted=include_deleted,
     )
-    return [
-        {
-            "id": node.id,
-            "title": node.title,
-            "node_type": node.node_type,
-            "body": node.body,
-            "char_count_with_spaces": node.char_count_with_spaces or 0,
-            "char_count_plain": node.char_count_plain or 0,
-        }
-        for node in ordered
-        if node.node_type == "chapter"
-    ]
+    return [node for node in ordered if node["node_type"] == "chapter"]
 
 
 def _ensure_serial_folder(

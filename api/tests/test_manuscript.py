@@ -391,6 +391,21 @@ class ManuscriptTests(unittest.TestCase):
         )
         self.assertEqual([doc["id"] for doc in docs], [first_id, second_id])
 
+    def test_scrivenings_scope_to_requested_subtree(self) -> None:
+        project = self._project()
+        target = self._node(project, "대상", node_type="folder")
+        other = self._node(project, "다른 폴더", node_type="folder")
+        wanted = self._node(
+            project, "대상 문서", parent_id=target.id, body="<p>대상 본문</p>"
+        )
+        self._node(
+            project, "다른 문서", parent_id=other.id, body="<p>다른 본문</p>"
+        )
+
+        docs = crud.get_scrivenings(self.db, self.owner.id, root_id=target.id)
+        self.assertEqual([doc["id"] for doc in docs], [wanted.id])
+        self.assertEqual([doc["body"] for doc in docs], ["<p>대상 본문</p>"])
+
     def test_search_covers_title_synopsis_notes_and_body(self) -> None:
         project = self._project()
         self._node(project, "찾을말 제목", body="相关内容")
