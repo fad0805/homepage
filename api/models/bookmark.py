@@ -114,6 +114,10 @@ class BookmarkRoutine(Base):
     day_of_month = Column(Integer, nullable=True)
     nth_week = Column(Integer, nullable=True)
     month = Column(Integer, nullable=True)
+    # Count routines may restrict each period to a window. The unit depends
+    # on frequency: weekday (0-6), day of month (1-31), or month (1-12).
+    window_start = Column(Integer, nullable=True)
+    window_end = Column(Integer, nullable=True)
     active = Column(
         Boolean,
         nullable=False,

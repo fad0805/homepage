@@ -38,12 +38,17 @@ export interface BookmarkRoutine {
   day_of_month: number | null;
   nth_week: number | null;
   month: number | null;
+  window_start: number | null;
+  window_end: number | null;
   active: boolean;
   position: number;
   created_at: string;
   updated_at: string;
   period_type: BookmarkPeriodType;
   period_start: string;
+  active_from?: string | null;
+  active_until?: string | null;
+  deadline?: string | null;
   completed_count: number;
   manual_done: boolean;
   occurrences: BookmarkRoutineOccurrence[];
@@ -213,14 +218,24 @@ export function routineScheduleLabel(routine: {
   day_of_month: number | null;
   nth_week: number | null;
   month: number | null;
+  window_start: number | null;
+  window_end: number | null;
 }) {
   if (routine.frequency === "daily") return "매일";
   if (routine.tracking_mode === "count") {
     if (routine.frequency === "weekly") {
-      return `주 ${routine.target_count}회`;
+      const first = routine.window_start ?? 0;
+      const last = routine.window_end ?? 6;
+      return first === 0 && last === 6
+        ? `주 ${routine.target_count}회`
+        : `주 ${routine.target_count}회 · ${WEEKDAY_SHORT[first]}~${WEEKDAY_SHORT[last]}`;
     }
     if (routine.frequency === "monthly") {
-      return `월 ${routine.target_count}회`;
+      const first = routine.window_start ?? 1;
+      const last = routine.window_end ?? 31;
+      return first === 1 && last === 31
+        ? `월 ${routine.target_count}회`
+        : `월 ${routine.target_count}회 · ${first}일~${last === 31 ? "말일" : `${last}일`}`;
     }
     if (routine.frequency === "quarterly") {
       const quarter = routine.month
@@ -230,7 +245,11 @@ export function routineScheduleLabel(routine: {
         ? `${quarter}분기 ${routine.target_count}회`
         : `분기 ${routine.target_count}회`;
     }
-    return `연 ${routine.target_count}회`;
+    const first = routine.window_start ?? 1;
+    const last = routine.window_end ?? 12;
+    return first === 1 && last === 12
+      ? `연 ${routine.target_count}회`
+      : `연 ${routine.target_count}회 · ${first}월~${last}월`;
   }
   if (routine.frequency === "weekly") {
     const days = routineWeekdays(routine);

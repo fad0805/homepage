@@ -387,6 +387,10 @@ export default function BookmarkClient({ username }: { username: string }) {
     setRoutineMonth,
     routineQuarter,
     setRoutineQuarter,
+    routineWindowStart,
+    setRoutineWindowStart,
+    routineWindowEnd,
+    setRoutineWindowEnd,
     modalFrequency,
     openCreateRoutine,
     openEditRoutine,
@@ -1207,6 +1211,10 @@ export default function BookmarkClient({ username }: { username: string }) {
           setRoutineWeekday={setRoutineWeekday}
           routineMonth={routineMonth}
           setRoutineMonth={setRoutineMonth}
+          routineWindowStart={routineWindowStart}
+          setRoutineWindowStart={setRoutineWindowStart}
+          routineWindowEnd={routineWindowEnd}
+          setRoutineWindowEnd={setRoutineWindowEnd}
           itemSaving={itemSaving}
           onClose={closeRoutineModal}
           onSubmit={handleSaveRoutine}

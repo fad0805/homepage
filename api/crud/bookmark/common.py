@@ -322,6 +322,17 @@ def _routine_period_dict(
         "updated_at": routine.updated_at,
         "period_type": period_type,
         "period_start": period_start,
+        "window_start": routine.window_start,
+        "window_end": routine.window_end,
+        "active_from": (
+            _routine_window_start(routine, period_type, period_start)
+        ),
+        "active_until": (
+            _routine_window_end(routine, period_type, period_start)
+        ),
+        "deadline": _routine_window_end(
+            routine, period_type, period_start
+        ),
         "completed_count": completed_count,
         "manual_done": manual_done,
         "occurrences": occurrences
@@ -356,6 +367,66 @@ def _in_routine_lifespan(routine: BookmarkRoutine, day: date) -> bool:
     return routine.start_date <= day and (
         routine.end_date is None or day <= routine.end_date
     )
+
+
+def _routine_window_bounds(
+    routine: BookmarkRoutine,
+    period_start: date,
+) -> tuple[date, date] | None:
+    """Return the active date window for a count routine's period."""
+    if routine.tracking_mode != "count":
+        return None
+    if routine.frequency == "weekly":
+        start = _week_start(period_start)
+        first = start + timedelta(days=routine.window_start or 0)
+        last = start + timedelta(days=routine.window_end if routine.window_end is not None else 6)
+        return first, last
+    if routine.frequency == "monthly":
+        start = _month_start(period_start)
+        end = _month_end(period_start)
+        first = date(
+            start.year,
+            start.month,
+            min(routine.window_start or 1, end.day),
+        )
+        last = date(
+            start.year,
+            start.month,
+            min(
+                routine.window_end if routine.window_end is not None else end.day,
+                end.day,
+            ),
+        )
+        return first, last
+    if routine.frequency == "yearly":
+        first_month = routine.window_start or 1
+        last_month = routine.window_end if routine.window_end is not None else 12
+        return (
+            date(period_start.year, first_month, 1),
+            _month_end(date(period_start.year, last_month, 1)),
+        )
+    if routine.frequency == "quarterly":
+        start = _quarter_start(period_start)
+        return start, _period_end("quarter", start)
+    return None
+
+
+def _routine_window_start(
+    routine: BookmarkRoutine,
+    period_type: str,
+    period_start: date,
+) -> date | None:
+    bounds = _routine_window_bounds(routine, period_start)
+    return bounds[0] if bounds else None
+
+
+def _routine_window_end(
+    routine: BookmarkRoutine,
+    period_type: str,
+    period_start: date,
+) -> date | None:
+    bounds = _routine_window_bounds(routine, period_start)
+    return bounds[1] if bounds else None
 
 
 def _check_period_start(routine: BookmarkRoutine, day: date) -> date:

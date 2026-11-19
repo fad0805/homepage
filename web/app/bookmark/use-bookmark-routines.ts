@@ -60,6 +60,8 @@ export function useBookmarkRoutines({
   const [routineNthWeek, setRoutineNthWeek] = useState(1);
   const [routineMonth, setRoutineMonth] = useState(1);
   const [routineQuarter, setRoutineQuarter] = useState(0);
+  const [routineWindowStart, setRoutineWindowStart] = useState(1);
+  const [routineWindowEnd, setRoutineWindowEnd] = useState(31);
 
   const persistRoutineOrder = async (next: BookmarkRoutine[]) => {
     if (routineOrderSaving) return;
@@ -143,6 +145,11 @@ export function useBookmarkRoutines({
     setRoutineNthWeek(1);
     setRoutineMonth(1);
     setRoutineQuarter(0);
+    const frequency = PERIOD_FREQUENCY[unitView];
+    setRoutineWindowStart(frequency === "weekly" ? 0 : 1);
+    setRoutineWindowEnd(
+      frequency === "weekly" ? 6 : frequency === "yearly" ? 12 : 31,
+    );
     onError(null);
   };
 
@@ -172,6 +179,18 @@ export function useBookmarkRoutines({
       routine.frequency === "quarterly"
         ? quarterFromMonth(routine.month)
         : 0,
+    );
+    setRoutineWindowStart(
+      routine.window_start ??
+        (routine.frequency === "weekly" ? 0 : 1),
+    );
+    setRoutineWindowEnd(
+      routine.window_end ??
+        (routine.frequency === "weekly"
+          ? 6
+          : routine.frequency === "yearly"
+            ? 12
+            : 31),
     );
     onError(null);
   };
@@ -256,6 +275,18 @@ export function useBookmarkRoutines({
             month:
               modalFrequency === "quarterly"
                 ? quarterStartMonth(routineQuarter)
+                : null,
+            window_start:
+              modalFrequency === "weekly" ||
+              modalFrequency === "monthly" ||
+              modalFrequency === "yearly"
+                ? routineWindowStart
+                : null,
+            window_end:
+              modalFrequency === "weekly" ||
+              modalFrequency === "monthly" ||
+              modalFrequency === "yearly"
+                ? routineWindowEnd
                 : null,
           };
 
@@ -612,6 +643,10 @@ export function useBookmarkRoutines({
     setRoutineMonth,
     routineQuarter,
     setRoutineQuarter,
+    routineWindowStart,
+    setRoutineWindowStart,
+    routineWindowEnd,
+    setRoutineWindowEnd,
     modalFrequency,
     openCreateRoutine,
     openEditRoutine,

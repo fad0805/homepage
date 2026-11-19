@@ -79,6 +79,71 @@ def _routine_due_on_day(routine: BookmarkRoutine, day: date) -> bool:
     return True
 
 
+def _first_count_window_start(
+    frequency: str,
+    tracking_mode: str,
+    schedule: dict[str, Any],
+    today: date,
+) -> date:
+    """Return today, or the next window start when it is still in the future."""
+    if tracking_mode != "count":
+        return today
+    if frequency == "weekly":
+        week_start = _week_start(today)
+        start = week_start + timedelta(
+            days=schedule.get("window_start") or 0
+        )
+        end = week_start + timedelta(
+            days=(
+                schedule.get("window_end")
+                if schedule.get("window_end") is not None
+                else 6
+            )
+        )
+        if start > today:
+            return start
+        return start + timedelta(days=7) if today > end else today
+    if frequency == "monthly":
+        month = _month_start(today)
+        end = _month_end(month)
+        day = min(schedule.get("window_start") or 1, end.day)
+        start = date(month.year, month.month, day)
+        last = date(
+            month.year,
+            month.month,
+            min(
+                schedule.get("window_end")
+                if schedule.get("window_end") is not None
+                else end.day,
+                end.day,
+            ),
+        )
+        if start > today:
+            return start
+        if today > last:
+            next_month = _shift_months(month, 1)
+            next_end = _month_end(next_month)
+            return date(
+                next_month.year,
+                next_month.month,
+                min(schedule.get("window_start") or 1, next_end.day),
+            )
+        return today
+    if frequency == "yearly":
+        first = schedule.get("window_start") or 1
+        last = (
+            schedule.get("window_end")
+            if schedule.get("window_end") is not None
+            else 12
+        )
+        start = date(today.year, first, 1)
+        end = _month_end(date(today.year, last, 1))
+        if start > today:
+            return start
+        return date(today.year + 1, first, 1) if today > end else today
+    return today
+
+
 def _next_routine_date(
     routine: BookmarkRoutine,
     today: date,
@@ -127,6 +192,8 @@ def _validate_schedule(
     day_of_month: int | None,
     nth_week: int | None,
     month: int | None,
+    window_start: int | None = None,
+    window_end: int | None = None,
 ) -> tuple[str, int, dict[str, Any]]:
     if frequency == "daily":
         return "date", 1, {
@@ -137,6 +204,32 @@ def _validate_schedule(
             "month": None,
         }
     if tracking_mode == "count":
+        if frequency == "weekly":
+            first = 0 if window_start is None else int(window_start)
+            last = 6 if window_end is None else int(window_end)
+            if not (0 <= first <= last <= 6):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="주간 시작·종료 요일을 확인해주세요.",
+                )
+        elif frequency == "monthly":
+            first = 1 if window_start is None else int(window_start)
+            last = 31 if window_end is None else int(window_end)
+            if not (1 <= first <= last <= 31):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="월간 시작·종료 일을 확인해주세요.",
+                )
+        elif frequency == "yearly":
+            first = 1 if window_start is None else int(window_start)
+            last = 12 if window_end is None else int(window_end)
+            if not (1 <= first <= last <= 12):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="연간 시작·종료 월을 확인해주세요.",
+                )
+        else:
+            first = last = None
         return "count", max(1, int(target_count or 1)), {
             "weekday": None,
             "weekdays": None,
@@ -147,6 +240,8 @@ def _validate_schedule(
                 if frequency == "quarterly"
                 else None
             ),
+            "window_start": first,
+            "window_end": last,
         }
     if tracking_mode != "date":
         raise HTTPException(

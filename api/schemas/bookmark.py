@@ -139,6 +139,8 @@ class BookmarkRoutineCreate(BaseModel):
     day_of_month: int | None = Field(default=None, ge=1, le=31)
     nth_week: int | None = Field(default=None, ge=1, le=5)
     month: int | None = Field(default=None, ge=1, le=12)
+    window_start: int | None = None
+    window_end: int | None = None
 
 
 class BookmarkRoutineUpdate(BaseModel):
@@ -152,6 +154,8 @@ class BookmarkRoutineUpdate(BaseModel):
     day_of_month: int | None = Field(default=None, ge=1, le=31)
     nth_week: int | None = Field(default=None, ge=1, le=5)
     month: int | None = Field(default=None, ge=1, le=12)
+    window_start: int | None = None
+    window_end: int | None = None
     active: bool | None = None
 
 
@@ -174,6 +178,8 @@ class BookmarkRoutineRead(BaseModel):
     day_of_month: int | None = None
     nth_week: int | None = None
     month: int | None = None
+    window_start: int | None = None
+    window_end: int | None = None
     active: bool
     position: int
     created_at: datetime

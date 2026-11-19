@@ -46,6 +46,10 @@ interface BookmarkRoutineModalProps {
   setRoutineWeekday: (value: number) => void;
   routineMonth: number;
   setRoutineMonth: (value: number) => void;
+  routineWindowStart: number;
+  setRoutineWindowStart: (value: number) => void;
+  routineWindowEnd: number;
+  setRoutineWindowEnd: (value: number) => void;
   itemSaving: boolean;
   onClose: () => void;
   onSubmit: FormEventHandler<HTMLFormElement>;
@@ -83,6 +87,10 @@ export function BookmarkRoutineModal({
   setRoutineWeekday,
   routineMonth,
   setRoutineMonth,
+  routineWindowStart,
+  setRoutineWindowStart,
+  routineWindowEnd,
+  setRoutineWindowEnd,
   itemSaving,
   onClose,
   onSubmit,
@@ -271,16 +279,112 @@ export function BookmarkRoutineModal({
                           />
                         </label>
                       )}
+                      {modalFrequency === "weekly" ? (
+                        <div className="bookmark-schedule-row">
+                          <label>
+                            <span>시작 요일</span>
+                            <select
+                              value={routineWindowStart}
+                              onChange={(event) =>
+                                setRoutineWindowStart(Number(event.target.value))
+                              }
+                            >
+                              {WEEKDAY_SHORT.map((label, index) => (
+                                <option value={index} key={label}>
+                                  {label}요일
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                          <label>
+                            <span>종료 요일</span>
+                            <select
+                              value={routineWindowEnd}
+                              onChange={(event) =>
+                                setRoutineWindowEnd(Number(event.target.value))
+                              }
+                            >
+                              {WEEKDAY_SHORT.map((label, index) => (
+                                <option value={index} key={label}>
+                                  {label}요일
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                        </div>
+                      ) : null}
+                      {modalFrequency === "monthly" ? (
+                        <div className="bookmark-schedule-row">
+                          <label>
+                            <span>시작 일</span>
+                            <input
+                              type="number"
+                              min={1}
+                              max={31}
+                              value={routineWindowStart}
+                              onChange={(event) =>
+                                setRoutineWindowStart(Number(event.target.value))
+                              }
+                            />
+                          </label>
+                          <label>
+                            <span>종료 일</span>
+                            <input
+                              type="number"
+                              min={1}
+                              max={31}
+                              value={routineWindowEnd}
+                              onChange={(event) =>
+                                setRoutineWindowEnd(Number(event.target.value))
+                              }
+                            />
+                          </label>
+                        </div>
+                      ) : null}
+                      {modalFrequency === "yearly" ? (
+                        <div className="bookmark-schedule-row">
+                          <label>
+                            <span>시작 월</span>
+                            <select
+                              value={routineWindowStart}
+                              onChange={(event) =>
+                                setRoutineWindowStart(Number(event.target.value))
+                              }
+                            >
+                              {Array.from({ length: 12 }, (_, index) => (
+                                <option value={index + 1} key={index + 1}>
+                                  {index + 1}월
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                          <label>
+                            <span>종료 월</span>
+                            <select
+                              value={routineWindowEnd}
+                              onChange={(event) =>
+                                setRoutineWindowEnd(Number(event.target.value))
+                              }
+                            >
+                              {Array.from({ length: 12 }, (_, index) => (
+                                <option value={index + 1} key={index + 1}>
+                                  {index + 1}월
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                        </div>
+                      ) : null}
                       <p className="bookmark-form-hint">
                         {modalFrequency === "weekly"
-                          ? "이번 주에 몇 회 수행할지 정합니다."
+                          ? "기본값은 월요일부터 일요일까지입니다."
                           : modalFrequency === "monthly"
-                            ? "이번 달에 몇 회 수행할지 정합니다."
+                            ? "기본값은 1일부터 말일까지입니다."
                             : modalFrequency === "quarterly"
                               ? routineQuarter > 0
-                                ? `${routineQuarter}분기에 몇 회 수행할지 정합니다.`
-                                : "매분기 몇 회 수행할지 정합니다."
-                              : "올해 몇 회 수행할지 정합니다."}
+                                ? `${routineQuarter}분기 전체가 목표 기간입니다.`
+                                : "매분기 전체가 목표 기간입니다."
+                              : "기본값은 1월부터 12월까지입니다."}
                       </p>
                     </>
                   ) : (

@@ -1,7 +1,11 @@
 """Bookmark routines."""
 
 from .common import *  # noqa: F401,F403
-from .schedule import _routine_due_on_day, _validate_schedule
+from .schedule import (
+    _first_count_window_start,
+    _routine_due_on_day,
+    _validate_schedule,
+)
 from .statistics import _upsert_routine_monthly_stat
 
 
@@ -19,6 +23,8 @@ def create_routine(
         day_of_month=payload.day_of_month,
         nth_week=payload.nth_week,
         month=payload.month,
+        window_start=payload.window_start,
+        window_end=payload.window_end,
     )
     max_position = (
         db.query(func.max(BookmarkRoutine.position))
@@ -28,6 +34,7 @@ def create_routine(
         )
         .scalar()
     )
+    today = _kst_today()
     routine = BookmarkRoutine(
         user_id=user_id,
         category_id=_resolve_category_id(
@@ -38,7 +45,12 @@ def create_routine(
         title=_clean_title(payload.title),
         notes=_clean_notes(payload.notes),
         frequency=payload.frequency,
-        start_date=_kst_today(),
+        start_date=_first_count_window_start(
+            payload.frequency,
+            mode,
+            schedule,
+            today,
+        ),
         end_date=None,
         tracking_mode=mode,
         target_count=target_count,
@@ -94,6 +106,8 @@ def update_routine(
         day_of_month=data.get("day_of_month", routine.day_of_month),
         nth_week=data.get("nth_week", routine.nth_week),
         month=data.get("month", routine.month),
+        window_start=data.get("window_start", routine.window_start),
+        window_end=data.get("window_end", routine.window_end),
     )
     routine.tracking_mode = mode
     routine.target_count = target_count
@@ -102,6 +116,8 @@ def update_routine(
     routine.day_of_month = schedule["day_of_month"]
     routine.nth_week = schedule["nth_week"]
     routine.month = schedule["month"]
+    routine.window_start = schedule.get("window_start")
+    routine.window_end = schedule.get("window_end")
 
     # Settings such as target_count and weekdays change the expected values of
     # every stored month, not only the current one. Recompute all months that

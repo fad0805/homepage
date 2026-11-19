@@ -8,9 +8,17 @@ os.environ.setdefault("ENVIRONMENT", "development")
 from fastapi import HTTPException
 
 from crud.bookmark.periods import get_period, get_today
-from crud.bookmark.routines import reorder_routines, update_routine
+from crud.bookmark.routines import (
+    create_routine,
+    reorder_routines,
+    update_routine,
+)
 from models.bookmark import BookmarkRoutine
-from schemas.bookmark import BookmarkRoutineReorder, BookmarkRoutineUpdate
+from schemas.bookmark import (
+    BookmarkRoutineCreate,
+    BookmarkRoutineReorder,
+    BookmarkRoutineUpdate,
+)
 from tests.bookmark_test_base import BookmarkDatabaseTestCase
 
 
@@ -54,6 +62,134 @@ class BookmarkRoutineTests(
         )
 
         self.assertEqual(updated.title, "수정된 루틴")
+
+    def test_count_windows_control_today_visibility(self) -> None:
+        monthly = self.make_routine(
+            frequency="monthly",
+            tracking_mode="count",
+            target_count=2,
+            window_start=15,
+            window_end=20,
+            start_date=date(2025, 1, 1),
+        )
+        weekly = self.make_routine(
+            frequency="weekly",
+            tracking_mode="count",
+            target_count=3,
+            window_start=2,
+            window_end=5,
+            start_date=date(2025, 1, 1),
+        )
+        yearly = self.make_routine(
+            frequency="yearly",
+            tracking_mode="count",
+            target_count=1,
+            window_start=4,
+            window_end=11,
+            start_date=date(2025, 1, 1),
+        )
+
+        hidden = get_today(self.db, 1, day=date(2026, 3, 14))
+        hidden_ids = [item["id"] for item in hidden["routines"]]
+        self.assertNotIn(monthly.id, hidden_ids)
+        self.assertNotIn(yearly.id, hidden_ids)
+
+        monthly_day = get_today(self.db, 1, day=date(2026, 3, 15))
+        monthly_ids = [item["id"] for item in monthly_day["routines"]]
+        self.assertIn(monthly.id, monthly_ids)
+        after_monthly = get_today(self.db, 1, day=date(2026, 3, 21))
+        self.assertNotIn(
+            monthly.id,
+            [item["id"] for item in after_monthly["routines"]],
+        )
+
+        weekly_day = get_today(self.db, 1, day=date(2026, 3, 3))
+        self.assertNotIn(
+            weekly.id,
+            [item["id"] for item in weekly_day["routines"]],
+        )
+        weekly_window = get_today(self.db, 1, day=date(2026, 3, 4))
+        self.assertIn(
+            weekly.id,
+            [item["id"] for item in weekly_window["routines"]],
+        )
+        after_weekly = get_today(self.db, 1, day=date(2026, 3, 8))
+        self.assertNotIn(
+            weekly.id,
+            [item["id"] for item in after_weekly["routines"]],
+        )
+
+        yearly_day = get_today(self.db, 1, day=date(2026, 4, 1))
+        self.assertIn(yearly.id, [item["id"] for item in yearly_day["routines"]])
+        after_yearly = get_today(self.db, 1, day=date(2026, 12, 1))
+        self.assertNotIn(
+            yearly.id,
+            [item["id"] for item in after_yearly["routines"]],
+        )
+
+        entry = next(
+            item for item in monthly_day["routines"] if item["id"] == monthly.id
+        )
+        self.assertEqual(entry["window_start"], 15)
+        self.assertEqual(entry["window_end"], 20)
+        self.assertEqual(entry["active_from"], date(2026, 3, 15))
+        self.assertEqual(entry["active_until"], date(2026, 3, 20))
+        self.assertEqual(entry["deadline"], date(2026, 3, 20))
+
+    def test_create_count_routine_records_first_window_start(self) -> None:
+        with patch(
+            "crud.bookmark.routines._kst_today",
+            return_value=date(2026, 3, 3),
+        ):
+            routine = create_routine(
+                self.db,
+                BookmarkRoutineCreate(
+                    frequency="monthly",
+                    title="월간 루틴",
+                    tracking_mode="count",
+                    target_count=2,
+                    window_start=15,
+                    window_end=20,
+                ),
+                1,
+            )
+        self.assertEqual(routine.start_date, date(2026, 3, 15))
+
+        with patch(
+            "crud.bookmark.routines._kst_today",
+            return_value=date(2026, 3, 18),
+        ):
+            active = create_routine(
+                self.db,
+                BookmarkRoutineCreate(
+                    frequency="monthly",
+                    title="진행 중 루틴",
+                    tracking_mode="count",
+                    target_count=2,
+                    window_start=15,
+                    window_end=20,
+                ),
+                1,
+            )
+        self.assertEqual(active.start_date, date(2026, 3, 18))
+
+        with patch(
+            "crud.bookmark.routines._kst_today",
+            return_value=date(2026, 3, 25),
+        ):
+            next_window = create_routine(
+                self.db,
+                BookmarkRoutineCreate(
+                    frequency="monthly",
+                    title="다음 창 루틴",
+                    tracking_mode="count",
+                    target_count=2,
+                    window_start=15,
+                    window_end=20,
+                ),
+                1,
+            )
+        self.assertEqual(next_window.start_date, date(2026, 4, 15))
 
 
 class BookmarkRoutineOrderTests(

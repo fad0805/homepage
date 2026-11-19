@@ -9,6 +9,7 @@ from crud.bookmark.common import (
     _month_has_day,
     _nth_weekday_day,
     _period_end,
+    _routine_window_start,
     _shift_months,
 )
 from crud.bookmark.schedule import (
@@ -178,6 +179,68 @@ class BookmarkScheduleTests(unittest.TestCase):
         self.assertTrue(_quarter_matches(routine, date(2026, 6, 30)))
         self.assertFalse(_quarter_matches(routine, date(2026, 7, 1)))
 
+    def test_count_schedule_keeps_start_and_end_windows(self) -> None:
+        _, _, weekly = _validate_schedule(
+            frequency="weekly",
+            tracking_mode="count",
+            target_count=2,
+            weekday=None,
+            weekdays=None,
+            day_of_month=None,
+            nth_week=None,
+            month=None,
+            window_start=2,
+            window_end=5,
+        )
+        self.assertEqual(weekly["window_start"], 2)
+        self.assertEqual(weekly["window_end"], 5)
+
+        _, _, monthly = _validate_schedule(
+            frequency="monthly",
+            tracking_mode="count",
+            target_count=2,
+            weekday=None,
+            weekdays=None,
+            day_of_month=None,
+            nth_week=None,
+            month=None,
+            window_start=5,
+            window_end=25,
+        )
+        self.assertEqual(monthly["window_start"], 5)
+        self.assertEqual(monthly["window_end"], 25)
+
+        _, _, yearly = _validate_schedule(
+            frequency="yearly",
+            tracking_mode="count",
+            target_count=2,
+            weekday=None,
+            weekdays=None,
+            day_of_month=None,
+            nth_week=None,
+            month=None,
+            window_start=4,
+            window_end=11,
+        )
+        self.assertEqual(yearly["window_start"], 4)
+        self.assertEqual(yearly["window_end"], 11)
+
+    def test_count_window_start_clamps_short_months(self) -> None:
+        routine = self._next_routine(
+            frequency="monthly",
+            tracking_mode="count",
+            window_start=31,
+            window_end=31,
+        )
+        self.assertEqual(
+            _routine_window_start(
+                routine,
+                "month",
+                date(2026, 2, 1),
+            ),
+            date(2026, 2, 28),
+        )
+
     def _next_routine(self, **overrides):
         values = {
             "frequency": "monthly",
@@ -189,6 +252,8 @@ class BookmarkScheduleTests(unittest.TestCase):
             "day_of_month": 10,
             "nth_week": None,
             "month": None,
+            "window_start": None,
+            "window_end": None,
             "active": True,
         }
         values.update(overrides)

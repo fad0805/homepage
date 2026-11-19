@@ -256,11 +256,16 @@ def get_today(
                 checks=checks,
             )
         elif routine.tracking_mode == "count":
+            period_type = _check_period_type(routine)
+            period_start = _check_period_start(routine, target)
+            window = _routine_window_bounds(routine, period_start)
+            if window is not None and not (window[0] <= target <= window[1]):
+                continue
             entry = _count_period_entry(
                 db,
                 routine,
-                period_type=_check_period_type(routine),
-                period_start=_check_period_start(routine, target),
+                period_type=period_type,
+                period_start=period_start,
                 checks=checks,
             )
         elif not _routine_due_on_day(routine, target):
