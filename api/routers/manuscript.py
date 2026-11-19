@@ -256,7 +256,7 @@ def get_scrivenings(
     )
 
 
-@public_router.get("/books/{book_id}/toc")
+@public_router.get("/{book_id}/toc")
 def get_public_toc(
     book_id: int,
     db: Session = Depends(get_db),

@@ -51,6 +51,22 @@ function folderTree(nodes: ManageTocNode[]): ManageTocNode[] {
     .map((node) => ({ ...node, children: folderTree(node.children) }));
 }
 
+function collectChapterCounts(
+  nodes: ManageTocNode[],
+  counts = new Map<number, number>(),
+): Map<number, number> {
+  for (const node of nodes) {
+    if (node.node_type === "folder") {
+      counts.set(
+        node.id,
+        node.children.filter((child) => child.node_type === "post").length,
+      );
+    }
+    collectChapterCounts(node.children, counts);
+  }
+  return counts;
+}
+
 function dropMode(event: DragEvent<HTMLElement>, node: ManageTocNode): DropMode {
   const rect = event.currentTarget.getBoundingClientRect();
   const offset = event.clientY - rect.top;
@@ -86,6 +102,9 @@ export function TocManager({
   onSelectParent,
 }: TocManagerProps) {
   const [tree, setTree] = useState<ManageTocNode[]>([]);
+  const [chapterCounts, setChapterCounts] = useState<Map<number, number>>(
+    () => new Map(),
+  );
   const [open, setOpen] = useState(defaultOpen || !collapsible);
   const [loading, setLoading] = useState(true);
   const [working, setWorking] = useState(false);
@@ -108,7 +127,8 @@ export function TocManager({
       const next = await apiFetch<ManageTocNode[]>(
         `/api/books/${bookId}/toc/manage`,
       );
-      setTree(next);
+      setChapterCounts(collectChapterCounts(next));
+      setTree(folderTree(next));
       if (selectedChapterId !== null) {
         const post = flattenNodes(next).find(
           (node) =>
@@ -130,17 +150,6 @@ export function TocManager({
   const allNodes = useMemo(() => flattenNodes(tree), [tree]);
   const visibleTree = useMemo(() => folderTree(tree), [tree]);
   const visibleCount = flattenNodes(visibleTree).length;
-  const chapterCounts = useMemo(() => {
-    const counts = new Map<number, number>();
-    for (const node of allNodes) {
-      if (node.node_type !== "folder") continue;
-      counts.set(
-        node.id,
-        node.children.filter((child) => child.node_type === "post").length,
-      );
-    }
-    return counts;
-  }, [allNodes]);
   const placedChapterIds = useMemo(
     () =>
       new Set(
@@ -157,7 +166,9 @@ export function TocManager({
   ) => {
     setWorking(true);
     try {
-      setTree(await action());
+      const next = await action();
+      setChapterCounts(collectChapterCounts(next));
+      setTree(folderTree(next));
       notify("success", success);
     } catch (caught) {
       notify("error", (caught as Error).message);

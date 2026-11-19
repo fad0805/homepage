@@ -78,12 +78,6 @@ def _next_position(db: Session, book_id: int, parent_id: int | None) -> int:
 
 
 def _serialize_tree(db: Session, book: Book) -> list[dict]:
-    chapters = {
-        chapter.id: chapter
-        for chapter in db.query(Chapter)
-        .filter(Chapter.book_id == book.id)
-        .all()
-    }
     nodes = (
         db.query(SerialNode)
         .filter(SerialNode.book_id == book.id)
@@ -102,16 +96,15 @@ def _serialize_tree(db: Session, book: Book) -> list[dict]:
         siblings.sort(key=lambda item: (item.position, item.id))
 
     def build(node: SerialNode) -> dict:
-        chapter = chapters.get(node.chapter_id) if node.node_type == "post" else None
         return {
             "id": node.id,
             "parent_id": node.parent_id,
             "node_type": node.node_type,
-            "label": node.label or (chapter.title if chapter else None),
+            "label": node.label,
             "position": node.position,
-            "chapter_id": chapter.id if chapter else node.chapter_id,
-            "pinned": bool(chapter and chapter.pinned),
-            "locked": bool(book.protected or (chapter and chapter.protected)),
+            "chapter_id": node.chapter_id,
+            "pinned": False,
+            "locked": bool(book.protected),
             "children": [build(child) for child in children.get(node.id, [])],
         }
 
