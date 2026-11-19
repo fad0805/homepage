@@ -14,6 +14,8 @@ interface Project {
   node_count: number;
   created_at: string | null;
   updated_at: string | null;
+  import_status: string;
+  import_error: string | null;
 }
 
 interface Book {
@@ -37,20 +39,30 @@ export default function AdminManuscriptPage() {
   const [fileBusyId, setFileBusyId] = useState<number | null>(null);
   const [importing, setImporting] = useState(false);
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  const load = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
     try {
       setProjects(await apiFetch<Project[]>("/api/manuscript/projects"));
     } catch (error) {
       setNotice({ type: "error", text: (error as Error).message });
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, []);
 
   useEffect(() => {
     void load();
   }, [load]);
+
+  const hasImporting = projects.some(
+    (project) => project.import_status === "importing",
+  );
+
+  useEffect(() => {
+    if (!hasImporting) return;
+    const timer = window.setInterval(() => void load(true), 2000);
+    return () => window.clearInterval(timer);
+  }, [hasImporting, load]);
 
   useEffect(() => {
     if (!notice) return;
@@ -151,16 +163,15 @@ export default function AdminManuscriptPage() {
       form.append("file", file);
       const result = await apiFetch<{
         project_title: string;
-        imported_count: number;
       }>("/api/manuscript/scrivener/import", {
         method: "POST",
         body: form,
       });
       setNotice({
         type: "success",
-        text: `“${result.project_title || file.name}” 프로젝트를 만들었습니다. (${result.imported_count}개 노드)`,
+        text: `“${result.project_title || file.name}” 가져오기를 시작했습니다. 목록에서 준비 상태를 확인하세요.`,
       });
-      await load();
+      await load(true);
     } catch (error) {
       setNotice({ type: "error", text: (error as Error).message });
     } finally {
@@ -194,6 +205,13 @@ export default function AdminManuscriptPage() {
   };
 
   const openProject = (project: Project) => {
+    if (project.import_status === "importing") {
+      setNotice({
+        type: "error",
+        text: "아직 가져오는 중입니다. 준비가 끝나면 열 수 있습니다.",
+      });
+      return;
+    }
     window.open(
       `/manuscript?project=${project.id}`,
       "_blank",
@@ -312,9 +330,26 @@ export default function AdminManuscriptPage() {
                       openProject(project);
                     }
                   }}
-                  title="클릭하여 편집기에서 열기"
+                  title={
+                    project.import_error ?? "클릭하여 편집기에서 열기"
+                  }
                 >
-                  {project.title}
+                  <span className="admin-manuscript-title-text">
+                    {project.title}
+                  </span>
+                  {project.import_status === "importing" ? (
+                    <span className="admin-import-state is-loading">
+                      가져오는 중…
+                    </span>
+                  ) : null}
+                  {project.import_status === "failed" ? (
+                    <span
+                      className="admin-import-state is-failed"
+                      title={project.import_error ?? "가져오기 실패"}
+                    >
+                      가져오기 실패
+                    </span>
+                  ) : null}
                 </span>
                 <button
                   type="button"

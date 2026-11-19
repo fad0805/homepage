@@ -37,6 +37,9 @@ class ManuscriptProject(Base):
     )
     created_at = Column(DateTime, default=func.now())
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
+    # NULL means a legacy project created before background imports existed.
+    import_status = Column(String(16), nullable=True)
+    import_error = Column(Text, nullable=True)
 
     book = relationship("Book", foreign_keys=[linked_book_id])
     nodes = relationship(

@@ -19,12 +19,14 @@ from core.scrivener import (
     build_scrivener_zip,
     html_to_rtf_with_images,
     parse_scrivener_zip,
+    read_scrivener_project_title,
     safe_filename,
 )
 from core.search import like_pattern, search_tokens
 from core.text_stats import count_characters, html_to_plain
 from core.uploads import open_uploaded_file, save_image_bytes
 from crud.books import _category_is_visible_to
+from db.session import SessionLocal
 from models.books import Book, Chapter
 from models.manuscript import ManuscriptNode, ManuscriptProject, SerialNode
 from schemas import manuscript as schemas
@@ -184,6 +186,8 @@ def _serialize_project(project: ManuscriptProject, node_count: int = 0) -> dict:
         "node_count": node_count,
         "created_at": _iso(project.created_at),
         "updated_at": _iso(project.updated_at),
+        "import_status": project.import_status or "ready",
+        "import_error": project.import_error,
     }
 
 
@@ -1291,27 +1295,18 @@ def _unique_project_title(db: Session, user_id: int, title: str) -> str:
     return _numbered_title(title, existing)
 
 
-def import_scrivener(
+def _upload_name_stem(filename: str) -> str:
+    name = (filename or "").replace("\\", "/").rsplit("/", 1)[-1]
+    stem = name.rsplit(".", 1)[0] if "." in name else name
+    return stem or "가져온 원고"
+
+
+def _add_parsed_nodes(
     db: Session,
+    project: ManuscriptProject,
     user_id: int,
-    data: bytes,
-) -> dict:
-    """Create a new manuscript project from a Scrivener project archive."""
-    try:
-        source_title, parsed = parse_scrivener_zip(data)
-    except ValueError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(exc),
-        ) from exc
-
-    project = ManuscriptProject(
-        user_id=user_id,
-        title=_unique_project_title(db, user_id, source_title),
-    )
-    db.add(project)
-    db.flush()
-
+    parsed: list,
+) -> int:
     ids: list[int | None] = []
     used_titles: dict[int | None, set[str]] = defaultdict(set)
     for position, item in enumerate(parsed):
@@ -1364,12 +1359,121 @@ def import_scrivener(
         db.add(node)
         db.flush()
         ids.append(node.id)
+    return len(parsed)
+
+
+def create_import_project(
+    db: Session,
+    user_id: int,
+    data: bytes,
+    filename: str,
+) -> dict:
+    """Create the project shell before the expensive archive parsing starts."""
+    try:
+        title = read_scrivener_project_title(
+            data, fallback=_upload_name_stem(filename)
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
+
+    project = ManuscriptProject(
+        user_id=user_id,
+        title=_unique_project_title(db, user_id, title),
+        import_status="importing",
+    )
+    db.add(project)
+    db.commit()
+    db.refresh(project)
+    return {
+        "project_id": project.id,
+        "project_title": project.title,
+        "import_status": "importing",
+    }
+
+
+def finish_scrivener_import(
+    db: Session,
+    project_id: int,
+    user_id: int,
+    data: bytes,
+) -> dict:
+    """Populate a project shell and record the final import state."""
+    project = (
+        db.query(ManuscriptProject)
+        .filter(ManuscriptProject.id == project_id, ManuscriptProject.user_id == user_id)
+        .one_or_none()
+    )
+    if project is None:
+        return {"status": "missing"}
+
+    try:
+        _source_title, parsed = parse_scrivener_zip(data)
+        db.query(ManuscriptNode).filter(
+            ManuscriptNode.project_id == project_id,
+            ManuscriptNode.user_id == user_id,
+        ).delete(synchronize_session=False)
+        count = _add_parsed_nodes(db, project, user_id, parsed)
+        project.import_status = "ready"
+        project.import_error = None
+        db.commit()
+        return {"status": "ready", "imported_count": count}
+    except Exception as exc:
+        db.rollback()
+        project = (
+            db.query(ManuscriptProject)
+            .filter(
+                ManuscriptProject.id == project_id,
+                ManuscriptProject.user_id == user_id,
+            )
+            .one_or_none()
+        )
+        if project is not None:
+            project.import_status = "failed"
+            project.import_error = str(exc)[:1000]
+            db.commit()
+        return {"status": "failed", "error": str(exc)}
+
+
+def run_import_in_background(project_id: int, user_id: int, data: bytes) -> dict:
+    """Background-task entry point with its own database session."""
+    db = SessionLocal()
+    try:
+        return finish_scrivener_import(db, project_id, user_id, data)
+    finally:
+        db.close()
+
+
+def import_scrivener(
+    db: Session,
+    user_id: int,
+    data: bytes,
+) -> dict:
+    """Synchronous import kept for callers that need the finished result."""
+    try:
+        source_title, parsed = parse_scrivener_zip(data)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
+
+    project = ManuscriptProject(
+        user_id=user_id,
+        title=_unique_project_title(db, user_id, source_title),
+        import_status="ready",
+    )
+    db.add(project)
+    db.flush()
+    count = _add_parsed_nodes(db, project, user_id, parsed)
 
     db.commit()
     return {
         "project_id": project.id,
         "project_title": project.title,
-        "imported_count": len(parsed),
+        "imported_count": count,
     }
 
 

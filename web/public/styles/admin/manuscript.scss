@@ -242,6 +242,33 @@
   }
 }
 
+.admin-manuscript-title-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-import-state {
+  display: inline-block;
+  margin-left: 0.35rem;
+  padding: 0.05rem 0.35rem;
+  border-radius: 999px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  vertical-align: middle;
+
+  &.is-loading {
+    background: color-mix(in srgb, var(--theme-main) 16%, transparent);
+    color: var(--theme-main);
+  }
+
+  &.is-failed {
+    background: color-mix(in srgb, #c62828 14%, transparent);
+    color: #c62828;
+    cursor: help;
+  }
+}
+
 .admin-manuscript-book {
   min-width: 0;
   overflow: hidden;

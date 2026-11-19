@@ -1,6 +1,15 @@
 from urllib.parse import quote
 
-from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Depends,
+    File,
+    HTTPException,
+    Query,
+    UploadFile,
+    status,
+)
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
@@ -51,8 +60,9 @@ def delete_project(
     return crud.delete_project(db, project_id, user.id)
 
 
-@router.post("/scrivener/import")
+@router.post("/scrivener/import", status_code=status.HTTP_202_ACCEPTED)
 async def import_scrivener(
+    background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
     user=Depends(require_auth),
@@ -64,7 +74,15 @@ async def import_scrivener(
             status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
             detail=str(exc),
         ) from exc
-    return crud.import_scrivener(db, user.id, data)
+
+    project = crud.create_import_project(db, user.id, data, file.filename or "")
+    background_tasks.add_task(
+        crud.run_import_in_background,
+        project["project_id"],
+        user.id,
+        data,
+    )
+    return project
 
 
 @router.get("/projects/{project_id}/scrivener/export")

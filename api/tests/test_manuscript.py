@@ -12,7 +12,11 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from core.scrivener import parse_scrivener_zip, read_upload_limited
+from core.scrivener import (
+    parse_scrivener_zip,
+    read_scrivener_project_title,
+    read_upload_limited,
+)
 from core.text_stats import count_characters
 from crud import manuscript as crud
 from db.base import Base
@@ -920,6 +924,102 @@ class ManuscriptTests(unittest.TestCase):
         body = crud.get_node(self.db, tree[0]["id"], self.owner.id)["body"]
         self.assertIn("아스트라", body)
         self.assertNotIn("¾Æ½ºÆ®¶ó", body)
+
+    def test_reads_title_from_encoded_manifest_filename(self) -> None:
+        manifest = """<?xml version="1.0" encoding="UTF-8"?>
+<ScrivenerProject Version="2.0">
+  <Binder><BinderItem UUID="D" Type="DraftFolder"><Title>Draft</Title></BinderItem></Binder>
+</ScrivenerProject>"""
+        buffer = BytesIO()
+        with ZipFile(buffer, "w") as archive:
+            archive.writestr("∞╣┤δÑ┤δööδéÿ∞¥ÿ ∞êÿφÿ╕∞₧É.scrivx", manifest)
+
+        title = read_scrivener_project_title(
+            buffer.getvalue(), fallback="아카이브.zip"
+        )
+        self.assertEqual(title, "카르디나의 수호자")
+
+    def test_background_import_exposes_project_before_parsing(self) -> None:
+        manifest = """<?xml version="1.0" encoding="UTF-8"?>
+<ScrivenerProject Version="2.0">
+  <ProjectProperties><ProjectTitle>백그라운드 원고</ProjectTitle></ProjectProperties>
+  <Binder>
+    <BinderItem UUID="D" Type="DraftFolder">
+      <Children>
+        <BinderItem UUID="T1" Type="Text"><Title>본문</Title></BinderItem>
+      </Children>
+    </BinderItem>
+  </Binder>
+</ScrivenerProject>"""
+        buffer = BytesIO()
+        with ZipFile(buffer, "w") as archive:
+            archive.writestr("background.scrivx", manifest)
+            archive.writestr(
+                "Files/Data/T1/content.rtf",
+                "{\\rtf1\\ansi\\ansicpg1252\\uc1\\pard\\fs26 hello\\par}",
+            )
+        data = buffer.getvalue()
+
+        shell = crud.create_import_project(
+            self.db, self.owner.id, data, "아카이브.zip"
+        )
+        self.assertEqual(shell["import_status"], "importing")
+        self.assertEqual(shell["project_title"], "백그라운드 원고")
+        project = next(
+            item
+            for item in crud.get_projects(self.db, self.owner.id)
+            if item["id"] == shell["project_id"]
+        )
+        self.assertEqual(project["import_status"], "importing")
+        self.assertEqual(project["node_count"], 0)
+
+        result = crud.finish_scrivener_import(
+            self.db, shell["project_id"], self.owner.id, data
+        )
+        self.assertEqual(result, {"status": "ready", "imported_count": 1})
+        project = next(
+            item
+            for item in crud.get_projects(self.db, self.owner.id)
+            if item["id"] == shell["project_id"]
+        )
+        self.assertEqual(project["import_status"], "ready")
+        self.assertEqual(project["node_count"], 1)
+
+    def test_background_import_records_failure_on_project(self) -> None:
+        manifest = """<?xml version="1.0" encoding="UTF-8"?>
+<ScrivenerProject Version="2.0">
+  <ProjectProperties><ProjectTitle>실패 원고</ProjectTitle></ProjectProperties>
+  <Binder>
+    <BinderItem UUID="D" Type="DraftFolder">
+      <Children>
+        <BinderItem UUID="T1" Type="Text"><Title>본문</Title></BinderItem>
+      </Children>
+    </BinderItem>
+  </Binder>
+</ScrivenerProject>"""
+        buffer = BytesIO()
+        with ZipFile(buffer, "w") as archive:
+            archive.writestr("failed.scrivx", manifest)
+        data = buffer.getvalue()
+
+        shell = crud.create_import_project(
+            self.db, self.owner.id, data, "failed.zip"
+        )
+        with patch.object(
+            crud, "parse_scrivener_zip", side_effect=RuntimeError("가져오기 실패")
+        ):
+            result = crud.finish_scrivener_import(
+                self.db, shell["project_id"], self.owner.id, data
+            )
+
+        self.assertEqual(result["status"], "failed")
+        project = next(
+            item
+            for item in crud.get_projects(self.db, self.owner.id)
+            if item["id"] == shell["project_id"]
+        )
+        self.assertEqual(project["import_status"], "failed")
+        self.assertEqual(project["import_error"], "가져오기 실패")
 
     def test_import_scrivener_preserves_alignment_and_inline_style(self) -> None:
         manifest = """<?xml version="1.0" encoding="UTF-8"?>

@@ -1044,6 +1044,54 @@ def _html_to_rtf(body: str | None) -> str:
     return _rtf_escape(html_to_plain(body))
 
 
+def _project_title_from_manifest(
+    root: ET.Element,
+    manifest: str,
+    fallback: str | None = None,
+) -> str:
+    title = ""
+    for child in list(root):
+        if _local(child.tag) in {"projectproperties", "projectsettings"}:
+            title = _child_text(child, "projecttitle")
+            if title:
+                break
+    if not title:
+        title = manifest.rsplit("/", 1)[-1].rsplit(".", 1)[0]
+        try:
+            title = title.encode("cp437").decode("utf-8")
+        except (UnicodeEncodeError, UnicodeDecodeError):
+            pass
+    if not title:
+        title = fallback or "가져온 원고"
+    return unicodedata.normalize("NFC", title)
+
+
+def read_scrivener_project_title(
+    data: bytes,
+    *,
+    fallback: str | None = None,
+) -> str:
+    """Read only the manifest title, without parsing any RTF bodies."""
+    if len(data) > MAX_IMPORT_BYTES:
+        raise ValueError("파일이 너무 큽니다.")
+    try:
+        with ZipFile(BytesIO(data)) as archive:
+            names = [info.filename for info in archive.infolist() if not info.is_dir()]
+            manifest = next(
+                (name for name in names if name.lower().endswith(".scrivx")),
+                None,
+            )
+            if manifest is None:
+                raise ValueError("스크리브너 프로젝트 파일(.scrivx)이 없습니다.")
+            try:
+                root = ET.fromstring(archive.read(manifest))
+            except ET.ParseError as exc:
+                raise ValueError("프로젝트 XML을 읽을 수 없습니다.") from exc
+            return _project_title_from_manifest(root, manifest, fallback)
+    except BadZipFile as exc:
+        raise ValueError("ZIP 파일을 열 수 없습니다.") from exc
+
+
 def parse_scrivener_zip(data: bytes) -> tuple[str, list[ScrivenerNode]]:
     """Read a zipped Scrivener project into a flat ordered node list."""
     if len(data) > MAX_IMPORT_BYTES:
@@ -1201,21 +1249,7 @@ def parse_scrivener_zip(data: bytes) -> tuple[str, list[ScrivenerNode]]:
             if not node_list:
                 raise ValueError("가져올 문서가 없습니다.")
 
-            project_title = ""
-            for child in list(root):
-                if _local(child.tag) in {"projectproperties", "projectsettings"}:
-                    project_title = _child_text(child, "projecttitle")
-                    if project_title:
-                        break
-            if not project_title:
-                project_title = manifest.rsplit("/", 1)[-1].rsplit(".", 1)[0]
-                try:
-                    project_title = project_title.encode("cp437").decode(
-                        "utf-8"
-                    )
-                except (UnicodeEncodeError, UnicodeDecodeError):
-                    pass
-            return unicodedata.normalize("NFC", project_title), node_list
+            return _project_title_from_manifest(root, manifest), node_list
     except BadZipFile as exc:
         raise ValueError("ZIP 파일을 열 수 없습니다.") from exc
 
