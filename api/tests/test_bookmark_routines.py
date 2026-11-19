@@ -7,7 +7,7 @@ os.environ.setdefault("ENVIRONMENT", "development")
 
 from fastapi import HTTPException
 
-from crud.bookmark.periods import get_period, get_today
+from crud.bookmark.periods import _load_checks, get_period, get_today
 from crud.bookmark.routines import (
     create_routine,
     reorder_routines,
@@ -310,6 +310,50 @@ class BookmarkRoutineOrderTests(
                     1,
                 )
             self.assertEqual(context.exception.status_code, 404)
+
+    def test_load_checks_is_bounded_on_both_ends(self) -> None:
+        routine = self.make_routine(frequency="monthly", tracking_mode="date")
+        self.add_check(routine, "month", date(2026, 2, 1))
+        self.add_check(routine, "month", date(2026, 3, 1))
+        self.add_check(routine, "month", date(2026, 4, 1))
+
+        checks = _load_checks(
+            self.db,
+            routine.user_id,
+            date(2026, 3, 1),
+            end=date(2026, 3, 31),
+        )
+
+        self.assertIsNotNone(checks.row(routine, "month", date(2026, 3, 1)))
+        self.assertIsNone(checks.row(routine, "month", date(2026, 2, 1)))
+        self.assertIsNone(checks.row(routine, "month", date(2026, 4, 1)))
+
+    def test_get_period_passes_period_bounds_to_check_loader(self) -> None:
+        with patch("crud.bookmark.periods._load_checks") as loader:
+            get_period(
+                self.db,
+                1,
+                period_type="month",
+                period_start=date(2026, 3, 1),
+            )
+
+        loader.assert_called_once_with(
+            self.db,
+            1,
+            date(2026, 3, 1),
+            end=date(2026, 3, 31),
+        )
+
+    def test_get_today_passes_today_as_check_end(self) -> None:
+        with patch("crud.bookmark.periods._load_checks") as loader:
+            get_today(self.db, 1, day=date(2026, 3, 15))
+
+        loader.assert_called_once_with(
+            self.db,
+            1,
+            date(2026, 1, 1),
+            end=date(2026, 3, 15),
+        )
 
     def test_get_period_batches_check_queries(self) -> None:
         from sqlalchemy import event

@@ -14,16 +14,16 @@ def _load_checks(
     db: Session,
     user_id: int,
     start: date,
+    *,
+    end: date | None = None,
 ) -> RoutineCheckIndex:
-    rows = (
-        db.query(BookmarkRoutineCheck)
-        .filter(
-            BookmarkRoutineCheck.user_id == user_id,
-            BookmarkRoutineCheck.period_start >= start,
-        )
-        .all()
+    query = db.query(BookmarkRoutineCheck).filter(
+        BookmarkRoutineCheck.user_id == user_id,
+        BookmarkRoutineCheck.period_start >= start,
     )
-    return RoutineCheckIndex(rows)
+    if end is not None:
+        query = query.filter(BookmarkRoutineCheck.period_start <= end)
+    return RoutineCheckIndex(query.all())
 
 
 def _period_count(
@@ -221,7 +221,7 @@ def get_today(
 ) -> dict[str, Any]:
     target = day or _kst_today()
     check_start = min(_week_start(target), date(target.year, 1, 1))
-    checks = _load_checks(db, user_id, check_start)
+    checks = _load_checks(db, user_id, check_start, end=target)
     routines = (
         db.query(BookmarkRoutine)
         .options(selectinload(BookmarkRoutine.category))
@@ -339,7 +339,7 @@ def get_period(
     frequency = PERIOD_FREQUENCY[period_type]
     period_end = _period_end(period_type, period_start)
     checks = (
-        _load_checks(db, user_id, period_start)
+        _load_checks(db, user_id, period_start, end=period_end)
         if include_routines
         else None
     )
