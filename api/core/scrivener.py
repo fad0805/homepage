@@ -470,6 +470,10 @@ def _rtf_to_html_with_images(
                 continue
             index += 2
             continue
+        if char == "\t":
+            append("⇥")
+            index += 1
+            continue
         if char in "\r\n":
             index += 1
             continue

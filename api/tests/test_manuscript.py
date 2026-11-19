@@ -567,7 +567,7 @@ class ManuscriptTests(unittest.TestCase):
 </ScrivenerProject>"""
         rtf = (
             "{\\rtf1\\ansi\\ansicpg1252\\uc1"
-            "\\pard first\\tab second\\\n\\\n  third  \\\n}"
+            "\\pard first\\tab second\tthird\\\n\\\n  fourth  \\\n}"
         )
         buffer = BytesIO()
         with ZipFile(buffer, "w") as archive:
@@ -579,7 +579,10 @@ class ManuscriptTests(unittest.TestCase):
         )
         tree = crud.get_tree(self.db, result["project_id"], self.owner.id)
         body = crud.get_node(self.db, tree[0]["id"], self.owner.id)["body"]
-        self.assertEqual(body, "<p>first⇥second</p><p></p><p>  third  </p>")
+        self.assertEqual(
+            body,
+            "<p>first⇥second⇥third</p><p></p><p>  fourth  </p>",
+        )
 
     def test_import_scrivener_numbers_duplicate_project_titles(self) -> None:
         manifest = """<?xml version="1.0" encoding="UTF-8"?>
