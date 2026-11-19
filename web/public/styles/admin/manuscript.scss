@@ -236,9 +236,9 @@
   flex-wrap: nowrap;
   justify-content: flex-start;
   gap: 0.25rem;
-  width: max-content;
+  width: 100%;
   max-width: 100%;
-  justify-self: start;
+  justify-self: stretch;
   min-width: 0;
 }
 
