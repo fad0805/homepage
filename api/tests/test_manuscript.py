@@ -125,6 +125,13 @@ class ManuscriptTests(unittest.TestCase):
         self.db.flush()
         return node
 
+    def _clear_publish_cooldown(self, node: ManuscriptNode) -> None:
+        node.published_at = datetime.now(timezone.utc).replace(
+            tzinfo=None
+        ) - timedelta(seconds=6)
+        self.db.commit()
+        self.db.refresh(node)
+
     def test_delete_project_removes_its_nodes(self) -> None:
         project = self._project()
         self._node(project, "챕터")
@@ -542,6 +549,7 @@ class ManuscriptTests(unittest.TestCase):
             schemas.NodeUpdate(title="원고에서 수정"),
             self.owner.id,
         )
+        self._clear_publish_cooldown(chapter_node)
         crud.publish_node(
             self.db,
             chapter_node.id,
@@ -554,6 +562,21 @@ class ManuscriptTests(unittest.TestCase):
             crud.get_node(self.db, chapter_node.id, self.owner.id)["published_state"],
             "published",
         )
+
+    def test_publish_rejects_retry_within_cooldown(self) -> None:
+        project = self._project()
+        node = self._node(project, "1화", body="<p>본문</p>")
+        payload = schemas.PublishRequest(target_book_id=self.book.id)
+
+        crud.publish_node(self.db, node.id, payload, self.owner.id)
+
+        with self.assertRaises(HTTPException) as raised:
+            crud.publish_node(self.db, node.id, payload, self.owner.id)
+        self.assertEqual(raised.exception.status_code, 429)
+
+        self._clear_publish_cooldown(node)
+        retried = crud.publish_node(self.db, node.id, payload, self.owner.id)
+        self.assertTrue(retried["node"]["published_chapter_exists"])
 
     def test_publish_shrinks_font_sizes_in_chapter_html(self) -> None:
         project = self._project()
@@ -724,6 +747,7 @@ class ManuscriptTests(unittest.TestCase):
         self.assertEqual(state["published_state"], "published_missing")
 
         # Publishing again creates a fresh chapter instead of failing.
+        self._clear_publish_cooldown(node)
         result = crud.publish_node(
             self.db,
             node.id,

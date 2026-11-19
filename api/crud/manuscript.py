@@ -30,6 +30,7 @@ from models.manuscript import ManuscriptNode, ManuscriptProject, SerialNode
 from schemas import manuscript as schemas
 
 TRASH_RETENTION_DAYS = 30
+PUBLISH_COOLDOWN_SECONDS = 5
 
 
 def _utcnow() -> datetime:
@@ -95,6 +96,7 @@ def _get_node_or_404(
     user_id: int,
     *,
     include_deleted: bool = False,
+    for_update: bool = False,
 ) -> ManuscriptNode:
     query = db.query(ManuscriptNode).filter(
         ManuscriptNode.id == node_id,
@@ -102,6 +104,8 @@ def _get_node_or_404(
     )
     if not include_deleted:
         query = query.filter(ManuscriptNode.deleted_at.is_(None))
+    if for_update:
+        query = query.with_for_update()
     node = query.first()
     if node is None:
         raise HTTPException(
@@ -1048,11 +1052,20 @@ def publish_node(
     payload: schemas.PublishRequest,
     user_id: int,
 ) -> dict:
-    node = _get_node_or_404(db, node_id, user_id)
+    node = _get_node_or_404(db, node_id, user_id, for_update=True)
     if node.node_type != "chapter":
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Only chapter nodes can be published",
+        )
+    now = _utcnow()
+    if (
+        node.published_at is not None
+        and (now - node.published_at).total_seconds() < PUBLISH_COOLDOWN_SECONDS
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="발행 후 5초 동안 다시 발행할 수 없습니다.",
         )
 
     project = (
@@ -1125,7 +1138,7 @@ def publish_node(
         node.published_chapter_hash = _content_hash(
             chapter.title, chapter.subtitle, chapter.body
         )
-        node.published_at = _utcnow()
+    node.published_at = _utcnow()
     db.commit()
     db.refresh(node)
     return {
