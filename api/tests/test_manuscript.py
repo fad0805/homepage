@@ -1,3 +1,4 @@
+import asyncio
 import base64
 from contextlib import contextmanager
 import unittest
@@ -11,7 +12,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from core.scrivener import parse_scrivener_zip
+from core.scrivener import parse_scrivener_zip, read_upload_limited
 from core.text_stats import count_characters
 from crud import manuscript as crud
 from db.base import Base
@@ -20,6 +21,50 @@ from models.illustrations import Illustration, IllustrationImage  # noqa: F401
 from models.manuscript import ManuscriptNode, ManuscriptProject, SerialNode
 from models.users import User
 from schemas import manuscript as schemas
+
+
+class _ChunkedUpload:
+    def __init__(self, chunks, size=None) -> None:
+        self.chunks = iter(chunks)
+        self.size = size
+        self.read_sizes: list[int] = []
+        self.closed = False
+
+    async def read(self, size: int) -> bytes:
+        self.read_sizes.append(size)
+        return next(self.chunks, b"")
+
+    async def close(self) -> None:
+        self.closed = True
+
+
+class ReadUploadLimitedTests(unittest.TestCase):
+    def test_reads_in_chunks_and_returns_full_data(self) -> None:
+        upload = _ChunkedUpload([b"ab", b"cd", b""])
+
+        data = asyncio.run(read_upload_limited(upload, limit=10, chunk_size=2))
+
+        self.assertEqual(data, b"abcd")
+        self.assertEqual(upload.read_sizes, [2, 2, 2])
+        self.assertTrue(upload.closed)
+
+    def test_stops_as_soon_as_cumulative_size_exceeds_limit(self) -> None:
+        upload = _ChunkedUpload([b"a" * 4, b"b" * 4, b"c" * 4])
+
+        with self.assertRaisesRegex(ValueError, "파일이 너무 큽니다"):
+            asyncio.run(read_upload_limited(upload, limit=10, chunk_size=4))
+
+        self.assertEqual(upload.read_sizes, [4, 4, 4])
+        self.assertTrue(upload.closed)
+
+    def test_declared_size_is_rejected_without_reading(self) -> None:
+        upload = _ChunkedUpload([b"x"], size=11)
+
+        with self.assertRaisesRegex(ValueError, "파일이 너무 큽니다"):
+            asyncio.run(read_upload_limited(upload, limit=10, chunk_size=4))
+
+        self.assertEqual(upload.read_sizes, [])
+        self.assertTrue(upload.closed)
 
 
 class ManuscriptTests(unittest.TestCase):

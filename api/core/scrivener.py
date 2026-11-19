@@ -16,6 +16,7 @@ from html import escape
 from html.parser import HTMLParser
 from io import BytesIO
 import re
+from typing import Any
 import unicodedata
 import uuid
 from xml.etree import ElementTree as ET
@@ -25,6 +26,36 @@ from core.text_stats import html_to_plain
 
 MAX_IMPORT_BYTES = 50 * 1024 * 1024
 MAX_UNCOMPRESSED_BYTES = 200 * 1024 * 1024
+UPLOAD_CHUNK_BYTES = 1024 * 1024
+
+
+async def read_upload_limited(
+    file: Any,
+    *,
+    limit: int = MAX_IMPORT_BYTES,
+    chunk_size: int = UPLOAD_CHUNK_BYTES,
+) -> bytes:
+    """Read an upload in chunks, failing as soon as ``limit`` is exceeded."""
+    if chunk_size < 1:
+        raise ValueError("청크 크기는 1 이상이어야 합니다.")
+    declared_size = getattr(file, "size", None)
+    if isinstance(declared_size, int) and declared_size > limit:
+        await file.close()
+        raise ValueError("파일이 너무 큽니다.")
+
+    data = bytearray()
+    try:
+        while True:
+            chunk = await file.read(chunk_size)
+            if not chunk:
+                break
+            if len(data) + len(chunk) > limit:
+                raise ValueError("파일이 너무 큽니다.")
+            data.extend(chunk)
+    finally:
+        await file.close()
+    return bytes(data)
+
 
 IGNORED_RTF_GROUPS = {
     "fonttbl",

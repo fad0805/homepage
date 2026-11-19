@@ -1,9 +1,10 @@
 from urllib.parse import quote
 
-from fastapi import APIRouter, Depends, File, Query, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
+from core.scrivener import read_upload_limited
 from crud import manuscript as crud
 from db.session import get_db
 from schemas import manuscript as schemas
@@ -56,7 +57,13 @@ async def import_scrivener(
     db: Session = Depends(get_db),
     user=Depends(require_auth),
 ):
-    data = await file.read()
+    try:
+        data = await read_upload_limited(file)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail=str(exc),
+        ) from exc
     return crud.import_scrivener(db, user.id, data)
 
 
