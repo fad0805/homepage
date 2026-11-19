@@ -387,7 +387,19 @@
     }
   }
 
+  .admin-manuscript-table {
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+  }
+
   .admin-manuscript-row {
-    grid-template-columns: minmax(0, 1fr) 3rem 4rem;
+    grid-template-columns: minmax(9rem, 2fr) minmax(7rem, 1.2fr) 3.5rem 7rem 4rem;
+    min-width: 35rem;
+
+    > span:nth-child(2),
+    > span:nth-child(4) {
+      display: block;
+    }
   }
 }
