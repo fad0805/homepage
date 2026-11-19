@@ -2350,18 +2350,20 @@
 
   &.has-day-meta {
     min-width: 41rem;
+
+    col.is-goal,
+    col.is-review {
+      width: calc((100% - 25rem) / 2);
+    }
   }
 
-  col.is-goal {
-    width: 26%;
+  col.is-goal,
+  col.is-review {
+    width: calc((100% - 14rem) / 2);
   }
 
   col.is-rating {
     width: 6.5rem;
-  }
-
-  col.is-review {
-    width: auto;
   }
 
   th,
