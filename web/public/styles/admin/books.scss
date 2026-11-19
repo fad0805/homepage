@@ -1134,17 +1134,16 @@ p.admin-books-draft-preview-empty {
 
   .admin-books-chapter-row {
     flex-wrap: nowrap;
-    width: 100%;
-    max-width: 100%;
+    width: max-content;
+    min-width: 100%;
     box-sizing: border-box;
 
     .admin-books-chapter-link {
       flex: 1 1 auto;
-      min-width: 0;
+      min-width: max-content;
 
       .admin-books-chapter-main {
-        flex: 1 1 auto;
-        width: 100%;
+        min-width: 120px;
       }
     }
   }
