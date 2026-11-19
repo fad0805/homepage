@@ -17,11 +17,17 @@
 .admin-books-toc-panel {
   padding: 0;
   overflow: hidden;
+
+  button {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.8rem;
+    line-height: 1.25;
+  }
 }
 
 .admin-books-toc-panel.is-collapsed .admin-books-toc__toggle {
-  min-height: 1.7rem;
-  padding: 0.2rem 0.55rem;
+  min-height: auto;
+  padding: 0.25rem 0.5rem;
   gap: 0.35rem;
 
   strong {
@@ -48,9 +54,9 @@
 .admin-books-toc__toggle {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.35rem;
   width: 100%;
-  padding: 0.75rem 0.9rem;
+  padding: 0.4rem 0.6rem;
   border: 0;
   background: transparent;
   color: var(--foreground);
@@ -78,25 +84,33 @@
 .admin-books-toc__static-title {
   display: flex;
   align-items: baseline;
-  gap: 0.5rem;
+  gap: 0.35rem;
   width: 100%;
-  padding: 0.5rem 0.2rem;
+  padding: 0.3rem 0.2rem;
 
   strong {
     color: var(--title-color);
-    font-size: 0.8rem;
+    font-size: 0.64rem;
   }
+}
+
+.admin-books-toc__toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.25rem;
 }
 
 .admin-books-toc__select-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.4rem;
-  padding: 0 0.9rem 0.6rem;
+  gap: 0.25rem;
+  padding: 0 0.6rem 0.4rem;
 }
 
 .admin-books-toc__count {
-  margin-left: 0.5rem;
+  margin-left: 0.35rem;
   color: var(--foreground);
   font-size: 0.7rem;
   opacity: 0.65;
@@ -105,30 +119,30 @@
 .admin-books-toc__actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.4rem;
-  padding: 0 0.9rem 0.7rem;
+  gap: 0.25rem;
+  padding: 0 0.6rem 0.4rem;
 }
 
 .admin-books-toc__tree {
   display: flex;
   flex-direction: column;
-  gap: 0.2rem;
-  padding: 0 0.9rem 0.9rem;
+  gap: 0.15rem;
+  padding: 0 0.6rem 0.6rem;
 }
 
 .admin-books-toc__branch {
   display: flex;
   flex-direction: column;
-  gap: 0.2rem;
+  gap: 0.15rem;
 }
 
 .admin-books-toc__row {
   position: relative;
   display: flex;
   align-items: center;
-  gap: 0.35rem;
-  min-height: 2.2rem;
-  padding: 0.15rem 0.3rem;
+  gap: 0.25rem;
+  min-height: 1.9rem;
+  padding: 0.1rem 0.2rem;
   border-radius: 0.45rem;
   cursor: grab;
 
@@ -188,19 +202,13 @@
   user-select: none;
 }
 
-.admin-books-toc__icon {
-  flex: 0 0 auto;
-  width: 1rem;
-  color: var(--title-color);
-  text-align: center;
-}
-
 .admin-books-toc__label {
   flex: 1;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  font-size: 0.9em;
   cursor: text;
 
   &.is-pinned {
@@ -210,41 +218,33 @@
 }
 
 .admin-books-toc__chapter-count {
+  display: inline-block;
   flex: 0 0 auto;
+  margin-left: 0.25rem;
   padding: 0.05rem 0.35rem;
   border-radius: 999px;
-  background: color-mix(in srgb, var(--admin-primary, var(--title-color)) 12%, transparent);
+  background: color-mix(in srgb, var(--admin-primary, var(--title-color)) 14%, transparent);
   color: var(--title-color);
   font-size: 0.62rem;
+  font-weight: normal;
+  vertical-align: middle;
   white-space: nowrap;
-}
-
-.admin-books-toc__root-drop {
-  margin-top: 0.25rem;
-  padding: 0.45rem 0.6rem;
-  border: 1px dashed color-mix(in srgb, var(--admin-primary, var(--title-color)) 45%, transparent);
-  border-radius: 0.45rem;
-  color: color-mix(in srgb, var(--foreground) 60%, transparent);
-  font-size: 0.72rem;
-  text-align: center;
-
-  &.is-active {
-    background: color-mix(in srgb, var(--admin-primary, var(--title-color)) 16%, transparent);
-    color: var(--title-color);
-  }
 }
 
 .admin-books-toc__inline-form {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0.4rem;
-  padding: 0.4rem 0.9rem;
+  gap: 0.25rem;
+  padding: 0.3rem 0.6rem;
 
   input {
     @include toc-control;
     flex: 1;
-    min-width: 8rem;
+    min-width: 4rem;
+    padding: 0.25rem 0.5rem;
+    font-size: 0.8rem;
+    line-height: 1.25;
   }
 
 }

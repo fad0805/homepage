@@ -333,9 +333,6 @@ export function TocManager({
           <span className="admin-books-toc__grip" aria-hidden="true">
             ⠿
           </span>
-          <span className="admin-books-toc__icon" aria-hidden="true">
-            {node.node_type === "folder" ? "▣" : "·"}
-          </span>
           {onSelectParent && node.node_type === "folder" ? (
             <input
               type="checkbox"
@@ -395,9 +392,6 @@ export function TocManager({
               {node.pinned ? (
                 <span className="admin-books-pin-badge">고정</span>
               ) : null}
-              {node.locked ? (
-                <span className="admin-books-pin-badge">보호</span>
-              ) : null}
               {node.children.length === 0 ? (
                 <span className="admin-books-toc__chapter-count">
                   챕터 {chapterCounts.get(node.id) ?? 0}개
@@ -407,12 +401,14 @@ export function TocManager({
                 <button
                   type="button"
                   className="admin-button"
+                  aria-label="하위 폴더 추가"
+                  title="하위 폴더 추가"
                   onClick={() => {
                     setFolderParentId(node.id);
                     setFolderLabel("");
                   }}
                 >
-                  하위 폴더
+                  +
                 </button>
               ) : null}
               <button
@@ -519,56 +515,58 @@ export function TocManager({
 
       {open ? (
         <>
-          <div className="admin-books-toc__actions">
-            <button
-              type="button"
-              className="admin-button"
-              onClick={() => {
-                setFolderParentId(null);
-                setFolderLabel("");
-              }}
-            >
-              + 폴더
-            </button>
-            <button
-              type="button"
-              className="admin-button"
-              onClick={() => void load()}
-              disabled={loading}
-            >
-              새로고침
-            </button>
-          </div>
-
-          {onSelectParent ? (
-            <div className="admin-books-toc__select-actions">
+          <div className="admin-books-toc__toolbar">
+            <div className="admin-books-toc__actions">
               <button
                 type="button"
-                className={[
-                  "admin-button",
-                  selectedParentId === null ? "primary" : "",
-                ]
-                  .filter(Boolean)
-                  .join(" ")}
-                onClick={() => selectParent(null)}
+                className="admin-button"
+                onClick={() => {
+                  setFolderParentId(null);
+                  setFolderLabel("");
+                }}
               >
-                목차 최상위에 배치
+                + 폴더
               </button>
-              {selectedChapterId !== null &&
-              chapters.some((chapter) => chapter.id === selectedChapterId) &&
-              !placedChapterIds.has(selectedChapterId) ? (
+              <button
+                type="button"
+                className="admin-button"
+                onClick={() => void load()}
+                disabled={loading}
+              >
+                새로고침
+              </button>
+            </div>
+
+            {onSelectParent ? (
+              <div className="admin-books-toc__select-actions">
                 <button
                   type="button"
-                  className="admin-button"
-                  onClick={() =>
-                    void createPost(selectedChapterId, selectedParentId)
-                  }
+                  className={[
+                    "admin-button",
+                    selectedParentId === null ? "primary" : "",
+                  ]
+                    .filter(Boolean)
+                    .join(" ")}
+                  onClick={() => selectParent(null)}
                 >
-                  이 챕터를 목차에 등록
+                  목차 최상위에 배치
                 </button>
-              ) : null}
-            </div>
-          ) : null}
+                {selectedChapterId !== null &&
+                chapters.some((chapter) => chapter.id === selectedChapterId) &&
+                !placedChapterIds.has(selectedChapterId) ? (
+                  <button
+                    type="button"
+                    className="admin-button"
+                    onClick={() =>
+                      void createPost(selectedChapterId, selectedParentId)
+                    }
+                  >
+                    이 챕터를 목차에 등록
+                  </button>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
 
           {folderParentId === null ? (
             <div className="admin-books-toc__inline-form">
@@ -611,22 +609,6 @@ export function TocManager({
           ) : (
             <div className="admin-books-toc__tree">
               {visibleTree.map((node) => renderNode(node, 0))}
-              <div
-                className={[
-                  "admin-books-toc__root-drop",
-                  dropKey === "root" ? "is-active" : "",
-                ]
-                  .filter(Boolean)
-                  .join(" ")}
-                onDragOver={(event) => {
-                  event.preventDefault();
-                  setDropKey("root");
-                }}
-                onDragLeave={() => setDropKey(null)}
-                onDrop={(event) => void applyDrop(event, rootTarget)}
-              >
-                여기에 놓으면 목차 최상위로 이동합니다.
-              </div>
             </div>
           )}
         </>
