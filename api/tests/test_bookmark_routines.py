@@ -136,6 +136,31 @@ class BookmarkRoutineTests(
         self.assertEqual(entry["active_until"], date(2026, 3, 20))
         self.assertEqual(entry["deadline"], date(2026, 3, 20))
 
+    def test_period_can_skip_routine_loading(self) -> None:
+        routine = self.make_routine(
+            frequency="daily",
+            tracking_mode="count",
+            start_date=date(2026, 1, 1),
+        )
+        full = get_period(
+            self.db,
+            1,
+            period_type="day",
+            period_start=date(2026, 3, 15),
+        )
+        self.assertIn(
+            routine.id,
+            [item["id"] for item in full["routines"]],
+        )
+        light = get_period(
+            self.db,
+            1,
+            period_type="day",
+            period_start=date(2026, 3, 15),
+            include_routines=False,
+        )
+        self.assertEqual(light["routines"], [])
+
     def test_create_count_routine_records_first_window_start(self) -> None:
         with patch(
             "crud.bookmark.routines._kst_today",

@@ -60,6 +60,8 @@ export function usePlannerData({
   const initializedToday = useRef(false);
   const tasksRequestRef = useRef(0);
   const eventsRequestRef = useRef(0);
+  const dayBookmarkRequestRef = useRef(0);
+  const dayBookmarkCacheRef = useRef(new Map<string, BookmarkPeriod>());
 
   const loadTasks = useCallback(
     async (monthKey: string) => {
@@ -159,14 +161,26 @@ export function usePlannerData({
   );
 
   const loadDayBookmark = useCallback(async (date: string) => {
+    const requestId = ++dayBookmarkRequestRef.current;
+    const cached = dayBookmarkCacheRef.current.get(date);
+    if (cached) {
+      setDayBookmark(cached);
+      return;
+    }
     try {
       const data = await apiFetch<BookmarkPeriod>(
-        `/api/bookmark?period_type=day&period_start=${date}`,
+        `/api/bookmark?period_type=day&period_start=${date}` +
+          "&include_routines=false",
         { cache: "no-store" },
       );
-      setDayBookmark(data);
+      dayBookmarkCacheRef.current.set(date, data);
+      if (requestId === dayBookmarkRequestRef.current) {
+        setDayBookmark(data);
+      }
     } catch {
-      setDayBookmark(null);
+      if (requestId === dayBookmarkRequestRef.current) {
+        setDayBookmark(null);
+      }
     }
   }, []);
 

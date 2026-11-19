@@ -88,6 +88,7 @@ def read_period(
     period_type: str,
     period_start: date,
     response: Response,
+    include_routines: bool = True,
     db: Session = Depends(get_db),
     user=Depends(require_auth),
 ):
@@ -97,6 +98,7 @@ def read_period(
         user.id,
         period_type=period_type,
         period_start=period_start,
+        include_routines=include_routines,
     )
 
 

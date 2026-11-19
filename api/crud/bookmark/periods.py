@@ -333,11 +333,16 @@ def get_period(
     *,
     period_type: str,
     period_start: date,
+    include_routines: bool = True,
 ) -> dict[str, Any]:
     _validate_period(period_type, period_start)
     frequency = PERIOD_FREQUENCY[period_type]
     period_end = _period_end(period_type, period_start)
-    checks = _load_checks(db, user_id, period_start)
+    checks = (
+        _load_checks(db, user_id, period_start)
+        if include_routines
+        else None
+    )
     routines = (
         db.query(BookmarkRoutine)
         .options(selectinload(BookmarkRoutine.category))
@@ -353,6 +358,8 @@ def get_period(
         )
         .order_by(BookmarkRoutine.position, BookmarkRoutine.id)
         .all()
+        if include_routines
+        else []
     )
     today = _kst_today()
     entries: list[dict[str, Any]] = []
