@@ -1096,6 +1096,11 @@ export default function ManuscriptWorkspace() {
   }
 
   const isPlaceholder = !selected;
+  // Changes whenever the visible document changes, so the editor scroll
+  // position is never carried over from one document to another.
+  const editorScrollKey = trashPreview
+    ? `trash-${trashPreview.id}`
+    : `node-${selectedId ?? "none"}`;
 
   return (
     <div className="ms-app">
@@ -1227,6 +1232,7 @@ export default function ManuscriptWorkspace() {
               onChange={() => {}}
               placeholder="삭제된 원고"
               uploadUrl="/api/chapters/upload"
+              scrollResetKey={editorScrollKey}
             />
           ) : scrivenings ? (
             <RichTextEditor
@@ -1241,6 +1247,7 @@ export default function ManuscriptWorkspace() {
               }}
               uploadUrl="/api/chapters/upload"
               onEditorReady={handleEditorReady}
+              scrollResetKey={editorScrollKey}
               onNotice={(editorNotice: EditorNotice) =>
                 notify(editorNotice.text, editorNotice.type)
               }
@@ -1259,6 +1266,7 @@ export default function ManuscriptWorkspace() {
                 setForm({ ...form, body: html });
                 setDirty(true);
               }}
+              scrollResetKey={editorScrollKey}
               uploadUrl="/api/chapters/upload"
               onNotice={(editorNotice: EditorNotice) =>
                 notify(editorNotice.text, editorNotice.type)

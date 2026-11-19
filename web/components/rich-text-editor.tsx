@@ -58,6 +58,8 @@ interface RichTextEditorProps {
   readOnly?: boolean;
   /** Receive the live editor instance for programmatic navigation. */
   onEditorReady?: (editor: Editor | null) => void;
+  /** Reset the editor scroll position when the displayed document changes. */
+  scrollResetKey?: string | number | null;
 }
 
 function ToolbarButton({
@@ -235,9 +237,11 @@ export function RichTextEditor({
   variant = "default",
   readOnly = false,
   onEditorReady,
+  scrollResetKey,
 }: RichTextEditorProps) {
   const onChangeRef = useRef(onChange);
   const onNoticeRef = useRef(onNotice);
+  const contentRef = useRef<HTMLDivElement | null>(null);
   const imageInputRef = useRef<HTMLInputElement | null>(null);
   const pasteImageRef = useRef<(file: File) => void>(() => {});
   const [uploadingImage, setUploadingImage] = useState(false);
@@ -336,6 +340,12 @@ export function RichTextEditor({
   useEffect(() => {
     editor?.setEditable(!readOnly);
   }, [editor, readOnly]);
+
+  // Switching documents reuses this component, so explicitly return to the top
+  // instead of inheriting the previous document's scroll position.
+  useEffect(() => {
+    if (contentRef.current) contentRef.current.scrollTop = 0;
+  }, [scrollResetKey]);
 
   const toggleHtmlMode = useCallback(() => {
     if (!editor) return;
@@ -1145,6 +1155,7 @@ export function RichTextEditor({
         </div>
       ) : null}
       <div
+        ref={contentRef}
         className={`admin-editor__content${
           variant === "workspace" ? " ms-editor__surface" : ""
         }`}
