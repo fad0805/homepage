@@ -25,7 +25,7 @@ function getMaxImageHeight() {
 }
 
 function AuthorImageView({ node, updateAttributes, selected }: NodeViewProps) {
-  const { src, alt, title, width, align, wrap } = node.attrs;
+  const { src, alt, title, width, height, align, wrap } = node.attrs;
   const imgRef = useRef<HTMLImageElement>(null);
   const [resizing, setResizing] = useState(false);
 
@@ -44,9 +44,14 @@ function AuthorImageView({ node, updateAttributes, selected }: NodeViewProps) {
       const startX = event.clientX;
       const startWidth = image.getBoundingClientRect().width;
       const ratio =
-        image.naturalHeight > 0
-          ? image.naturalWidth / image.naturalHeight
-          : 1;
+        typeof width === "number" &&
+        typeof height === "number" &&
+        width > 0 &&
+        height > 0
+          ? width / height
+          : image.naturalHeight > 0
+            ? image.naturalWidth / image.naturalHeight
+            : 1;
       const maxHeight = getMaxImageHeight();
       const container = image.closest(".admin-editor__content");
       const containerWidth = container
@@ -63,7 +68,12 @@ function AuthorImageView({ node, updateAttributes, selected }: NodeViewProps) {
           maxWidth,
           Math.max(minWidth, startWidth + delta),
         );
-        updateAttributes({ width: Math.round(nextWidth) });
+        updateAttributes({
+          width: Math.round(nextWidth),
+          ...(typeof height === "number" && height > 0
+            ? { height: Math.round(nextWidth / ratio) }
+            : {}),
+        });
       };
 
       const handleUp = () => {
@@ -118,8 +128,16 @@ function AuthorImageView({ node, updateAttributes, selected }: NodeViewProps) {
           style={{
             display: "block",
             width: width ? "100%" : "auto",
-            height: "auto",
-            maxHeight: `${AUTHOR_IMAGE_MAX_HEIGHT_REM}rem`,
+            height:
+              typeof height === "number" && !width ? `${height}px` : "auto",
+            aspectRatio:
+              typeof width === "number" && typeof height === "number"
+                ? `${width} / ${height}`
+                : undefined,
+            maxHeight:
+              typeof height === "number" && height > 0
+                ? "none"
+                : `${AUTHOR_IMAGE_MAX_HEIGHT_REM}rem`,
             maxWidth: "100%",
             objectFit: "contain",
             borderRadius: "0.7rem",
@@ -156,6 +174,18 @@ export const AuthorImage = Image.extend({
                 style: `width: ${attributes.width}px`,
               }
             : {},
+      },
+      height: {
+        default: null,
+        parseHTML: (element) => {
+          const raw =
+            element.getAttribute("height") || element.style.height || "";
+          if (!raw) return null;
+          const parsed = Number.parseInt(raw, 10);
+          return Number.isFinite(parsed) ? parsed : null;
+        },
+        renderHTML: (attributes) =>
+          attributes.height ? { height: attributes.height } : {},
       },
       align: {
         default: "center",
