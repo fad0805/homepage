@@ -423,7 +423,7 @@ def _rtf_to_html_with_images(
                 elif word == "line":
                     append("<br>")
                 elif word == "tab":
-                    append("\t")
+                    append("⇥")
                 elif word in RTF_SYMBOLS:
                     append(escape(RTF_SYMBOLS[word]))
                 elif word == "pard":
@@ -561,6 +561,8 @@ def _rtf_text(text: str) -> str:
             parts.append(f"\\{char}")
         elif char == "\n":
             parts.append("\\par\n")
+        elif char == "\t":
+            parts.append("\\tab ")
         elif char == "\r":
             continue
         elif 32 <= ord(char) < 127:
@@ -902,7 +904,7 @@ class _RtfBodyParser(HTMLParser):
                 return
             self._open_paragraph("p", [])
         self._ensure_style()
-        self.parts.append(_rtf_text(data))
+        self.parts.append(_rtf_text(data.replace("⇥", "\t")))
 
     def finish(self) -> None:
         self._close_paragraph()

@@ -567,7 +567,7 @@ class ManuscriptTests(unittest.TestCase):
 </ScrivenerProject>"""
         rtf = (
             "{\\rtf1\\ansi\\ansicpg1252\\uc1"
-            "\\pard first\\\n\\\n  second  \\\n}"
+            "\\pard first\\tab second\\\n\\\n  third  \\\n}"
         )
         buffer = BytesIO()
         with ZipFile(buffer, "w") as archive:
@@ -579,7 +579,7 @@ class ManuscriptTests(unittest.TestCase):
         )
         tree = crud.get_tree(self.db, result["project_id"], self.owner.id)
         body = crud.get_node(self.db, tree[0]["id"], self.owner.id)["body"]
-        self.assertEqual(body, "<p>first</p><p></p><p>  second  </p>")
+        self.assertEqual(body, "<p>first⇥second</p><p></p><p>  third  </p>")
 
     def test_import_scrivener_numbers_duplicate_project_titles(self) -> None:
         manifest = """<?xml version="1.0" encoding="UTF-8"?>
@@ -743,7 +743,7 @@ class ManuscriptTests(unittest.TestCase):
 
     def test_export_scrivener_keeps_blank_lines_and_spaces(self) -> None:
         project = self._project()
-        body = "<p>앞  공백</p><p></p><p>  뒤  </p>"
+        body = "<p>앞  공백</p><p></p><p>  뒤 ⇥ 끝  </p>"
         self._node(project, "빈줄", body=body)
         self.db.commit()
 
