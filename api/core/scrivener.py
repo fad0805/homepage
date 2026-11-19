@@ -59,6 +59,12 @@ RTF_SYMBOLS = {
     "zwj": "",
 }
 
+# Scrivener's body default is 13pt, but the manuscript editor is laid out for
+# 10pt. Treat 13pt as *the default size* (no inline span) so imported files
+# render at the editor's 10pt while exported .scriv files stay native at 13pt.
+# Explicit sizes other than 13pt are preserved exactly in both directions.
+SCRIVENER_DEFAULT_PT = 13.0
+
 
 @dataclass
 class ScrivenerNode:
@@ -185,7 +191,7 @@ def _prepare_rtf(
 def _render_rtf_segment(content: str, style: _RtfStyle) -> str:
     if style.color:
         content = f'<span style="color: {style.color}">{content}</span>'
-    if style.size is not None and style.size != 10:
+    if style.size is not None and abs(style.size - SCRIVENER_DEFAULT_PT) > 0.01:
         size = f"{style.size:g}"
         content = f'<span style="font-size: {size}pt">{content}</span>'
     if style.strike:
@@ -549,7 +555,7 @@ def _rtf_header(colors: list[str]) -> str:
             "\\pard\\tx566\\tx1133\\tx1700\\tx2267\\tx2834"
             "\\tx3401\\tx3968\\tx4535\\tx5102\\tx5669"
             "\\tx6236\\tx6803\\pardirnatural\\partightenfactor0",
-            "\\f0\\fs20 \\cf0 ",
+            f"\\f0\\fs{round(SCRIVENER_DEFAULT_PT * 2)} \\cf0 ",
         ]
     )
 
@@ -740,8 +746,12 @@ class _RtfBodyParser(HTMLParser):
             controls.append("\\ul " if current.underline else "\\ulnone ")
         if current.strike != previous.strike:
             controls.append("\\strike " if current.strike else "\\strike0 ")
-        current_size = round((current.size or 10) * 2)
-        previous_size = round((previous.size or 10) * 2)
+        current_size = round(
+            (current.size if current.size is not None else SCRIVENER_DEFAULT_PT) * 2
+        )
+        previous_size = round(
+            (previous.size if previous.size is not None else SCRIVENER_DEFAULT_PT) * 2
+        )
         if current_size != previous_size:
             controls.append(f"\\fs{current_size} ")
         if current.color != previous.color:
@@ -788,7 +798,9 @@ class _RtfBodyParser(HTMLParser):
             controls.append(f"\\ri{self._paragraph.indent_right * 15} ")
         if self._paragraph.indent_first:
             controls.append(f"\\fi{self._paragraph.indent_first * 15} ")
-        controls.append("\\fs20\\cf0\\b0\\i0\\ulnone\\strike0 ")
+        controls.append(
+            f"\\fs{round(SCRIVENER_DEFAULT_PT * 2)}\\cf0\\b0\\i0\\ulnone\\strike0 "
+        )
         self.parts.append("".join(controls))
         self._style = _RtfStyle()
         self._emitted_style = _RtfStyle()

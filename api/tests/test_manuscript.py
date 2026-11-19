@@ -565,7 +565,8 @@ class ManuscriptTests(unittest.TestCase):
         chapter = crud.get_node(self.db, tree[1]["id"], self.owner.id)
         self.assertEqual(
             chapter["body"],
-            "<p>Hello 가</p><p></p><p>second</p>",
+            '<p><span style="font-size: 10pt">Hello 가</span></p>'
+            '<p></p><p><span style="font-size: 10pt">second</span></p>',
         )
         self.assertEqual(chapter["synopsis"], "첫 장 요약")
         self.assertIsNone(
@@ -574,6 +575,32 @@ class ManuscriptTests(unittest.TestCase):
             .first()
             .deleted_at
         )
+
+    def test_import_scrivener_default_13pt_renders_as_editor_default(self) -> None:
+        manifest = """<?xml version="1.0" encoding="UTF-8"?>
+<ScrivenerProject Version="2.0">
+  <Binder>
+    <BinderItem UUID="D" Type="DraftFolder">
+      <Children>
+        <BinderItem UUID="T1" Type="Text"><Title>본문</Title></BinderItem>
+      </Children>
+    </BinderItem>
+  </Binder>
+</ScrivenerProject>"""
+        rtf = (
+            "{\\rtf1\\ansi\\ansicpg1252\\uc1"
+            "{\\fonttbl\\f0\\fswiss\\fcharset0 Helvetica;}"
+            "\\pard\\f0\\fs26 default\\par}"
+        )
+        buffer = BytesIO()
+        with ZipFile(buffer, "w") as archive:
+            archive.writestr("default-size.scrivx", manifest)
+            archive.writestr("Files/Data/T1/content.rtf", rtf)
+
+        result = crud.import_scrivener(self.db, self.owner.id, buffer.getvalue())
+        tree = crud.get_tree(self.db, result["project_id"], self.owner.id)
+        body = crud.get_node(self.db, tree[0]["id"], self.owner.id)["body"]
+        self.assertEqual(body, "<p>default</p>")
 
     def test_import_scrivener_preserves_alignment_and_inline_style(self) -> None:
         manifest = """<?xml version="1.0" encoding="UTF-8"?>
@@ -842,7 +869,7 @@ class ManuscriptTests(unittest.TestCase):
         body = (
             '<p style="text-align: center; padding-left: 24px; '
             'text-indent: -12px"><strong><span style="color: #ff0000">'
-            '<span style="font-size: 13pt">Center</span></span></strong></p>'
+            '<span style="font-size: 16pt">Center</span></span></strong></p>'
             "<p>plain</p>"
         )
         self._node(project, "서식", body=body)
@@ -855,8 +882,23 @@ class ManuscriptTests(unittest.TestCase):
         self.assertIn("padding-left: 24px", exported)
         self.assertIn("text-indent: -12px", exported)
         self.assertIn("<strong>", exported)
-        self.assertIn("font-size: 13pt", exported)
+        self.assertIn("font-size: 16pt", exported)
         self.assertIn("color: #ff0000", exported)
+
+    def test_export_scrivener_defaults_to_13pt(self) -> None:
+        project = self._project()
+        self._node(project, "기본", body="<p>plain</p>")
+        self.db.commit()
+
+        data, _ = crud.export_scrivener(self.db, project.id, self.owner.id)
+        with ZipFile(BytesIO(data)) as archive:
+            rtf = next(
+                archive.read(name)
+                for name in archive.namelist()
+                if name.endswith("/content.rtf")
+            )
+        self.assertIn(b"\\fs26", rtf)
+        self.assertNotIn(b"\\fs20", rtf)
 
     def test_export_scrivener_embeds_body_images(self) -> None:
         png = base64.b64decode(
