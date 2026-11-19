@@ -20,6 +20,7 @@ import { Color, FontSize, TextStyle } from "@tiptap/extension-text-style";
 
 import { AuthorImage } from "@/components/author-image";
 import { ManuscriptParagraph } from "@/components/manuscript-paragraph";
+import { ManuscriptTab } from "@/components/manuscript-tab";
 import { PagePreview } from "@/components/page-preview";
 import { AUTHOR_IMAGE_MAX_HEIGHT_REM } from "@/config/author";
 import { apiFetch } from "@/lib/api";
@@ -269,6 +270,7 @@ export function RichTextEditor({
         },
       }),
       ManuscriptParagraph,
+      ManuscriptTab,
       TextStyle,
       Color,
       FontSize,

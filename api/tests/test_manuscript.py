@@ -581,7 +581,9 @@ class ManuscriptTests(unittest.TestCase):
         body = crud.get_node(self.db, tree[0]["id"], self.owner.id)["body"]
         self.assertEqual(
             body,
-            "<p>first\tsecond\tthird</p><p></p><p>  fourth  </p>",
+            '<p>first<span data-ms-tab="true"></span>second'
+            '<span data-ms-tab="true"></span>third</p>'
+            "<p></p><p>  fourth  </p>",
         )
 
     def test_import_scrivener_numbers_duplicate_project_titles(self) -> None:
@@ -746,7 +748,10 @@ class ManuscriptTests(unittest.TestCase):
 
     def test_export_scrivener_keeps_blank_lines_and_spaces(self) -> None:
         project = self._project()
-        body = "<p>앞  공백</p><p></p><p>  뒤 \t 끝  </p>"
+        body = (
+            '<p>앞  공백</p><p></p><p>  뒤 '
+            '<span data-ms-tab="true"></span> 끝  </p>'
+        )
         self._node(project, "빈줄", body=body)
         self.db.commit()
 

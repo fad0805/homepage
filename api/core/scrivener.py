@@ -122,6 +122,7 @@ def _meta_text(item: ET.Element, name: str) -> str:
 
 IMAGE_PLACEHOLDER_PREFIX = "@@SCRIVENER_IMAGE_"
 IMAGE_PLACEHOLDER_SUFFIX = "@@"
+TAB_MARKER = '<span data-ms-tab="true"></span>'
 
 
 def _pict_size(group: str) -> tuple[int | None, int | None]:
@@ -423,7 +424,7 @@ def _rtf_to_html_with_images(
                 elif word == "line":
                     append("<br>")
                 elif word == "tab":
-                    append("\t")
+                    append(TAB_MARKER)
                 elif word in RTF_SYMBOLS:
                     append(escape(RTF_SYMBOLS[word]))
                 elif word == "pard":
@@ -471,7 +472,7 @@ def _rtf_to_html_with_images(
             index += 2
             continue
         if char == "\t":
-            append("\t")
+            append(TAB_MARKER)
             index += 1
             continue
         if char in "\r\n":
@@ -709,6 +710,7 @@ class _RtfBodyParser(HTMLParser):
         self.colors: list[str] = ["#ffffff"]
         self._color_index = {"#ffffff": 1}
         self._skip_depth = 0
+        self._tab_depth = 0
         self._load_image = load_image
         self._style = _RtfStyle()
         self._emitted_style = _RtfStyle()
@@ -857,6 +859,13 @@ class _RtfBodyParser(HTMLParser):
             return
 
         values = {key: value for key, value in attrs}
+        if tag == "span" and values.get("data-ms-tab") == "true":
+            if not self._paragraph_open:
+                self._open_paragraph("p", [])
+            self._ensure_style()
+            self.parts.append("\\tab ")
+            self._tab_depth += 1
+            return
         if tag in {"strong", "b", "em", "i", "u", "s", "strike", "del", "span"}:
             self._style_stack.append(replace(self._style))
             if tag in {"strong", "b"}:
@@ -883,6 +892,9 @@ class _RtfBodyParser(HTMLParser):
             return
         if self._skip_depth:
             return
+        if tag == "span" and self._tab_depth:
+            self._tab_depth -= 1
+            return
         if tag in _RTF_BLOCK_TAGS:
             self._close_paragraph()
             return
@@ -901,7 +913,7 @@ class _RtfBodyParser(HTMLParser):
                 self._style = self._style_stack.pop()
 
     def handle_data(self, data: str) -> None:
-        if self._skip_depth:
+        if self._skip_depth or self._tab_depth:
             return
         if not self._paragraph_open:
             if not data.strip():

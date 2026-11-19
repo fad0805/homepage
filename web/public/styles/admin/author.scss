@@ -488,6 +488,12 @@
     white-space: break-spaces;
     tab-size: 4;
 
+    [data-ms-tab="true"] {
+      display: inline-block;
+      width: 2em;
+      vertical-align: baseline;
+    }
+
     p {
       margin: 0 0 0.6rem;
       line-height: 1.65;
