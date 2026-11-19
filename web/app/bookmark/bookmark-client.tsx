@@ -71,6 +71,7 @@ import {
   FREQUENCY_LABELS,
   MODE_LABELS,
   PERIOD_FREQUENCY,
+  PERIOD_LABELS,
   PERIOD_TYPES,
   ROUTINE_SECTION_LABELS,
   STATS_COLORS,
@@ -101,7 +102,6 @@ import {
   statBucketEnd,
   statBucketLabel,
   statRangeBounds,
-  weekPeriodLabel,
 } from "./bookmark-utils";
 
 import "@/public/styles/bookmark.scss";
@@ -353,7 +353,7 @@ export default function BookmarkClient({ username }: { username: string }) {
   const isTodaySelected = anchorDate === todayDateInputValue();
   const periodOptions = PERIOD_TYPES.map((type) => ({
     type,
-    label: compactPeriodLabel(anchorDate, type),
+    label: PERIOD_LABELS[type],
   }));
   const todayTabLabel =
     tab === "today"
@@ -935,9 +935,7 @@ export default function BookmarkClient({ username }: { username: string }) {
                 }
                 onClick={handleOpenPeriodSelector}
               >
-                {periodType === "week"
-                  ? weekPeriodLabel(periodStart)
-                  : periodLabel(periodStart, periodType)}
+                {compactPeriodLabel(anchorDate, periodType)}
               </button>
               <button
                 type="button"
