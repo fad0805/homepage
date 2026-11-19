@@ -91,6 +91,7 @@ class _RtfStyle:
     underline: bool = False
     strike: bool = False
     size: float | None = None
+    color: str | None = None
 
 
 def _local(tag: str) -> str:
@@ -173,6 +174,8 @@ def _prepare_rtf(
 
 
 def _render_rtf_segment(content: str, style: _RtfStyle) -> str:
+    if style.color:
+        content = f'<span style="color: {style.color}">{content}</span>'
     if style.size is not None and style.size != 10:
         size = f"{style.size:g}"
         content = f'<span style="font-size: {size}pt">{content}</span>'
@@ -187,13 +190,43 @@ def _render_rtf_segment(content: str, style: _RtfStyle) -> str:
     return content
 
 
-def _render_rtf_paragraph(align: str, content: str) -> str:
-    style = (
-        f' style="text-align: {align}"'
-        if align in {"center", "right", "justify"}
-        else ""
-    )
+def _render_rtf_paragraph(
+    align: str,
+    content: str,
+    *,
+    indent_left: int = 0,
+    indent_right: int = 0,
+    indent_first: int = 0,
+) -> str:
+    styles: list[str] = []
+    if align in {"center", "right", "justify"}:
+        styles.append(f"text-align: {align}")
+    if indent_left:
+        styles.append(f"padding-left: {indent_left}px")
+    if indent_right:
+        styles.append(f"padding-right: {indent_right}px")
+    if indent_first:
+        styles.append(f"text-indent: {indent_first}px")
+    style = f' style="{"; ".join(styles)}"' if styles else ""
     return f"<p{style}>{content}</p>"
+
+
+def _parse_rtf_color_table(raw: str) -> list[str | None]:
+    match = re.search(r"\{\\colortbl(.*?)\}", raw, re.S)
+    if not match:
+        return []
+
+    colors: list[str | None] = []
+    for entry in match.group(1).split(";"):
+        red = re.search(r"\\red(\d+)", entry)
+        green = re.search(r"\\green(\d+)", entry)
+        blue = re.search(r"\\blue(\d+)", entry)
+        if not red or not green or not blue:
+            colors.append(None)
+            continue
+        values = [min(255, max(0, int(part.group(1)))) for part in (red, green, blue)]
+        colors.append("#" + "".join(f"{value:02x}" for value in values))
+    return colors
 
 
 def _rtf_to_html_with_images(
@@ -205,12 +238,16 @@ def _rtf_to_html_with_images(
     encoding = f"cp{codepage.group(1)}" if codepage else "cp1252"
     uc_match = re.search(r"\\uc(\d+)", raw)
     uc_count = int(uc_match.group(1)) if uc_match else 1
+    colors = _parse_rtf_color_table(raw)
 
     style = _RtfStyle()
     align = "left"
-    stack: list[tuple[_RtfStyle, str, bool]] = []
+    indent_left = 0
+    indent_right = 0
+    indent_first = 0
+    stack: list[tuple[_RtfStyle, str, bool, tuple[int, int, int]]] = []
     skip = False
-    paragraphs: list[tuple[str, str]] = []
+    paragraphs: list[tuple[str, str, int, int, int]] = []
     segments: list[tuple[str, _RtfStyle]] = []
 
     def append(html: str, text_style: _RtfStyle | None = None) -> None:
@@ -229,7 +266,9 @@ def _rtf_to_html_with_images(
             _render_rtf_segment(part, part_style)
             for part, part_style in segments
         )
-        paragraphs.append((align, content))
+        paragraphs.append(
+            (align, content, indent_left, indent_right, indent_first)
+        )
         segments.clear()
 
     index = 0
@@ -261,14 +300,22 @@ def _rtf_to_html_with_images(
                     word = raw[word_start:word_end].lower()
                     if word in IGNORED_RTF_GROUPS:
                         skip_group = True
-            stack.append((replace(style), align, skip))
+            stack.append(
+                (
+                    replace(style),
+                    align,
+                    skip,
+                    (indent_left, indent_right, indent_first),
+                )
+            )
             if skip_group:
                 skip = True
             index += 1
             continue
         if char == "}":
             if stack:
-                style, align, skip = stack.pop()
+                style, align, skip, indents = stack.pop()
+                indent_left, indent_right, indent_first = indents
             index += 1
             continue
         if skip:
@@ -369,6 +416,17 @@ def _rtf_to_html_with_images(
                     append(escape(RTF_SYMBOLS[word]))
                 elif word == "pard":
                     align = "left"
+                    indent_left = 0
+                    indent_right = 0
+                    indent_first = 0
+                elif word in {"li", "ri", "fi"} and param is not None:
+                    pixels = round(int(param) / 15)
+                    if word == "li":
+                        indent_left = pixels
+                    elif word == "ri":
+                        indent_right = pixels
+                    else:
+                        indent_first = pixels
                 elif word in {"ql", "qc", "qr", "qj"}:
                     align = {
                         "ql": "left",
@@ -387,6 +445,13 @@ def _rtf_to_html_with_images(
                 elif word == "fs" and param:
                     size = int(param) / 2
                     style.size = size if size > 0 else None
+                elif word == "cf":
+                    color_index = int(param or "0")
+                    style.color = (
+                        colors[color_index]
+                        if 0 <= color_index < len(colors)
+                        else None
+                    )
                 elif word == "plain":
                     style = _RtfStyle()
                 index += match.end()
@@ -403,8 +468,14 @@ def _rtf_to_html_with_images(
     while paragraphs and not paragraphs[-1][1].strip():
         paragraphs.pop()
     html = "".join(
-        _render_rtf_paragraph(paragraph_align, content)
-        for paragraph_align, content in paragraphs
+        _render_rtf_paragraph(
+            paragraph_align,
+            content,
+            indent_left=left,
+            indent_right=right,
+            indent_first=first,
+        )
+        for paragraph_align, content, left, right, first in paragraphs
     )
     return html, images, image_sizes
 

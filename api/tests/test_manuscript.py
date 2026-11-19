@@ -527,8 +527,9 @@ class ManuscriptTests(unittest.TestCase):
 </ScrivenerProject>"""
         rtf = (
             "{\\rtf1\\ansi\\ansicpg1252\\uc1"
-            "\\pard\\qc\\b Center\\b0\\par"
-            "\\pard\\ql before \\i italic\\i0 "
+            "{\\colortbl;\\red255\\green0\\blue0;}"
+            "\\pard\\qc\\b\\cf1 Center\\cf0\\b0\\par"
+            "\\pard\\ql\\li360\\ri180\\fi-180 before \\i italic\\i0 "
             "\\ul underline\\ulnone \\strike strike\\strike0\\par}"
         )
         buffer = BytesIO()
@@ -543,8 +544,10 @@ class ManuscriptTests(unittest.TestCase):
         body = crud.get_node(self.db, tree[0]["id"], self.owner.id)["body"]
         self.assertEqual(
             body,
-            '<p style="text-align: center"><strong>Center</strong></p>'
-            "<p>before <em>italic</em><u>underline</u>"
+            '<p style="text-align: center"><strong>'
+            '<span style="color: #ff0000">Center</span></strong></p>'
+            '<p style="padding-left: 24px; padding-right: 12px; '
+            'text-indent: -12px">before <em>italic</em><u>underline</u>'
             "<s>strike</s></p>",
         )
 
