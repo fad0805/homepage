@@ -384,11 +384,15 @@ html[data-workspace='manuscript'] .ms-editor--workspace .ms-editor__surface .tip
     font-size: 10pt;
   }
 
-  /* Logical 13pt is the document default (and what Scrivener stores), but it
-     is rendered at the editor's 10pt size. */
-  span[style*='font-size: 13pt'],
-  span[style*='font-size:13pt'] {
-    font-size: 10pt !important;
+  /* Font sizes stay logical (Scrivener-native) in the document, but the
+     manuscript editor renders every explicit size 3pt smaller. 13pt -> 10pt,
+     14pt -> 11pt, and so on. */
+  @each $pt in 8, 9, 10, 11, 12, 13, 14, 15, 16, 18, 20, 21, 24, 28, 32, 36, 48, 72
+  {
+    span[style*='font-size: #{$pt}pt'],
+    span[style*='font-size:#{$pt}pt'] {
+      font-size: #{$pt - 3}pt !important;
+    }
   }
 }
 
