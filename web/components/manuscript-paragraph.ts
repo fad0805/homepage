@@ -14,6 +14,27 @@ function styleValue(
  * attributes instead of being flattened into margins.
  */
 export const ManuscriptParagraph = Paragraph.extend({
+  addKeyboardShortcuts() {
+    const change = (delta: number) => () => {
+      const current = Number.parseInt(
+        this.editor.getAttributes(this.name).indentLeft ?? "0",
+        10,
+      );
+      const next = Math.max(0, (Number.isFinite(current) ? current : 0) + delta);
+      return this.editor
+        .chain()
+        .focus()
+        .updateAttributes(this.name, {
+          indentLeft: next ? `${next}px` : null,
+        })
+        .run();
+    };
+
+    return {
+      "Mod-]": change(24),
+      "Mod-[": change(-24),
+    };
+  },
   addAttributes() {
     return {
       ...this.parent?.(),

@@ -635,6 +635,24 @@ export function RichTextEditor({
     [editor, imageWrap],
   );
   const isImageSelected = Boolean(editor?.isActive("image"));
+  const paragraphIndent = Math.max(
+    0,
+    Number.parseInt(
+      editor?.getAttributes("paragraph").indentLeft ?? "0",
+      10,
+    ) || 0,
+  );
+  const changeParagraphIndent = (delta: number) => {
+    if (!editor) return;
+    const next = Math.max(0, paragraphIndent + delta);
+    editor
+      .chain()
+      .focus()
+      .updateAttributes("paragraph", {
+        indentLeft: next ? `${next}px` : null,
+      })
+      .run();
+  };
   const alignMenuItems: ToolbarMenuItem[] = isImageSelected
     ? [
         {
@@ -826,6 +844,20 @@ export function RichTextEditor({
             disabled={!editor}
             items={alignMenuItems}
           />
+          <ToolbarButton
+            onClick={() => changeParagraphIndent(-24)}
+            disabled={!editor || paragraphIndent === 0}
+            title="내어쓰기 (Mod-[)"
+          >
+            ⇤
+          </ToolbarButton>
+          <ToolbarButton
+            onClick={() => changeParagraphIndent(24)}
+            disabled={!editor}
+            title="들여쓰기 (Mod-])"
+          >
+            ⇥
+          </ToolbarButton>
           <ToolbarMenu
             label="목록"
             active={
