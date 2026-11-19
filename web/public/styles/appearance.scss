@@ -859,11 +859,25 @@ html:has(#container.site-layout--side) {
 
 .site-bottom-bar #navbar {
   flex-direction: row;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   justify-content: center;
   width: 100%;
+  max-width: 100%;
   margin: 0;
   gap: 0.35rem 0.9rem;
+  box-sizing: border-box;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
+
+  &.has-left-fade,
+  &.has-right-fade {
+    justify-content: flex-start;
+  }
 }
 
 .site-bottom-bar #navbar a {

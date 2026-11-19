@@ -1,5 +1,6 @@
 @use 'sass:color';
 @use 'variables' as *;
+@use 'mixins' as *;
 
 :root {
   --navbar-active-color: #{$light-active-text};
@@ -47,6 +48,29 @@ nav {
   gap: 1.5rem;
 }
 
+nav#navbar {
+  @include horizontal-scroll-fade();
+
+  max-width: 100%;
+  box-sizing: border-box;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
+
+  &.has-left-fade,
+  &.has-right-fade {
+    justify-content: flex-start;
+  }
+}
+
+#container.site-layout--editorial > header nav#navbar {
+  width: min(var(--site-content-width, 63vw), 850px, 100%);
+}
+
 nav#navbar a {
   color: var(--title-color);
   text-decoration: none;
@@ -65,14 +89,5 @@ nav#navbar a {
   nav#navbar {
     flex-wrap: nowrap;
     justify-content: flex-start;
-    max-width: 100%;
-    box-sizing: border-box;
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-    scrollbar-width: none;
-
-    &::-webkit-scrollbar {
-      display: none;
-    }
   }
 }

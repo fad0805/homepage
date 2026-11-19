@@ -1,15 +1,31 @@
 "use client";
-import { Fragment } from "react";
+import { Fragment, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 
 import "@/public/styles/admin/navbar.scss";
 import navigation from "@/config/navigation";
 import { useAuth } from "@/components/auth-provider";
+import { useHorizontalScrollFade } from "@/lib/use-horizontal-scroll-fade";
 
 interface AdminNavbarProps {
   id?: string;
   showGroupLabels?: boolean;
+}
+
+function ScrollFadeRow({ children }: { children: ReactNode }) {
+  const { ref, fadeClassName } = useHorizontalScrollFade<HTMLDivElement>();
+
+  return (
+    <div
+      ref={ref}
+      className={["admin-navbar__row", fadeClassName]
+        .filter(Boolean)
+        .join(" ")}
+    >
+      {children}
+    </div>
+  );
 }
 
 export const AdminNavbar = ({
@@ -40,7 +56,7 @@ export const AdminNavbar = ({
           {showGroupLabels && group.label ? (
             <div className="admin-navbar__group-label">{group.label}</div>
           ) : null}
-          <div className="admin-navbar__row">
+          <ScrollFadeRow>
             {group.items.map((item) => (
               <Link
                 key={item.href}
@@ -79,7 +95,7 @@ export const AdminNavbar = ({
                 )}
               </Link>
             ))}
-          </div>
+          </ScrollFadeRow>
         </Fragment>
       ))}
     </nav>

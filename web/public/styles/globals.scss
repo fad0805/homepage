@@ -24,6 +24,8 @@ body {
 :root {
   color-scheme: light;
 
+  --site-content-width: 63vw;
+
   --theme-main: var(--theme-light-main, #{$maintheme});
   --theme-sub: var(--theme-light-sub, #{$subtheme});
   --background: var(--theme-light-background, #{$light-bg});
@@ -40,6 +42,12 @@ body {
 
   a, a:visited {
     color: var(--title-color);
+  }
+}
+
+@media (width <= 768px) {
+  :root {
+    --site-content-width: 90vw;
   }
 }
 
@@ -214,12 +222,8 @@ div#container>main>div#content {
   border-radius: 1.7rem;
   flex: 1;
   min-height: max-content;
-  width: 63vw;
+  width: var(--site-content-width);
   max-width: 850px;
-
-  @media (width <= 768px) {
-    width: 90vw;
-  }
 }
 
 .page-title {

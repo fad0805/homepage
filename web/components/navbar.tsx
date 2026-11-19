@@ -3,6 +3,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 
 import { useAuth } from "@/components/auth-provider";
+import { useHorizontalScrollFade } from "@/lib/use-horizontal-scroll-fade";
 
 import "@/public/styles/navbar.scss";
 import navigation from "@/config/navigation";
@@ -17,12 +18,13 @@ export const Navbar = () => {
     const currentPath = usePathname();
     const router = useRouter();
     const { isLoggedIn } = useAuth();
+    const { ref, fadeClassName } = useHorizontalScrollFade<HTMLElement>();
 
     const menuItems = navigation.main.items.filter(
         (item: MenuItem) => !item.authOnly || isLoggedIn
     );
 
-    return <nav id="navbar">
+    return <nav id="navbar" ref={ref} className={fadeClassName || undefined}>
         { menuItems.map((item: MenuItem) => (
             <Link
                 key={item.href}
