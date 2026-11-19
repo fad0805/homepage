@@ -748,17 +748,19 @@ export default function AdminBookDetail() {
                             ) : null}
                           </span>
                         </span>
-                        <span className="admin-books-chapter-views">
-                          조회 {chapter.view_count ?? 0}
-                        </span>
-                        <span className="admin-books-chapter-updated">
-                          {formatDateTime(chapter.updated_at)}
-                        </span>
-                        <span
-                          className="admin-books-chapter-arrow"
-                          aria-hidden="true"
-                        >
-                          →
+                        <span className="admin-books-chapter-meta">
+                          <span className="admin-books-chapter-views">
+                            조회 {chapter.view_count ?? 0}
+                          </span>
+                          <span className="admin-books-chapter-updated">
+                            {formatDateTime(chapter.updated_at)}
+                          </span>
+                          <span
+                            className="admin-books-chapter-arrow"
+                            aria-hidden="true"
+                          >
+                            →
+                          </span>
                         </span>
                       </Link>
                     </div>
