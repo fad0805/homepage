@@ -637,6 +637,13 @@ html[data-workspace='manuscript'] .ms-editor--workspace .ms-editor__surface .tip
   font-size: 0.75rem;
 }
 
+.ms-modal__footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 0.9rem;
+}
+
 .ms-search-input {
   width: 100%;
   box-sizing: border-box;

@@ -7,6 +7,7 @@ import {
   useState,
   type FormEvent,
   type MouseEvent as ReactMouseEvent,
+  type ReactNode,
 } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -16,7 +17,7 @@ import { ImageLightbox, type LightboxImage } from "@/components/image-lightbox";
 import { Pagination } from "@/components/pagination";
 import { RssSubscribe } from "@/components/rss-subscribe";
 import { formatDateTime } from "@/lib/datetime";
-import type { Book, BookCategory, Chapter } from "./types";
+import type { Book, BookCategory, Chapter, TocNode } from "./types";
 
 import "@/public/styles/books.scss";
 
@@ -50,6 +51,15 @@ async function fetchChapterPage(
     chapters,
     total: Number.isFinite(total) ? total : chapters.length,
   };
+}
+
+async function fetchBookToc(bookId: number, signal: AbortSignal) {
+  const response = await fetch(`/api/books/${bookId}/toc`, {
+    signal,
+    credentials: "include",
+  });
+  if (!response.ok) throw new Error("Failed to load table of contents");
+  return (await response.json()) as TocNode[];
 }
 
 function TagChip({ tag }: { tag: string }) {
@@ -254,6 +264,13 @@ export default function BooksClient({
   );
   const [chaptersLoading, setChaptersLoading] = useState(false);
   const [chaptersError, setChaptersError] = useState(false);
+  const [toc, setToc] = useState<TocNode[]>([]);
+  const [tocLoading, setTocLoading] = useState(false);
+  const [tocError, setTocError] = useState(false);
+  const [tocView, setTocView] = useState(false);
+  const [expandedTocNodes, setExpandedTocNodes] = useState<Set<number>>(
+    () => new Set(),
+  );
   const [activeBookId, setActiveBookId] = useState<number | null>(() => {
     if (initialBookId !== null) return initialBookId;
     if (initialChapterId === null) return null;
@@ -399,6 +416,52 @@ export default function BooksClient({
       controller.abort();
     };
   }, [activeBookId, chapterPage, searchQuery]);
+
+  // The public TOC is hierarchical and independent of the flat, paginated
+  // chapter list. Load it once per book so folders can be browsed without a
+  // login and without pulling every chapter body.
+  useEffect(() => {
+    setToc([]);
+    setTocError(false);
+    setTocView(false);
+    setExpandedTocNodes(new Set());
+    if (activeBookId === null) {
+      setTocLoading(false);
+      return;
+    }
+
+    const controller = new AbortController();
+    setTocLoading(true);
+    fetchBookToc(activeBookId, controller.signal)
+      .then((nodes) => {
+        if (controller.signal.aborted) return;
+        const folders = new Set<number>();
+        const collectFolders = (items: TocNode[]) => {
+          for (const node of items) {
+            if (node.node_type === "folder" && node.id !== null) {
+              folders.add(node.id);
+            }
+            collectFolders(node.children);
+          }
+        };
+        collectFolders(nodes);
+        setToc(nodes);
+        setExpandedTocNodes(folders);
+        setTocView(
+          nodes.some(
+            (node) => node.node_type === "folder" || node.children.length > 0,
+          ),
+        );
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) setTocError(true);
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setTocLoading(false);
+      });
+
+    return () => controller.abort();
+  }, [activeBookId]);
 
   chapterLookupRef.current = new Map(
     [...pinnedChapters, ...chapters].map((chapter) => [chapter.id, chapter]),
@@ -680,6 +743,58 @@ export default function BooksClient({
     </button>
   );
 
+  const toggleTocNode = (id: number) => {
+    setExpandedTocNodes((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const renderTocNodes = (nodes: TocNode[], depth = 0): ReactNode[] =>
+    nodes.map((node, index) => {
+      const indentation = { paddingLeft: `${depth * 1.1}rem` };
+      if (node.node_type === "folder") {
+        const open = node.id === null || expandedTocNodes.has(node.id);
+        return (
+          <div className="books-toc__group" key={node.id ?? `folder-${index}`}>
+            <button
+              type="button"
+              className="books-toc__folder"
+              style={indentation}
+              onClick={() => node.id !== null && toggleTocNode(node.id)}
+              aria-expanded={open}
+            >
+              <span className="books-toc__chevron" aria-hidden="true">
+                {open ? "▾" : "▸"}
+              </span>
+              <span>{node.label ?? "폴더"}</span>
+            </button>
+            {open ? renderTocNodes(node.children, depth + 1) : null}
+          </div>
+        );
+      }
+      const chapter = node.chapter;
+      if (!chapter) return null;
+      return (
+        <button
+          type="button"
+          className={`books-toc__chapter${
+            chapter.id === activeChapterId ? " is-active" : ""
+          }`}
+          style={indentation}
+          onClick={() => selectChapter(chapter.id)}
+          key={`${chapter.id}-${index}`}
+        >
+          <span>{chapter.title}</span>
+          {chapter.locked ? (
+            <span className="books-protected-badge">보호</span>
+          ) : null}
+        </button>
+      );
+    });
+
   const toggleCategory = (category: BookCategory) => {
     const locked =
       category.protected &&
@@ -742,6 +857,7 @@ export default function BooksClient({
   const handleSearchChange = (value: string) => {
     setSearchQuery(value);
     setActiveChapterId(null);
+    setTocView(false);
   };
 
   const bookList = (
@@ -905,6 +1021,26 @@ export default function BooksClient({
         <InlineUnlockForm label="이 책은 열람 비밀번호가 필요합니다." />
       ) : (
         <>
+      {!searchQuery && (toc.length > 0 || tocLoading) ? (
+        <div className="books-view-toggle" role="group" aria-label="게시글 보기 방식">
+          <button
+            type="button"
+            className={tocView ? "" : "is-active"}
+            onClick={() => setTocView(false)}
+          >
+            목록
+          </button>
+          <button
+            type="button"
+            className={tocView ? "is-active" : ""}
+            onClick={() => setTocView(true)}
+            disabled={tocLoading && toc.length === 0}
+          >
+            목차
+          </button>
+        </div>
+      ) : null}
+
       {searchQuery ? (
         <p className="books-search-active">
           검색: <strong>{searchQuery}</strong>
@@ -914,7 +1050,19 @@ export default function BooksClient({
         </p>
       ) : null}
 
-      {chaptersError ? (
+      {tocView && !searchQuery ? (
+        tocError ? (
+          <p className="books-panel__empty" role="alert">
+            목차를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.
+          </p>
+        ) : tocLoading && toc.length === 0 ? (
+          <p className="books-panel__empty">목차를 불러오는 중…</p>
+        ) : toc.length === 0 ? (
+          <p className="books-panel__empty">등록된 목차가 없습니다.</p>
+        ) : (
+          <div className="books-toc">{renderTocNodes(toc)}</div>
+        )
+      ) : chaptersError ? (
         <p className="books-panel__empty" role="alert">
           게시글을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.
         </p>

@@ -20,6 +20,33 @@ export interface Book {
   locked?: boolean;
 }
 
+export interface ManageTocNode {
+  id: number;
+  parent_id: number | null;
+  node_type: "folder" | "post";
+  label: string | null;
+  position: number;
+  chapter_id: number | null;
+  locked: boolean;
+  children: ManageTocNode[];
+}
+
+export interface TocNode {
+  id: number | null;
+  node_type: "folder" | "post";
+  label: string | null;
+  position: number;
+  chapter: {
+    id: number;
+    title: string;
+    subtitle: string | null;
+    locked: boolean;
+    published_at: string | null;
+    updated_at: string | null;
+  } | null;
+  children: TocNode[];
+}
+
 export interface Chapter {
   id: number;
   book_id: number;

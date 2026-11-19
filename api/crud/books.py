@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session, contains_eager, load_only
 
 from core.mastodon import maybe_notify_chapter
 from core.search import like_pattern, search_tokens
+from crud import serial_nodes as serial_node_crud
 from crud.tags import sync_chapter_tags
 from models.books import Book, BookCategory, Chapter, ChapterView
 from models.tags import ChapterTag, Tag
@@ -1133,7 +1134,7 @@ def create_chapter(
     user_id: int,
 ):
     _get_book_or_404(db, payload.book_id, owner_user_id=user_id)
-    data = payload.model_dump(exclude={"notify_mastodon"})
+    data = payload.model_dump(exclude={"notify_mastodon", "toc_parent_id"})
     data["tags"] = _clean_tags(data.get("tags"))
     data["user_id"] = user_id
     if data.get("pinned"):
@@ -1141,6 +1142,14 @@ def create_chapter(
     chapter = Chapter(**data)
     db.add(chapter)
     db.flush()
+    serial_node_crud.ensure_post(
+        db,
+        user_id,
+        payload.book_id,
+        chapter.id,
+        payload.toc_parent_id,
+        set_parent=True,
+    )
     sync_chapter_tags(db, chapter)
     db.commit()
     db.refresh(chapter)
@@ -1178,6 +1187,8 @@ def update_chapter(
         )
 
     data = payload.model_dump(exclude_unset=True)
+    toc_parent_set = "toc_parent_id" in data
+    toc_parent_id = data.pop("toc_parent_id", None)
     if "book_id" in data and data["book_id"] is not None:
         _get_book_or_404(
             db,
@@ -1203,15 +1214,23 @@ def update_chapter(
     for key, value in data.items():
         setattr(chapter, key, value)
 
-    next_book_id = data.get("book_id")
-    if next_book_id is not None and next_book_id != previous_book_id:
+    target_book_id = data.get("book_id", chapter.book_id) or chapter.book_id
+    if target_book_id != previous_book_id:
         # Moving a chapter re-sorts both books so their order always follows
         # the original creation time.
         db.flush()
         _reorder_chapters_by_created_at(db, previous_book_id)
-        _reorder_chapters_by_created_at(db, next_book_id)
+        _reorder_chapters_by_created_at(db, target_book_id)
 
     db.flush()
+    serial_node_crud.ensure_post(
+        db,
+        chapter.user_id,
+        target_book_id,
+        chapter.id,
+        toc_parent_id,
+        set_parent=toc_parent_set,
+    )
     sync_chapter_tags(db, chapter)
     db.commit()
     db.refresh(chapter)
@@ -1295,6 +1314,13 @@ def delete_chapter(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Does not exist chapter",
         )
+    serial_node = (
+        db.query(serial_node_crud.SerialNode)
+        .filter(serial_node_crud.SerialNode.chapter_id == chapter_id)
+        .first()
+    )
+    if serial_node is not None:
+        db.delete(serial_node)
     db.delete(chapter)
     db.commit()
     return True
@@ -1335,6 +1361,14 @@ def reorder_chapters(
         chapter.order = item.order
         if item.book_id is not None:
             chapter.book_id = item.book_id
+        serial_node_crud.ensure_post(
+            db,
+            chapter.user_id,
+            chapter.book_id,
+            chapter.id,
+            None,
+            set_parent=False,
+        )
     db.commit()
     return True
 

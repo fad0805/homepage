@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { Editor } from "@tiptap/core";
 import { RichTextEditor, type EditorNotice } from "@/components/rich-text-editor";
+import { TocPicker } from "@/components/toc-picker";
 import { apiFetch } from "@/lib/api";
 
 import { ManuscriptBinder } from "./manuscript-binder";
@@ -323,6 +324,9 @@ export default function ManuscriptWorkspace() {
   const [saveError, setSaveError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [publishOpen, setPublishOpen] = useState(false);
+  const [publishParentId, setPublishParentId] = useState<number | null>(null);
+  const [publishing, setPublishing] = useState(false);
   const [autoSaving, setAutoSaving] = useState(false);
   const autosaveRef = useRef<{ key: string | null; signature: string | null }>({
     key: null,
@@ -723,23 +727,36 @@ export default function ManuscriptWorkspace() {
       (selected?.published_chapter_id && selected.published_state !== "published_missing"),
   );
 
-  const publish = async () => {
+  const openPublish = () => {
     if (!selectedId || selected?.node_type !== "chapter") return;
     if (!linkedBookId) {
       notify("프로젝트에 연결된 책이 없습니다.", "error");
       return;
     }
+    setPublishParentId(null);
+    setPublishOpen(true);
+  };
+
+  const confirmPublish = async () => {
+    if (!selectedId || !linkedBookId || publishing) return;
     if (!(await flushAutosave())) return;
     const wasRepublish = hasLinkedPost;
+    setPublishing(true);
     try {
       await apiFetch(`/api/manuscript/nodes/${selectedId}/publish`, {
         method: "POST",
-        body: JSON.stringify({ target_book_id: linkedBookId }),
+        body: JSON.stringify({
+          target_book_id: linkedBookId,
+          toc_parent_id: publishParentId,
+        }),
       });
       await refresh();
+      setPublishOpen(false);
       notify(wasRepublish ? "재발행했습니다." : "발행했습니다.");
     } catch (error) {
       notify((error as Error).message, "error");
+    } finally {
+      setPublishing(false);
     }
   };
 
@@ -1349,7 +1366,7 @@ export default function ManuscriptWorkspace() {
                       type="button"
                       className="ms-button ms-button--primary"
                       disabled={!linkedBookId}
-                      onClick={publish}
+                      onClick={openPublish}
                     >
                       {hasLinkedPost ? "재발행" : "발행"}
                     </button>
@@ -1483,6 +1500,54 @@ export default function ManuscriptWorkspace() {
               {query.trim() && results.length === 0 ? (
                 <p className="ms-search-results__empty">검색 결과가 없습니다.</p>
               ) : null}
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {publishOpen && linkedBookId ? (
+        <div
+          className="ms-modal-backdrop"
+          onClick={() => setPublishOpen(false)}
+        >
+          <div
+            className="ms-modal"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="ms-modal__header">
+              <h2>발행 위치 선택</h2>
+              <button
+                type="button"
+                onClick={() => setPublishOpen(false)}
+                aria-label="닫기"
+              >
+                ×
+              </button>
+            </div>
+            <p className="ms-modal__hint">
+              이 문서를 공개 목차의 어디에 놓을지 선택하세요.
+            </p>
+            <TocPicker
+              bookId={linkedBookId}
+              chapterId={selected?.published_chapter_id ?? null}
+              onChange={setPublishParentId}
+            />
+            <div className="ms-modal__footer">
+              <button type="button" onClick={() => setPublishOpen(false)}>
+                취소
+              </button>
+              <button
+                type="button"
+                className="ms-button ms-button--primary"
+                onClick={() => void confirmPublish()}
+                disabled={publishing}
+              >
+                {publishing
+                  ? "발행 중…"
+                  : hasLinkedPost
+                    ? "재발행"
+                    : "발행"}
+              </button>
             </div>
           </div>
         </div>

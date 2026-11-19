@@ -14,6 +14,7 @@ import { useParams, useRouter } from "next/navigation";
 import { MastodonShare } from "@/components/mastodon-share";
 import { RichTextEditor } from "@/components/rich-text-editor";
 import { TagInput } from "@/components/tag-input";
+import { TocPicker } from "@/components/toc-picker";
 import { apiFetch } from "@/lib/api";
 import { formatDateTime } from "@/lib/datetime";
 
@@ -140,6 +141,8 @@ export default function AdminChapterEdit() {
   const [issuing, setIssuing] = useState(false);
   const [publishedAt, setPublishedAt] = useState("");
   const [targetBookId, setTargetBookId] = useState(bookId);
+  const [tocParentId, setTocParentId] = useState<number | null>(null);
+  const [tocModalOpen, setTocModalOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [draftSaving, setDraftSaving] = useState(false);
@@ -744,6 +747,7 @@ export default function AdminChapterEdit() {
             pinned,
             protected: chapterProtected,
             published_at: publishedAtValue,
+            toc_parent_id: tocParentId,
           }),
         });
         await deleteDraft();
@@ -769,6 +773,7 @@ export default function AdminChapterEdit() {
               visible,
               protected: chapterProtected,
               published_at: publishedAtValue,
+              toc_parent_id: tocParentId,
             }),
           },
         );
@@ -999,21 +1004,30 @@ export default function AdminChapterEdit() {
               className="admin-books-edit-form"
               onSubmit={handleSubmit}
             >
-              <label className="admin-field">
+              <div className="admin-field admin-field--inline-book">
                 <span>소속 책</span>
-                <select
-                  value={targetBookId}
-                  onChange={(event) =>
-                    setTargetBookId(Number(event.target.value))
-                  }
-                >
-                  {books.map((item) => (
-                    <option value={item.id} key={item.id}>
-                      {item.title}
-                    </option>
-                  ))}
-                </select>
-              </label>
+                <div className="admin-field__inline-controls">
+                  <select
+                    value={targetBookId}
+                    onChange={(event) =>
+                      setTargetBookId(Number(event.target.value))
+                    }
+                  >
+                    {books.map((item) => (
+                      <option value={item.id} key={item.id}>
+                        {item.title}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    className="admin-button"
+                    onClick={() => setTocModalOpen(true)}
+                  >
+                    목차 위치
+                  </button>
+                </div>
+              </div>
               {!isNew && chapter && targetBookId !== chapter.book_id ? (
                 <p className="admin-books-hint">
                   저장하면 선택한 책으로 이동합니다.
@@ -1254,6 +1268,50 @@ export default function AdminChapterEdit() {
                   이 내용 불러오기
                 </button>
               ) : null}
+            </footer>
+          </div>
+        </div>
+      ) : null}
+
+      {tocModalOpen ? (
+        <div
+          className="admin-modal-backdrop"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) setTocModalOpen(false);
+          }}
+        >
+          <div
+            className="admin-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="chapter-toc-modal-title"
+          >
+            <header className="admin-modal-header">
+              <h2 id="chapter-toc-modal-title">공개 목차 위치</h2>
+              <button
+                type="button"
+                className="admin-modal-close"
+                onClick={() => setTocModalOpen(false)}
+                aria-label="닫기"
+              >
+                ×
+              </button>
+            </header>
+            <div className="admin-modal-body">
+              <TocPicker
+                bookId={targetBookId}
+                chapterId={isNew ? null : chapter?.id ?? null}
+                onChange={setTocParentId}
+              />
+            </div>
+            <footer className="admin-modal-footer">
+              <button
+                type="button"
+                className="admin-button primary"
+                onClick={() => setTocModalOpen(false)}
+              >
+                확인
+              </button>
             </footer>
           </div>
         </div>

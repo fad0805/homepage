@@ -25,6 +25,7 @@ from core.scrivener import (
 from core.search import like_pattern, search_tokens
 from core.text_stats import count_characters, html_to_plain
 from core.uploads import open_uploaded_file, save_image_bytes
+from crud import serial_nodes as serial_node_crud
 from crud.books import _category_is_visible_to
 from db.session import SessionLocal
 from models.books import Book, Chapter
@@ -939,117 +940,6 @@ def get_scrivenings(
     return [node for node in ordered if node["node_type"] == "chapter"]
 
 
-def _ensure_serial_folder(
-    db: Session,
-    user_id: int,
-    book_id: int,
-    parent_id: int | None,
-    label: str,
-) -> int:
-    existing = (
-        db.query(SerialNode)
-        .filter(
-            SerialNode.book_id == book_id,
-            SerialNode.node_type == "folder",
-            SerialNode.parent_id.is_(parent_id) if parent_id is None else SerialNode.parent_id == parent_id,
-            SerialNode.label == label,
-        )
-        .first()
-    )
-    if existing is not None:
-        return existing.id
-    position = _next_position(db, book_id, parent_id)
-    folder = SerialNode(
-        user_id=user_id,
-        book_id=book_id,
-        parent_id=parent_id,
-        node_type="folder",
-        label=label,
-        position=position,
-    )
-    db.add(folder)
-    db.flush()
-    return folder.id
-
-
-def _next_position(db: Session, book_id: int, parent_id: int | None) -> int:
-    from sqlalchemy import func
-
-    query = db.query(func.max(SerialNode.position)).filter(
-        SerialNode.book_id == book_id,
-    )
-    if parent_id is None:
-        query = query.filter(SerialNode.parent_id.is_(None))
-    else:
-        query = query.filter(SerialNode.parent_id == parent_id)
-    return (query.scalar() or 0) + 1
-
-
-def _sync_serial_node(
-    db: Session,
-    node: ManuscriptNode,
-    chapter: Chapter,
-    *,
-    user_id: int,
-    sync_structure: bool,
-) -> SerialNode:
-    book_id = chapter.book_id
-    existing = (
-        db.query(SerialNode)
-        .filter(
-            SerialNode.book_id == book_id,
-            SerialNode.chapter_id == chapter.id,
-        )
-        .first()
-    )
-    if existing is not None and existing.book_id != book_id:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Chapter is placed in a different book's TOC",
-        )
-
-    parent_id = existing.parent_id if existing is not None else None
-    if existing is None or sync_structure:
-        parent_id = None
-        ancestors = []
-        current = db.query(ManuscriptNode).filter(
-            ManuscriptNode.id == node.parent_id
-        ).first()
-        while current is not None:
-            ancestors.append(current)
-            current = (
-                db.query(ManuscriptNode)
-                .filter(ManuscriptNode.id == current.parent_id)
-                .first()
-                if current.parent_id
-                else None
-            )
-        for folder in reversed(ancestors):
-            if folder.node_type != "folder":
-                continue
-            parent_id = _ensure_serial_folder(
-                db, user_id, book_id, parent_id, folder.title
-            )
-
-    if existing is not None:
-        if sync_structure:
-            existing.parent_id = parent_id
-        return existing
-
-    post = SerialNode(
-        user_id=user_id,
-        book_id=book_id,
-        parent_id=parent_id,
-        node_type="post",
-        chapter_id=chapter.id,
-        label=None,
-        position=_next_position(db, book_id, parent_id),
-    )
-    db.add(post)
-    db.flush()
-    return post
-
-
 def publish_node(
     db: Session,
     node_id: int,
@@ -1126,12 +1016,15 @@ def publish_node(
     chapter.body = chapter_body
     db.flush()
 
-    _sync_serial_node(
+    # Place the post where the author chose.  Re-publishing without an
+    # explicit ``toc_parent_id`` keeps the node where it already is.
+    serial_node_crud.ensure_post(
         db,
-        node,
-        chapter,
-        user_id=user_id,
-        sync_structure=payload.sync_structure if is_linked_target else False,
+        user_id,
+        target_book_id,
+        chapter.id,
+        payload.toc_parent_id,
+        set_parent="toc_parent_id" in payload.model_fields_set,
     )
 
     if is_linked_target:

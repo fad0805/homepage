@@ -1,0 +1,151 @@
+.toc-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.75rem;
+  border: 1px solid color-mix(in srgb, var(--foreground) 16%, transparent);
+  border-radius: 0.5rem;
+  background: color-mix(in srgb, var(--subtheme) 45%, var(--background));
+  color: var(--foreground);
+  font-size: 0.85rem;
+}
+
+.toc-picker__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+
+  span {
+    font-size: 0.72rem;
+    opacity: 0.6;
+  }
+}
+
+.toc-picker__root,
+.toc-picker__select {
+  flex: 1;
+  min-width: 0;
+  padding: 0.3rem 0.45rem;
+  border: 1px solid transparent;
+  border-radius: 0.35rem;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+
+  &:hover {
+    background: color-mix(in srgb, var(--theme-main) 18%, transparent);
+  }
+}
+
+.toc-picker__root.is-selected,
+.toc-picker__row.is-selected > .toc-picker__select {
+  border-color: color-mix(in srgb, var(--theme-main) 60%, transparent);
+  background: color-mix(in srgb, var(--theme-main) 24%, transparent);
+  font-weight: 700;
+}
+
+.toc-picker__tree {
+  max-height: 15rem;
+  overflow-y: auto;
+}
+
+.toc-picker__row {
+  display: flex;
+  align-items: center;
+  gap: 0.2rem;
+  min-height: 1.9rem;
+  padding-right: 0.25rem;
+  border-radius: 0.35rem;
+
+  input {
+    min-width: 0;
+    flex: 1;
+    padding: 0.2rem 0.35rem;
+    border: 1px solid var(--theme-main);
+    border-radius: 0.3rem;
+    background: var(--background);
+    color: inherit;
+    font: inherit;
+  }
+
+  button {
+    flex: 0 0 auto;
+    padding: 0.15rem 0.35rem;
+    border: 1px solid color-mix(in srgb, var(--foreground) 18%, transparent);
+    border-radius: 0.3rem;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+  }
+}
+
+.toc-picker__row.is-post {
+  color: color-mix(in srgb, var(--foreground) 65%, transparent);
+}
+
+.toc-picker__post {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.toc-picker__mini {
+  font-size: 0.75rem;
+  line-height: 1.2;
+
+  &.is-danger {
+    color: #c0392b;
+  }
+}
+
+.toc-picker__create {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+
+  input {
+    min-width: 0;
+    flex: 1;
+    padding: 0.25rem 0.4rem;
+    border: 1px solid var(--theme-main);
+    border-radius: 0.3rem;
+    background: var(--background);
+    color: inherit;
+    font: inherit;
+  }
+
+  button {
+    padding: 0.25rem 0.5rem;
+    border: 1px solid color-mix(in srgb, var(--theme-main) 45%, transparent);
+    border-radius: 0.3rem;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+  }
+}
+
+.toc-picker__add {
+  align-self: flex-start;
+  padding: 0.25rem 0.4rem;
+  border: 1px dashed color-mix(in srgb, var(--foreground) 25%, transparent);
+  border-radius: 0.3rem;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.toc-picker__empty,
+.toc-picker__error {
+  margin: 0;
+  font-size: 0.75rem;
+}
+
+.toc-picker__error {
+  color: #c0392b;
+}

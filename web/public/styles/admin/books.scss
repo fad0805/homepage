@@ -782,6 +782,21 @@ p.admin-books-draft-preview-empty {
   width: min(900px, 100%);
 }
 
+.admin-field--inline-book .admin-field__inline-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+
+  select {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .admin-button {
+    flex: 0 0 auto;
+  }
+}
+
 .admin-books-groups {
   display: flex;
   flex-direction: column;

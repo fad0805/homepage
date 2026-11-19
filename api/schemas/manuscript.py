@@ -75,9 +75,26 @@ class PublishRequest(BaseModel):
 
     ``target_book_id`` defaults to the project's linked book. Publishing to
     another book creates a chapter there without linking it back to the
-    manuscript node. ``sync_structure`` explicitly pushes the manuscript
-    folder path into the public serial tree.
+    manuscript node. ``toc_parent_id`` explicitly places the post in the
+    public table of contents; omitting it keeps the current placement.
     """
 
     target_book_id: int | None = None
+    toc_parent_id: int | None = None
+    # Kept for API compatibility; the editor now places posts explicitly.
     sync_structure: bool = False
+
+
+class TocFolderCreate(BaseModel):
+    label: str
+    parent_id: int | None = None
+
+
+class TocNodeUpdate(BaseModel):
+    label: str | None = None
+    parent_id: int | None = None
+
+
+class TocPostCreate(BaseModel):
+    chapter_id: int
+    parent_id: int | None = None

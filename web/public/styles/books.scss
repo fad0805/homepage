@@ -563,6 +563,98 @@
   opacity: 0.5;
 }
 
+.books-view-toggle {
+  display: inline-flex;
+  gap: 0.2rem;
+  margin-bottom: 0.6rem;
+  padding: 0.15rem;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  border-radius: 0.45rem;
+
+  button {
+    padding: 0.25rem 0.7rem;
+    border: 0;
+    border-radius: 0.3rem;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    font-size: 0.8rem;
+    cursor: pointer;
+  }
+
+  button.is-active {
+    background: var(--title-color);
+    color: var(--background);
+    font-weight: 700;
+  }
+
+  button:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+}
+
+.books-toc {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.books-toc__group {
+  display: flex;
+  flex-direction: column;
+}
+
+.books-toc__folder,
+.books-toc__chapter {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  width: 100%;
+  box-sizing: border-box;
+  padding-top: 0.45rem;
+  padding-bottom: 0.45rem;
+  padding-right: 0.6rem;
+  border: 0;
+  border-radius: 0.45rem;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+
+  &:hover,
+  &:focus-visible {
+    background: rgba(255, 255, 255, 0.4);
+  }
+}
+
+.books-toc__folder {
+  color: var(--title-color);
+  font-weight: 700;
+}
+
+.books-toc__chapter {
+  color: var(--input-text);
+  font-size: 0.88rem;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+
+  &.is-active {
+    background: color-mix(in srgb, var(--title-color) 12%, transparent);
+    color: var(--title-color);
+    font-weight: 700;
+  }
+}
+
+.books-toc__chevron {
+  flex: 0 0 auto;
+  width: 1rem;
+  font-size: 0.7rem;
+  opacity: 0.6;
+}
+
 .books-detail-nav {
   display: flex;
   align-items: center;

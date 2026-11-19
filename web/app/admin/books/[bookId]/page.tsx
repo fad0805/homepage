@@ -12,6 +12,7 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 
 import { Pagination } from "@/components/pagination";
+import { TocManager } from "@/components/toc-manager";
 import { apiFetch } from "@/lib/api";
 import { formatDateTime } from "@/lib/datetime";
 import { useHorizontalScrollFade } from "@/lib/use-horizontal-scroll-fade";
@@ -774,6 +775,14 @@ export default function AdminBookDetail() {
               </>
             )}
           </section>
+
+          {Number.isFinite(bookId) ? (
+            <TocManager
+              bookId={bookId}
+              chapters={chapters}
+              notify={notify}
+            />
+          ) : null}
         </>
       )}
 

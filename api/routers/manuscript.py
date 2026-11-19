@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 
 from core.scrivener import read_upload_limited
 from crud import manuscript as crud
+from crud import serial_nodes as toc_crud
 from db.session import get_db
 from schemas import manuscript as schemas
 
@@ -261,3 +262,77 @@ def get_public_toc(
     db: Session = Depends(get_db),
 ):
     return crud.get_public_toc(db, book_id, author_id=get_default_author_id(db))
+
+
+@public_router.get("/{book_id}/toc/manage")
+def get_manage_toc(
+    book_id: int,
+    db: Session = Depends(get_db),
+    user=Depends(require_auth),
+):
+    return toc_crud.get_manage_toc(db, book_id, user.id)
+
+
+@public_router.post("/{book_id}/toc/folders")
+def post_toc_folder(
+    book_id: int,
+    payload: schemas.TocFolderCreate,
+    db: Session = Depends(get_db),
+    user=Depends(require_auth),
+):
+    return toc_crud.create_folder(
+        db, book_id, user.id, payload.label, payload.parent_id
+    )
+
+
+@public_router.post("/{book_id}/toc/posts")
+def post_toc_post(
+    book_id: int,
+    payload: schemas.TocPostCreate,
+    db: Session = Depends(get_db),
+    user=Depends(require_auth),
+):
+    return toc_crud.add_post(
+        db, book_id, user.id, payload.chapter_id, payload.parent_id
+    )
+
+
+@public_router.patch("/{book_id}/toc/nodes/{node_id}")
+def patch_toc_node(
+    book_id: int,
+    node_id: int,
+    payload: schemas.TocNodeUpdate,
+    db: Session = Depends(get_db),
+    user=Depends(require_auth),
+):
+    node = toc_crud._node_or_404(db, node_id, user.id)
+    if node.book_id != book_id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Does not exist TOC node",
+        )
+    return toc_crud.update_node(
+        db,
+        node_id,
+        user.id,
+        label=payload.label,
+        label_set="label" in payload.model_fields_set,
+        parent_id=payload.parent_id,
+        parent_set="parent_id" in payload.model_fields_set,
+    )
+
+
+@public_router.delete("/{book_id}/toc/nodes/{node_id}")
+def delete_toc_node(
+    book_id: int,
+    node_id: int,
+    db: Session = Depends(get_db),
+    user=Depends(require_auth),
+):
+    node = toc_crud._node_or_404(db, node_id, user.id)
+    if node.book_id != book_id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Does not exist TOC node",
+        )
+    return toc_crud.delete_node(db, node_id, user.id)

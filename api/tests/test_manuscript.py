@@ -18,12 +18,15 @@ from core.scrivener import (
     read_upload_limited,
 )
 from core.text_stats import count_characters
+from crud import books as books_crud
 from crud import manuscript as crud
+from crud import serial_nodes as toc_crud
 from db.base import Base
 from models.books import Book, BookCategory, Chapter
 from models.illustrations import Illustration, IllustrationImage  # noqa: F401
 from models.manuscript import ManuscriptNode, ManuscriptProject, SerialNode
 from models.users import User
+from schemas import books as book_schemas
 from schemas import manuscript as schemas
 
 
@@ -536,8 +539,10 @@ class ManuscriptTests(unittest.TestCase):
 
         toc = crud.get_public_toc(self.db, self.book.id, author_id=self.owner.id)
         self.assertEqual(len(toc), 1)
-        self.assertEqual(toc[0]["label"], "1권")
-        self.assertEqual(toc[0]["children"][0]["chapter"]["title"], "도입")
+        # Manuscript folders are no longer copied automatically; the post is
+        # placed at the TOC root unless the author chooses a folder.
+        self.assertEqual(toc[0]["label"], "도입")
+        self.assertEqual(toc[0]["chapter"]["title"], "도입")
 
         # A bookshelf edit does not touch the manuscript.
         chapter.title = "책장에서 수정"
@@ -565,6 +570,195 @@ class ManuscriptTests(unittest.TestCase):
         self.assertEqual(
             crud.get_node(self.db, chapter_node.id, self.owner.id)["published_state"],
             "published",
+        )
+
+    def test_publish_uses_explicit_toc_folder(self) -> None:
+        project = self._project()
+        node = self._node(project, "도입", body="<p>본문</p>")
+        tree = toc_crud.create_folder(
+            self.db, self.book.id, self.owner.id, "1부", None
+        )
+        folder_id = tree[0]["id"]
+
+        crud.publish_node(
+            self.db,
+            node.id,
+            schemas.PublishRequest(
+                target_book_id=self.book.id, toc_parent_id=folder_id
+            ),
+            self.owner.id,
+        )
+        toc = crud.get_public_toc(self.db, self.book.id, author_id=self.owner.id)
+        self.assertEqual(len(toc), 1)
+        self.assertEqual(toc[0]["label"], "1부")
+        self.assertEqual(toc[0]["children"][0]["chapter"]["title"], "도입")
+
+        # Re-publishing without a selection keeps the chosen location.
+        self._clear_publish_cooldown(node)
+        crud.publish_node(
+            self.db, node.id, schemas.PublishRequest(), self.owner.id
+        )
+        toc = crud.get_public_toc(self.db, self.book.id, author_id=self.owner.id)
+        self.assertEqual(toc[0]["children"][0]["chapter"]["title"], "도입")
+
+    def test_manage_toc_folders(self) -> None:
+        tree = toc_crud.create_folder(
+            self.db, self.book.id, self.owner.id, "1부", None
+        )
+        folder_id = tree[0]["id"]
+        child = toc_crud.create_folder(
+            self.db, self.book.id, self.owner.id, "1장", folder_id
+        )
+        child_id = child[0]["children"][0]["id"]
+
+        with self.assertRaises(HTTPException) as raised:
+            toc_crud.update_node(
+                self.db,
+                folder_id,
+                self.owner.id,
+                parent_id=child_id,
+                parent_set=True,
+            )
+        self.assertEqual(raised.exception.status_code, 400)
+
+        with self.assertRaises(HTTPException) as raised:
+            toc_crud.delete_node(self.db, folder_id, self.owner.id)
+        self.assertEqual(raised.exception.status_code, 400)
+
+        renamed = toc_crud.update_node(
+            self.db,
+            folder_id,
+            self.owner.id,
+            label="첫 권",
+            label_set=True,
+        )
+        self.assertEqual(renamed[0]["label"], "첫 권")
+
+        moved = toc_crud.update_node(
+            self.db, child_id, self.owner.id, parent_id=None, parent_set=True
+        )
+        self.assertEqual([node["label"] for node in moved], ["첫 권", "1장"])
+
+        deleted = toc_crud.delete_node(self.db, child_id, self.owner.id)
+        self.assertEqual([node["label"] for node in deleted], ["첫 권"])
+
+    def test_add_existing_chapter_to_toc(self) -> None:
+        created = books_crud.create_chapter(
+            self.db,
+            book_schemas.ChapterCreate(book_id=self.book.id, title="등록할 글"),
+            self.owner.id,
+        )
+        before = toc_crud.get_manage_toc(self.db, self.book.id, self.owner.id)
+        post_id = next(
+            node["id"]
+            for node in before
+            if node["node_type"] == "post" and node["chapter_id"] == created["id"]
+        )
+        toc_crud.delete_node(self.db, post_id, self.owner.id)
+
+        folder = toc_crud.create_folder(
+            self.db, self.book.id, self.owner.id, "1부", None
+        )
+        folder_id = next(
+            node["id"] for node in folder if node["node_type"] == "folder"
+        )
+        toc_crud.add_post(
+            self.db, self.book.id, self.owner.id, created["id"], folder_id
+        )
+        toc = crud.get_public_toc(self.db, self.book.id, author_id=self.owner.id)
+        self.assertEqual(toc[0]["label"], "1부")
+        self.assertEqual(toc[0]["children"][0]["chapter"]["title"], "등록할 글")
+
+        with self.assertRaises(HTTPException) as raised:
+            toc_crud.add_post(
+                self.db, self.book.id, self.other.id, created["id"], None
+            )
+        self.assertEqual(raised.exception.status_code, 404)
+
+    def test_chapter_create_and_update_use_toc_parent(self) -> None:
+        tree = toc_crud.create_folder(
+            self.db, self.book.id, self.owner.id, "1부", None
+        )
+        folder_id = tree[0]["id"]
+        created = books_crud.create_chapter(
+            self.db,
+            book_schemas.ChapterCreate(
+                book_id=self.book.id,
+                title="게시글",
+                toc_parent_id=folder_id,
+            ),
+            self.owner.id,
+        )
+        toc = crud.get_public_toc(self.db, self.book.id, author_id=self.owner.id)
+        self.assertEqual(toc[0]["label"], "1부")
+        self.assertEqual(toc[0]["children"][0]["chapter"]["title"], "게시글")
+
+        books_crud.update_chapter(
+            self.db,
+            created["id"],
+            book_schemas.ChapterUpdate(toc_parent_id=None),
+            self.owner.id,
+        )
+        toc = crud.get_public_toc(self.db, self.book.id, author_id=self.owner.id)
+        self.assertEqual(
+            sorted(node["label"] for node in toc), ["1부", "게시글"]
+        )
+
+    def test_chapter_delete_and_reorder_keep_toc_in_sync(self) -> None:
+        def post_chapter_ids(nodes):
+            found = []
+            for node in nodes:
+                if node["node_type"] == "post":
+                    found.append(node["chapter_id"])
+                found.extend(post_chapter_ids(node["children"]))
+            return found
+
+        created = books_crud.create_chapter(
+            self.db,
+            book_schemas.ChapterCreate(
+                book_id=self.book.id,
+                title="삭제될 글",
+            ),
+            self.owner.id,
+        )
+        self.assertIn(
+            created["id"],
+            post_chapter_ids(toc_crud.get_manage_toc(self.db, self.book.id, self.owner.id)),
+        )
+        books_crud.delete_chapter(self.db, created["id"], self.owner.id)
+        self.assertNotIn(
+            created["id"],
+            post_chapter_ids(toc_crud.get_manage_toc(self.db, self.book.id, self.owner.id)),
+        )
+
+        other_book = Book(user_id=self.owner.id, title="다른 책", tags=[])
+        self.db.add(other_book)
+        self.db.flush()
+        moved = books_crud.create_chapter(
+            self.db,
+            book_schemas.ChapterCreate(book_id=self.book.id, title="이동할 글"),
+            self.owner.id,
+        )
+        books_crud.reorder_chapters(
+            self.db,
+            book_schemas.ChapterReorderRequest(
+                items=[
+                    book_schemas.ChapterReorderItem(
+                        id=moved["id"], order=0, book_id=other_book.id
+                    )
+                ]
+            ),
+            self.owner.id,
+        )
+        self.assertNotIn(
+            moved["id"],
+            post_chapter_ids(toc_crud.get_manage_toc(self.db, self.book.id, self.owner.id)),
+        )
+        self.assertIn(
+            moved["id"],
+            post_chapter_ids(
+                toc_crud.get_manage_toc(self.db, other_book.id, self.owner.id)
+            ),
         )
 
     def test_publish_rejects_retry_within_cooldown(self) -> None:

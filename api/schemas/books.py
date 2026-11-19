@@ -74,6 +74,7 @@ class ChapterBase(BaseModel):
     pinned: bool = False
     protected: bool = False
     published_at: datetime | None = None
+    toc_parent_id: int | None = None
 
 
 class ChapterCreate(ChapterBase):
@@ -93,6 +94,7 @@ class ChapterUpdate(BaseModel):
     pinned: bool | None = None
     protected: bool | None = None
     published_at: datetime | None = None
+    toc_parent_id: int | None = None
 
 
 class ChapterReorderItem(BaseModel):
