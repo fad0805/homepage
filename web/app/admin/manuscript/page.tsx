@@ -161,11 +161,11 @@ export default function AdminManuscriptPage() {
         </div>
         <div className="admin-manuscript-actions">
           <label className="admin-manuscript-field">
-            <span>제목 검색</span>
             <input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder="프로젝트 제목"
+              placeholder="제목 검색"
+              aria-label="제목 검색"
             />
           </label>
           <div className="admin-manuscript-actions-right">
