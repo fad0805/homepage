@@ -469,6 +469,8 @@ p.admin-books-draft-preview-empty {
 }
 
 .admin-books-chapters {
+  @include horizontal-scroll-fade(1rem);
+
   display: flex;
   flex-direction: column;
   gap: 0.15rem;
@@ -1121,6 +1123,47 @@ p.admin-books-draft-preview-empty {
 
   .admin-book-card__updated {
     white-space: nowrap;
+  }
+
+  .admin-books-chapters {
+    flex-direction: row;
+    align-items: stretch;
+    gap: 0.6rem;
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    scroll-padding-left: 0.1rem;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    padding-bottom: 0.4rem;
+
+    &::-webkit-scrollbar {
+      display: none;
+    }
+  }
+
+  .admin-books-chapter-row {
+    flex: 0 0 min(18rem, 85vw);
+    min-width: min(18rem, 85vw);
+    align-items: flex-start;
+    padding: 0.5rem;
+    border: 1px solid var(--admin-border);
+    border-radius: 0.6rem;
+    scroll-snap-align: start;
+    scroll-snap-stop: always;
+
+    .admin-books-chapter-link {
+      flex: 1 1 auto;
+      flex-wrap: wrap;
+      min-width: 0;
+      padding: 0.15rem 0;
+    }
+
+    .admin-books-chapter-main {
+      flex: 1 0 100%;
+    }
   }
 }
 

@@ -14,6 +14,7 @@ import { useParams, useRouter } from "next/navigation";
 import { Pagination } from "@/components/pagination";
 import { apiFetch } from "@/lib/api";
 import { formatDateTime } from "@/lib/datetime";
+import { useHorizontalScrollFade } from "@/lib/use-horizontal-scroll-fade";
 
 import "@/public/styles/admin/books.scss";
 
@@ -88,6 +89,8 @@ export default function AdminBookDetail() {
   const params = useParams<{ bookId: string }>();
   const router = useRouter();
   const bookId = Number(params.bookId);
+  const { ref: chaptersRef, fadeClassName: chaptersFade } =
+    useHorizontalScrollFade<HTMLDivElement>();
 
   const [book, setBook] = useState<Book | null>(null);
   const [books, setBooks] = useState<Book[]>([]);
@@ -684,7 +687,12 @@ export default function AdminBookDetail() {
               </p>
             ) : (
               <>
-                <div className="admin-books-chapters">
+                <div
+                  ref={chaptersRef}
+                  className={["admin-books-chapters", chaptersFade]
+                    .filter(Boolean)
+                    .join(" ")}
+                >
                   {pageChapters.map((chapter) => (
                     <div
                       className="admin-books-chapter-row"
