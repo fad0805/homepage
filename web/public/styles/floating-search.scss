@@ -137,6 +137,14 @@ html[data-appearance='collapsible']
     bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
   }
 
+  .floating-search__popover {
+    position: fixed;
+    right: auto;
+    bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
+    left: 50%;
+    transform: translateX(-50%);
+  }
+
   html:not([data-appearance='collapsible'])
     body:has(.floating-search:not(.floating-search--sidebar))
     .theme-toggle:not(.theme-toggle--sidebar):not(.theme-toggle--drawer) {
