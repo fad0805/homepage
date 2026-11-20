@@ -99,6 +99,8 @@ nav#navbar a {
     &.active {
       color: var(--navbar-active-color);
       font-size: 1.2rem;
+      width: 22.5px;
+      height: 22.5px;
     }
   }
 }
