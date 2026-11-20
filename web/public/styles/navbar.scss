@@ -98,14 +98,7 @@ nav#navbar a {
 
     &.active {
       color: var(--navbar-active-color);
-      font-size: 1.4rem;
-      width: 1.55rem;
-      height: 1.55rem;
-
-      .navbar-icon {
-        width: 1.35rem;
-        height: 1.35rem;
-      }
+      font-size: 1.2rem;
     }
   }
 }
