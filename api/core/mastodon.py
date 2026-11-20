@@ -8,6 +8,7 @@ from urllib.parse import urlparse
 import httpx
 from sqlalchemy.orm import Session
 
+from core.uploads import open_uploaded_file
 from core.url_safety import UnsafeUrlError, pin_external_url
 from models.books import Chapter
 from models.illustrations import Illustration
@@ -633,6 +634,22 @@ def _illustration_text(
     )
 
 
+def _illustration_representative_url(
+    illustration: Illustration,
+) -> str | None:
+    """Return the dedicated representative image or the selected gallery image."""
+    if illustration.representative_url:
+        return illustration.representative_url
+    images = illustration.images or []
+    if not images:
+        return None
+    if illustration.representative_image_id:
+        for image in images:
+            if image.id == illustration.representative_image_id:
+                return image.url
+    return images[0].url if images[0].url else None
+
+
 def _request_error(response: httpx.Response) -> str:
     try:
         payload = response.json()
@@ -812,17 +829,21 @@ def detect_service(
 def _post_mastodon_status(
     settings: MastodonSettings,
     text: str,
+    media_ids: list[str] | None = None,
 ) -> str:
     visibility = (
         settings.visibility
         if settings.visibility in ("public", "unlisted", "private")
         else "public"
     )
+    data = {"status": text, "visibility": visibility}
+    if media_ids:
+        data["media_ids[]"] = media_ids
     response = _request(
         settings,
         "POST",
         "/api/v1/statuses",
-        data={"status": text, "visibility": visibility},
+        data=data,
     )
     if response.status_code not in (200, 201):
         raise MastodonError(_request_error(response))
@@ -836,16 +857,20 @@ def _post_mastodon_status(
 def _post_misskey_status(
     settings: MastodonSettings,
     text: str,
+    file_ids: list[str] | None = None,
 ) -> str:
     visibility = {
         "public": "public",
         "unlisted": "home",
         "private": "followers",
     }.get(settings.visibility, "public")
+    payload = {"text": text, "visibility": visibility}
+    if file_ids:
+        payload["fileIds"] = file_ids
     response = _misskey_request(
         settings,
         "/api/notes/create",
-        {"text": text, "visibility": visibility},
+        payload,
     )
     if response.status_code not in (200, 201):
         raise MastodonError(_request_error(response))
@@ -857,15 +882,114 @@ def _post_misskey_status(
     return str(status_id)
 
 
-def post_status(settings: MastodonSettings, text: str) -> str:
+def _read_media_file(url: str) -> tuple[str, bytes, str] | None:
+    """Read a stored upload for social media attachment."""
+    try:
+        with open_uploaded_file(url) as (handle, content_type, _size):
+            payload = handle.read()
+    except (FileNotFoundError, OSError) as error:
+        logger.warning("Could not read notification image %s: %s", url, error)
+        return None
+    filename = os.path.basename(urlparse(url).path) or "image"
+    return filename, payload, content_type or "application/octet-stream"
+
+
+def _upload_mastodon_media(
+    settings: MastodonSettings,
+    url: str,
+    description: str | None = None,
+) -> str | None:
+    media = _read_media_file(url)
+    if media is None:
+        return None
+    filename, payload, content_type = media
+    try:
+        response = _request(
+            settings,
+            "POST",
+            "/api/v2/media",
+            data={"description": (description or "")[:1500]},
+            files={"file": (filename, payload, content_type)},
+        )
+    except MastodonError as error:
+        logger.warning("Mastodon media upload failed: %s", error)
+        return None
+    if response.status_code not in (200, 201, 202):
+        logger.warning(
+            "Mastodon media upload failed: %s", _request_error(response)
+        )
+        return None
+    try:
+        media_id = response.json().get("id")
+    except ValueError:
+        return None
+    return str(media_id) if media_id else None
+
+
+def _upload_misskey_media(
+    settings: MastodonSettings,
+    url: str,
+    description: str | None = None,
+) -> str | None:
+    media = _read_media_file(url)
+    if media is None:
+        return None
+    filename, payload, content_type = media
+    instance = normalize_instance_url(settings.instance_url)
+    token = (settings.access_token or "").strip()
+    if not instance or not token:
+        return None
+    target = _pin_instance_url(f"{instance}/api/drive/files/create")
+    try:
+        with httpx.Client(timeout=REQUEST_TIMEOUT) as client:
+            response = client.post(
+                target.url,
+                headers=target.headers,
+                extensions=target.extensions,
+                data={"i": token, "comment": (description or "")[:1500]},
+                files={"file": (filename, payload, content_type)},
+            )
+    except httpx.HTTPError as error:
+        logger.warning("Misskey media upload failed: %s", error)
+        return None
+    if response.status_code not in (200, 201):
+        logger.warning(
+            "Misskey media upload failed: %s", _request_error(response)
+        )
+        return None
+    try:
+        file_id = response.json().get("id")
+    except ValueError:
+        return None
+    return str(file_id) if file_id else None
+
+
+def post_status(
+    settings: MastodonSettings,
+    text: str,
+    *,
+    image_url: str | None = None,
+    image_description: str | None = None,
+) -> str:
     provider = (
         settings.provider
         if settings.provider in ("mastodon", "misskey", "writ")
         else "mastodon"
     )
+    media_id = None
+    if image_url:
+        if provider == "misskey":
+            media_id = _upload_misskey_media(
+                settings, image_url, image_description
+            )
+        else:
+            media_id = _upload_mastodon_media(
+                settings, image_url, image_description
+            )
+    media_ids = [media_id] if media_id else None
     if provider == "misskey":
-        return _post_misskey_status(settings, text)
-    return _post_mastodon_status(settings, text)
+        return _post_misskey_status(settings, text, media_ids)
+    return _post_mastodon_status(settings, text, media_ids)
 
 
 def maybe_notify_chapter(db: Session, chapter: Chapter) -> bool:
@@ -998,6 +1122,8 @@ def maybe_notify_illustration(
             status_id = post_status(
                 profile,
                 _illustration_text(profile, illustration),
+                image_url=_illustration_representative_url(illustration),
+                image_description=illustration.title,
             )
         except MastodonError as error:
             logger.warning(
