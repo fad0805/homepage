@@ -3,9 +3,11 @@ import logging
 import os
 import re
 from datetime import datetime, timedelta, timezone
+from io import BytesIO
 from urllib.parse import urlparse
 
 import httpx
+from PIL import Image, ImageOps
 from sqlalchemy.orm import Session
 
 from core.uploads import open_uploaded_file
@@ -30,6 +32,8 @@ NOTIFY_SCOPES = {
 NOTIFY_TAG_SCOPES = {"tag", "tag_books", "tag_illustrations"}
 NOTIFY_TAG_MODES = {"any", "all"}
 MAX_NOTIFY_TAGS = 10
+SOCIAL_IMAGE_MAX_DIMENSION = 2048
+SOCIAL_IMAGE_MAX_BYTES = 7 * 1024 * 1024
 
 # Delivery rows only prevent duplicate posts for a short window. The content
 # row's mastodon_status_id remains the permanent "already announced" marker.
@@ -882,16 +886,64 @@ def _post_misskey_status(
     return str(status_id)
 
 
+def _prepare_social_image(
+    payload: bytes,
+    content_type: str | None,
+) -> tuple[bytes, str]:
+    """Downscale/re-encode an upload so common instance limits accept it."""
+    try:
+        with Image.open(BytesIO(payload)) as source:
+            if getattr(source, "is_animated", False):
+                return payload, content_type or "image/gif"
+            image = ImageOps.exif_transpose(source)
+            if (
+                image.mode in ("RGBA", "LA")
+                or (image.mode == "P" and "transparency" in image.info)
+            ):
+                rgba = image.convert("RGBA")
+                background = Image.new("RGB", rgba.size, "white")
+                background.paste(rgba, mask=rgba.getchannel("A"))
+                image = background
+            else:
+                image = image.convert("RGB")
+            resampling = getattr(getattr(Image, "Resampling", Image), "LANCZOS")
+            image.thumbnail(
+                (SOCIAL_IMAGE_MAX_DIMENSION, SOCIAL_IMAGE_MAX_DIMENSION),
+                resampling,
+            )
+            quality = 88
+            while True:
+                output = BytesIO()
+                image.save(
+                    output,
+                    format="JPEG",
+                    quality=quality,
+                    optimize=True,
+                )
+                result = output.getvalue()
+                if len(result) <= SOCIAL_IMAGE_MAX_BYTES or quality <= 60:
+                    return result, "image/jpeg"
+                quality -= 8
+    except Exception as error:
+        logger.warning("Could not optimize notification image: %s", error)
+        return payload, content_type or "application/octet-stream"
+
+
 def _read_media_file(url: str) -> tuple[str, bytes, str] | None:
-    """Read a stored upload for social media attachment."""
+    """Read and optimize a stored upload for social media attachment."""
     try:
         with open_uploaded_file(url) as (handle, content_type, _size):
             payload = handle.read()
     except (FileNotFoundError, OSError) as error:
         logger.warning("Could not read notification image %s: %s", url, error)
         return None
+    payload, content_type = _prepare_social_image(payload, content_type)
     filename = os.path.basename(urlparse(url).path) or "image"
-    return filename, payload, content_type or "application/octet-stream"
+    if content_type == "image/jpeg" and not filename.lower().endswith(
+        (".jpg", ".jpeg")
+    ):
+        filename = f"{os.path.splitext(filename)[0]}.jpg"
+    return filename, payload, content_type
 
 
 def _upload_mastodon_media(
@@ -916,7 +968,9 @@ def _upload_mastodon_media(
         return None
     if response.status_code not in (200, 201, 202):
         logger.warning(
-            "Mastodon media upload failed: %s", _request_error(response)
+            "Mastodon media upload failed (%s): %s",
+            response.status_code,
+            _request_error(response),
         )
         return None
     try:
@@ -954,7 +1008,9 @@ def _upload_misskey_media(
         return None
     if response.status_code not in (200, 201):
         logger.warning(
-            "Misskey media upload failed: %s", _request_error(response)
+            "Misskey media upload failed (%s): %s",
+            response.status_code,
+            _request_error(response),
         )
         return None
     try:

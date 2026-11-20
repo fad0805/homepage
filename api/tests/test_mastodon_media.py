@@ -4,7 +4,14 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 import core.mastodon as mastodon
+from PIL import Image
 from core.mastodon import MastodonError
+
+
+def _image_bytes() -> bytes:
+    buffer = BytesIO()
+    Image.new("RGB", (2, 2), "white").save(buffer, format="PNG")
+    return buffer.getvalue()
 
 
 class _FakeResponse:
@@ -111,7 +118,7 @@ class MastodonMediaTests(unittest.TestCase):
             ) as request,
         ):
             opened.return_value.__enter__.return_value = (
-                BytesIO(b"img"),
+                BytesIO(_image_bytes()),
                 "image/jpeg",
                 3,
             )
@@ -123,7 +130,7 @@ class MastodonMediaTests(unittest.TestCase):
         self.assertEqual(request.call_args.args[2], "/api/v2/media")
         file_field = request.call_args.kwargs["files"]["file"]
         self.assertEqual(file_field[0], "cover.jpg")
-        self.assertEqual(file_field[1], b"img")
+        self.assertTrue(file_field[1].startswith(b"\xff\xd8"))
         self.assertEqual(file_field[2], "image/jpeg")
         self.assertEqual(request.call_args.kwargs["data"]["description"], "표지")
 
@@ -141,7 +148,7 @@ class MastodonMediaTests(unittest.TestCase):
             ),
         ):
             opened.return_value.__enter__.return_value = (
-                BytesIO(b"img"),
+                BytesIO(_image_bytes()),
                 "image/jpeg",
                 3,
             )
@@ -150,6 +157,22 @@ class MastodonMediaTests(unittest.TestCase):
             )
 
         self.assertIsNone(media_id)
+
+    def test_social_image_is_downscaled_and_reencoded(self) -> None:
+        source = Image.new("RGB", (3000, 2000), (120, 80, 200))
+        buffer = BytesIO()
+        source.save(buffer, format="PNG")
+
+        payload, content_type = mastodon._prepare_social_image(
+            buffer.getvalue(), "image/png"
+        )
+
+        self.assertEqual(content_type, "image/jpeg")
+        self.assertLessEqual(len(payload), mastodon.SOCIAL_IMAGE_MAX_BYTES)
+        with Image.open(BytesIO(payload)) as result:
+            self.assertLessEqual(
+                max(result.size), mastodon.SOCIAL_IMAGE_MAX_DIMENSION
+            )
 
     def test_representative_url_prefers_dedicated_image(self) -> None:
         image = SimpleNamespace(id=7, url="/uploads/7.jpg")
