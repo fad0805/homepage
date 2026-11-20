@@ -88,7 +88,8 @@ nav#navbar a {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    margin-left: auto;
+    margin-left: -0.8rem;
+    padding-left: 0.8rem;
 
     &.active {
       font-size: 1.2rem;
