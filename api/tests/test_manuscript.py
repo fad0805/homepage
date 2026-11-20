@@ -601,6 +601,55 @@ class ManuscriptTests(unittest.TestCase):
         toc = crud.get_public_toc(self.db, self.book.id, author_id=self.owner.id)
         self.assertEqual(toc[0]["children"][0]["chapter"]["title"], "도입")
 
+    def test_public_toc_groups_unassigned_chapters(self) -> None:
+        placed = books_crud.create_chapter(
+            self.db,
+            book_schemas.ChapterCreate(book_id=self.book.id, title="배치된 글"),
+            self.owner.id,
+        )
+        unassigned = books_crud.create_chapter(
+            self.db,
+            book_schemas.ChapterCreate(book_id=self.book.id, title="남은 글"),
+            self.owner.id,
+        )
+        folder = toc_crud.create_folder(
+            self.db, self.book.id, self.owner.id, "1부", None
+        )
+        folder_id = next(
+            node["id"] for node in folder if node["node_type"] == "folder"
+        )
+        placed_post = next(
+            node["id"]
+            for node in toc_crud.get_manage_toc(
+                self.db, self.book.id, self.owner.id
+            )
+            if node["node_type"] == "post" and node["chapter_id"] == placed["id"]
+        )
+        toc_crud.move_node(
+            self.db, placed_post, self.owner.id, folder_id, 0
+        )
+        unassigned_post = next(
+            node["id"]
+            for node in toc_crud.get_manage_toc(
+                self.db, self.book.id, self.owner.id
+            )
+            if node["node_type"] == "post"
+            and node["chapter_id"] == unassigned["id"]
+        )
+        toc_crud.delete_node(self.db, unassigned_post, self.owner.id)
+
+        toc = crud.get_public_toc(self.db, self.book.id, author_id=self.owner.id)
+
+        self.assertEqual(toc[0]["label"], "1부")
+        self.assertEqual(toc[0]["children"][0]["chapter"]["title"], "배치된 글")
+        self.assertEqual(toc[-1]["id"], -1)
+        self.assertEqual(toc[-1]["label"], "목차에 소속되지 않은 게시글")
+        self.assertTrue(toc[-1]["unassigned"])
+        self.assertEqual(
+            [child["chapter"]["title"] for child in toc[-1]["children"]],
+            ["남은 글"],
+        )
+
     def test_manage_toc_folders(self) -> None:
         tree = toc_crud.create_folder(
             self.db, self.book.id, self.owner.id, "1부", None

@@ -675,6 +675,17 @@
       color: var(--title-color);
     }
   }
+
+  &.is-unassigned {
+    margin-top: 0.6rem;
+    border-top: 1px dashed
+      color-mix(in srgb, var(--title-color) 25%, transparent);
+    border-radius: 0;
+    padding-top: 0.75rem;
+    color: color-mix(in srgb, var(--title-color) 65%, transparent);
+    font-size: 0.82rem;
+    font-style: italic;
+  }
 }
 
 .books-toc__chapter {

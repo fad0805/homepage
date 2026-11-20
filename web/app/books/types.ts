@@ -37,6 +37,7 @@ export interface TocNode {
   node_type: "folder" | "post";
   label: string | null;
   position: number;
+  unassigned?: boolean;
   chapter: {
     id: number;
     title: string;

@@ -69,6 +69,8 @@ export function PublicToc({
               <button
                 type="button"
                 className={`books-toc__folder is-leaf${
+                  node.unassigned ? " is-unassigned" : ""
+                }${
                   node.id !== null && node.id === selectedFolderId
                     ? " is-selected"
                     : ""

@@ -1207,7 +1207,37 @@ def get_public_toc(
             "children": [build(child) for child in children.get(node.id, [])],
         }
 
-    return [build(node) for node in children.get(None, [])]
+    result = [build(node) for node in children.get(None, [])]
+    placed_ids = {
+        node.chapter_id for node in nodes if node.node_type == "post"
+    }
+    unassigned = [
+        chapter
+        for chapter_id, chapter in chapters.items()
+        if chapter_id not in placed_ids
+    ]
+    if unassigned:
+        result.append(
+            {
+                "id": -1,
+                "node_type": "folder",
+                "label": "목차에 소속되지 않은 게시글",
+                "position": 10**9,
+                "unassigned": True,
+                "children": [
+                    {
+                        "id": None,
+                        "node_type": "post",
+                        "label": chapter.title,
+                        "position": index,
+                        "chapter": chapter_summary(chapter),
+                        "children": [],
+                    }
+                    for index, chapter in enumerate(unassigned)
+                ],
+            }
+        )
+    return result
 
 
 def _numbered_title(title: str, existing: set[str]) -> str:
