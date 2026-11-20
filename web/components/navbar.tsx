@@ -51,7 +51,7 @@ export const Navbar = () => {
                     viewBox="0 0 24 24"
                     fill="none"
                     stroke="currentColor"
-                    strokeWidth="1.8"
+                    strokeWidth="2.1"
                     strokeLinecap="round"
                     strokeLinejoin="round"
                     aria-hidden="true"
