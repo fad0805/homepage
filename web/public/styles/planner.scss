@@ -2424,6 +2424,25 @@
   min-height: 0;
 }
 
+.planner-preview-title {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  margin: 0.55rem 0 0;
+
+  span {
+    color: var(--title-color);
+    font-size: 0.6rem;
+    opacity: 0.7;
+  }
+
+  strong {
+    font-size: 0.8rem;
+    font-weight: 600;
+    overflow-wrap: anywhere;
+  }
+}
+
 .planner-preview-summary {
   margin: 0.55rem 0 0;
   font-size: 0.72rem;

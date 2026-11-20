@@ -124,6 +124,12 @@ export function PlannerEventPreviewModal({
             <p className="planner-status">불러오는 중...</p>
           ) : preview?.available ? (
             <>
+              {preview.title ? (
+                <p className="planner-preview-title">
+                  <span>현재 제목</span>
+                  <strong>{preview.title}</strong>
+                </p>
+              ) : null}
               {preview.summary ? (
                 <p className="planner-preview-summary">
                   {preview.summary}
@@ -164,7 +170,8 @@ export function PlannerEventPreviewModal({
                   상세 페이지로 이동
                 </Link>
               ) : null}
-              {!preview.summary &&
+              {!preview.title &&
+              !preview.summary &&
               !preview.content_html &&
               fieldEntries.length === 0 &&
               tags.length === 0 ? (
