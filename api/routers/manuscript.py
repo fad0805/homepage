@@ -19,7 +19,7 @@ from crud import serial_nodes as toc_crud
 from db.session import get_db
 from schemas import manuscript as schemas
 
-from .utils import get_default_author_id, require_auth
+from .utils import get_default_author_id, get_optional_user, is_admin, require_auth
 
 router = APIRouter()
 public_router = APIRouter()
@@ -260,8 +260,15 @@ def get_scrivenings(
 def get_public_toc(
     book_id: int,
     db: Session = Depends(get_db),
+    current_user=Depends(get_optional_user),
 ):
-    return crud.get_public_toc(db, book_id, author_id=get_default_author_id(db))
+    return crud.get_public_toc(
+        db,
+        book_id,
+        author_id=get_default_author_id(db),
+        viewer_user_id=current_user.id if current_user else None,
+        can_view_hidden=current_user is not None and is_admin(current_user),
+    )
 
 
 @public_router.get("/{book_id}/toc/manage")

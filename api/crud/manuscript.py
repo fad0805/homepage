@@ -6,7 +6,7 @@ import hashlib
 import json
 
 from fastapi import HTTPException, status
-from sqlalchemy import or_
+from sqlalchemy import and_, or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload, load_only
 
@@ -1100,30 +1100,62 @@ def get_public_toc(
     book_id: int,
     *,
     author_id: int | None,
+    viewer_user_id: int | None = None,
+    can_view_hidden: bool = False,
 ) -> list[dict]:
-    """Return the anonymous reader's TOC using the public book rules."""
+    """Return the reader TOC, including a viewer's own hidden posts."""
     not_found = HTTPException(
         status_code=status.HTTP_404_NOT_FOUND,
         detail="Does not exist book",
     )
     if author_id is None:
         raise not_found
-    book = (
+    book_query = (
         db.query(Book)
         .options(joinedload(Book.category_relation))
-        .filter(
-            Book.id == book_id,
+        .filter(Book.id == book_id)
+    )
+    if can_view_hidden:
+        pass
+    elif viewer_user_id is not None:
+        book_query = book_query.filter(
+            or_(
+                and_(Book.visible.is_(True), Book.user_id == author_id),
+                Book.user_id == viewer_user_id,
+            )
+        )
+    else:
+        book_query = book_query.filter(
             Book.visible.is_(True),
             Book.user_id == author_id,
         )
-        .first()
-    )
+    book = book_query.first()
     if book is None or not _category_is_visible_to(
         book,
-        viewer_user_id=None,
-        can_view_hidden=False,
+        viewer_user_id=viewer_user_id,
+        can_view_hidden=can_view_hidden,
     ):
         raise not_found
+
+    chapter_filters = [
+        Chapter.book_id == book_id,
+        or_(
+            Chapter.published_at.is_(None),
+            Chapter.published_at <= _utcnow(),
+        ),
+    ]
+    if not can_view_hidden:
+        if viewer_user_id is None:
+            chapter_filters.append(Chapter.visible.is_(True))
+        elif book.user_id != viewer_user_id:
+            # Book owners see every chapter in their book. Other signed-in
+            # readers only gain access to their own hidden chapters.
+            chapter_filters.append(
+                or_(
+                    Chapter.visible.is_(True),
+                    Chapter.user_id == viewer_user_id,
+                )
+            )
 
     chapters = {
         chapter.id: chapter
@@ -1139,14 +1171,7 @@ def get_public_toc(
                 Chapter.order,
             )
         )
-        .filter(
-            Chapter.book_id == book_id,
-            Chapter.visible.is_(True),
-            or_(
-                Chapter.published_at.is_(None),
-                Chapter.published_at <= _utcnow(),
-            ),
-        )
+        .filter(*chapter_filters)
         .order_by(Chapter.order.asc(), Chapter.id.asc())
         .all()
     }

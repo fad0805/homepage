@@ -976,6 +976,43 @@ class ManuscriptTests(unittest.TestCase):
         )
         self.assertEqual(toc, [])
 
+    def test_public_toc_includes_hidden_chapters_for_author(self) -> None:
+        project = self._project()
+        node = self._node(project, "비공개", body="<p>본문</p>")
+        published = crud.publish_node(
+            self.db,
+            node.id,
+            schemas.PublishRequest(target_book_id=self.book.id),
+            self.owner.id,
+        )
+        chapter = (
+            self.db.query(Chapter).filter(Chapter.id == published["chapter_id"]).one()
+        )
+        chapter.visible = False
+        self.db.commit()
+
+        self.assertEqual(
+            crud.get_public_toc(self.db, self.book.id, author_id=self.owner.id),
+            [],
+        )
+
+        for_author = crud.get_public_toc(
+            self.db,
+            self.book.id,
+            author_id=self.owner.id,
+            viewer_user_id=self.owner.id,
+        )
+        self.assertEqual(len(for_author), 1)
+        self.assertEqual(for_author[0]["chapter"]["title"], "비공개")
+
+        for_other = crud.get_public_toc(
+            self.db,
+            self.book.id,
+            author_id=self.owner.id,
+            viewer_user_id=self.other.id,
+        )
+        self.assertEqual(for_other, [])
+
     def test_public_toc_is_limited_to_default_author(self) -> None:
         other_book = Book(user_id=self.other.id, title="남의 책", tags=[])
         self.db.add(other_book)

@@ -252,12 +252,14 @@ function ChapterDetail({
   bodyLoading = false,
   nearbyChapters = [],
   onSelectChapter,
+  onBackToList,
 }: {
   chapter: Chapter;
   bookTitle: string;
   bodyLoading?: boolean;
   nearbyChapters?: Chapter[];
   onSelectChapter?: (chapterId: number) => void;
+  onBackToList?: () => void;
 }) {
   const [lightbox, setLightbox] = useState<{
     images: LightboxImage[];
@@ -327,6 +329,15 @@ function ChapterDetail({
             <TagChip tag={tag} key={tag} />
           ))}
         </div>
+      ) : null}
+      {onBackToList ? (
+        <button
+          type="button"
+          className="books-panel__back chapter-detail__back-bottom"
+          onClick={onBackToList}
+        >
+          ← 게시글 목록
+        </button>
       ) : null}
       {nearbyChapters.length > 1 ? (
         <nav className="chapter-nearby" aria-label="이 책의 게시글">
@@ -1558,6 +1569,9 @@ export default function BooksClient({
           bodyLoading={chapterBodyLoading}
           nearbyChapters={nearbyChapters}
           onSelectChapter={selectChapter}
+          onBackToList={() =>
+            goBackTo({ bookId: activeBookId, chapterId: null })
+          }
         />
       </div>
     ) : null;
