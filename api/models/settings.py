@@ -62,6 +62,7 @@ class MastodonSettings(Base):
         nullable=True,
         index=True,
     )
+    notify_tag = Column(String(255), nullable=True)
     created_at = Column(DateTime, default=func.now(), nullable=False)
     updated_at = Column(
         DateTime,

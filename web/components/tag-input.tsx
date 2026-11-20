@@ -17,6 +17,7 @@ interface TagInputProps {
   onChange: (value: string) => void;
   placeholder?: string;
   disabled?: boolean;
+  single?: boolean;
   id?: string;
   className?: string;
 }
@@ -41,6 +42,7 @@ export function TagInput({
   onChange,
   placeholder = "쉼표로 구분",
   disabled = false,
+  single = false,
   id,
   className = "",
 }: TagInputProps) {
@@ -88,6 +90,14 @@ export function TagInput({
   }, [excluded, token]);
 
   const applySuggestion = (name: string) => {
+    if (single) {
+      onChange(`${name}, `);
+      setSuggestions([]);
+      setOpen(false);
+      setActiveIndex(-1);
+      window.requestAnimationFrame(() => inputRef.current?.focus());
+      return;
+    }
     const index = value.lastIndexOf(",");
     const prefix = index >= 0 ? value.slice(0, index + 1) : "";
     onChange(`${prefix}${prefix ? " " : ""}${name}, `);

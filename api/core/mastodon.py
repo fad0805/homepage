@@ -17,7 +17,7 @@ logger = logging.getLogger("uvicorn.error")
 
 STATUS_LIMIT = 500
 REQUEST_TIMEOUT = 15.0
-NOTIFY_SCOPES = {"all", "books", "book", "illustrations"}
+NOTIFY_SCOPES = {"all", "books", "book", "illustrations", "tag"}
 
 # Delivery rows only prevent duplicate posts for a short window. The content
 # row's mastodon_status_id remains the permanent "already announced" marker.
@@ -61,6 +61,13 @@ def normalize_site_url(value: str | None) -> str | None:
             "사이트 주소를 확인해주세요. 예: https://example.com"
         )
     return f"{parsed.scheme}://{parsed.netloc}".rstrip("/")
+
+
+def normalize_notify_tag(value: str | None) -> str | None:
+    """Return the plain tag name used by the notification tag filter."""
+    raw = (value or "").strip().lstrip("#").strip()
+    raw = raw.split(",", 1)[0].strip()
+    return raw[:255] or None
 
 
 def _pin_instance_url(url: str):
@@ -195,6 +202,11 @@ def serialize_mastodon_settings(
             if settings and scope == "book"
             else None
         ),
+        "notify_tag": (
+            normalize_notify_tag(settings.notify_tag)
+            if settings and scope == "tag"
+            else None
+        ),
         "has_access_token": bool(token),
         "access_token_hint": f"••••{token[-4:]}" if token else None,
         "updated_at": settings.updated_at if settings else None,
@@ -210,25 +222,46 @@ def _settings_ready(settings: MastodonSettings | None) -> bool:
     )
 
 
+def _tag_matches(tags: object, configured: str | None) -> bool:
+    target = normalize_notify_tag(configured)
+    if target is None:
+        return False
+    target_key = target.casefold()
+    if not isinstance(tags, (list, tuple, set)):
+        return False
+    return any(
+        (normalize_notify_tag(str(tag)) or "").casefold() == target_key
+        for tag in tags
+    )
+
+
 def _chapter_notify_allowed(
     settings: MastodonSettings,
     chapter: Chapter,
 ) -> bool:
     scope = _notify_scope(settings)
-    if scope == "all":
-        return True
-    if scope == "books":
+    if scope in ("all", "books"):
         return True
     if scope == "book":
         return (
             settings.notify_book_id is not None
             and chapter.book_id == settings.notify_book_id
         )
+    if scope == "tag":
+        return _tag_matches(chapter.tags, settings.notify_tag)
     return False
 
 
-def _illustration_notify_allowed(settings: MastodonSettings) -> bool:
-    return _notify_scope(settings) in ("all", "illustrations")
+def _illustration_notify_allowed(
+    settings: MastodonSettings,
+    illustration: Illustration,
+) -> bool:
+    scope = _notify_scope(settings)
+    if scope in ("all", "illustrations"):
+        return True
+    if scope == "tag":
+        return _tag_matches(illustration.tags, settings.notify_tag)
+    return False
 
 
 def _site_base(settings: MastodonSettings) -> str:
@@ -686,7 +719,7 @@ def maybe_notify_illustration(
     for profile in profiles:
         if profile.id in delivered:
             continue
-        if not _illustration_notify_allowed(profile):
+        if not _illustration_notify_allowed(profile, illustration):
             continue
 
         try:

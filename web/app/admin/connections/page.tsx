@@ -9,13 +9,19 @@ import {
   type FormEvent,
 } from "react";
 
+import { TagInput } from "@/components/tag-input";
 import { apiFetch } from "@/lib/api";
 import { formatDateTime } from "@/lib/datetime";
 
 import "@/public/styles/admin/connections.scss";
 
 type MastodonVisibility = "public" | "unlisted" | "private";
-type MastodonNotifyScope = "all" | "books" | "book" | "illustrations";
+type MastodonNotifyScope =
+  | "all"
+  | "books"
+  | "book"
+  | "illustrations"
+  | "tag";
 type MastodonProvider = "mastodon" | "misskey" | "writ";
 
 interface MastodonProfile {
@@ -28,6 +34,7 @@ interface MastodonProfile {
   visibility: MastodonVisibility;
   notify_scope: MastodonNotifyScope;
   notify_book_id: number | null;
+  notify_tag: string | null;
   has_access_token: boolean;
   access_token_hint: string | null;
   updated_at: string | null;
@@ -40,6 +47,7 @@ interface ProfileDraft {
   visibility: MastodonVisibility;
   notify_scope: MastodonNotifyScope;
   notify_book_id: number | null;
+  notify_tag: string;
   access_token: string;
   has_access_token: boolean;
   access_token_hint: string | null;
@@ -62,6 +70,13 @@ interface BookOption {
 
 type Notice = { type: "success" | "error"; text: string };
 
+function firstTag(value: string) {
+  return value
+    .split(",")
+    .map((tag) => tag.trim().replace(/^#/, "").trim())
+    .find(Boolean) ?? "";
+}
+
 function toDraft(profile: MastodonProfile): ProfileDraft {
   return {
     name: profile.name,
@@ -70,6 +85,7 @@ function toDraft(profile: MastodonProfile): ProfileDraft {
     visibility: profile.visibility ?? "public",
     notify_scope: profile.notify_scope ?? "all",
     notify_book_id: profile.notify_book_id ?? null,
+    notify_tag: profile.notify_tag ?? "",
     access_token: "",
     has_access_token: profile.has_access_token,
     access_token_hint: profile.access_token_hint,
@@ -88,10 +104,12 @@ function scopeLabel(
   scope: MastodonNotifyScope,
   bookId: number | null,
   books: BookOption[],
+  tag: string | null,
 ) {
   if (scope === "all") return "전체 (목차 + 삽화)";
   if (scope === "books") return "목차 전체";
   if (scope === "illustrations") return "삽화 전체";
+  if (scope === "tag") return tag ? `태그: ${tag}` : "태그 지정 필요";
   const book = books.find((item) => item.id === bookId);
   return book ? `책: ${book.title}` : "목차 내 특정 책";
 }
@@ -313,6 +331,12 @@ export default function AdminConnections() {
       notify("error", "알림 대상 책을 선택해주세요.");
       return;
     }
+    const notifyTag =
+      draft.notify_scope === "tag" ? firstTag(draft.notify_tag) : "";
+    if (draft.notify_scope === "tag" && !notifyTag) {
+      notify("error", "알림 대상 태그를 입력해주세요.");
+      return;
+    }
 
     setSaving(true);
     try {
@@ -324,6 +348,7 @@ export default function AdminConnections() {
         notify_scope: draft.notify_scope,
         notify_book_id:
           draft.notify_scope === "book" ? draft.notify_book_id : null,
+        notify_tag: draft.notify_scope === "tag" ? notifyTag : null,
         access_token: draft.access_token.trim() || null,
       };
 
@@ -493,6 +518,7 @@ export default function AdminConnections() {
                           profile.notify_scope,
                           profile.notify_book_id,
                           books,
+                          profile.notify_tag,
                         )}
                       </span>
                     </button>
@@ -524,6 +550,7 @@ export default function AdminConnections() {
                       selectedProfile.notify_scope,
                       selectedProfile.notify_book_id,
                       books,
+                      selectedProfile.notify_tag,
                     )}
                   </p>
                 </div>
@@ -649,6 +676,7 @@ export default function AdminConnections() {
                   <option value="books">목차 전체</option>
                   <option value="book">목차 내 특정 책</option>
                   <option value="illustrations">삽화 전체</option>
+                  <option value="tag">특정 태그 (목차 + 삽화)</option>
                 </select>
               </label>
               <p className="admin-connections-help">
@@ -676,6 +704,18 @@ export default function AdminConnections() {
                       </option>
                     ))}
                   </select>
+                </label>
+              ) : null}
+
+              {draft.notify_scope === "tag" ? (
+                <label className="admin-field">
+                  <span>알림 대상 태그</span>
+                  <TagInput
+                    single
+                    value={draft.notify_tag}
+                    onChange={(value) => patchDraft({ notify_tag: value })}
+                    placeholder="태그를 입력하세요 (예: 신작)"
+                  />
                 </label>
               ) : null}
 

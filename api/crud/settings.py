@@ -5,6 +5,7 @@ from core.mastodon import (
     MastodonError,
     detect_service,
     normalize_instance_url,
+    normalize_notify_tag,
     normalize_site_url,
     serialize_mastodon_settings,
 )
@@ -108,6 +109,21 @@ def update_mastodon_settings(
         settings.notify_book_id = target_book.id
     else:
         settings.notify_book_id = None
+
+    if settings.notify_scope == "tag":
+        if "notify_tag" in payload.model_fields_set:
+            tag = payload.notify_tag
+        else:
+            tag = settings.notify_tag
+        normalized_tag = normalize_notify_tag(tag)
+        if normalized_tag is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="알림 대상 태그를 입력해주세요.",
+            )
+        settings.notify_tag = normalized_tag
+    else:
+        settings.notify_tag = None
 
     instance_changed = False
     if payload.instance_url is not None:

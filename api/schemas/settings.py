@@ -4,7 +4,9 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 MastodonVisibility = Literal["public", "unlisted", "private"]
-MastodonNotifyScope = Literal["all", "books", "book", "illustrations"]
+MastodonNotifyScope = Literal[
+    "all", "books", "book", "illustrations", "tag"
+]
 MastodonProvider = Literal["mastodon", "misskey", "writ"]
 
 
@@ -20,6 +22,7 @@ class MastodonSettingsRead(BaseModel):
     visibility: MastodonVisibility = "public"
     notify_scope: MastodonNotifyScope = "all"
     notify_book_id: int | None = None
+    notify_tag: str | None = None
     has_access_token: bool = False
     access_token_hint: str | None = None
     updated_at: datetime | None = None
@@ -42,6 +45,7 @@ class MastodonSettingsUpdate(BaseModel):
     visibility: MastodonVisibility | None = None
     notify_scope: MastodonNotifyScope | None = None
     notify_book_id: int | None = None
+    notify_tag: str | None = Field(default=None, max_length=255)
 
 
 class MastodonTestRequest(BaseModel):
