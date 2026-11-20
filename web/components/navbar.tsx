@@ -12,6 +12,7 @@ interface MenuItem {
     label: string;
     href: string;
     authOnly?: boolean;
+    iconOnly?: boolean;
 }
 
 export const Navbar = () => {
@@ -29,7 +30,12 @@ export const Navbar = () => {
             <Link
                 key={item.href}
                 href={item.href}
-                className={ currentPath === item.href ? "active" : "" }
+                className={[
+                    currentPath === item.href ? "active" : "",
+                    item.iconOnly ? "navbar-icon-link" : "",
+                ].filter(Boolean).join(" ")}
+                title={item.iconOnly ? item.label : undefined}
+                aria-label={item.iconOnly ? item.label : undefined}
                 onClick={(event) => {
                     // Next.js treats a link to the current URL as a no-op.
                     // Refetch the server data on a second click while keeping
@@ -39,7 +45,23 @@ export const Navbar = () => {
                         router.refresh();
                     }
                 }}
-            ><span>{item.label}</span></Link>
+            >{item.iconOnly ? (
+                <svg
+                    className="navbar-icon"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.8"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                >
+                    <circle cx="10.8" cy="10.8" r="6.8" />
+                    <path d="m16 16 4.5 4.5" />
+                </svg>
+            ) : (
+                <span>{item.label}</span>
+            )}</Link>
         )) }
     </nav>;
 };

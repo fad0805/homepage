@@ -83,6 +83,22 @@ nav#navbar a {
     font-size: 1.4rem;
     color: var(--navbar-active-color);
   }
+
+  &.navbar-icon-link {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin-left: auto;
+
+    &.active {
+      font-size: 1.2rem;
+    }
+  }
+}
+
+.navbar-icon {
+  width: 1.15rem;
+  height: 1.15rem;
 }
 
 @media (max-width: $breakpoint-md) {

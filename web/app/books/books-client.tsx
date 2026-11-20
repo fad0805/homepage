@@ -1125,7 +1125,7 @@ export default function BooksClient({
                   className="books-toc-trigger"
                   onClick={() => setTocModalOpen(true)}
                 >
-                  ☷ 목차
+                  목차
                 </button>
               ) : null}
             </span>
