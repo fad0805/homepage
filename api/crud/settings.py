@@ -5,10 +5,11 @@ from core.mastodon import (
     NOTIFY_TAG_SCOPES,
     MastodonError,
     detect_service,
+    format_notify_tag_expression,
     normalize_instance_url,
     normalize_notify_tag_mode,
-    normalize_notify_tags,
     normalize_site_url,
+    parse_notify_tag_expression,
     serialize_mastodon_settings,
 )
 from models.books import Book
@@ -117,24 +118,34 @@ def update_mastodon_settings(
             tag_value = payload.notify_tag
         else:
             tag_value = settings.notify_tag
-        tags = normalize_notify_tags(tag_value)
-        if not tags:
+        mode_value = (
+            payload.notify_tag_mode
+            if payload.notify_tag_mode is not None
+            else settings.notify_tag_mode
+        )
+        default_operator = (
+            "AND" if normalize_notify_tag_mode(mode_value) == "all" else "OR"
+        )
+        try:
+            rules = parse_notify_tag_expression(tag_value, default_operator)
+        except ValueError as error:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=str(error),
+            ) from error
+        if not rules:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="알림 대상 태그를 입력해주세요.",
             )
-        stored_tags = ", ".join(tags)
+        stored_tags = format_notify_tag_expression(rules)
         if len(stored_tags) > 255:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="알림 대상 태그가 너무 많습니다.",
             )
         settings.notify_tag = stored_tags
-        settings.notify_tag_mode = normalize_notify_tag_mode(
-            payload.notify_tag_mode
-            if payload.notify_tag_mode is not None
-            else settings.notify_tag_mode
-        )
+        settings.notify_tag_mode = normalize_notify_tag_mode(mode_value)
     else:
         settings.notify_tag = None
         settings.notify_tag_mode = "any"

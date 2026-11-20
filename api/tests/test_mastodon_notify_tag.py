@@ -100,6 +100,25 @@ class MastodonNotifyTagTests(unittest.TestCase):
             _illustration_notify_allowed(all_profile, illustration)
         )
 
+    def test_mixed_operators_respect_precedence_and_parentheses(self) -> None:
+        chapter = SimpleNamespace(book_id=1, tags=["신작"])
+        profile = self._profile("신작 * 판타지 + 로맨스")
+
+        self.assertTrue(_chapter_notify_allowed(profile, chapter))
+
+        chapter.tags = ["판타지"]
+        self.assertFalse(_chapter_notify_allowed(profile, chapter))
+
+        chapter.tags = ["판타지", "로맨스"]
+        self.assertTrue(_chapter_notify_allowed(profile, chapter))
+
+        grouped = self._profile("(신작 * 판타지) + 로맨스")
+        chapter.tags = ["신작"]
+        self.assertFalse(_chapter_notify_allowed(grouped, chapter))
+
+        chapter.tags = ["신작", "로맨스"]
+        self.assertTrue(_chapter_notify_allowed(grouped, chapter))
+
     def test_tag_scopes_can_target_chapters_or_illustrations(self) -> None:
         chapter = SimpleNamespace(book_id=1, tags=["신작"])
         illustration = SimpleNamespace(tags=["신작"])
@@ -121,6 +140,37 @@ class MastodonNotifyTagTests(unittest.TestCase):
         self.assertTrue(
             _illustration_notify_allowed(illustrations_only, illustration)
         )
+
+    def test_update_keeps_explicit_operator_expression(self) -> None:
+        profile = create_mastodon_settings(
+            self.db,
+            MastodonSettingsCreate(name="표현식 알림"),
+            self.user_id,
+        )
+        updated = update_mastodon_settings(
+            self.db,
+            profile["id"],
+            MastodonSettingsUpdate(
+                notify_scope="tag_illustrations",
+                notify_tag="(신작 * 판타지) + 로맨스",
+            ),
+            self.user_id,
+        )
+        self.assertEqual(
+            updated["notify_tag"], "(신작 * 판타지) + 로맨스"
+        )
+
+        with self.assertRaises(HTTPException) as raised:
+            update_mastodon_settings(
+                self.db,
+                profile["id"],
+                MastodonSettingsUpdate(
+                    notify_scope="tag_illustrations",
+                    notify_tag="신작 + (판타지",
+                ),
+                self.user_id,
+            )
+        self.assertEqual(raised.exception.status_code, 400)
 
     def test_other_scopes_still_allow_content_without_tags(self) -> None:
         chapter = SimpleNamespace(book_id=7, tags=[])
@@ -183,7 +233,7 @@ class MastodonNotifyTagTests(unittest.TestCase):
             self.user_id,
         )
         self.assertEqual(multiple["notify_scope"], "tag_books")
-        self.assertEqual(multiple["notify_tag"], "신작, 판타지")
+        self.assertEqual(multiple["notify_tag"], "신작 + 판타지")
         self.assertEqual(multiple["notify_tag_mode"], "all")
 
         cleared = update_mastodon_settings(

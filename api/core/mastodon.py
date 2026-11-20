@@ -106,6 +106,192 @@ def normalize_notify_tag_mode(value: object) -> str:
     return value if value in NOTIFY_TAG_MODES else "any"
 
 
+def _tokenize_notify_tag_expression(value: str | None) -> list[tuple[str, str]]:
+    """Tokenize ``A + (B * C)`` into tag/operator/parenthesis tokens."""
+    raw = str(value or "").strip()
+    tokens: list[tuple[str, str]] = []
+    seen: set[str] = set()
+    index = 0
+    while index < len(raw):
+        char = raw[index]
+        if char.isspace() or char == ",":
+            index += 1
+            continue
+        if char == "(":
+            tokens.append(("LPAREN", char))
+            index += 1
+            continue
+        if char == ")":
+            tokens.append(("RPAREN", char))
+            index += 1
+            continue
+        if char == "+":
+            tokens.append(("AND", char))
+            index += 1
+            continue
+        if char == "*":
+            tokens.append(("OR", char))
+            index += 1
+            continue
+        if char == '"':
+            end = raw.find('"', index + 1)
+            if end < 0:
+                raise ValueError("따옴표가 닫히지 않았습니다.")
+            tag = raw[index + 1 : end].strip()
+            index = end + 1
+        else:
+            end = index
+            while (
+                end < len(raw)
+                and not raw[end].isspace()
+                and raw[end] not in ",()+*"
+            ):
+                end += 1
+            tag = raw[index:end]
+            index = end
+        name = normalize_notify_tag(tag)
+        if name is None:
+            continue
+        key = name.casefold()
+        if key in seen:
+            continue
+        seen.add(key)
+        tokens.append(("TAG", name))
+    return tokens
+
+
+def _with_implicit_operators(
+    tokens: list[tuple[str, str]],
+    default_operator: str,
+) -> list[tuple[str, str]]:
+    """Treat legacy comma/space separated tags as ``default_operator``."""
+    result: list[tuple[str, str]] = []
+    operands = {"TAG", "RPAREN"}
+    for token in tokens:
+        if (
+            result
+            and result[-1][0] in operands
+            and token[0] in {"TAG", "LPAREN"}
+        ):
+            result.append((default_operator, default_operator))
+        result.append(token)
+    return result
+
+
+class _NotifyTagExpressionParser:
+    """Recursive-descent parser with AND (+) binding tighter than OR (*)."""
+
+    def __init__(
+        self,
+        tokens: list[tuple[str, str]],
+        default_operator: str,
+    ) -> None:
+        self.tokens = _with_implicit_operators(tokens, default_operator)
+        self.position = 0
+
+    def _peek(self) -> tuple[str, str] | None:
+        if self.position >= len(self.tokens):
+            return None
+        return self.tokens[self.position]
+
+    def _match(self, kind: str) -> tuple[str, str] | None:
+        token = self._peek()
+        if token is not None and token[0] == kind:
+            self.position += 1
+            return token
+        return None
+
+    def parse(self):
+        if not self.tokens:
+            return None
+        node = self._parse_or()
+        if self._peek() is not None:
+            raise ValueError("괄호와 연산자를 확인해주세요.")
+        return node
+
+    def _parse_or(self):
+        node = self._parse_and()
+        while self._match("OR"):
+            node = ("or", node, self._parse_and())
+        return node
+
+    def _parse_and(self):
+        node = self._parse_factor()
+        while self._match("AND"):
+            node = ("and", node, self._parse_factor())
+        return node
+
+    def _parse_factor(self):
+        if self._match("LPAREN"):
+            node = self._parse_or()
+            if not self._match("RPAREN"):
+                raise ValueError("닫는 괄호 ')'가 없습니다.")
+            return node
+        token = self._match("TAG")
+        if token is None:
+            raise ValueError("태그와 연산자를 확인해주세요.")
+        return ("tag", token[1])
+
+
+def _count_notify_tags(node) -> int:
+    if node[0] == "tag":
+        return 1
+    return _count_notify_tags(node[1]) + _count_notify_tags(node[2])
+
+
+def parse_notify_tag_expression(
+    value: str | None,
+    default_operator: str = "OR",
+):
+    """Parse a ``+`` / ``*`` / parentheses tag expression into an AST."""
+    default = "AND" if default_operator == "AND" else "OR"
+    tokens = _tokenize_notify_tag_expression(value)
+    node = _NotifyTagExpressionParser(tokens, default).parse()
+    if node is None:
+        return None
+    if _count_notify_tags(node) > MAX_NOTIFY_TAGS:
+        raise ValueError(f"태그는 최대 {MAX_NOTIFY_TAGS}개까지 지정할 수 있습니다.")
+    return node
+
+
+def format_notify_tag_expression(node) -> str:
+    """Render a parsed tag AST using ``+``/``*`` with minimal parentheses."""
+    if node is None:
+        return ""
+
+    def render(current) -> str:
+        kind = current[0]
+        if kind == "tag":
+            return current[1]
+        symbol = "+" if kind == "and" else "*"
+        left, right = current[1], current[2]
+
+        def operand(child) -> str:
+            if child[0] == "tag" or child[0] == kind:
+                return render(child)
+            if kind == "and" and child[0] == "or":
+                return f"({render(child)})"
+            return render(child)
+
+        return f"{operand(left)} {symbol} {operand(right)}"
+
+    return render(node)
+
+
+def format_stored_notify_tags(value: str | None, mode: object) -> str | None:
+    """Render a stored tag value for API responses, tolerating old formats."""
+    default_operator = "AND" if normalize_notify_tag_mode(mode) == "all" else "OR"
+    try:
+        node = parse_notify_tag_expression(value, default_operator)
+    except ValueError:
+        node = None
+        for tag in normalize_notify_tags(value):
+            item = ("tag", tag)
+            kind = "and" if default_operator == "AND" else "or"
+            node = item if node is None else (kind, node, item)
+    return format_notify_tag_expression(node) or None
+
+
 def _pin_instance_url(url: str):
     """Resolve an instance URL once so the request uses the checked IP."""
     try:
@@ -239,7 +425,9 @@ def serialize_mastodon_settings(
             else None
         ),
         "notify_tag": (
-            ", ".join(normalize_notify_tags(settings.notify_tag))
+            format_stored_notify_tags(
+                settings.notify_tag, settings.notify_tag_mode
+            )
             if settings and scope in NOTIFY_TAG_SCOPES
             else None
         ),
@@ -263,37 +451,47 @@ def _settings_ready(settings: MastodonSettings | None) -> bool:
     )
 
 
+def _evaluate_notify_tag_node(node, content: set[str]) -> bool:
+    kind = node[0]
+    if kind == "tag":
+        return node[1].casefold() in content
+    left = _evaluate_notify_tag_node(node[1], content)
+    if kind == "and":
+        return left and _evaluate_notify_tag_node(node[2], content)
+    return left or _evaluate_notify_tag_node(node[2], content)
+
+
 def _tags_match(
     tags: object,
     configured: str | list[str] | tuple[str, ...] | None,
     mode: object = "any",
 ) -> bool:
-    """Match content tags against configured tags using OR or AND."""
-    if isinstance(configured, str):
-        targets = normalize_notify_tags(configured)
-    else:
-        targets = []
-        seen: set[str] = set()
-        for item in configured or []:
-            name = normalize_notify_tag(str(item))
-            if name is None:
-                continue
-            key = name.casefold()
-            if key in seen:
-                continue
-            seen.add(key)
-            targets.append(name)
-    if not targets or not isinstance(tags, (list, tuple, set)):
+    """Match content tags against a ``+`` / ``*`` tag expression."""
+    if not isinstance(tags, (list, tuple, set)):
+        return False
+    default_operator = "AND" if normalize_notify_tag_mode(mode) == "all" else "OR"
+    try:
+        if isinstance(configured, str):
+            node = parse_notify_tag_expression(configured, default_operator)
+        else:
+            node = None
+            for item in configured or []:
+                name = normalize_notify_tag(str(item))
+                if name is None:
+                    continue
+                tag_node = ("tag", name)
+                kind = "and" if default_operator == "AND" else "or"
+                node = tag_node if node is None else (kind, node, tag_node)
+    except ValueError:
+        return False
+    if node is None:
         return False
 
     content = {
         (normalize_notify_tag(str(tag)) or "").casefold() for tag in tags
     }
     content.discard("")
-    target_keys = {name.casefold() for name in targets}
-    if normalize_notify_tag_mode(mode) == "all":
-        return target_keys <= content
-    return bool(target_keys & content)
+    return _evaluate_notify_tag_node(node, content)
 
 
 def _tag_matches(tags: object, configured: str | None) -> bool:

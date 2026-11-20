@@ -9,7 +9,6 @@ import {
   type FormEvent,
 } from "react";
 
-import { TagInput } from "@/components/tag-input";
 import { apiFetch } from "@/lib/api";
 import { formatDateTime } from "@/lib/datetime";
 
@@ -75,13 +74,6 @@ interface BookOption {
 
 type Notice = { type: "success" | "error"; text: string };
 
-function tagList(value: string | null | undefined): string[] {
-  return (value ?? "")
-    .split(",")
-    .map((tag) => tag.trim().replace(/^#/, "").trim())
-    .filter(Boolean);
-}
-
 function isTagScope(scope: MastodonNotifyScope) {
   return (
     scope === "tag" || scope === "tag_books" || scope === "tag_illustrations"
@@ -117,7 +109,6 @@ function scopeLabel(
   bookId: number | null,
   books: BookOption[],
   tag: string | null,
-  tagMode: NotifyTagMode = "any",
 ) {
   if (scope === "all") return "전체 (목차 + 삽화)";
   if (scope === "books") return "목차 전체";
@@ -129,10 +120,9 @@ function scopeLabel(
         : scope === "tag_illustrations"
           ? "삽화"
           : "전체";
-    const tags = tagList(tag);
-    if (!tags.length) return `태그(${target}) 지정 필요`;
-    const separator = tagMode === "all" ? " + " : ", ";
-    return `태그(${target}): ${tags.join(separator)}`;
+    const expression = tag?.trim();
+    if (!expression) return `태그(${target}) 지정 필요`;
+    return `태그(${target}): ${expression}`;
   }
   const book = books.find((item) => item.id === bookId);
   return book ? `책: ${book.title}` : "목차 내 특정 책";
@@ -356,9 +346,9 @@ export default function AdminConnections() {
       return;
     }
     const tagScope = isTagScope(draft.notify_scope);
-    const notifyTags = tagScope ? tagList(draft.notify_tag) : [];
-    if (tagScope && !notifyTags.length) {
-      notify("error", "알림 대상 태그를 입력해주세요.");
+    const notifyTag = draft.notify_tag.trim();
+    if (tagScope && !notifyTag) {
+      notify("error", "알림 대상 태그 표현식을 입력해주세요.");
       return;
     }
 
@@ -372,8 +362,8 @@ export default function AdminConnections() {
         notify_scope: draft.notify_scope,
         notify_book_id:
           draft.notify_scope === "book" ? draft.notify_book_id : null,
-        notify_tag: tagScope ? notifyTags.join(", ") : null,
-        notify_tag_mode: tagScope ? draft.notify_tag_mode : "any",
+        notify_tag: tagScope ? notifyTag : null,
+        notify_tag_mode: "any",
         access_token: draft.access_token.trim() || null,
       };
 
@@ -544,7 +534,6 @@ export default function AdminConnections() {
                           profile.notify_book_id,
                           books,
                           profile.notify_tag,
-                          profile.notify_tag_mode,
                         )}
                       </span>
                     </button>
@@ -577,7 +566,6 @@ export default function AdminConnections() {
                       selectedProfile.notify_book_id,
                       books,
                       selectedProfile.notify_tag,
-                      selectedProfile.notify_tag_mode,
                     )}
                   </p>
                 </div>
@@ -739,30 +727,20 @@ export default function AdminConnections() {
               {isTagScope(draft.notify_scope) ? (
                 <>
                   <label className="admin-field">
-                    <span>알림 대상 태그</span>
-                    <TagInput
+                    <span>알림 대상 태그 표현식</span>
+                    <input
+                      type="text"
                       value={draft.notify_tag}
-                      onChange={(value) => patchDraft({ notify_tag: value })}
-                      placeholder="태그를 입력하세요 (예: 신작, 판타지)"
+                      onChange={(event) =>
+                        patchDraft({ notify_tag: event.target.value })
+                      }
+                      placeholder="예: 신작 + (판타지 * 로맨스)"
                     />
                   </label>
-                  <label className="admin-field">
-                    <span>태그 조건</span>
-                    <select
-                      value={draft.notify_tag_mode}
-                      onChange={(event) =>
-                        patchDraft({
-                          notify_tag_mode: event.target
-                            .value as NotifyTagMode,
-                        })
-                      }
-                    >
-                      <option value="any">OR — 하나라도 일치</option>
-                      <option value="all">AND — 모두 일치</option>
-                    </select>
-                  </label>
                   <p className="admin-connections-help">
-                    여러 태그를 쉼표로 구분해 등록할 수 있습니다.
+                    <code>+</code>는 AND, <code>*</code>는 OR입니다. 괄호로
+                    묶어 우선순위를 정할 수 있습니다. (예:{" "}
+                    <code>신작 + (판타지 * 로맨스)</code>)
                   </p>
                 </>
               ) : null}
