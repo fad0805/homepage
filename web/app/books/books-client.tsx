@@ -400,10 +400,13 @@ export default function BooksClient({
 
     const controller = new AbortController();
     const timer = window.setTimeout(() => {
-      fetch(`/api/books?q=${encodeURIComponent(query)}`, {
-        signal: controller.signal,
-        credentials: "include",
-      })
+      fetch(
+        `/api/books?q=${encodeURIComponent(query)}&include_chapter_matches=true`,
+        {
+          signal: controller.signal,
+          credentials: "include",
+        },
+      )
         .then((response) => {
           if (!response.ok) throw new Error("Failed to search books");
           return response.json() as Promise<Book[]>;
@@ -658,9 +661,9 @@ export default function BooksClient({
     };
   }, [activeChapterId]);
 
-  // Mobile book/chapter selection does not change the URL, so tag the
-  // current history entry and push one per view. The browser back button can
-  // then walk chapter -> chapter list -> book list instead of leaving /books.
+  // Book/chapter selection does not change the URL, so tag the current
+  // history entry and push one per view. The browser back button can then
+  // walk chapter -> chapter list -> book list instead of leaving /books.
   useEffect(() => {
     window.history.replaceState(
       {
@@ -836,7 +839,6 @@ export default function BooksClient({
     bookId: number | null;
     chapterId: number | null;
   }) => {
-    if (!isMobile) return;
     const depth = viewDepthRef.current + 1;
     window.history.pushState(
       {
@@ -853,42 +855,37 @@ export default function BooksClient({
     bookId: number | null;
     chapterId: number | null;
   }) => {
-    if (viewDepthRef.current > 0) {
-      window.history.back();
-      return;
-    }
+    // Always navigate explicitly instead of history.back(): the previous
+    // history entry may belong to another menu, and the in-page back button
+    // must land on the chapter list/TOC the post was opened from.
+    const depth = 0;
     window.history.replaceState(
       {
         ...window.history.state,
         booksView: view,
-        booksDepth: 0,
+        booksDepth: depth,
       },
       "",
     );
+    viewDepthRef.current = depth;
     setActiveBookId(view.bookId);
     setActiveChapterId(view.chapterId);
     setChapterPage(1);
   };
 
   const selectBook = (bookId: number) => {
-    if (isMobile) {
-      pushView({ bookId, chapterId: null });
-    }
+    pushView({ bookId, chapterId: null });
     setActiveBookId(bookId);
     setActiveChapterId(null);
   };
 
   const selectChapter = (chapterId: number) => {
-    if (isMobile) {
-      pushView({ bookId: activeBookId, chapterId });
-    }
+    pushView({ bookId: activeBookId, chapterId });
     setActiveChapterId(chapterId);
   };
 
   const openChapterSearchResult = (chapter: Chapter) => {
-    if (isMobile) {
-      pushView({ bookId: chapter.book_id, chapterId: chapter.id });
-    }
+    pushView({ bookId: chapter.book_id, chapterId: chapter.id });
     setActiveBookId(chapter.book_id);
     setActiveChapterId(chapter.id);
   };

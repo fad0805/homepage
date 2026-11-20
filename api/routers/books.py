@@ -41,12 +41,16 @@ def get_books(
     response: Response,
     mine: bool = False,
     q: str | None = None,
+    include_chapter_matches: bool = False,
     page: int | None = None,
     page_size: int = 20,
     db: Session = Depends(get_db),
     current_user=Depends(get_optional_user),
 ):
-    filters: dict = {"query": q}
+    filters: dict = {
+        "query": q,
+        "include_chapter_matches": include_chapter_matches,
+    }
     if mine:
         if current_user is None:
             raise HTTPException(

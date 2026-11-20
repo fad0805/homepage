@@ -3,11 +3,12 @@ from datetime import datetime, timedelta, timezone
 
 from fastapi import Response
 from sqlalchemy import create_engine, event
+from sqlalchemy.dialects import postgresql
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 from starlette.requests import Request
 
-from crud.books import get_all_books, get_chapters_page
+from crud.books import _book_tag_match, get_all_books, get_chapters_page
 from db.base import Base
 from models.books import Book, Chapter
 from models.users import User
@@ -100,6 +101,21 @@ class BookChapterPaginationSupportTests(unittest.TestCase):
 
         self.assertEqual(title_matches, [])
         self.assertEqual(body_matches, [])
+
+    def test_sidebar_book_search_can_match_chapters(self) -> None:
+        title_matches = get_all_books(
+            self.db, query="고정", include_chapter_matches=True
+        )
+        body_matches = get_all_books(
+            self.db, query="보물", include_chapter_matches=True
+        )
+
+        self.assertEqual(
+            [book["title"] for book in title_matches], ["첫 번째 책"]
+        )
+        self.assertEqual(
+            [book["title"] for book in body_matches], ["첫 번째 책"]
+        )
 
     def test_chapter_page_can_be_scoped_to_one_book(self) -> None:
         chapters, total = get_chapters_page(
@@ -230,6 +246,26 @@ class BookChapterPaginationSupportTests(unittest.TestCase):
         matches = get_all_books(self.db, query="판타지")
 
         self.assertEqual([book["id"] for book in matches], [self.first.id])
+
+    def test_book_tag_match_expands_json_array_on_postgresql(self) -> None:
+        class FakeDialect:
+            name = "postgresql"
+
+        class FakeBind:
+            dialect = FakeDialect()
+
+        class FakeDb:
+            bind = FakeBind()
+
+        sql = str(
+            _book_tag_match(FakeDb(), "%판타지%").compile(
+                dialect=postgresql.dialect(),
+                compile_kwargs={"literal_binds": True},
+            )
+        ).lower()
+
+        self.assertIn("json_array_elements_text", sql)
+        self.assertNotIn("cast(", sql)
 
 
 if __name__ == "__main__":

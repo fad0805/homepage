@@ -361,16 +361,26 @@ def _serialize_chapter(
 # Book CRUD
 def _book_tag_match(db: Session, pattern: str):
     """Match a tag substring without materializing book rows in Python."""
-    if db.bind is not None and db.bind.dialect.name == "sqlite":
-        # SQLite's JSON type stores non-ASCII tags as escaped code units, so a
-        # plain text cast cannot match Korean tags. json_each decodes them.
+    dialect = db.bind.dialect.name if db.bind is not None else None
+    if dialect == "sqlite":
+        # SQLAlchemy's JSON serializer escapes non-ASCII tags in SQLite text,
+        # so a plain cast cannot match Korean tags. json_each decodes them.
         tags = func.json_each(Book.tags).table_valued("value").alias("book_tag")
-        return Book.id.in_(
-            select(Book.id)
-            .select_from(tags)
-            .where(func.lower(tags.c.value).like(pattern, escape="\\"))
+    elif dialect == "postgresql":
+        # The same escaping can be present in stored json text, so expand the
+        # array instead of matching the serialized JSON blob.
+        tags = (
+            func.json_array_elements_text(Book.tags)
+            .table_valued("value")
+            .alias("book_tag")
         )
-    return func.cast(Book.tags, String).ilike(pattern, escape="\\")
+    else:
+        return func.cast(Book.tags, String).ilike(pattern, escape="\\")
+    return Book.id.in_(
+        select(Book.id)
+        .select_from(tags)
+        .where(func.lower(tags.c.value).like(pattern, escape="\\"))
+    )
 
 
 def _build_book_query(
@@ -381,6 +391,9 @@ def _build_book_query(
     owner_user_id: int | None = None,
     is_admin: bool = False,
     author_user_id: int | None = None,
+    granted_chapters: frozenset[int] = frozenset(),
+    granted_books: frozenset[int] = frozenset(),
+    include_chapter_matches: bool = False,
     query: str | None = None,
 ):
     books_query = (
@@ -414,20 +427,45 @@ def _build_book_query(
         else:
             books_query = books_query.filter(visible_category)
 
-    # Book search is intentionally metadata-only: chapter titles, bodies, and
-    # tags never make a book match. Chapter search is a separate query.
+    # Metadata-only by default for global search. The books page sidebar opts
+    # in to chapter matches so its book list also follows chapter searches.
     tokens = search_tokens(query)
     if tokens:
+        chapter_book_ids: set[int] = set()
+        if include_chapter_matches:
+            chapter_match_query = _build_chapter_query(
+                db,
+                include_hidden=include_hidden,
+                granted_chapters=granted_chapters,
+                granted_books=granted_books,
+                viewer_user_id=viewer_user_id,
+                owner_user_id=owner_user_id,
+                author_user_id=author_user_id,
+                query=query,
+                include_body=False,
+                ids_only=True,
+                published_only=True,
+            )
+            chapter_book_ids = {
+                book_id
+                for (book_id,) in chapter_match_query.with_entities(
+                    Chapter.book_id
+                )
+                .order_by(None)
+                .distinct()
+                .all()
+            }
         for token in tokens:
             pattern = like_pattern(token)
-            books_query = books_query.filter(
-                or_(
-                    Book.title.ilike(pattern, escape="\\"),
-                    Book.description.ilike(pattern, escape="\\"),
-                    BookCategory.name.ilike(pattern, escape="\\"),
-                    _book_tag_match(db, pattern),
-                )
+            field_match = or_(
+                Book.title.ilike(pattern, escape="\\"),
+                Book.description.ilike(pattern, escape="\\"),
+                BookCategory.name.ilike(pattern, escape="\\"),
+                _book_tag_match(db, pattern),
             )
+            if chapter_book_ids:
+                field_match = or_(field_match, Book.id.in_(chapter_book_ids))
+            books_query = books_query.filter(field_match)
 
     return books_query.order_by(Book.order, Book.id)
 
@@ -444,6 +482,7 @@ def _get_books_page(
     author_user_id: int | None = None,
     granted_chapters: frozenset[int] = frozenset(),
     granted_books: frozenset[int] = frozenset(),
+    include_chapter_matches: bool = False,
     query: str | None = None,
 ) -> tuple[list[dict], int]:
     books_query = _build_book_query(
@@ -453,6 +492,9 @@ def _get_books_page(
         owner_user_id=owner_user_id,
         is_admin=is_admin,
         author_user_id=author_user_id,
+        granted_chapters=granted_chapters,
+        granted_books=granted_books,
+        include_chapter_matches=include_chapter_matches,
         query=query,
     )
     total = books_query.order_by(None).count()
@@ -483,6 +525,7 @@ def get_all_books(
     is_admin: bool = False,
     granted_chapters: frozenset[int] = frozenset(),
     granted_books: frozenset[int] = frozenset(),
+    include_chapter_matches: bool = False,
     query: str | None = None,
 ):
     books, _ = _get_books_page(
@@ -496,6 +539,7 @@ def get_all_books(
         author_user_id=None,
         granted_chapters=granted_chapters,
         granted_books=granted_books,
+        include_chapter_matches=include_chapter_matches,
         query=query,
     )
     return books
@@ -513,6 +557,7 @@ def get_books_page(
     author_user_id: int | None,
     granted_chapters: frozenset[int] = frozenset(),
     granted_books: frozenset[int] = frozenset(),
+    include_chapter_matches: bool = False,
     query: str | None = None,
 ) -> tuple[list[dict], int]:
     """Return one page of books and the total, both computed in the database."""
@@ -527,6 +572,7 @@ def get_books_page(
         author_user_id=author_user_id,
         granted_chapters=granted_chapters,
         granted_books=granted_books,
+        include_chapter_matches=include_chapter_matches,
         query=query,
     )
 
