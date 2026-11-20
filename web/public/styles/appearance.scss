@@ -315,6 +315,16 @@ html:has(#container.site-layout--side) {
   color: $white;
   font-size: 1rem;
 
+  &.navbar-icon-link {
+    align-self: stretch;
+    box-sizing: border-box;
+    width: 100%;
+    height: auto;
+    margin-left: 0;
+    padding: 0.35rem 0.45rem;
+    justify-content: flex-start;
+  }
+
   &:hover {
     background: rgba(255, 255, 255, 0.08);
   }
@@ -554,6 +564,20 @@ html:has(#container.site-layout--side) {
 
   #container.site-layout--side:not(.is-side-right)
     .site-sidebar
+    #navbar
+    a.navbar-icon-link {
+    justify-content: flex-end;
+  }
+
+  #container.site-layout--side.is-side-right
+    .site-sidebar
+    #navbar
+    a.navbar-icon-link {
+    justify-content: flex-start;
+  }
+
+  #container.site-layout--side:not(.is-side-right)
+    .site-sidebar
     #title
     .title__caption {
     text-align: right;
@@ -564,6 +588,15 @@ html:has(#container.site-layout--side) {
   padding: 0.35rem 0.45rem;
   border-radius: 0.4rem;
   font-size: 1rem;
+
+  &.navbar-icon-link {
+    align-self: stretch;
+    box-sizing: border-box;
+    width: 100%;
+    height: auto;
+    margin-left: 0;
+    padding: 0.35rem 0.45rem;
+  }
 
   &.active {
     background: transparent;
