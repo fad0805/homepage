@@ -6,6 +6,7 @@ from core.mastodon import (
     detect_service,
     normalize_instance_url,
     post_status,
+    probe_media_upload,
 )
 from crud.settings import (
     create_mastodon_settings,
@@ -129,6 +130,14 @@ def test_mastodon_status(
         )
 
     try:
+        probe_media_upload(settings)
+    except MastodonError as error:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"{error} 테스트 알림을 게시하지 않았습니다.",
+        ) from error
+
+    try:
         status_id = post_status(
             settings,
             "소셜 알림 연결 테스트입니다.",
@@ -142,7 +151,7 @@ def test_mastodon_status(
     return {
         "ok": True,
         "status_id": status_id,
-        "message": "테스트 알림을 게시했습니다.",
+        "message": "이미지 첨부 권한까지 확인하고 테스트 알림을 게시했습니다.",
     }
 
 

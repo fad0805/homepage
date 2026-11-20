@@ -785,15 +785,19 @@ export default function AdminConnections() {
                   <li>
                     마스토돈: 설정 → 개발 → 새 애플리케이션에서{" "}
                     <code>write:statuses</code>,{" "}
+                    <code>write:media</code>,{" "}
                     <code>read:accounts</code> 권한으로 발급합니다.
+                    삽화 이미지 첨부에 <code>write:media</code>가
+                    필요합니다.
                   </li>
                   <li>
-                    미스키: 설정 → API → 액세스 토큰에서 노트 작성
-                    권한을 포함해 발급합니다.
+                    미스키: 설정 → API → 액세스 토큰에서 노트 작성과
+                    드라이브 파일 생성 권한을 포함해 발급합니다.
                   </li>
                   <li>
                     WRIT: 설정 → 개발에서 앱을 만들고{" "}
                     <code>write:statuses</code>,{" "}
+                    <code>write:media</code>,{" "}
                     <code>read:accounts</code> 권한의 토큰을
                     발급합니다.
                   </li>

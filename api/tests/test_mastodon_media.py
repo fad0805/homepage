@@ -158,6 +158,42 @@ class MastodonMediaTests(unittest.TestCase):
 
         self.assertIsNone(media_id)
 
+    def test_probe_media_upload_reports_missing_scope(self) -> None:
+        settings = SimpleNamespace(provider="mastodon")
+        response = SimpleNamespace(
+            status_code=403,
+            json=lambda: {
+                "error": "This action is outside the authorized scopes",
+            },
+        )
+        with patch.object(mastodon, "_request", return_value=response):
+            with self.assertRaises(MastodonError) as caught:
+                mastodon.probe_media_upload(settings)
+
+        message = str(caught.exception)
+        self.assertIn("write:media", message)
+        self.assertIn("다시 발급", message)
+
+    def test_probe_media_upload_deletes_probe_file(self) -> None:
+        settings = SimpleNamespace(provider="mastodon")
+        with patch.object(
+            mastodon,
+            "_request",
+            side_effect=[
+                _FakeResponse(),
+                SimpleNamespace(status_code=200, json=lambda: {}),
+            ],
+        ) as request:
+            mastodon.probe_media_upload(settings)
+
+        self.assertEqual(request.call_count, 2)
+        self.assertEqual(request.call_args_list[0].args[2], "/api/v2/media")
+        self.assertEqual(request.call_args_list[1].args[1], "DELETE")
+        self.assertEqual(
+            request.call_args_list[1].args[2],
+            "/api/v2/media/media-1",
+        )
+
     def test_social_image_is_downscaled_and_reencoded(self) -> None:
         source = Image.new("RGB", (3000, 2000), (120, 80, 200))
         buffer = BytesIO()

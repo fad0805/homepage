@@ -654,6 +654,14 @@ def _illustration_representative_url(
     return images[0].url if images[0].url else None
 
 
+def _media_scope_error(provider: str, detail: str) -> str:
+    scope = "드라이브 파일 생성" if provider == "misskey" else "write:media"
+    return (
+        "이미지 업로드 권한이 없습니다. "
+        f"액세스 토큰에 {scope} 권한을 추가해 다시 발급해주세요. ({detail})"
+    )
+
+
 def _request_error(response: httpx.Response) -> str:
     try:
         payload = response.json()
@@ -946,6 +954,40 @@ def _read_media_file(url: str) -> tuple[str, bytes, str] | None:
     return filename, payload, content_type
 
 
+def _upload_mastodon_media_bytes(
+    settings: MastodonSettings,
+    filename: str,
+    payload: bytes,
+    content_type: str,
+    description: str | None = None,
+) -> str:
+    """Upload image bytes to Mastodon, raising a clear error on failure."""
+    try:
+        response = _request(
+            settings,
+            "POST",
+            "/api/v2/media",
+            data={"description": (description or "")[:1500]},
+            files={"file": (filename, payload, content_type)},
+        )
+    except MastodonError as error:
+        raise MastodonError(f"마스토돈 미디어 업로드 실패: {error}") from error
+    if response.status_code not in (200, 201, 202):
+        detail = _request_error(response)
+        if response.status_code == 403:
+            detail = _media_scope_error("mastodon", detail)
+        raise MastodonError(
+            f"마스토돈 미디어 업로드 실패 ({response.status_code}): {detail}"
+        )
+    try:
+        media_id = response.json().get("id")
+    except ValueError:
+        media_id = None
+    if not media_id:
+        raise MastodonError("마스토돈 미디어 ID를 받지 못했습니다.")
+    return str(media_id)
+
+
 def _upload_mastodon_media(
     settings: MastodonSettings,
     url: str,
@@ -956,43 +998,30 @@ def _upload_mastodon_media(
         return None
     filename, payload, content_type = media
     try:
-        response = _request(
+        return _upload_mastodon_media_bytes(
             settings,
-            "POST",
-            "/api/v2/media",
-            data={"description": (description or "")[:1500]},
-            files={"file": (filename, payload, content_type)},
+            filename,
+            payload,
+            content_type,
+            description,
         )
     except MastodonError as error:
         logger.warning("Mastodon media upload failed: %s", error)
         return None
-    if response.status_code not in (200, 201, 202):
-        logger.warning(
-            "Mastodon media upload failed (%s): %s",
-            response.status_code,
-            _request_error(response),
-        )
-        return None
-    try:
-        media_id = response.json().get("id")
-    except ValueError:
-        return None
-    return str(media_id) if media_id else None
 
 
-def _upload_misskey_media(
+def _upload_misskey_media_bytes(
     settings: MastodonSettings,
-    url: str,
+    filename: str,
+    payload: bytes,
+    content_type: str,
     description: str | None = None,
-) -> str | None:
-    media = _read_media_file(url)
-    if media is None:
-        return None
-    filename, payload, content_type = media
+) -> str:
+    """Upload image bytes to Misskey, raising a clear error on failure."""
     instance = normalize_instance_url(settings.instance_url)
     token = (settings.access_token or "").strip()
     if not instance or not token:
-        return None
+        raise MastodonError("연결 정보를 먼저 저장해주세요.")
     target = _pin_instance_url(f"{instance}/api/drive/files/create")
     try:
         with httpx.Client(timeout=REQUEST_TIMEOUT) as client:
@@ -1004,20 +1033,84 @@ def _upload_misskey_media(
                 files={"file": (filename, payload, content_type)},
             )
     except httpx.HTTPError as error:
-        logger.warning("Misskey media upload failed: %s", error)
-        return None
+        raise MastodonError(f"미스키 미디어 업로드 실패: {error}") from error
     if response.status_code not in (200, 201):
-        logger.warning(
-            "Misskey media upload failed (%s): %s",
-            response.status_code,
-            _request_error(response),
+        detail = _request_error(response)
+        if response.status_code == 403:
+            detail = _media_scope_error("misskey", detail)
+        raise MastodonError(
+            f"미스키 미디어 업로드 실패 ({response.status_code}): {detail}"
         )
-        return None
     try:
         file_id = response.json().get("id")
     except ValueError:
+        file_id = None
+    if not file_id:
+        raise MastodonError("미스키 파일 ID를 받지 못했습니다.")
+    return str(file_id)
+
+
+def _upload_misskey_media(
+    settings: MastodonSettings,
+    url: str,
+    description: str | None = None,
+) -> str | None:
+    media = _read_media_file(url)
+    if media is None:
         return None
-    return str(file_id) if file_id else None
+    filename, payload, content_type = media
+    try:
+        return _upload_misskey_media_bytes(
+            settings,
+            filename,
+            payload,
+            content_type,
+            description,
+        )
+    except MastodonError as error:
+        logger.warning("Misskey media upload failed: %s", error)
+        return None
+
+
+def probe_media_upload(settings: MastodonSettings) -> None:
+    """Check that the token can upload images, then delete the probe file."""
+    output = BytesIO()
+    Image.new("RGB", (1, 1), "white").save(output, format="PNG")
+    payload = output.getvalue()
+    provider = (
+        settings.provider
+        if settings.provider in ("mastodon", "misskey", "writ")
+        else "mastodon"
+    )
+    if provider == "misskey":
+        file_id = _upload_misskey_media_bytes(
+            settings,
+            "notification-probe.png",
+            payload,
+            "image/png",
+            "알림 연결 확인용 이미지",
+        )
+        try:
+            _misskey_request(
+                settings,
+                "/api/drive/files/delete",
+                {"fileId": file_id},
+            )
+        except MastodonError:
+            logger.warning("Could not delete Misskey probe file %s", file_id)
+        return
+
+    media_id = _upload_mastodon_media_bytes(
+        settings,
+        "notification-probe.png",
+        payload,
+        "image/png",
+        "알림 연결 확인용 이미지",
+    )
+    try:
+        _request(settings, "DELETE", f"/api/v2/media/{media_id}")
+    except MastodonError:
+        logger.warning("Could not delete Mastodon probe media %s", media_id)
 
 
 def post_status(
