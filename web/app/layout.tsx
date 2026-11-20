@@ -22,6 +22,7 @@ import "@/public/styles/globals.scss";
 import "@/public/styles/appearance.scss";
 
 import { AuthProvider } from "@/components/auth-provider";
+import { FloatingSearch } from "@/components/floating-search";
 import { InstallPrompt } from "@/components/install-prompt";
 import { ServiceWorkerRegister } from "@/components/service-worker-register";
 import { SiteShell } from "@/components/site-shell";
@@ -213,6 +214,7 @@ export default async function RootLayout({
                 {children}
               </SiteShell>
             </Shortcuts>
+            <FloatingSearch />
             <ThemeToggle />
             <InstallPrompt />
             <ServiceWorkerRegister />

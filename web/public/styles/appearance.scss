@@ -959,7 +959,8 @@ html[data-appearance='collapsible'] .theme-toggle {
   }
 }
 
-html[data-appearance='drawer'] .theme-toggle:not(.theme-toggle--drawer) {
+html[data-appearance='drawer'] .theme-toggle:not(.theme-toggle--drawer),
+html[data-appearance='drawer'] .floating-search:not(.floating-search--drawer) {
   display: none;
 }
 
@@ -990,6 +991,29 @@ html[data-appearance='drawer'] .theme-toggle:not(.theme-toggle--drawer) {
 .site-drawer .theme-toggle.theme-toggle--drawer:hover {
   filter: none;
   background: rgba(255, 255, 255, 0.12);
+}
+
+.site-drawer .floating-search--drawer {
+  display: inline-flex;
+  position: static;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-color: rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.07);
+  color: $white;
+  box-shadow: none;
+
+  &:hover {
+    filter: none;
+    background: rgba(255, 255, 255, 0.12);
+  }
+}
+
+[data-theme='dark'] .site-drawer .floating-search--drawer {
+  border-color: rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.07);
+  color: $white;
+  box-shadow: none;
 }
 
 @media (min-width: ($breakpoint-md + 1)) {

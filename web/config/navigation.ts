@@ -34,7 +34,6 @@ const navigation: Navigation = {
       { href: "/planner", label: "부록", authOnly: true },
       { href: "/bookmark", label: "책갈피", authOnly: true },
       { href: "/links", label: "놀러가기" },
-      { href: "/search", label: "전체 검색", iconOnly: true },
     ],
   },
   admin: {

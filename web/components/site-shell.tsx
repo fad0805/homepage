@@ -11,6 +11,7 @@ import {
 } from "react";
 
 import { AdminNavbar } from "@/components/admin-navbar";
+import { FloatingSearch } from "@/components/floating-search";
 import { FooterShortcut } from "@/components/footer-shortcut";
 import { Navbar } from "@/components/navbar";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -293,6 +294,7 @@ export function SiteShell({
           <Navbar />
           {!sideRight ? (
             <div className="site-sidebar__theme">
+              <FloatingSearch variant="sidebar" />
               <ThemeToggle variant="sidebar" />
             </div>
           ) : null}
@@ -409,6 +411,7 @@ export function SiteShell({
             )}
             <div className="site-drawer__theme">
               <span>테마</span>
+              <FloatingSearch variant="drawer" />
               <ThemeToggle variant="drawer" />
             </div>
           </div>
