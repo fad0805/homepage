@@ -90,9 +90,9 @@ nav#navbar a {
     justify-content: center;
     align-self: center;
     box-sizing: border-box;
-    width: 22.5px;
-    height: 22.5px;
-    margin-left: 0;
+    width: 27.9px;
+    height: 27.9px;
+    margin-left: calc((1.15rem - 27.9px) / 2);
     padding: 0;
     line-height: 1;
 
