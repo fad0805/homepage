@@ -66,6 +66,7 @@ def get_chapters(
     pinned: bool | None = None,
     include_body: bool = True,
     ids_only: bool = False,
+    sort: str = "newest",
     page: int | None = None,
     page_size: int = 20,
     db: Session = Depends(get_db),
@@ -105,6 +106,12 @@ def get_chapters(
                 viewer_user_id=current_user.id if current_user else None,
             )
 
+    if sort not in ("newest", "oldest"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="sort must be newest or oldest",
+        )
+
     if page is None:
         # Searches are always paginated so a broad query cannot return every
         # matching chapter in one payload. Callers that need a full list can
@@ -117,6 +124,8 @@ def get_chapters(
         db,
         page=page,
         page_size=page_size,
+        newest_first=sort == "newest",
+        oldest_first=sort == "oldest",
         **filters,
     )
     response.headers["X-Total-Count"] = str(total)

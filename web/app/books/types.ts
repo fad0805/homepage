@@ -17,6 +17,8 @@ export interface Book {
   visible: boolean;
   protected: boolean;
   chapter_count?: number;
+  created_at: string | null;
+  updated_at: string | null;
   locked?: boolean;
 }
 

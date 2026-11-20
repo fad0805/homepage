@@ -23,12 +23,56 @@ import "@/public/styles/books.scss";
 
 const CHAPTERS_PER_PAGE = 15;
 const PINNED_CHAPTER_LIMIT = 100;
+const NEARBY_CHAPTER_RADIUS = 2;
+const NEARBY_CHAPTER_LIMIT = NEARBY_CHAPTER_RADIUS * 2 + 1;
+
+function createdTime(value: string | null) {
+  if (!value) return null;
+  const time = new Date(value).getTime();
+  return Number.isNaN(time) ? null : time;
+}
+
+function compareBooksByCreatedDesc(a: Book, b: Book) {
+  const aTime = createdTime(a.created_at);
+  const bTime = createdTime(b.created_at);
+  if (aTime === null && bTime === null) return b.id - a.id;
+  if (aTime === null) return 1;
+  if (bTime === null) return -1;
+  return bTime - aTime || b.id - a.id;
+}
+
+function compareBooksByOrder(a: Book, b: Book) {
+  return a.order - b.order || a.id - b.id;
+}
+
+function compareChaptersByOrder(a: Chapter, b: Chapter) {
+  return a.order - b.order || a.id - b.id;
+}
+
+function compareChaptersByCreatedAsc(a: Chapter, b: Chapter) {
+  const aTime = createdTime(a.created_at);
+  const bTime = createdTime(b.created_at);
+  if (aTime === null && bTime === null) return a.id - b.id;
+  if (aTime === null) return 1;
+  if (bTime === null) return -1;
+  return aTime - bTime || a.id - b.id;
+}
+
+function compareChaptersByCreatedDesc(a: Chapter, b: Chapter) {
+  const aTime = createdTime(a.created_at);
+  const bTime = createdTime(b.created_at);
+  if (aTime === null && bTime === null) return b.id - a.id;
+  if (aTime === null) return 1;
+  if (bTime === null) return -1;
+  return bTime - aTime || b.id - a.id;
+}
 
 async function fetchChapterPage(
   bookId: number,
   page: number,
   query: string,
   pinned: boolean,
+  sort: "newest" | "oldest",
   signal: AbortSignal,
 ) {
   const params = new URLSearchParams({
@@ -37,6 +81,7 @@ async function fetchChapterPage(
     page: String(page),
     page_size: String(pinned ? PINNED_CHAPTER_LIMIT : CHAPTERS_PER_PAGE),
     pinned: String(pinned),
+    sort,
   });
   if (query.trim()) params.set("q", query);
   const response = await fetch(`/api/chapters?${params.toString()}`, {
@@ -205,10 +250,14 @@ function ChapterDetail({
   chapter,
   bookTitle,
   bodyLoading = false,
+  nearbyChapters = [],
+  onSelectChapter,
 }: {
   chapter: Chapter;
   bookTitle: string;
   bodyLoading?: boolean;
+  nearbyChapters?: Chapter[];
+  onSelectChapter?: (chapterId: number) => void;
 }) {
   const [lightbox, setLightbox] = useState<{
     images: LightboxImage[];
@@ -278,6 +327,51 @@ function ChapterDetail({
             <TagChip tag={tag} key={tag} />
           ))}
         </div>
+      ) : null}
+      {nearbyChapters.length > 1 ? (
+        <nav className="chapter-nearby" aria-label="이 책의 게시글">
+          <h3 className="chapter-nearby__title">이 책의 게시글</h3>
+          <ol className="chapter-nearby__list">
+            {nearbyChapters.map((item) => {
+              const content = (
+                <>
+                  <span className="chapter-nearby__name">
+                    {item.title}
+                    {item.visible === false ? (
+                      <span className="books-private-badge">비공개</span>
+                    ) : null}
+                    {item.visible !== false && item.protected ? (
+                      <span className="books-protected-badge">보호</span>
+                    ) : null}
+                  </span>
+                  <span className="chapter-nearby__time">
+                    {formatDateTime(item.created_at)}
+                  </span>
+                </>
+              );
+              return (
+                <li key={item.id}>
+                  {item.id === chapter.id ? (
+                    <span
+                      className="chapter-nearby__item is-current"
+                      aria-current="page"
+                    >
+                      {content}
+                    </span>
+                  ) : (
+                    <button
+                      type="button"
+                      className="chapter-nearby__item"
+                      onClick={() => onSelectChapter?.(item.id)}
+                    >
+                      {content}
+                    </button>
+                  )}
+                </li>
+              );
+            })}
+          </ol>
+        </nav>
       ) : null}
       {lightbox ? (
         <ImageLightbox
@@ -354,8 +448,13 @@ export default function BooksClient({
     body: string | null;
   } | null>(null);
   const [chapterBodyLoading, setChapterBodyLoading] = useState(false);
+  const [nearbyChapters, setNearbyChapters] = useState<Chapter[]>([]);
   const [expandedCategories, setExpandedCategories] = useState<Set<number>>(
     () => new Set(),
+  );
+  const [bookSort, setBookSort] = useState<"order" | "latest">("order");
+  const [chapterSort, setChapterSort] = useState<"newest" | "oldest">(
+    "newest",
   );
   const [searchQuery, setSearchQuery] = useState("");
   const [bookSearch, setBookSearch] = useState<{
@@ -382,6 +481,7 @@ export default function BooksClient({
   const [categoryCodeLoading, setCategoryCodeLoading] = useState(false);
   const chapterRequestRef = useRef<AbortController | null>(null);
   const chapterLookupRef = useRef(new Map<number, Chapter>());
+  const nearbyCacheRef = useRef(new Map<number, Chapter[]>());
   const viewDepthRef = useRef(0);
   const initialViewRef = useRef({
     bookId: activeBookId,
@@ -486,6 +586,7 @@ export default function BooksClient({
           chapterPage,
           searchQuery,
           false,
+          chapterSort,
           controller.signal,
         ),
         fetchChapterPage(
@@ -493,6 +594,7 @@ export default function BooksClient({
           1,
           searchQuery,
           true,
+          chapterSort,
           controller.signal,
         ),
       ])
@@ -521,7 +623,7 @@ export default function BooksClient({
       window.clearTimeout(timer);
       controller.abort();
     };
-  }, [activeBookId, chapterPage, searchQuery]);
+  }, [activeBookId, chapterPage, chapterSort, searchQuery]);
 
   // The public TOC is hierarchical and independent of the flat, paginated
   // chapter list. Load it once per book so it can be browsed in the modal
@@ -661,6 +763,59 @@ export default function BooksClient({
     };
   }, [activeChapterId]);
 
+  // The bottom of a post shows two posts on either side in the book's
+  // original order. Load the full metadata list once per book so a chapter
+  // that is not on the current page still gets correct neighbours.
+  useEffect(() => {
+    if (activeBookId === null || activeChapterId === null) {
+      setNearbyChapters([]);
+      return;
+    }
+
+    const applyWindow = (items: Chapter[]) => {
+      const index = items.findIndex((item) => item.id === activeChapterId);
+      if (index === -1) {
+        setNearbyChapters([]);
+        return;
+      }
+      const start = Math.max(
+        0,
+        Math.min(
+          index - NEARBY_CHAPTER_RADIUS,
+          items.length - NEARBY_CHAPTER_LIMIT,
+        ),
+      );
+      setNearbyChapters(items.slice(start, start + NEARBY_CHAPTER_LIMIT));
+    };
+
+    const cached = nearbyCacheRef.current.get(activeBookId);
+    if (cached) {
+      applyWindow(cached);
+      return;
+    }
+
+    const controller = new AbortController();
+    fetch(`/api/chapters?book_id=${activeBookId}&include_body=false`, {
+      signal: controller.signal,
+      credentials: "include",
+    })
+      .then((response) => {
+        if (!response.ok) throw new Error("Failed to load nearby chapters");
+        return response.json() as Promise<Chapter[]>;
+      })
+      .then((items) => {
+        if (controller.signal.aborted) return;
+        const sorted = [...items].sort(compareChaptersByOrder);
+        nearbyCacheRef.current.set(activeBookId, sorted);
+        applyWindow(sorted);
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) setNearbyChapters([]);
+      });
+
+    return () => controller.abort();
+  }, [activeBookId, activeChapterId]);
+
   // Book/chapter selection does not change the URL, so tag the current
   // history entry and push one per view. The browser back button can then
   // walk chapter -> chapter list -> book list instead of leaving /books.
@@ -715,8 +870,12 @@ export default function BooksClient({
             (isLoggedIn || book.visible !== false) &&
             (isAdmin || book.category?.visible !== false),
         )
-        .sort((a, b) => a.order - b.order || a.id - b.id),
-    [books, isAdmin, isLoggedIn],
+        .sort(
+          bookSort === "latest"
+            ? compareBooksByCreatedDesc
+            : compareBooksByOrder,
+        ),
+    [bookSort, books, isAdmin, isLoggedIn],
   );
 
   const categoryList = useMemo(() => {
@@ -740,8 +899,19 @@ export default function BooksClient({
           (isLoggedIn || book.visible !== false) &&
           (isAdmin || book.category?.visible !== false),
       )
-      .sort((a, b) => a.order - b.order || a.id - b.id);
-  }, [bookSearch, isAdmin, isLoggedIn, searchQuery, visibleBooks]);
+      .sort(
+        bookSort === "latest"
+          ? compareBooksByCreatedDesc
+          : compareBooksByOrder,
+      );
+  }, [
+    bookSearch,
+    bookSort,
+    isAdmin,
+    isLoggedIn,
+    searchQuery,
+    visibleBooks,
+  ]);
 
   const trimmedQuery = searchQuery.trim();
   const bookSearchReady = !trimmedQuery || bookSearch?.query === trimmedQuery;
@@ -755,6 +925,9 @@ export default function BooksClient({
     (chapterSearch?.total ?? 0) > 0;
 
   const groupedBooks = useMemo(() => {
+    if (bookSort === "latest") {
+      return [{ category: null, books: filteredBooks }];
+    }
     const result: { category: BookCategory | null; books: Book[] }[] = [];
     const uncategorized = filteredBooks.filter((book) => !book.category);
     if (uncategorized.length > 0) {
@@ -769,7 +942,7 @@ export default function BooksClient({
       }
     }
     return result;
-  }, [categoryList, filteredBooks]);
+  }, [bookSort, categoryList, filteredBooks]);
 
   useEffect(() => {
     if (isMobile) return;
@@ -801,7 +974,15 @@ export default function BooksClient({
       ? []
       : (findTocPath(toc, selectedTocFolderId) ?? []);
   const folderFilterActive = selectedTocFolder !== null;
-  const visibleChapters = folderFilterActive ? folderChapters : activeChapters;
+  const visibleChapters = useMemo(
+    () =>
+      [...(folderFilterActive ? folderChapters : activeChapters)].sort(
+        chapterSort === "oldest"
+          ? compareChaptersByCreatedAsc
+          : compareChaptersByCreatedDesc,
+      ),
+    [activeChapters, chapterSort, folderChapters, folderFilterActive],
+  );
   const visiblePinnedChapters = folderFilterActive ? [] : activePinnedChapters;
   const chapterListLoading = folderFilterActive
     ? folderChaptersLoading
@@ -823,7 +1004,7 @@ export default function BooksClient({
 
   useEffect(() => {
     setChapterPage(1);
-  }, [activeBookId, searchQuery]);
+  }, [activeBookId, chapterSort, searchQuery]);
 
   useEffect(() => {
     setChapterSearchPage(1);
@@ -1006,6 +1187,24 @@ export default function BooksClient({
             ×
           </button>
         ) : null}
+      </div>
+      <div className="books-sort" role="group" aria-label="책 정렬">
+        <button
+          type="button"
+          className={bookSort === "order" ? "is-active" : undefined}
+          onClick={() => setBookSort("order")}
+          aria-pressed={bookSort === "order"}
+        >
+          등록순
+        </button>
+        <button
+          type="button"
+          className={bookSort === "latest" ? "is-active" : undefined}
+          onClick={() => setBookSort("latest")}
+          aria-pressed={bookSort === "latest"}
+        >
+          최신순
+        </button>
       </div>
       <div className="books-books">
         {groupedBooks.length === 0 ? (
@@ -1190,6 +1389,29 @@ export default function BooksClient({
         </p>
       ) : null}
 
+      <div
+        className="books-sort books-sort--chapters"
+        role="group"
+        aria-label="게시글 정렬"
+      >
+        <button
+          type="button"
+          className={chapterSort === "oldest" ? "is-active" : undefined}
+          onClick={() => setChapterSort("oldest")}
+          aria-pressed={chapterSort === "oldest"}
+        >
+          오름차순
+        </button>
+        <button
+          type="button"
+          className={chapterSort === "newest" ? "is-active" : undefined}
+          onClick={() => setChapterSort("newest")}
+          aria-pressed={chapterSort === "newest"}
+        >
+          내림차순
+        </button>
+      </div>
+
       {chapterListError ? (
         <p className="books-panel__empty" role="alert">
           게시글을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.
@@ -1328,6 +1550,8 @@ export default function BooksClient({
           }}
           bookTitle={activeBook.title}
           bodyLoading={chapterBodyLoading}
+          nearbyChapters={nearbyChapters}
+          onSelectChapter={selectChapter}
         />
       </div>
     ) : null;

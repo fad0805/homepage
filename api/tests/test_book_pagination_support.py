@@ -132,6 +132,22 @@ class BookChapterPaginationSupportTests(unittest.TestCase):
             all(chapter["book_id"] == self.first.id for chapter in chapters)
         )
 
+    def test_chapter_page_can_sort_oldest_first(self) -> None:
+        chapters, total = get_chapters_page(
+            self.db,
+            book_id=self.first.id,
+            pinned=False,
+            newest_first=False,
+            oldest_first=True,
+            include_body=False,
+        )
+
+        self.assertEqual(total, 2)
+        self.assertEqual(
+            [chapter["title"] for chapter in chapters],
+            ["첫 번째 글", "세 번째 글"],
+        )
+
     def test_chapter_page_can_select_pinned_chapters(self) -> None:
         chapters, total = get_chapters_page(
             self.db,

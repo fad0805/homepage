@@ -763,6 +763,7 @@ def _build_chapter_query(
     include_body: bool = True,
     ids_only: bool = False,
     newest_first: bool = False,
+    oldest_first: bool = False,
     published_only: bool = False,
 ):
     chapters_query = db.query(Chapter)
@@ -802,6 +803,11 @@ def _build_chapter_query(
         chapters_query = chapters_query.order_by(
             Chapter.created_at.desc().nullslast(),
             Chapter.id.desc(),
+        )
+    elif oldest_first:
+        chapters_query = chapters_query.order_by(
+            Chapter.created_at.asc().nullslast(),
+            Chapter.id.asc(),
         )
     else:
         chapters_query = chapters_query.order_by(
@@ -1040,6 +1046,8 @@ def get_chapters_page(
     tag: str | None = None,
     include_body: bool = True,
     ids_only: bool = False,
+    newest_first: bool = True,
+    oldest_first: bool = False,
 ):
     page = max(1, page)
     page_size = max(1, min(page_size, 100))
@@ -1057,7 +1065,8 @@ def get_chapters_page(
         tag=tag,
         include_body=include_body,
         ids_only=ids_only,
-        newest_first=True,
+        newest_first=newest_first,
+        oldest_first=oldest_first,
         published_only=True,
     )
     total = chapters_query.order_by(None).count()

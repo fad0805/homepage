@@ -68,6 +68,49 @@
   }
 }
 
+.books-sort {
+  display: flex;
+  align-items: center;
+  gap: 0.2rem;
+  margin: 0.1rem 0 0.4rem;
+
+  button {
+    padding: 0.25rem 0.5rem;
+    border: 1px solid transparent;
+    border-radius: 0.4rem;
+    background: transparent;
+    color: var(--input-text);
+    font-family: inherit;
+    font-size: 0.7rem;
+    opacity: 0.65;
+    cursor: pointer;
+
+    &:hover,
+    &:focus-visible {
+      background: rgba(255, 255, 255, 0.4);
+      opacity: 0.9;
+    }
+
+    &.is-active {
+      border-color: rgba(0, 0, 0, 0.14);
+      background: color-mix(in srgb, var(--title-color) 7%, transparent);
+      color: var(--title-color);
+      opacity: 1;
+    }
+  }
+}
+
+.books-sort--chapters {
+  justify-content: flex-end;
+  margin: 0 0 0.45rem;
+}
+
+[data-theme='dark'] .books-sort button {
+  &.is-active {
+    border-color: rgba(255, 255, 255, 0.2);
+  }
+}
+
 .books-list-empty {
   margin: 0.4rem 0;
   color: var(--input-text);
@@ -746,6 +789,85 @@
 
 .chapter-detail__tags {
   margin-top: 2rem;
+}
+
+.chapter-nearby {
+  margin-top: 1.8rem;
+  padding-top: 1rem;
+  border-top: 1px solid rgba(0, 0, 0, 0.12);
+}
+
+.chapter-nearby__title {
+  margin: 0 0 0.45rem;
+  color: var(--input-text);
+  font-size: 0.68rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  opacity: 0.55;
+}
+
+.chapter-nearby__list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.chapter-nearby__item {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.45rem 0.55rem;
+  border: 0;
+  border-radius: 0.45rem;
+  background: transparent;
+  color: inherit;
+  font-family: inherit;
+  text-align: left;
+}
+
+button.chapter-nearby__item {
+  cursor: pointer;
+
+  &:hover,
+  &:focus-visible {
+    background: rgba(255, 255, 255, 0.4);
+  }
+}
+
+.chapter-nearby__item.is-current {
+  background: color-mix(in srgb, var(--title-color) 8%, transparent);
+}
+
+.chapter-nearby__name {
+  flex: 1;
+  min-width: 0;
+  color: var(--title-color);
+  font-size: 0.82rem;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.chapter-nearby__time {
+  flex-shrink: 0;
+  color: var(--input-text);
+  font-size: 0.65rem;
+  opacity: 0.55;
+  white-space: nowrap;
+}
+
+[data-theme='dark'] .chapter-nearby {
+  border-top-color: rgba(255, 255, 255, 0.16);
+
+  button.chapter-nearby__item:hover,
+  button.chapter-nearby__item:focus-visible {
+    background: rgba(255, 255, 255, 0.08);
+  }
 }
 
 .books-panel__detail {
