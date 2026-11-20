@@ -330,7 +330,6 @@ function ChapterDetail({
       ) : null}
       {nearbyChapters.length > 1 ? (
         <nav className="chapter-nearby" aria-label="이 책의 게시글">
-          <h3 className="chapter-nearby__title">이 책의 게시글</h3>
           <ol className="chapter-nearby__list">
             {nearbyChapters.map((item) => {
               const content = (
