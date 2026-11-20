@@ -53,6 +53,31 @@ async function fetchChapterPage(
   };
 }
 
+async function fetchChapterSearchPage(
+  query: string,
+  page: number,
+  signal: AbortSignal,
+) {
+  const params = new URLSearchParams({
+    include_body: "false",
+    page: String(page),
+    page_size: String(CHAPTERS_PER_PAGE),
+  });
+  if (query.trim()) params.set("q", query);
+  const response = await fetch(`/api/chapters?${params.toString()}`, {
+    signal,
+    credentials: "include",
+  });
+  if (!response.ok) throw new Error("Failed to search chapters");
+  const chapters = (await response.json()) as Chapter[];
+  const rawTotal = response.headers.get("x-total-count");
+  const total = rawTotal === null ? chapters.length : Number(rawTotal);
+  return {
+    chapters,
+    total: Number.isFinite(total) ? total : chapters.length,
+  };
+}
+
 async function fetchBookToc(bookId: number, signal: AbortSignal) {
   const response = await fetch(`/api/books/${bookId}/toc`, {
     signal,
@@ -337,7 +362,13 @@ export default function BooksClient({
     query: string;
     books: Book[];
   } | null>(null);
+  const [chapterSearch, setChapterSearch] = useState<{
+    query: string;
+    chapters: Chapter[];
+    total: number;
+  } | null>(null);
   const [chapterPage, setChapterPage] = useState(1);
+  const [chapterSearchPage, setChapterSearchPage] = useState(1);
   const [isMobile, setIsMobile] = useState(initialIsMobile);
   const [unlockedCategories, setUnlockedCategories] = useState<Set<number>>(
     () => new Set(initialUnlockedCategoryIds),
@@ -357,8 +388,9 @@ export default function BooksClient({
     chapterId: activeChapterId,
   });
 
-  // Book-level search runs on the API and matches only book metadata/tags;
-  // chapter matches are handled by the separate chapter query below.
+  // Book-level search runs on the API and matches only book metadata/tags.
+  // Chapter matches are fetched separately below so books are never marked as
+  // matched just because one of their chapters matched.
   useEffect(() => {
     const query = searchQuery.trim();
     if (!query) {
@@ -393,6 +425,36 @@ export default function BooksClient({
       controller.abort();
     };
   }, [searchQuery]);
+
+  // Chapter search stays independent from book search: a tag that only exists
+  // on chapters must still find posts without marking their books as matches.
+  useEffect(() => {
+    const query = searchQuery.trim();
+    if (!query) {
+      setChapterSearch(null);
+      return;
+    }
+
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => {
+      fetchChapterSearchPage(query, chapterSearchPage, controller.signal)
+        .then((result) => {
+          if (!controller.signal.aborted) {
+            setChapterSearch({ query, ...result });
+          }
+        })
+        .catch(() => {
+          if (!controller.signal.aborted) {
+            setChapterSearch({ query, chapters: [], total: 0 });
+          }
+        });
+    }, 250);
+
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+    };
+  }, [searchQuery, chapterSearchPage]);
 
   // Chapters are loaded one book/page at a time. Pinned chapters are fetched
   // separately so they stay visible on every page.
@@ -678,6 +740,17 @@ export default function BooksClient({
       .sort((a, b) => a.order - b.order || a.id - b.id);
   }, [bookSearch, isAdmin, isLoggedIn, searchQuery, visibleBooks]);
 
+  const trimmedQuery = searchQuery.trim();
+  const bookSearchReady = !trimmedQuery || bookSearch?.query === trimmedQuery;
+  const chapterSearchReady =
+    !trimmedQuery || chapterSearch?.query === trimmedQuery;
+  const showChapterSearchResults =
+    trimmedQuery.length > 0 &&
+    bookSearchReady &&
+    chapterSearchReady &&
+    filteredBooks.length === 0 &&
+    (chapterSearch?.total ?? 0) > 0;
+
   const groupedBooks = useMemo(() => {
     const result: { category: BookCategory | null; books: Book[] }[] = [];
     const uncategorized = filteredBooks.filter((book) => !book.category);
@@ -708,8 +781,10 @@ export default function BooksClient({
     setActiveChapterId(null);
   }, [activeBookId, filteredBooks, isMobile]);
 
+  // Look up the open book across all visible books so a chapter search result
+  // can still be opened when no book matched the query.
   const activeBook =
-    filteredBooks.find((book) => book.id === activeBookId) ?? null;
+    visibleBooks.find((book) => book.id === activeBookId) ?? null;
   const chapterDataReady =
     activeBook !== null && chapterBookId === activeBook.id;
   const activeChapters = chapterDataReady ? chapters : [];
@@ -746,6 +821,10 @@ export default function BooksClient({
   useEffect(() => {
     setChapterPage(1);
   }, [activeBookId, searchQuery]);
+
+  useEffect(() => {
+    setChapterSearchPage(1);
+  }, [searchQuery]);
 
   useEffect(() => {
     if (chapterPage > totalChapterPages) {
@@ -804,6 +883,14 @@ export default function BooksClient({
       pushView({ bookId: activeBookId, chapterId });
     }
     setActiveChapterId(chapterId);
+  };
+
+  const openChapterSearchResult = (chapter: Chapter) => {
+    if (isMobile) {
+      pushView({ bookId: chapter.book_id, chapterId: chapter.id });
+    }
+    setActiveBookId(chapter.book_id);
+    setActiveChapterId(chapter.id);
   };
 
   const renderChapterButton = (chapter: Chapter) => (
@@ -1147,6 +1234,73 @@ export default function BooksClient({
     </>
   ) : null;
 
+  const chapterSearchPanel = showChapterSearchResults ? (
+    <>
+      {isMobile ? (
+        <button
+          type="button"
+          className="books-panel__back"
+          onClick={() => {
+            handleSearchChange("");
+            goBackTo({ bookId: null, chapterId: null });
+          }}
+        >
+          ← 목차
+        </button>
+      ) : null}
+      <header className="books-panel__header">
+        <h2>
+          <span>게시글 검색 결과</span>
+        </h2>
+        <p className="books-search-active">
+          검색: <strong>{trimmedQuery}</strong>
+          <button type="button" onClick={() => handleSearchChange("")}>
+            초기화
+          </button>
+        </p>
+      </header>
+      <div className="books-chapters">
+        {chapterSearch?.chapters.map((chapter) => (
+          <button
+            type="button"
+            className="books-chapter-link"
+            onClick={() => openChapterSearchResult(chapter)}
+            key={chapter.id}
+          >
+            <span className="books-chapter-link__main">
+              <span className="books-chapter-link__book">
+                {chapter.book?.title ?? "책"}
+              </span>
+              <span className="books-chapter-link__title">
+                {chapter.title}
+                {chapter.visible === false ? (
+                  <span className="books-private-badge">비공개</span>
+                ) : null}
+                {chapter.visible !== false && chapter.protected ? (
+                  <span className="books-protected-badge">보호</span>
+                ) : null}
+              </span>
+            </span>
+            <span className="books-chapter-link__time">
+              {formatDateTime(chapter.created_at)}
+            </span>
+            <span className="books-chapter-link__arrow" aria-hidden="true">
+              →
+            </span>
+          </button>
+        ))}
+      </div>
+      <Pagination
+        page={chapterSearchPage}
+        totalPages={Math.max(
+          1,
+          Math.ceil((chapterSearch?.total ?? 0) / CHAPTERS_PER_PAGE),
+        )}
+        onChange={setChapterSearchPage}
+      />
+    </>
+  ) : null;
+
   const detailPanel =
     activeBook && activeChapter && !activeBook.locked ? (
       <div className="books-panel__detail">
@@ -1181,12 +1335,17 @@ export default function BooksClient({
       </div>
     ) : null;
 
+  const searchResultPanel =
+    chapterSearchPanel && !activeChapter ? chapterSearchPanel : null;
+
   return (
     <div id="books-page">
       {visibleBooks.length === 0 ? (
         <p className="books-state">등록된 책이 없습니다.</p>
       ) : isMobile ? (
-        activeBook ? (
+        searchResultPanel ? (
+          <div className="books-panel">{searchResultPanel}</div>
+        ) : activeBook ? (
           activeChapter && !activeBook.locked ? (
             <div className="books-panel">{detailPanel}</div>
           ) : (
@@ -1199,7 +1358,9 @@ export default function BooksClient({
         <div className="books-layout">
           {bookList}
           <aside className="books-panel">
-            {activeChapter && !activeBook?.locked ? (
+            {searchResultPanel ? (
+              searchResultPanel
+            ) : activeChapter && !activeBook?.locked ? (
               detailPanel
             ) : activeBook ? (
               chapterPanel

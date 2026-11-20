@@ -603,6 +603,13 @@
   word-break: break-word;
 }
 
+.books-chapter-link__book {
+  display: block;
+  color: var(--input-text);
+  font-size: 0.72rem;
+  opacity: 0.7;
+}
+
 .books-chapter-link__time {
   flex-shrink: 0;
   color: var(--input-text);
