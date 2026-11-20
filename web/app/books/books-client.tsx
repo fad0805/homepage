@@ -17,6 +17,7 @@ import { Pagination } from "@/components/pagination";
 import { PublicToc } from "@/components/public-toc";
 import { RssSubscribe } from "@/components/rss-subscribe";
 import { formatDateTime } from "@/lib/datetime";
+import { tagSearchHref } from "@/lib/search";
 import type { Book, BookCategory, Chapter, TocNode } from "./types";
 
 import "@/public/styles/books.scss";
@@ -183,7 +184,7 @@ function TagChip({ tag }: { tag: string }) {
   return (
     <Link
       className="tag is-clickable"
-      href={`/search?q=${encodeURIComponent(tag)}`}
+      href={tagSearchHref(tag)}
     >
       {tag}
     </Link>

@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 
 import { formatDate, formatDateTime } from "@/lib/datetime";
 import type { IllustrationDetailItem } from "@/lib/illustration-types";
+import { tagSearchHref } from "@/lib/search";
 import { ServerApiError, serverApiFetch } from "@/lib/server-api";
 import { getCurrentUser } from "@/lib/server-auth";
 
@@ -130,7 +131,7 @@ export default async function IllustrationDetailPage({
                 {illustration.tags.map((tag) => (
                   <Link
                     className="tag is-clickable"
-                    href={`/search?q=${encodeURIComponent(tag)}`}
+                    href={tagSearchHref(tag)}
                     key={tag}
                   >
                     {tag}

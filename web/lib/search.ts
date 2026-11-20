@@ -1,3 +1,8 @@
+/** Build a global-search URL that filters by an exact tag. */
+export function tagSearchHref(tag: string): string {
+  return `/search?q=${encodeURIComponent(`type:tag ${tag}`)}`;
+}
+
 /**
  * Split a search query on whitespace. Every resulting token must match for a
  * document to be included (AND search).

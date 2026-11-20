@@ -6,7 +6,7 @@ import { formatDate, formatDateTime } from "@/lib/datetime";
 import type { IllustrationItem } from "@/lib/illustration-types";
 import { paginationPages } from "@/lib/pagination";
 import { serverApiFetchWithTotal } from "@/lib/server-api";
-import { parseSearchQuery, searchTokens } from "@/lib/search";
+import { parseSearchQuery, searchTokens, tagSearchHref } from "@/lib/search";
 import { getCurrentUser } from "@/lib/server-auth";
 import type { Book, Chapter } from "../books/types";
 
@@ -81,7 +81,7 @@ function TagLinks({ tags }: { tags: string[] }) {
       {tags.map((tag) => (
         <Link
           className="tag is-clickable"
-          href={`/search?q=${encodeURIComponent(tag)}`}
+          href={tagSearchHref(tag)}
           key={tag}
         >
           {tag}
