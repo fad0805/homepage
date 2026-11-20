@@ -23,7 +23,7 @@ class GalleryInviteCreate(BaseModel):
     resource_type: ResourceType
     resource_id: int
     note: str | None = Field(default=None, max_length=255)
-    expires_in_hours: int | None = Field(default=None, ge=1, le=720)
+    expires_in_hours: int | None = Field(default=None, ge=1, le=24 * 7)
 
 
 class GalleryInviteCreated(BaseModel):

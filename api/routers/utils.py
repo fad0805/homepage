@@ -94,7 +94,7 @@ def get_gallery_grants(request: Request, db: Session) -> GalleryGrants:
     if (
         session is None
         or session.revoked_at is not None
-        or session.expires_at <= datetime.utcnow()
+        or gallery_crud.session_is_expired(session)
     ):
         return GalleryGrants()
 

@@ -66,7 +66,7 @@ def _invite_status(invite, now: datetime) -> str:
         return "revoked"
     if invite.used_at is not None:
         return "used"
-    if invite.expires_at <= now:
+    if gallery_crud.invite_is_expired(invite, now):
         return "expired"
     return "unused"
 
@@ -74,7 +74,7 @@ def _invite_status(invite, now: datetime) -> str:
 def _session_status(session, now: datetime) -> str:
     if session.revoked_at is not None:
         return "revoked"
-    if session.expires_at <= now:
+    if gallery_crud.session_is_expired(session, now):
         return "expired"
     return "active"
 
@@ -311,7 +311,7 @@ def unlock_gallery(
         invite is None
         or invite.used_at is not None
         or invite.revoked_at is not None
-        or invite.expires_at <= now
+        or gallery_crud.invite_is_expired(invite, now)
         or resource is None
     ):
         _reject_unlock(ip)
@@ -335,7 +335,7 @@ def unlock_gallery(
         )
         if session is not None and (
             session.revoked_at is not None
-            or session.expires_at <= now
+            or gallery_crud.session_is_expired(session, now)
         ):
             session = None
 
@@ -385,7 +385,7 @@ def unlock_gallery(
     return {
         "success": True,
         "resource": resource,
-        "expires_at": session.expires_at,
+        "expires_at": gallery_crud.session_expires_at(session),
     }
 
 
@@ -415,7 +415,7 @@ def gallery_status(
     if (
         session is None
         or session.revoked_at is not None
-        or session.expires_at <= now
+        or gallery_crud.session_is_expired(session, now)
     ):
         response.delete_cookie(GALLERY_COOKIE_NAME, path="/")
         return empty
@@ -450,7 +450,7 @@ def gallery_status(
             for grant in session.grants
             if grant.category_id is not None
         ],
-        "expires_at": session.expires_at,
+        "expires_at": gallery_crud.session_expires_at(session),
     }
 
 
@@ -491,7 +491,10 @@ def create_gallery_invite(
         )
 
     code = generate_gallery_code()
-    hours = payload.expires_in_hours or GALLERY_INVITE_HOURS
+    hours = min(
+        payload.expires_in_hours or GALLERY_INVITE_HOURS,
+        GALLERY_INVITE_HOURS,
+    )
     note = (payload.note or "").strip() or None
     expires_at = datetime.utcnow() + timedelta(hours=hours)
 
@@ -518,7 +521,7 @@ def create_gallery_invite(
         },
         "code": code,
         "note": invite.note,
-        "expires_at": invite.expires_at,
+        "expires_at": gallery_crud.invite_expires_at(invite),
     }
 
 
@@ -551,7 +554,7 @@ def read_gallery_invites(
             "resource": _invite_resource(invite, owner_names),
             "note": invite.note,
             "created_at": invite.created_at,
-            "expires_at": invite.expires_at,
+            "expires_at": gallery_crud.invite_expires_at(invite),
             "used_at": invite.used_at,
             "revoked_at": invite.revoked_at,
             "status": _invite_status(invite, now),
@@ -605,7 +608,7 @@ def read_gallery_sessions(
         {
             "id": session.id,
             "created_at": session.created_at,
-            "expires_at": session.expires_at,
+            "expires_at": gallery_crud.session_expires_at(session),
             "last_seen_at": session.last_seen_at,
             "revoked_at": session.revoked_at,
             "ip_address": session.ip_address,

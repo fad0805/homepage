@@ -1,12 +1,45 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from sqlalchemy.orm import Session, selectinload
 
+from core.config import GALLERY_ACCESS_MAX_DAYS
 from models.gallery import (
     GalleryInvite,
     GallerySession,
     GallerySessionGrant,
 )
+
+
+def invite_expires_at(invite: GalleryInvite) -> datetime:
+    """Effective expiry, capped at one week even for older long-lived rows."""
+    created_at = invite.created_at or (
+        invite.expires_at - timedelta(days=GALLERY_ACCESS_MAX_DAYS)
+    )
+    max_expires_at = created_at + timedelta(days=GALLERY_ACCESS_MAX_DAYS)
+    return min(invite.expires_at, max_expires_at)
+
+
+def invite_is_expired(
+    invite: GalleryInvite, now: datetime | None = None
+) -> bool:
+    now = now or datetime.utcnow()
+    return invite_expires_at(invite) <= now
+
+
+def session_expires_at(session: GallerySession) -> datetime:
+    """Effective expiry, capped at one week even for older long-lived rows."""
+    created_at = session.created_at or (
+        session.expires_at - timedelta(days=GALLERY_ACCESS_MAX_DAYS)
+    )
+    max_expires_at = created_at + timedelta(days=GALLERY_ACCESS_MAX_DAYS)
+    return min(session.expires_at, max_expires_at)
+
+
+def session_is_expired(
+    session: GallerySession, now: datetime | None = None
+) -> bool:
+    now = now or datetime.utcnow()
+    return session_expires_at(session) <= now
 
 
 def create_invite(

@@ -15,11 +15,19 @@ REFRESH_TOKEN_GRACE_SECONDS = int(
     os.getenv('REFRESH_TOKEN_GRACE_SECONDS', 60)
 )
 
-# One-time gallery invite codes and the browser cookie they unlock.
-# The default is 24 hours; GALLERY_SESSION_DAYS can override it.
+# One-time gallery invite codes and the browser cookie they unlock. Access is
+# hard-capped at one week, including sessions created before a config change.
 GALLERY_COOKIE_NAME = os.getenv('GALLERY_COOKIE_NAME', 'gallery_access')
-GALLERY_SESSION_DAYS = int(os.getenv('GALLERY_SESSION_DAYS', 1))
-GALLERY_INVITE_HOURS = int(os.getenv('GALLERY_INVITE_HOURS', 24))
+GALLERY_ACCESS_MAX_DAYS = 7
+GALLERY_INVITE_MAX_HOURS = GALLERY_ACCESS_MAX_DAYS * 24
+GALLERY_SESSION_DAYS = min(
+    int(os.getenv('GALLERY_SESSION_DAYS', GALLERY_ACCESS_MAX_DAYS)),
+    GALLERY_ACCESS_MAX_DAYS,
+)
+GALLERY_INVITE_HOURS = min(
+    int(os.getenv('GALLERY_INVITE_HOURS', GALLERY_INVITE_MAX_HOURS)),
+    GALLERY_INVITE_MAX_HOURS,
+)
 GALLERY_COOKIE_MAX_AGE = GALLERY_SESSION_DAYS * 24 * 60 * 60
 # Revoked invite records older than this are removed automatically.
 GALLERY_INVITE_RETENTION_DAYS = int(
