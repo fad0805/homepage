@@ -829,6 +829,7 @@ button.chapter-nearby__item {
 
 .chapter-nearby__item.is-current {
   background: color-mix(in srgb, var(--title-color) 8%, transparent);
+  font-weight: 600;
 }
 
 .chapter-nearby__name {
