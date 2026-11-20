@@ -104,6 +104,8 @@ export default function AdminBookDetail() {
   const [bulkTargetBookId, setBulkTargetBookId] = useState<number | null>(
     null,
   );
+  const [bulkTocModalOpen, setBulkTocModalOpen] = useState(false);
+  const [bulkTocParentId, setBulkTocParentId] = useState<number | null>(null);
   const [bulkWorking, setBulkWorking] = useState(false);
   const [pinningChapterId, setPinningChapterId] = useState<number | null>(
     null,
@@ -286,6 +288,8 @@ export default function AdminBookDetail() {
   const clearChapterSelection = () => {
     setSelectedChapterIds(new Set());
     setBulkTargetBookId(null);
+    setBulkTocModalOpen(false);
+    setBulkTocParentId(null);
   };
 
   const handleBulkMove = async () => {
@@ -395,6 +399,40 @@ export default function AdminBookDetail() {
         error instanceof Error
           ? error.message
           : "챕터를 복사하지 못했습니다.",
+      );
+    } finally {
+      clearChapterSelection();
+      await load();
+      setBulkWorking(false);
+    }
+  };
+
+  const openBulkTocModal = () => {
+    if (selectedChapterIds.size === 0) return;
+    setBulkTocParentId(null);
+    setBulkTocModalOpen(true);
+  };
+
+  const handleBulkTocMove = async () => {
+    if (selectedChapterIds.size === 0) return;
+    const ids = [...selectedChapterIds];
+
+    setBulkWorking(true);
+    try {
+      for (const chapterId of ids) {
+        await apiFetch(`/api/chapters/${chapterId}`, {
+          method: "PUT",
+          body: JSON.stringify({ toc_parent_id: bulkTocParentId }),
+        });
+      }
+      setBulkTocModalOpen(false);
+      notify("success", `${ids.length}개 챕터를 목차로 옮겼습니다.`);
+    } catch (error) {
+      notify(
+        "error",
+        error instanceof Error
+          ? error.message
+          : "챕터를 목차로 옮기지 못했습니다.",
       );
     } finally {
       clearChapterSelection();
@@ -656,6 +694,14 @@ export default function AdminBookDetail() {
                       </option>
                     ))}
                 </select>
+                <button
+                  type="button"
+                  className="admin-button"
+                  onClick={openBulkTocModal}
+                  disabled={bulkWorking}
+                >
+                  목차로 이동
+                </button>
                 <button
                   type="button"
                   className="admin-button"
@@ -933,6 +979,65 @@ export default function AdminBookDetail() {
                 disabled={saving}
               >
                 {saving ? "저장 중..." : "저장"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {bulkTocModalOpen && book ? (
+        <div
+          className="admin-modal-backdrop"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) {
+              setBulkTocModalOpen(false);
+            }
+          }}
+        >
+          <div
+            className="admin-modal admin-books-toc-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-label="목차로 이동"
+          >
+            <div className="admin-modal-header">
+              <h2>목차로 이동</h2>
+              <button
+                type="button"
+                className="admin-modal-close"
+                onClick={() => setBulkTocModalOpen(false)}
+                aria-label="닫기"
+              >
+                ×
+              </button>
+            </div>
+            <div className="admin-modal-body">
+              <TocManager
+                bookId={book.id}
+                chapters={[]}
+                notify={notify}
+                title="이동할 목차 위치"
+                collapsible={false}
+                selectedParentId={bulkTocParentId}
+                onSelectParent={setBulkTocParentId}
+              />
+            </div>
+            <div className="admin-modal-footer">
+              <button
+                type="button"
+                className="admin-button"
+                onClick={() => setBulkTocModalOpen(false)}
+                disabled={bulkWorking}
+              >
+                취소
+              </button>
+              <button
+                type="button"
+                className="admin-button primary"
+                onClick={() => void handleBulkTocMove()}
+                disabled={bulkWorking}
+              >
+                {bulkWorking ? "이동 중..." : "이동"}
               </button>
             </div>
           </div>
