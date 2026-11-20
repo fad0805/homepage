@@ -357,8 +357,8 @@ export default function BooksClient({
     chapterId: activeChapterId,
   });
 
-  // Book-level search runs on the API so matching chapters do not have to be
-  // loaded into the browser just to find their books.
+  // Book-level search runs on the API and matches only book metadata/tags;
+  // chapter matches are handled by the separate chapter query below.
   useEffect(() => {
     const query = searchQuery.trim();
     if (!query) {

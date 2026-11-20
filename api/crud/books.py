@@ -381,8 +381,6 @@ def _build_book_query(
     owner_user_id: int | None = None,
     is_admin: bool = False,
     author_user_id: int | None = None,
-    granted_chapters: frozenset[int] = frozenset(),
-    granted_books: frozenset[int] = frozenset(),
     query: str | None = None,
 ):
     books_query = (
@@ -416,41 +414,20 @@ def _build_book_query(
         else:
             books_query = books_query.filter(visible_category)
 
+    # Book search is intentionally metadata-only: chapter titles, bodies, and
+    # tags never make a book match. Chapter search is a separate query.
     tokens = search_tokens(query)
     if tokens:
-        chapter_match_query = _build_chapter_query(
-            db,
-            include_hidden=include_hidden,
-            granted_chapters=granted_chapters,
-            granted_books=granted_books,
-            viewer_user_id=viewer_user_id,
-            owner_user_id=owner_user_id,
-            author_user_id=author_user_id,
-            query=query,
-            include_body=False,
-            ids_only=True,
-            published_only=True,
-        )
-        chapter_book_ids = {
-            book_id
-            for (book_id,) in chapter_match_query.with_entities(
-                Chapter.book_id
-            )
-            .order_by(None)
-            .distinct()
-            .all()
-        }
         for token in tokens:
             pattern = like_pattern(token)
-            field_match = or_(
-                Book.title.ilike(pattern, escape="\\"),
-                Book.description.ilike(pattern, escape="\\"),
-                BookCategory.name.ilike(pattern, escape="\\"),
-                _book_tag_match(db, pattern),
+            books_query = books_query.filter(
+                or_(
+                    Book.title.ilike(pattern, escape="\\"),
+                    Book.description.ilike(pattern, escape="\\"),
+                    BookCategory.name.ilike(pattern, escape="\\"),
+                    _book_tag_match(db, pattern),
+                )
             )
-            if chapter_book_ids:
-                field_match = or_(field_match, Book.id.in_(chapter_book_ids))
-            books_query = books_query.filter(field_match)
 
     return books_query.order_by(Book.order, Book.id)
 
@@ -476,8 +453,6 @@ def _get_books_page(
         owner_user_id=owner_user_id,
         is_admin=is_admin,
         author_user_id=author_user_id,
-        granted_chapters=granted_chapters,
-        granted_books=granted_books,
         query=query,
     )
     total = books_query.order_by(None).count()

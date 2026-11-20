@@ -94,12 +94,12 @@ class BookChapterPaginationSupportTests(unittest.TestCase):
         self.assertEqual(books["첫 번째 책"]["chapter_count"], 3)
         self.assertEqual(books["두 번째 책"]["chapter_count"], 1)
 
-    def test_book_search_matches_chapter_title_and_body(self) -> None:
+    def test_book_search_ignores_chapter_title_and_body(self) -> None:
         title_matches = get_all_books(self.db, query="고정")
         body_matches = get_all_books(self.db, query="보물")
 
-        self.assertEqual([book["title"] for book in title_matches], ["첫 번째 책"])
-        self.assertEqual([book["title"] for book in body_matches], ["첫 번째 책"])
+        self.assertEqual(title_matches, [])
+        self.assertEqual(body_matches, [])
 
     def test_chapter_page_can_be_scoped_to_one_book(self) -> None:
         chapters, total = get_chapters_page(
@@ -201,6 +201,26 @@ class BookChapterPaginationSupportTests(unittest.TestCase):
         self.assertEqual(response.headers["x-total-count"], "2")
         self.assertTrue(
             any("LIMIT" in statement and "OFFSET" in statement for statement in statements)
+        )
+
+    def test_book_search_query_does_not_read_chapters(self) -> None:
+        statements: list[str] = []
+
+        @event.listens_for(self.engine, "before_cursor_execute")
+        def record_statement(
+            conn, cursor, statement, parameters, context, executemany
+        ):
+            statements.append(statement)
+
+        try:
+            matches = get_all_books(self.db, query="고정")
+        finally:
+            event.remove(self.engine, "before_cursor_execute", record_statement)
+
+        self.assertEqual(matches, [])
+        self.assertTrue(statements)
+        self.assertTrue(
+            all("chapters" not in statement.lower() for statement in statements)
         )
 
     def test_book_search_matches_tags_in_database(self) -> None:
