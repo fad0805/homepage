@@ -2,10 +2,12 @@ from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
 from core.mastodon import (
+    NOTIFY_TAG_SCOPES,
     MastodonError,
     detect_service,
     normalize_instance_url,
-    normalize_notify_tag,
+    normalize_notify_tag_mode,
+    normalize_notify_tags,
     normalize_site_url,
     serialize_mastodon_settings,
 )
@@ -110,20 +112,32 @@ def update_mastodon_settings(
     else:
         settings.notify_book_id = None
 
-    if settings.notify_scope == "tag":
+    if settings.notify_scope in NOTIFY_TAG_SCOPES:
         if "notify_tag" in payload.model_fields_set:
-            tag = payload.notify_tag
+            tag_value = payload.notify_tag
         else:
-            tag = settings.notify_tag
-        normalized_tag = normalize_notify_tag(tag)
-        if normalized_tag is None:
+            tag_value = settings.notify_tag
+        tags = normalize_notify_tags(tag_value)
+        if not tags:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="알림 대상 태그를 입력해주세요.",
             )
-        settings.notify_tag = normalized_tag
+        stored_tags = ", ".join(tags)
+        if len(stored_tags) > 255:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="알림 대상 태그가 너무 많습니다.",
+            )
+        settings.notify_tag = stored_tags
+        settings.notify_tag_mode = normalize_notify_tag_mode(
+            payload.notify_tag_mode
+            if payload.notify_tag_mode is not None
+            else settings.notify_tag_mode
+        )
     else:
         settings.notify_tag = None
+        settings.notify_tag_mode = "any"
 
     instance_changed = False
     if payload.instance_url is not None:

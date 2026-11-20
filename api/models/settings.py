@@ -63,6 +63,12 @@ class MastodonSettings(Base):
         index=True,
     )
     notify_tag = Column(String(255), nullable=True)
+    notify_tag_mode = Column(
+        String(16),
+        nullable=False,
+        default="any",
+        server_default="any",
+    )
     created_at = Column(DateTime, default=func.now(), nullable=False)
     updated_at = Column(
         DateTime,

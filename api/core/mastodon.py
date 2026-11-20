@@ -17,7 +17,18 @@ logger = logging.getLogger("uvicorn.error")
 
 STATUS_LIMIT = 500
 REQUEST_TIMEOUT = 15.0
-NOTIFY_SCOPES = {"all", "books", "book", "illustrations", "tag"}
+NOTIFY_SCOPES = {
+    "all",
+    "books",
+    "book",
+    "illustrations",
+    "tag",
+    "tag_books",
+    "tag_illustrations",
+}
+NOTIFY_TAG_SCOPES = {"tag", "tag_books", "tag_illustrations"}
+NOTIFY_TAG_MODES = {"any", "all"}
+MAX_NOTIFY_TAGS = 10
 
 # Delivery rows only prevent duplicate posts for a short window. The content
 # row's mastodon_status_id remains the permanent "already announced" marker.
@@ -68,6 +79,31 @@ def normalize_notify_tag(value: str | None) -> str | None:
     raw = (value or "").strip().lstrip("#").strip()
     raw = raw.split(",", 1)[0].strip()
     return raw[:255] or None
+
+
+def normalize_notify_tags(value: str | None) -> list[str]:
+    """Return the normalized tag list stored in one comma-separated field."""
+    if not value:
+        return []
+    tags: list[str] = []
+    seen: set[str] = set()
+    for raw in str(value).split(","):
+        name = normalize_notify_tag(raw)
+        if name is None:
+            continue
+        key = name.casefold()
+        if key in seen:
+            continue
+        seen.add(key)
+        tags.append(name)
+        if len(tags) >= MAX_NOTIFY_TAGS:
+            break
+    return tags
+
+
+def normalize_notify_tag_mode(value: object) -> str:
+    """Return ``any`` (OR) or ``all`` (AND) for a tag notification profile."""
+    return value if value in NOTIFY_TAG_MODES else "any"
 
 
 def _pin_instance_url(url: str):
@@ -203,9 +239,14 @@ def serialize_mastodon_settings(
             else None
         ),
         "notify_tag": (
-            normalize_notify_tag(settings.notify_tag)
-            if settings and scope == "tag"
+            ", ".join(normalize_notify_tags(settings.notify_tag))
+            if settings and scope in NOTIFY_TAG_SCOPES
             else None
+        ),
+        "notify_tag_mode": (
+            normalize_notify_tag_mode(settings.notify_tag_mode)
+            if settings and scope in NOTIFY_TAG_SCOPES
+            else "any"
         ),
         "has_access_token": bool(token),
         "access_token_hint": f"••••{token[-4:]}" if token else None,
@@ -222,17 +263,42 @@ def _settings_ready(settings: MastodonSettings | None) -> bool:
     )
 
 
+def _tags_match(
+    tags: object,
+    configured: str | list[str] | tuple[str, ...] | None,
+    mode: object = "any",
+) -> bool:
+    """Match content tags against configured tags using OR or AND."""
+    if isinstance(configured, str):
+        targets = normalize_notify_tags(configured)
+    else:
+        targets = []
+        seen: set[str] = set()
+        for item in configured or []:
+            name = normalize_notify_tag(str(item))
+            if name is None:
+                continue
+            key = name.casefold()
+            if key in seen:
+                continue
+            seen.add(key)
+            targets.append(name)
+    if not targets or not isinstance(tags, (list, tuple, set)):
+        return False
+
+    content = {
+        (normalize_notify_tag(str(tag)) or "").casefold() for tag in tags
+    }
+    content.discard("")
+    target_keys = {name.casefold() for name in targets}
+    if normalize_notify_tag_mode(mode) == "all":
+        return target_keys <= content
+    return bool(target_keys & content)
+
+
 def _tag_matches(tags: object, configured: str | None) -> bool:
-    target = normalize_notify_tag(configured)
-    if target is None:
-        return False
-    target_key = target.casefold()
-    if not isinstance(tags, (list, tuple, set)):
-        return False
-    return any(
-        (normalize_notify_tag(str(tag)) or "").casefold() == target_key
-        for tag in tags
-    )
+    """Backwards-compatible single-tag OR matcher."""
+    return _tags_match(tags, configured, "any")
 
 
 def _chapter_notify_allowed(
@@ -247,8 +313,12 @@ def _chapter_notify_allowed(
             settings.notify_book_id is not None
             and chapter.book_id == settings.notify_book_id
         )
-    if scope == "tag":
-        return _tag_matches(chapter.tags, settings.notify_tag)
+    if scope in NOTIFY_TAG_SCOPES and scope != "tag_illustrations":
+        return _tags_match(
+            chapter.tags,
+            settings.notify_tag,
+            settings.notify_tag_mode,
+        )
     return False
 
 
@@ -259,8 +329,12 @@ def _illustration_notify_allowed(
     scope = _notify_scope(settings)
     if scope in ("all", "illustrations"):
         return True
-    if scope == "tag":
-        return _tag_matches(illustration.tags, settings.notify_tag)
+    if scope in NOTIFY_TAG_SCOPES and scope != "tag_books":
+        return _tags_match(
+            illustration.tags,
+            settings.notify_tag,
+            settings.notify_tag_mode,
+        )
     return False
 
 

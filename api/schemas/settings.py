@@ -5,8 +5,15 @@ from pydantic import BaseModel, Field
 
 MastodonVisibility = Literal["public", "unlisted", "private"]
 MastodonNotifyScope = Literal[
-    "all", "books", "book", "illustrations", "tag"
+    "all",
+    "books",
+    "book",
+    "illustrations",
+    "tag",
+    "tag_books",
+    "tag_illustrations",
 ]
+NotifyTagMode = Literal["any", "all"]
 MastodonProvider = Literal["mastodon", "misskey", "writ"]
 
 
@@ -23,6 +30,7 @@ class MastodonSettingsRead(BaseModel):
     notify_scope: MastodonNotifyScope = "all"
     notify_book_id: int | None = None
     notify_tag: str | None = None
+    notify_tag_mode: NotifyTagMode = "any"
     has_access_token: bool = False
     access_token_hint: str | None = None
     updated_at: datetime | None = None
@@ -45,7 +53,8 @@ class MastodonSettingsUpdate(BaseModel):
     visibility: MastodonVisibility | None = None
     notify_scope: MastodonNotifyScope | None = None
     notify_book_id: int | None = None
-    notify_tag: str | None = Field(default=None, max_length=255)
+    notify_tag: str | None = Field(default=None, max_length=1000)
+    notify_tag_mode: NotifyTagMode | None = None
 
 
 class MastodonTestRequest(BaseModel):

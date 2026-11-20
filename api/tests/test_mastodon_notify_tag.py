@@ -47,10 +47,17 @@ class MastodonNotifyTagTests(unittest.TestCase):
         self.db.close()
         self.engine.dispose()
 
-    def _profile(self, notify_tag: str = "#신작") -> SimpleNamespace:
+    def _profile(
+        self,
+        notify_tag: str = "#신작",
+        *,
+        notify_scope: str = "tag",
+        notify_tag_mode: str = "any",
+    ) -> SimpleNamespace:
         return SimpleNamespace(
-            notify_scope="tag",
+            notify_scope=notify_scope,
             notify_tag=notify_tag,
+            notify_tag_mode=notify_tag_mode,
             notify_book_id=None,
         )
 
@@ -77,6 +84,42 @@ class MastodonNotifyTagTests(unittest.TestCase):
         illustration.tags = ["일반"]
         self.assertFalse(
             _illustration_notify_allowed(settings, illustration)
+        )
+
+    def test_multiple_tags_support_or_and_and(self) -> None:
+        chapter = SimpleNamespace(book_id=1, tags=["신작", "판타지"])
+        illustration = SimpleNamespace(tags=["신작"])
+
+        any_profile = self._profile("신작, 판타지", notify_tag_mode="any")
+        all_profile = self._profile("신작, 판타지", notify_tag_mode="all")
+
+        self.assertTrue(_chapter_notify_allowed(any_profile, chapter))
+        self.assertTrue(_chapter_notify_allowed(all_profile, chapter))
+        self.assertTrue(_illustration_notify_allowed(any_profile, illustration))
+        self.assertFalse(
+            _illustration_notify_allowed(all_profile, illustration)
+        )
+
+    def test_tag_scopes_can_target_chapters_or_illustrations(self) -> None:
+        chapter = SimpleNamespace(book_id=1, tags=["신작"])
+        illustration = SimpleNamespace(tags=["신작"])
+
+        chapters_only = self._profile(
+            "신작", notify_scope="tag_books"
+        )
+        illustrations_only = self._profile(
+            "신작", notify_scope="tag_illustrations"
+        )
+
+        self.assertTrue(_chapter_notify_allowed(chapters_only, chapter))
+        self.assertFalse(
+            _illustration_notify_allowed(chapters_only, illustration)
+        )
+        self.assertFalse(
+            _chapter_notify_allowed(illustrations_only, chapter)
+        )
+        self.assertTrue(
+            _illustration_notify_allowed(illustrations_only, illustration)
         )
 
     def test_other_scopes_still_allow_content_without_tags(self) -> None:
@@ -129,6 +172,20 @@ class MastodonNotifyTagTests(unittest.TestCase):
         self.assertEqual(updated["notify_scope"], "tag")
         self.assertEqual(updated["notify_tag"], "신작")
 
+        multiple = update_mastodon_settings(
+            self.db,
+            profile["id"],
+            MastodonSettingsUpdate(
+                notify_scope="tag_books",
+                notify_tag="  #신작, 판타지, #신작  ",
+                notify_tag_mode="all",
+            ),
+            self.user_id,
+        )
+        self.assertEqual(multiple["notify_scope"], "tag_books")
+        self.assertEqual(multiple["notify_tag"], "신작, 판타지")
+        self.assertEqual(multiple["notify_tag_mode"], "all")
+
         cleared = update_mastodon_settings(
             self.db,
             profile["id"],
@@ -137,19 +194,23 @@ class MastodonNotifyTagTests(unittest.TestCase):
         )
         self.assertEqual(cleared["notify_scope"], "books")
         self.assertIsNone(cleared["notify_tag"])
+        self.assertEqual(cleared["notify_tag_mode"], "any")
 
     def test_serializer_exposes_tag_only_for_tag_scope(self) -> None:
         settings = MastodonSettings(
             notify_scope="tag",
             notify_tag="신작",
         )
-        self.assertEqual(
-            serialize_mastodon_settings(settings)["notify_tag"], "신작"
-        )
+        serialized = serialize_mastodon_settings(settings)
+        self.assertEqual(serialized["notify_tag"], "신작")
+        self.assertEqual(serialized["notify_tag_mode"], "any")
 
         settings.notify_scope = "all"
         self.assertIsNone(
             serialize_mastodon_settings(settings)["notify_tag"]
+        )
+        self.assertEqual(
+            serialize_mastodon_settings(settings)["notify_tag_mode"], "any"
         )
 
 

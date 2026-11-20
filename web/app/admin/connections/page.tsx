@@ -21,7 +21,10 @@ type MastodonNotifyScope =
   | "books"
   | "book"
   | "illustrations"
-  | "tag";
+  | "tag"
+  | "tag_books"
+  | "tag_illustrations";
+type NotifyTagMode = "any" | "all";
 type MastodonProvider = "mastodon" | "misskey" | "writ";
 
 interface MastodonProfile {
@@ -35,6 +38,7 @@ interface MastodonProfile {
   notify_scope: MastodonNotifyScope;
   notify_book_id: number | null;
   notify_tag: string | null;
+  notify_tag_mode: NotifyTagMode;
   has_access_token: boolean;
   access_token_hint: string | null;
   updated_at: string | null;
@@ -48,6 +52,7 @@ interface ProfileDraft {
   notify_scope: MastodonNotifyScope;
   notify_book_id: number | null;
   notify_tag: string;
+  notify_tag_mode: NotifyTagMode;
   access_token: string;
   has_access_token: boolean;
   access_token_hint: string | null;
@@ -70,11 +75,17 @@ interface BookOption {
 
 type Notice = { type: "success" | "error"; text: string };
 
-function firstTag(value: string) {
-  return value
+function tagList(value: string | null | undefined): string[] {
+  return (value ?? "")
     .split(",")
     .map((tag) => tag.trim().replace(/^#/, "").trim())
-    .find(Boolean) ?? "";
+    .filter(Boolean);
+}
+
+function isTagScope(scope: MastodonNotifyScope) {
+  return (
+    scope === "tag" || scope === "tag_books" || scope === "tag_illustrations"
+  );
 }
 
 function toDraft(profile: MastodonProfile): ProfileDraft {
@@ -86,6 +97,7 @@ function toDraft(profile: MastodonProfile): ProfileDraft {
     notify_scope: profile.notify_scope ?? "all",
     notify_book_id: profile.notify_book_id ?? null,
     notify_tag: profile.notify_tag ?? "",
+    notify_tag_mode: profile.notify_tag_mode ?? "any",
     access_token: "",
     has_access_token: profile.has_access_token,
     access_token_hint: profile.access_token_hint,
@@ -105,11 +117,23 @@ function scopeLabel(
   bookId: number | null,
   books: BookOption[],
   tag: string | null,
+  tagMode: NotifyTagMode = "any",
 ) {
   if (scope === "all") return "전체 (목차 + 삽화)";
   if (scope === "books") return "목차 전체";
   if (scope === "illustrations") return "삽화 전체";
-  if (scope === "tag") return tag ? `태그: ${tag}` : "태그 지정 필요";
+  if (isTagScope(scope)) {
+    const target =
+      scope === "tag_books"
+        ? "목차"
+        : scope === "tag_illustrations"
+          ? "삽화"
+          : "전체";
+    const tags = tagList(tag);
+    if (!tags.length) return `태그(${target}) 지정 필요`;
+    const separator = tagMode === "all" ? " + " : ", ";
+    return `태그(${target}): ${tags.join(separator)}`;
+  }
   const book = books.find((item) => item.id === bookId);
   return book ? `책: ${book.title}` : "목차 내 특정 책";
 }
@@ -331,9 +355,9 @@ export default function AdminConnections() {
       notify("error", "알림 대상 책을 선택해주세요.");
       return;
     }
-    const notifyTag =
-      draft.notify_scope === "tag" ? firstTag(draft.notify_tag) : "";
-    if (draft.notify_scope === "tag" && !notifyTag) {
+    const tagScope = isTagScope(draft.notify_scope);
+    const notifyTags = tagScope ? tagList(draft.notify_tag) : [];
+    if (tagScope && !notifyTags.length) {
       notify("error", "알림 대상 태그를 입력해주세요.");
       return;
     }
@@ -348,7 +372,8 @@ export default function AdminConnections() {
         notify_scope: draft.notify_scope,
         notify_book_id:
           draft.notify_scope === "book" ? draft.notify_book_id : null,
-        notify_tag: draft.notify_scope === "tag" ? notifyTag : null,
+        notify_tag: tagScope ? notifyTags.join(", ") : null,
+        notify_tag_mode: tagScope ? draft.notify_tag_mode : "any",
         access_token: draft.access_token.trim() || null,
       };
 
@@ -519,6 +544,7 @@ export default function AdminConnections() {
                           profile.notify_book_id,
                           books,
                           profile.notify_tag,
+                          profile.notify_tag_mode,
                         )}
                       </span>
                     </button>
@@ -551,6 +577,7 @@ export default function AdminConnections() {
                       selectedProfile.notify_book_id,
                       books,
                       selectedProfile.notify_tag,
+                      selectedProfile.notify_tag_mode,
                     )}
                   </p>
                 </div>
@@ -676,7 +703,9 @@ export default function AdminConnections() {
                   <option value="books">목차 전체</option>
                   <option value="book">목차 내 특정 책</option>
                   <option value="illustrations">삽화 전체</option>
-                  <option value="tag">특정 태그 (목차 + 삽화)</option>
+                  <option value="tag">특정 태그 (전체)</option>
+                  <option value="tag_books">특정 태그 (목차)</option>
+                  <option value="tag_illustrations">특정 태그 (삽화)</option>
                 </select>
               </label>
               <p className="admin-connections-help">
@@ -707,16 +736,35 @@ export default function AdminConnections() {
                 </label>
               ) : null}
 
-              {draft.notify_scope === "tag" ? (
-                <label className="admin-field">
-                  <span>알림 대상 태그</span>
-                  <TagInput
-                    single
-                    value={draft.notify_tag}
-                    onChange={(value) => patchDraft({ notify_tag: value })}
-                    placeholder="태그를 입력하세요 (예: 신작)"
-                  />
-                </label>
+              {isTagScope(draft.notify_scope) ? (
+                <>
+                  <label className="admin-field">
+                    <span>알림 대상 태그</span>
+                    <TagInput
+                      value={draft.notify_tag}
+                      onChange={(value) => patchDraft({ notify_tag: value })}
+                      placeholder="태그를 입력하세요 (예: 신작, 판타지)"
+                    />
+                  </label>
+                  <label className="admin-field">
+                    <span>태그 조건</span>
+                    <select
+                      value={draft.notify_tag_mode}
+                      onChange={(event) =>
+                        patchDraft({
+                          notify_tag_mode: event.target
+                            .value as NotifyTagMode,
+                        })
+                      }
+                    >
+                      <option value="any">OR — 하나라도 일치</option>
+                      <option value="all">AND — 모두 일치</option>
+                    </select>
+                  </label>
+                  <p className="admin-connections-help">
+                    여러 태그를 쉼표로 구분해 등록할 수 있습니다.
+                  </p>
+                </>
               ) : null}
 
               <div className="admin-connections-actions">
