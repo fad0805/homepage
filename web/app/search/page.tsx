@@ -24,20 +24,29 @@ export const metadata: Metadata = {
 };
 
 const MAX_QUERY_LENGTH = 100;
-const CHAPTERS_PER_PAGE = 10;
+const CHAPTERS_PER_PAGE = 5;
+const ILLUSTRATIONS_PER_PAGE = 5;
 const BOOKS_PER_PAGE = 10;
 
 function firstParam(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] : value;
 }
 
-function searchHref(q: string, chapterPage = 1, bookPage = 1) {
+function searchHref(
+  q: string,
+  chapterPage = 1,
+  bookPage = 1,
+  illustrationPage = 1,
+) {
   const params = new URLSearchParams({ q });
   if (chapterPage > 1) {
     params.set("chapter_page", String(chapterPage));
   }
   if (bookPage > 1) {
     params.set("book_page", String(bookPage));
+  }
+  if (illustrationPage > 1) {
+    params.set("illustration_page", String(illustrationPage));
   }
   return `/search?${params.toString()}`;
 }
@@ -89,6 +98,7 @@ export default async function SearchPage({
     q?: string | string[];
     chapter_page?: string | string[];
     book_page?: string | string[];
+    illustration_page?: string | string[];
   }>;
 }) {
   const params = await searchParams;
@@ -102,6 +112,13 @@ export default async function SearchPage({
   const bookPage =
     Number.isFinite(requestedBookPage) && requestedBookPage > 0
       ? Math.floor(requestedBookPage)
+      : 1;
+  const requestedIllustrationPage = Number(
+    firstParam(params.illustration_page),
+  );
+  const illustrationPage =
+    Number.isFinite(requestedIllustrationPage) && requestedIllustrationPage > 0
+      ? Math.floor(requestedIllustrationPage)
       : 1;
   const parsed = parseSearchQuery(q);
   const normalizedQuery = normalize(parsed.query);
@@ -129,7 +146,8 @@ export default async function SearchPage({
   });
   const illustrationParams = new URLSearchParams({
     sort: "created",
-    page_size: "50",
+    page: String(illustrationPage),
+    page_size: String(ILLUSTRATIONS_PER_PAGE),
   });
   if (tagFilter !== null) {
     if (tagFilter) {
@@ -191,13 +209,17 @@ export default async function SearchPage({
     Math.ceil(chapterTotal / CHAPTERS_PER_PAGE),
   );
   const bookTotalPages = Math.max(1, Math.ceil(bookTotal / BOOKS_PER_PAGE));
+  const illustrationTotalPages = Math.max(
+    1,
+    Math.ceil(illustrationTotal / ILLUSTRATIONS_PER_PAGE),
+  );
   if (
     !failed &&
     hasSearch &&
     chapterTotal > 0 &&
     chapterPage > chapterTotalPages
   ) {
-    redirect(searchHref(q, chapterTotalPages, bookPage));
+    redirect(searchHref(q, chapterTotalPages, bookPage, illustrationPage));
   }
   if (
     !failed &&
@@ -205,7 +227,15 @@ export default async function SearchPage({
     bookTotal > 0 &&
     bookPage > bookTotalPages
   ) {
-    redirect(searchHref(q, chapterPage, bookTotalPages));
+    redirect(searchHref(q, chapterPage, bookTotalPages, illustrationPage));
+  }
+  if (
+    !failed &&
+    hasSearch &&
+    illustrationTotal > 0 &&
+    illustrationPage > illustrationTotalPages
+  ) {
+    redirect(searchHref(q, chapterPage, bookPage, illustrationTotalPages));
   }
 
   const now = Date.now();
@@ -304,7 +334,12 @@ export default async function SearchPage({
                   {chapterPage > 1 ? (
                     <Link
                       className="search-pagination__button"
-                      href={searchHref(q, chapterPage - 1, bookPage)}
+                      href={searchHref(
+                        q,
+                        chapterPage - 1,
+                        bookPage,
+                        illustrationPage,
+                      )}
                       prefetch={false}
                     >
                       이전
@@ -328,7 +363,7 @@ export default async function SearchPage({
                           className={`search-pagination__button${
                             value === chapterPage ? " is-active" : ""
                           }`}
-                          href={searchHref(q, value, bookPage)}
+                          href={searchHref(q, value, bookPage, illustrationPage)}
                           aria-current={
                             value === chapterPage ? "page" : undefined
                           }
@@ -342,7 +377,12 @@ export default async function SearchPage({
                   {chapterPage < chapterTotalPages ? (
                     <Link
                       className="search-pagination__button"
-                      href={searchHref(q, chapterPage + 1, bookPage)}
+                      href={searchHref(
+                        q,
+                        chapterPage + 1,
+                        bookPage,
+                        illustrationPage,
+                      )}
                       prefetch={false}
                     >
                       다음
@@ -392,7 +432,12 @@ export default async function SearchPage({
                   {bookPage > 1 ? (
                     <Link
                       className="search-pagination__button"
-                      href={searchHref(q, chapterPage, bookPage - 1)}
+                      href={searchHref(
+                        q,
+                        chapterPage,
+                        bookPage - 1,
+                        illustrationPage,
+                      )}
                       prefetch={false}
                     >
                       이전
@@ -416,7 +461,7 @@ export default async function SearchPage({
                           className={`search-pagination__button${
                             value === bookPage ? " is-active" : ""
                           }`}
-                          href={searchHref(q, chapterPage, value)}
+                          href={searchHref(q, chapterPage, value, illustrationPage)}
                           aria-current={value === bookPage ? "page" : undefined}
                           prefetch={false}
                           key={value}
@@ -428,7 +473,12 @@ export default async function SearchPage({
                   {bookPage < bookTotalPages ? (
                     <Link
                       className="search-pagination__button"
-                      href={searchHref(q, chapterPage, bookPage + 1)}
+                      href={searchHref(
+                        q,
+                        chapterPage,
+                        bookPage + 1,
+                        illustrationPage,
+                      )}
                       prefetch={false}
                     >
                       다음
@@ -488,6 +538,76 @@ export default async function SearchPage({
                   </article>
                 ))}
               </div>
+              {illustrationTotalPages > 1 ? (
+                <nav
+                  className="search-pagination"
+                  aria-label="삽화 검색 페이지 이동"
+                >
+                  {illustrationPage > 1 ? (
+                    <Link
+                      className="search-pagination__button"
+                      href={searchHref(
+                        q,
+                        chapterPage,
+                        bookPage,
+                        illustrationPage - 1,
+                      )}
+                      prefetch={false}
+                    >
+                      이전
+                    </Link>
+                  ) : (
+                    <span className="search-pagination__button is-disabled">
+                      이전
+                    </span>
+                  )}
+                  {paginationPages(
+                    illustrationPage,
+                    illustrationTotalPages,
+                  ).map((value, index) =>
+                    value === "ellipsis" ? (
+                      <span
+                        className="search-pagination__ellipsis"
+                        key={`ellipsis-${index}`}
+                      >
+                        …
+                      </span>
+                    ) : (
+                      <Link
+                        className={`search-pagination__button${
+                          value === illustrationPage ? " is-active" : ""
+                        }`}
+                        href={searchHref(q, chapterPage, bookPage, value)}
+                        aria-current={
+                          value === illustrationPage ? "page" : undefined
+                        }
+                        prefetch={false}
+                        key={value}
+                      >
+                        {value}
+                      </Link>
+                    ),
+                  )}
+                  {illustrationPage < illustrationTotalPages ? (
+                    <Link
+                      className="search-pagination__button"
+                      href={searchHref(
+                        q,
+                        chapterPage,
+                        bookPage,
+                        illustrationPage + 1,
+                      )}
+                      prefetch={false}
+                    >
+                      다음
+                    </Link>
+                  ) : (
+                    <span className="search-pagination__button is-disabled">
+                      다음
+                    </span>
+                  )}
+                </nav>
+              ) : null}
             </section>
           ) : null}
         </>
