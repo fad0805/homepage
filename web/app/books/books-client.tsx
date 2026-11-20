@@ -1378,23 +1378,18 @@ export default function BooksClient({
               >
                 <button
                   type="button"
-                  className={
-                    chapterSort === "oldest" ? "is-active" : undefined
+                  className="is-active"
+                  onClick={() =>
+                    setChapterSort((current) =>
+                      current === "oldest" ? "newest" : "oldest",
+                    )
                   }
-                  onClick={() => setChapterSort("oldest")}
-                  aria-pressed={chapterSort === "oldest"}
+                  aria-label={`게시글 정렬: ${
+                    chapterSort === "oldest" ? "처음부터 보기" : "최신순 보기"
+                  }`}
+                  title="정렬 방식 전환"
                 >
-                  오름차순
-                </button>
-                <button
-                  type="button"
-                  className={
-                    chapterSort === "newest" ? "is-active" : undefined
-                  }
-                  onClick={() => setChapterSort("newest")}
-                  aria-pressed={chapterSort === "newest"}
-                >
-                  내림차순
+                  {chapterSort === "oldest" ? "처음부터 보기" : "최신순 보기"}
                 </button>
               </div>
             </div>
