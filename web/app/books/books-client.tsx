@@ -1307,49 +1307,79 @@ export default function BooksClient({
         </button>
       ) : null}
       <header className="books-panel__header">
-        <div>
-          <h2>
-            <span>
-              {activeBook.title}
-              {activeBook.visible === false ? (
-                <span className="books-private-badge">비공개</span>
-              ) : null}
-              {activeBook.visible !== false && activeBook.protected ? (
-                <span className="books-protected-badge">보호</span>
-              ) : null}
-              {hasTocFolder && !activeBook.locked ? (
+        <div className="books-panel__header-top">
+          <div className="books-panel__heading">
+            <h2>
+              <span>
+                {activeBook.title}
+                {activeBook.visible === false ? (
+                  <span className="books-private-badge">비공개</span>
+                ) : null}
+                {activeBook.visible !== false && activeBook.protected ? (
+                  <span className="books-protected-badge">보호</span>
+                ) : null}
+                {hasTocFolder && !activeBook.locked ? (
+                  <button
+                    type="button"
+                    className="books-toc-trigger"
+                    onClick={() => setTocModalOpen(true)}
+                  >
+                    목차
+                  </button>
+                ) : null}
+              </span>
+            </h2>
+            {activeBook.description ? (
+              <p>{activeBook.description}</p>
+            ) : null}
+            {activeBook.category || activeBook.tags?.length ? (
+              <div className="tag-list books-panel__tags">
+                {activeBook.category ? (
+                  <span className="tag is-category">
+                    {activeBook.category.name}
+                  </span>
+                ) : null}
+                {activeBook.tags?.map((tag) => (
+                  <TagChip tag={tag} key={tag} />
+                ))}
+              </div>
+            ) : null}
+          </div>
+          {activeBook.locked ? null : (
+            <div className="books-panel__header-actions">
+              <RssSubscribe
+                path={`/books/${activeBook.id}/rss.xml`}
+                label="RSS"
+              />
+              <div
+                className="books-sort books-sort--chapters"
+                role="group"
+                aria-label="게시글 정렬"
+              >
                 <button
                   type="button"
-                  className="books-toc-trigger"
-                  onClick={() => setTocModalOpen(true)}
+                  className={
+                    chapterSort === "oldest" ? "is-active" : undefined
+                  }
+                  onClick={() => setChapterSort("oldest")}
+                  aria-pressed={chapterSort === "oldest"}
                 >
-                  목차
+                  오름차순
                 </button>
-              ) : null}
-            </span>
-          </h2>
-          {activeBook.description ? (
-            <p>{activeBook.description}</p>
-          ) : null}
-          {activeBook.category || activeBook.tags?.length ? (
-            <div className="tag-list books-panel__tags">
-              {activeBook.category ? (
-                <span className="tag is-category">
-                  {activeBook.category.name}
-                </span>
-              ) : null}
-              {activeBook.tags?.map((tag) => (
-                <TagChip tag={tag} key={tag} />
-              ))}
+                <button
+                  type="button"
+                  className={
+                    chapterSort === "newest" ? "is-active" : undefined
+                  }
+                  onClick={() => setChapterSort("newest")}
+                  aria-pressed={chapterSort === "newest"}
+                >
+                  내림차순
+                </button>
+              </div>
             </div>
-          ) : null}
+          )}
         </div>
-        {activeBook.locked ? null : (
-          <RssSubscribe
-            path={`/books/${activeBook.id}/rss.xml`}
-            label="RSS"
-          />
-        )}
       </header>
 
       {activeBook.locked ? (
@@ -1387,29 +1417,6 @@ export default function BooksClient({
           </button>
         </p>
       ) : null}
-
-      <div
-        className="books-sort books-sort--chapters"
-        role="group"
-        aria-label="게시글 정렬"
-      >
-        <button
-          type="button"
-          className={chapterSort === "oldest" ? "is-active" : undefined}
-          onClick={() => setChapterSort("oldest")}
-          aria-pressed={chapterSort === "oldest"}
-        >
-          오름차순
-        </button>
-        <button
-          type="button"
-          className={chapterSort === "newest" ? "is-active" : undefined}
-          onClick={() => setChapterSort("newest")}
-          aria-pressed={chapterSort === "newest"}
-        >
-          내림차순
-        </button>
-      </div>
 
       {chapterListError ? (
         <p className="books-panel__empty" role="alert">
