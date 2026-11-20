@@ -41,6 +41,7 @@ def get_books(
     response: Response,
     mine: bool = False,
     q: str | None = None,
+    tag: str | None = None,
     include_chapter_matches: bool = False,
     page: int | None = None,
     page_size: int = 20,
@@ -49,6 +50,7 @@ def get_books(
 ):
     filters: dict = {
         "query": q,
+        "tag": tag,
         "include_chapter_matches": include_chapter_matches,
     }
     if mine:

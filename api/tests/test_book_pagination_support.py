@@ -247,6 +247,17 @@ class BookChapterPaginationSupportTests(unittest.TestCase):
 
         self.assertEqual([book["id"] for book in matches], [self.first.id])
 
+    def test_book_search_can_filter_by_exact_tag(self) -> None:
+        self.first.tags = ["판타지", "판타지 소설"]
+        self.second.tags = ["로맨스"]
+        self.db.commit()
+
+        matches = get_all_books(self.db, tag="판타지")
+        partial = get_all_books(self.db, tag="판타")
+
+        self.assertEqual([book["id"] for book in matches], [self.first.id])
+        self.assertEqual(partial, [])
+
     def test_book_tag_match_expands_json_array_on_postgresql(self) -> None:
         class FakeDialect:
             name = "postgresql"

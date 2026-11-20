@@ -6,7 +6,7 @@ import { formatDate, formatDateTime } from "@/lib/datetime";
 import type { IllustrationItem } from "@/lib/illustration-types";
 import { paginationPages } from "@/lib/pagination";
 import { serverApiFetchWithTotal } from "@/lib/server-api";
-import { searchTokens } from "@/lib/search";
+import { parseSearchQuery, searchTokens } from "@/lib/search";
 import { getCurrentUser } from "@/lib/server-auth";
 import type { Book, Chapter } from "../books/types";
 
@@ -103,8 +103,11 @@ export default async function SearchPage({
     Number.isFinite(requestedBookPage) && requestedBookPage > 0
       ? Math.floor(requestedBookPage)
       : 1;
-  const normalizedQuery = normalize(q);
+  const parsed = parseSearchQuery(q);
+  const normalizedQuery = normalize(parsed.query);
   const queryTokens = searchTokens(normalizedQuery);
+  const tagFilter = parsed.tag;
+  const hasSearch = !!queryTokens.length || Boolean(tagFilter?.length);
 
   let books: Book[] = [];
   let chapters: Chapter[] = [];
@@ -113,7 +116,7 @@ export default async function SearchPage({
   let chapterTotal = 0;
   let illustrationTotal = 0;
   let failed = false;
-  const currentUser = queryTokens.length > 0 ? await getCurrentUser() : null;
+  const currentUser = hasSearch ? await getCurrentUser() : null;
 
   const bookParams = new URLSearchParams({
     page: String(bookPage),
@@ -128,10 +131,16 @@ export default async function SearchPage({
     sort: "created",
     page_size: "50",
   });
-  if (q) {
-    bookParams.set("q", q);
-    chapterParams.set("q", q);
-    illustrationParams.set("q", q);
+  if (tagFilter !== null) {
+    if (tagFilter) {
+      bookParams.set("tag", tagFilter);
+      chapterParams.set("tag", tagFilter);
+      illustrationParams.set("tag", tagFilter);
+    }
+  } else if (parsed.query) {
+    bookParams.set("q", parsed.query);
+    chapterParams.set("q", parsed.query);
+    illustrationParams.set("q", parsed.query);
   }
 
   try {
@@ -139,7 +148,7 @@ export default async function SearchPage({
       await Promise.all([
         // Search conditions go to the API so the browser never receives the
         // full book list just to filter it locally.
-        q
+        hasSearch
           ? serverApiFetchWithTotal<Book[]>(`/books?${bookParams.toString()}`, {
               tags: ["books"],
               auth: Boolean(currentUser),
@@ -147,7 +156,7 @@ export default async function SearchPage({
           : Promise.resolve({ data: [] as Book[], total: 0 }),
         // The API already matches title, subtitle, tags, and body text. Keep
         // bodies out of this payload; the search page only renders metadata.
-        queryTokens.length > 0
+        hasSearch
           ? serverApiFetchWithTotal<Chapter[]>(
               `/chapters?${chapterParams.toString()}`,
               {
@@ -156,7 +165,7 @@ export default async function SearchPage({
               },
             )
           : Promise.resolve({ data: [] as Chapter[], total: 0 }),
-        queryTokens.length > 0
+        hasSearch
           ? serverApiFetchWithTotal<IllustrationItem[]>(
               `/illustrations?${illustrationParams.toString()}`,
               {
@@ -184,7 +193,7 @@ export default async function SearchPage({
   const bookTotalPages = Math.max(1, Math.ceil(bookTotal / BOOKS_PER_PAGE));
   if (
     !failed &&
-    queryTokens.length > 0 &&
+    hasSearch &&
     chapterTotal > 0 &&
     chapterPage > chapterTotalPages
   ) {
@@ -192,7 +201,7 @@ export default async function SearchPage({
   }
   if (
     !failed &&
-    queryTokens.length > 0 &&
+    hasSearch &&
     bookTotal > 0 &&
     bookPage > bookTotalPages
   ) {
@@ -208,9 +217,9 @@ export default async function SearchPage({
   );
 
   // Search matching is done by the APIs; these arrays are already filtered.
-  const matchedBooks = queryTokens.length ? books : [];
-  const matchedChapters = queryTokens.length ? visibleChapters : [];
-  const matchedIllustrations = queryTokens.length ? illustrations : [];
+  const matchedBooks = hasSearch ? books : [];
+  const matchedChapters = hasSearch ? visibleChapters : [];
+  const matchedIllustrations = hasSearch ? illustrations : [];
 
   matchedBooks.sort((a, b) => a.order - b.order || a.id - b.id);
   matchedChapters.sort(
@@ -239,7 +248,7 @@ export default async function SearchPage({
           />
           <button type="submit">검색</button>
         </form>
-        {queryTokens.length > 0 ? (
+        {hasSearch ? (
           <p className="search-summary">
             <strong>‘{q}’</strong> 검색 결과 {total}건
           </p>
@@ -252,7 +261,7 @@ export default async function SearchPage({
 
       {failed ? (
         <p className="search-state">검색 결과를 불러오지 못했습니다.</p>
-      ) : queryTokens.length === 0 ? null : total === 0 ? (
+      ) : !hasSearch ? null : total === 0 ? (
         <p className="search-state">검색 결과가 없습니다.</p>
       ) : (
         <>

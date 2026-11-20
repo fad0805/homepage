@@ -61,6 +61,7 @@ def get_chapters(
     response: Response,
     mine: bool = False,
     q: str | None = None,
+    tag: str | None = None,
     book_id: int | None = None,
     pinned: bool | None = None,
     include_body: bool = True,
@@ -73,6 +74,7 @@ def get_chapters(
     grants = get_gallery_grants(request, db)
     filters: dict = {
         "query": q,
+        "tag": tag,
         "book_id": book_id,
         "pinned": pinned,
         "include_body": include_body,

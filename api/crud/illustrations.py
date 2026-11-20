@@ -2,7 +2,7 @@ import os
 from datetime import date, datetime, time, timedelta
 
 from fastapi import HTTPException, status
-from sqlalchemy import func, or_
+from sqlalchemy import false, func, or_
 from sqlalchemy.orm import Session, selectinload
 
 from core.mastodon import maybe_notify_illustration
@@ -215,6 +215,7 @@ def _list_query(
     include_hidden: bool,
     author_user_id: int | None,
     query: str | None,
+    tag: str | None,
     sort: str,
     filter_basis: str,
     date_from: date | None,
@@ -258,6 +259,21 @@ def _list_query(
                 tag_match,
             )
         )
+
+    if tag is not None:
+        normalized = tag.strip().lower()
+        if not normalized:
+            illustrations_query = illustrations_query.filter(false())
+        else:
+            illustrations_query = illustrations_query.filter(
+                db.query(IllustrationTag.illustration_id)
+                .join(Tag, Tag.id == IllustrationTag.tag_id)
+                .filter(
+                    IllustrationTag.illustration_id == Illustration.id,
+                    Tag.normalized_name == normalized,
+                )
+                .exists()
+            )
 
     if filter_basis == "created":
         if date_from:
@@ -328,6 +344,7 @@ def get_visible_illustrations(
     viewer_user_id: int | None = None,
     include_hidden: bool = False,
     query: str | None = None,
+    tag: str | None = None,
     *,
     author_user_id: int | None = None,
     granted_illustrations: frozenset[int] = frozenset(),
@@ -346,6 +363,7 @@ def get_visible_illustrations(
         include_hidden=include_hidden,
         author_user_id=author_user_id,
         query=query,
+        tag=tag,
         sort=sort,
         filter_basis=filter_basis,
         date_from=date_from,
@@ -440,6 +458,7 @@ def get_all_illustrations(
         include_hidden=True,
         author_user_id=owner_user_id,
         query=query,
+        tag=None,
         sort="order",
         filter_basis="taken",
         date_from=None,
@@ -470,6 +489,7 @@ def get_popular_illustrations(
         include_hidden=True,
         author_user_id=owner_user_id,
         query=None,
+        tag=None,
         sort="order",
         filter_basis="taken",
         date_from=None,
@@ -504,6 +524,7 @@ def get_illustration_stats(
         include_hidden=True,
         author_user_id=owner_user_id,
         query=None,
+        tag=None,
         sort="order",
         filter_basis="taken",
         date_from=None,

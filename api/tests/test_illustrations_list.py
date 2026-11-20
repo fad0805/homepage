@@ -11,6 +11,7 @@ from crud.illustrations import (
     get_all_illustrations,
     get_visible_illustrations,
 )
+from crud.tags import sync_illustration_tags
 from db.base import Base
 from models.illustrations import Illustration, IllustrationImage
 from models.tags import IllustrationTag, Tag
@@ -57,6 +58,32 @@ class IllustrationListTests(unittest.TestCase):
         )
         self.db.add(image)
         return image
+
+    def test_tag_filter_matches_exact_tag(self) -> None:
+        first = self._illustration("첫 번째")
+        second = self._illustration("두 번째")
+        first.tags = ["판타지"]
+        second.tags = ["판타지 소설"]
+        self.db.commit()
+        sync_illustration_tags(self.db, first)
+        sync_illustration_tags(self.db, second)
+        self.db.commit()
+
+        items, total = get_visible_illustrations(
+            self.db,
+            author_user_id=self.owner.id,
+            tag="판타지",
+        )
+        partial, partial_total = get_visible_illustrations(
+            self.db,
+            author_user_id=self.owner.id,
+            tag="판타",
+        )
+
+        self.assertEqual([item["title"] for item in items], ["첫 번째"])
+        self.assertEqual(total, 1)
+        self.assertEqual(partial, [])
+        self.assertEqual(partial_total, 0)
 
     def test_list_is_paginated_and_only_loads_page_images(self) -> None:
         for index in range(25):

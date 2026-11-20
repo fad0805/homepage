@@ -98,6 +98,7 @@ def read_illustrations(
     request: Request,
     response: Response,
     q: str | None = None,
+    tag: str | None = None,
     sort: str = "taken",
     filter_basis: str = Query("taken", alias="filter"),
     from_: date | None = Query(None, alias="from"),
@@ -117,6 +118,7 @@ def read_illustrations(
     common = {
         "author_user_id": get_default_author_id(db),
         "query": q,
+        "tag": tag,
         "sort": sort,
         "filter_basis": filter_basis,
         "date_from": date_from,

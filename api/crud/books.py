@@ -4,7 +4,7 @@ import re
 from datetime import datetime, timedelta, timezone
 
 from fastapi import HTTPException, status
-from sqlalchemy import String, and_, func, or_, select
+from sqlalchemy import String, and_, false, func, or_, select
 from sqlalchemy.orm import Session, contains_eager, load_only
 
 from core.mastodon import maybe_notify_chapter
@@ -359,27 +359,46 @@ def _serialize_chapter(
 
 
 # Book CRUD
-def _book_tag_match(db: Session, pattern: str):
-    """Match a tag substring without materializing book rows in Python."""
+def _book_tag_values(db: Session):
+    """Expand the JSON tag array into a table of values, when supported."""
     dialect = db.bind.dialect.name if db.bind is not None else None
     if dialect == "sqlite":
         # SQLAlchemy's JSON serializer escapes non-ASCII tags in SQLite text,
         # so a plain cast cannot match Korean tags. json_each decodes them.
-        tags = func.json_each(Book.tags).table_valued("value").alias("book_tag")
-    elif dialect == "postgresql":
-        # The same escaping can be present in stored json text, so expand the
-        # array instead of matching the serialized JSON blob.
-        tags = (
+        return func.json_each(Book.tags).table_valued("value").alias("book_tag")
+    if dialect == "postgresql":
+        return (
             func.json_array_elements_text(Book.tags)
             .table_valued("value")
             .alias("book_tag")
         )
-    else:
+    return None
+
+
+def _book_tag_match(db: Session, pattern: str):
+    """Match a tag substring without materializing book rows in Python."""
+    tags = _book_tag_values(db)
+    if tags is None:
         return func.cast(Book.tags, String).ilike(pattern, escape="\\")
     return Book.id.in_(
         select(Book.id)
         .select_from(tags)
         .where(func.lower(tags.c.value).like(pattern, escape="\\"))
+    )
+
+
+def _book_has_tag(db: Session, tag: str):
+    """Match an exact (case-insensitive) tag on a book."""
+    normalized = tag.strip().lower()
+    if not normalized:
+        return false()
+    tags = _book_tag_values(db)
+    if tags is None:
+        return func.cast(Book.tags, String).ilike(f"%{normalized}%")
+    return Book.id.in_(
+        select(Book.id)
+        .select_from(tags)
+        .where(func.lower(tags.c.value) == normalized)
     )
 
 
@@ -395,6 +414,7 @@ def _build_book_query(
     granted_books: frozenset[int] = frozenset(),
     include_chapter_matches: bool = False,
     query: str | None = None,
+    tag: str | None = None,
 ):
     books_query = (
         db.query(Book)
@@ -467,6 +487,9 @@ def _build_book_query(
                 field_match = or_(field_match, Book.id.in_(chapter_book_ids))
             books_query = books_query.filter(field_match)
 
+    if tag is not None:
+        books_query = books_query.filter(_book_has_tag(db, tag))
+
     return books_query.order_by(Book.order, Book.id)
 
 
@@ -484,6 +507,7 @@ def _get_books_page(
     granted_books: frozenset[int] = frozenset(),
     include_chapter_matches: bool = False,
     query: str | None = None,
+    tag: str | None = None,
 ) -> tuple[list[dict], int]:
     books_query = _build_book_query(
         db,
@@ -496,6 +520,7 @@ def _get_books_page(
         granted_books=granted_books,
         include_chapter_matches=include_chapter_matches,
         query=query,
+        tag=tag,
     )
     total = books_query.order_by(None).count()
     if page is not None:
@@ -527,6 +552,7 @@ def get_all_books(
     granted_books: frozenset[int] = frozenset(),
     include_chapter_matches: bool = False,
     query: str | None = None,
+    tag: str | None = None,
 ):
     books, _ = _get_books_page(
         db,
@@ -541,6 +567,7 @@ def get_all_books(
         granted_books=granted_books,
         include_chapter_matches=include_chapter_matches,
         query=query,
+        tag=tag,
     )
     return books
 
@@ -559,6 +586,7 @@ def get_books_page(
     granted_books: frozenset[int] = frozenset(),
     include_chapter_matches: bool = False,
     query: str | None = None,
+    tag: str | None = None,
 ) -> tuple[list[dict], int]:
     """Return one page of books and the total, both computed in the database."""
     return _get_books_page(
@@ -574,6 +602,7 @@ def get_books_page(
         granted_books=granted_books,
         include_chapter_matches=include_chapter_matches,
         query=query,
+        tag=tag,
     )
 
 
@@ -730,6 +759,7 @@ def _build_chapter_query(
     book_id: int | None = None,
     pinned: bool | None = None,
     query: str | None = None,
+    tag: str | None = None,
     include_body: bool = True,
     ids_only: bool = False,
     newest_first: bool = False,
@@ -883,6 +913,20 @@ def _build_chapter_query(
                 body_match,
             )
         )
+    if tag is not None:
+        normalized = tag.strip().lower()
+        if not normalized:
+            chapters_query = chapters_query.filter(false())
+        else:
+            chapters_query = chapters_query.filter(
+                db.query(ChapterTag.chapter_id)
+                .join(Tag, Tag.id == ChapterTag.tag_id)
+                .filter(
+                    ChapterTag.chapter_id == Chapter.id,
+                    Tag.normalized_name == normalized,
+                )
+                .exists()
+            )
     return chapters_query
 
 
@@ -948,6 +992,7 @@ def get_all_chapters(
     book_id: int | None = None,
     pinned: bool | None = None,
     query: str | None = None,
+    tag: str | None = None,
     include_body: bool = True,
     ids_only: bool = False,
 ):
@@ -962,6 +1007,7 @@ def get_all_chapters(
         book_id=book_id,
         pinned=pinned,
         query=query,
+        tag=tag,
         include_body=include_body,
         ids_only=ids_only,
     )
@@ -991,6 +1037,7 @@ def get_chapters_page(
     book_id: int | None = None,
     pinned: bool | None = None,
     query: str | None = None,
+    tag: str | None = None,
     include_body: bool = True,
     ids_only: bool = False,
 ):
@@ -1007,6 +1054,7 @@ def get_chapters_page(
         book_id=book_id,
         pinned=pinned,
         query=query,
+        tag=tag,
         include_body=include_body,
         ids_only=ids_only,
         newest_first=True,

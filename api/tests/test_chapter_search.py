@@ -13,6 +13,7 @@ from crud.books import (
     get_chapters_page,
     search_chapters_for_owner,
 )
+from crud.tags import sync_chapter_tags
 from db.base import Base
 from models.books import Book, BookCategory, Chapter
 from models.users import User
@@ -52,6 +53,32 @@ class ChapterSearchTests(unittest.TestCase):
         )
         self.db.add(chapter)
         return chapter
+
+    def test_tag_filter_matches_exact_normalized_tag(self) -> None:
+        first = self._chapter(
+            "1화",
+            "본문",
+            owner_id=self.owner.id,
+            created_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
+        )
+        second = self._chapter(
+            "2화",
+            "본문",
+            owner_id=self.owner.id,
+            created_at=datetime(2026, 1, 2, tzinfo=timezone.utc),
+        )
+        first.tags = ["판타지"]
+        second.tags = ["판타지 소설"]
+        self.db.commit()
+        sync_chapter_tags(self.db, first)
+        sync_chapter_tags(self.db, second)
+        self.db.commit()
+
+        matches = get_all_chapters(self.db, tag="판타지")
+        partial = get_all_chapters(self.db, tag="판타")
+
+        self.assertEqual([chapter["title"] for chapter in matches], ["1화"])
+        self.assertEqual(partial, [])
 
     def test_search_matches_body_and_returns_snippet_only(self) -> None:
         self._chapter(
