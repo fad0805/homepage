@@ -97,7 +97,15 @@ nav#navbar a {
     line-height: 1;
 
     &.active {
-      font-size: 1.2rem;
+      color: var(--navbar-active-color);
+      font-size: 1.4rem;
+      width: 1.55rem;
+      height: 1.55rem;
+
+      .navbar-icon {
+        width: 1.35rem;
+        height: 1.35rem;
+      }
     }
   }
 }
