@@ -45,8 +45,17 @@ function compareBooksByOrder(a: Book, b: Book) {
   return a.order - b.order || a.id - b.id;
 }
 
-function compareChaptersByOrder(a: Chapter, b: Chapter) {
-  return a.order - b.order || a.id - b.id;
+function publicationTime(chapter: Chapter) {
+  return createdTime(chapter.published_at) ?? createdTime(chapter.created_at);
+}
+
+function compareChaptersByPublishedDesc(a: Chapter, b: Chapter) {
+  const aTime = publicationTime(a);
+  const bTime = publicationTime(b);
+  if (aTime === null && bTime === null) return b.id - a.id;
+  if (aTime === null) return 1;
+  if (bTime === null) return -1;
+  return bTime - aTime || b.id - a.id;
 }
 
 function compareChaptersByCreatedAsc(a: Chapter, b: Chapter) {
@@ -355,7 +364,7 @@ function ChapterDetail({
                     ) : null}
                   </span>
                   <span className="chapter-nearby__time">
-                    {formatDateTime(item.created_at)}
+                    {formatDateTime(item.published_at ?? item.created_at)}
                   </span>
                 </>
               );
@@ -773,8 +782,8 @@ export default function BooksClient({
     };
   }, [activeChapterId]);
 
-  // The bottom of a post shows two posts on either side in the book's
-  // original order. Load the full metadata list once per book so a chapter
+  // The bottom of a post shows two posts on either side by publication date
+  // (newest first). Load the full metadata list once per book so a chapter
   // that is not on the current page still gets correct neighbours.
   useEffect(() => {
     if (activeBookId === null || activeChapterId === null) {
@@ -815,7 +824,7 @@ export default function BooksClient({
       })
       .then((items) => {
         if (controller.signal.aborted) return;
-        const sorted = [...items].sort(compareChaptersByOrder);
+        const sorted = [...items].sort(compareChaptersByPublishedDesc);
         nearbyCacheRef.current.set(activeBookId, sorted);
         applyWindow(sorted);
       })
