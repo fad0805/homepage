@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 
 import "@/public/styles/floating-search.scss";
@@ -33,7 +32,6 @@ function SearchIcon() {
 
 export function FloatingSearch({ variant = "floating" }: FloatingSearchProps) {
   const router = useRouter();
-  const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const [value, setValue] = useState("");
   const wrapperRef = useRef<HTMLDivElement>(null);
@@ -72,8 +70,6 @@ export function FloatingSearch({ variant = "floating" }: FloatingSearchProps) {
       </Link>
     );
   }
-
-  if (pathname.startsWith("/admin")) return null;
 
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
