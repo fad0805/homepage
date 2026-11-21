@@ -80,7 +80,7 @@ export function BookmarkJournalEditModal({
         }),
       );
     }
-    if (rating !== currentRating) {
+    if (node.level === "day" && rating !== currentRating) {
       requests.push(
         apiFetch<unknown>("/api/bookmark/rating", {
           method: "PUT",
@@ -226,11 +226,13 @@ export function BookmarkJournalEditModal({
           ) : null}
 
           <div className="bookmark-journal-edit-rating">
-            <span>별점</span>
+            <span>
+              {node.level === "day" ? "별점" : "별점 (하위 평균)"}
+            </span>
             <CloverRating
               value={rating}
               onChange={setRating}
-              disabled={saving}
+              disabled={saving || node.level !== "day"}
             />
           </div>
 

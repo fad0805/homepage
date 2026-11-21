@@ -64,6 +64,7 @@ FREQUENCY_ORDER = {
     "yearly": 4,
 }
 QUARTER_START_MONTHS = {1, 4, 7, 10}
+RATING_LEVELS = ("day", "week", "month", "quarter", "year")
 KST = ZoneInfo("Asia/Seoul")
 SHORT_RETENTION_MONTHS = 3
 LONG_RETENTION_MONTHS = 36
@@ -157,6 +158,68 @@ def _quarter_start(value: date) -> date:
 
 def _year_start(value: date) -> date:
     return date(value.year, 1, 1)
+
+
+def _week_group_date(week_start: date) -> date:
+    """A week belongs to the month containing its Thursday."""
+    return week_start + timedelta(days=3)
+
+
+def _rating_parent_start(level: str, period_start: date) -> date:
+    if level == "day":
+        return _week_start(period_start)
+    if level == "week":
+        return _month_start(_week_group_date(period_start))
+    if level == "month":
+        return _quarter_start(period_start)
+    return _year_start(period_start)
+
+
+def build_derived_ratings(
+    ratings: list[BookmarkRating],
+) -> dict[tuple[str, date], tuple[int, float]]:
+    """Derive larger-period ratings by averaging the level below them."""
+    grouped: dict[str, dict[date, list[float]]] = {
+        level: {} for level in RATING_LEVELS
+    }
+    for rating in ratings:
+        grouped["day"].setdefault(rating.period_start, []).append(
+            float(rating.rating)
+        )
+
+    for index, level in enumerate(RATING_LEVELS[1:], start=1):
+        child_level = RATING_LEVELS[index - 1]
+        for period_start, values in grouped[child_level].items():
+            average = sum(values) / len(values)
+            parent_start = _rating_parent_start(child_level, period_start)
+            grouped[level].setdefault(parent_start, []).append(average)
+
+    derived: dict[tuple[str, date], tuple[int, float]] = {}
+    for level in RATING_LEVELS:
+        for period_start, values in grouped[level].items():
+            derived[(level, period_start)] = (
+                len(values),
+                sum(values) / len(values),
+            )
+    return derived
+
+
+def derived_rating_read(
+    level: str,
+    period_start: date,
+    average: float,
+) -> dict[str, Any]:
+    """Build a read-only rating payload for a computed period."""
+    timestamp = datetime.combine(period_start, datetime.min.time())
+    return {
+        "id": 0,
+        "period_type": level,
+        "period_start": period_start,
+        "rating": int(average + 0.5),
+        "created_at": timestamp,
+        "updated_at": timestamp,
+        "derived": True,
+    }
 
 
 def _month_has_day(year: int, month: int, day: int) -> bool:

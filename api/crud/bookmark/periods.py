@@ -401,15 +401,37 @@ def get_period(
         )
         .first()
     )
-    rating = (
-        db.query(BookmarkRating)
-        .filter(
-            BookmarkRating.user_id == user_id,
-            BookmarkRating.period_type == period_type,
-            BookmarkRating.period_start == period_start,
+    if period_type == "day":
+        rating = (
+            db.query(BookmarkRating)
+            .filter(
+                BookmarkRating.user_id == user_id,
+                BookmarkRating.period_type == "day",
+                BookmarkRating.period_start == period_start,
+            )
+            .first()
         )
-        .first()
-    )
+    else:
+        day_ratings = (
+            db.query(BookmarkRating)
+            .filter(
+                BookmarkRating.user_id == user_id,
+                BookmarkRating.period_type == "day",
+                BookmarkRating.period_start >= period_start
+                - timedelta(days=6),
+                BookmarkRating.period_start <= period_end
+                + timedelta(days=6),
+            )
+            .all()
+        )
+        info = build_derived_ratings(day_ratings).get(
+            (period_type, period_start)
+        )
+        rating = (
+            derived_rating_read(period_type, period_start, info[1])
+            if info is not None
+            else None
+        )
     review = (
         db.query(BookmarkReview)
         .filter(

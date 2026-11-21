@@ -208,6 +208,7 @@ export default function BookmarkClient({ username }: { username: string }) {
     ratingDraft,
     setRatingDraft,
     ratingSaving,
+    ratingEditable,
     reviewContent,
     setReviewContent,
     reviewSaving,
@@ -1114,18 +1115,24 @@ export default function BookmarkClient({ username }: { username: string }) {
                       <CloverRating
                         value={ratingDraft}
                         onChange={handleRatingChange}
-                        disabled={ratingSaving}
+                        disabled={ratingSaving || !ratingEditable}
                       />
-                      <button
-                        type="button"
-                        className="bookmark-primary bookmark-rating-save"
-                        disabled={
-                          ratingSaving || ratingDraft === rating
-                        }
-                        onClick={() => void handleSaveRating()}
-                      >
-                        {ratingSaving ? "저장 중..." : "저장"}
-                      </button>
+                      {ratingEditable ? (
+                        <button
+                          type="button"
+                          className="bookmark-primary bookmark-rating-save"
+                          disabled={
+                            ratingSaving || ratingDraft === rating
+                          }
+                          onClick={() => void handleSaveRating()}
+                        >
+                          {ratingSaving ? "저장 중..." : "저장"}
+                        </button>
+                      ) : (
+                        <span className="bookmark-rating-derived">
+                          하위 평균
+                        </span>
+                      )}
                     </div>
                     {reviewSaved ? (
                       <span className="bookmark-saved">저장됨</span>

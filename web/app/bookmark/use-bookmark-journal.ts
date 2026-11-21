@@ -37,6 +37,7 @@ export function useBookmarkJournal({
   const [reviewContent, setReviewContent] = useState("");
   const [reviewSaving, setReviewSaving] = useState(false);
   const [reviewSaved, setReviewSaved] = useState(false);
+  const ratingEditable = recordPeriodType === "day";
 
   const applyPeriod = (next: BookmarkPeriod) => {
     setGoalContent(next.goal?.content ?? "");
@@ -81,7 +82,7 @@ export function useBookmarkJournal({
   };
 
   const handleRatingChange = (nextRating: number) => {
-    if (ratingSaving) return;
+    if (!ratingEditable || ratingSaving) return;
     setRatingDraft(nextRating);
   };
 
@@ -120,7 +121,7 @@ export function useBookmarkJournal({
   };
 
   const handleSaveRating = async () => {
-    if (ratingSaving || ratingDraft === rating) return;
+    if (!ratingEditable || ratingSaving || ratingDraft === rating) return;
     setRatingSaving(true);
     onError(null);
     try {
@@ -202,6 +203,7 @@ export function useBookmarkJournal({
     ratingDraft,
     setRatingDraft,
     ratingSaving,
+    ratingEditable,
     reviewContent,
     setReviewContent,
     reviewSaving,

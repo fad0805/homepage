@@ -126,6 +126,7 @@ export interface BookmarkRating {
   rating: number;
   created_at: string;
   updated_at: string;
+  derived?: boolean;
 }
 
 export interface BookmarkReview {

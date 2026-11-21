@@ -1,7 +1,9 @@
 import unittest
 from datetime import date, time
 
-from crud.bookmark.journal import get_journal_tree
+from fastapi import HTTPException
+
+from crud.bookmark.journal import get_journal_tree, save_rating
 from models.bookmark import (
     BookmarkGoal,
     BookmarkMoodTag,
@@ -9,6 +11,7 @@ from models.bookmark import (
     BookmarkReview,
 )
 from models.users import User
+from schemas.bookmark import BookmarkRatingUpdate
 from tests.bookmark_test_base import BookmarkDatabaseTestCase
 
 
@@ -106,8 +109,11 @@ class BookmarkJournalTreeTests(
         year = tree["years"][0]
         self.assertEqual(year["goal"].content, "연간 목표")
         self.assertEqual(year["goal_count"], 5)
-        self.assertEqual(year["rating_count"], 4)
+        # Direct week/year ratings are no longer accepted; only daily ratings
+        # feed the hierarchy (2 and 5 -> 3.5 for every larger period).
+        self.assertEqual(year["rating_count"], 1)
         self.assertEqual(year["average_rating"], 3.5)
+        self.assertEqual(year["rating"]["rating"], 4)
 
         quarter = year["children"][0]
         self.assertEqual(quarter["label"], "2026년 4분기")
@@ -246,3 +252,46 @@ class BookmarkJournalTreeTests(
         self.assertEqual(day["level"], "day")
         self.assertEqual(day["goal"].wake_time, time(7, 5))
         self.assertEqual(day["goal"].mood_tag_id, tag.id)
+
+    def test_larger_ratings_average_one_level_below(self):
+        self.add_record("day", date(2026, 1, 5), rating=1)
+        self.add_record("day", date(2026, 1, 6), rating=3)
+        self.add_record("day", date(2026, 2, 2), rating=5)
+
+        tree = get_journal_tree(
+            self.db,
+            self.user_id,
+            decade_start=date(2026, 1, 1),
+        )
+
+        year = tree["years"][0]
+        self.assertEqual(year["average_rating"], 3.5)
+        self.assertEqual(year["rating_count"], 1)
+        quarter = year["children"][0]
+        self.assertEqual(quarter["average_rating"], 3.5)
+        months = {
+            month["label"]: month for month in quarter["children"]
+        }
+        self.assertEqual(months["2026년 1월"]["average_rating"], 2)
+        self.assertEqual(months["2026년 2월"]["average_rating"], 5)
+        january_week = months["2026년 1월"]["children"][0]
+        self.assertEqual(january_week["average_rating"], 2)
+        self.assertEqual(january_week["rating_count"], 2)
+        self.assertEqual(january_week["rating"]["rating"], 2)
+        self.assertEqual(
+            [day["rating"].rating for day in january_week["children"]],
+            [1, 3],
+        )
+
+    def test_direct_non_day_rating_is_rejected(self):
+        with self.assertRaises(HTTPException) as raised:
+            save_rating(
+                self.db,
+                BookmarkRatingUpdate(
+                    period_type="week",
+                    period_start=date(2026, 1, 5),
+                    rating=5,
+                ),
+                self.user_id,
+            )
+        self.assertEqual(raised.exception.status_code, 400)

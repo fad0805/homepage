@@ -7,11 +7,6 @@ WEEKDAYS = ("월", "화", "수", "목", "금", "토", "일")
 WEEK_ORDINALS = ("첫", "둘", "셋", "넷", "다섯")
 
 
-def _week_group_date(week_start: date) -> date:
-    """A week belongs to the month containing its Thursday."""
-    return week_start + timedelta(days=3)
-
-
 def _period_group_date(level: str, period_start: date) -> date:
     if level == "day":
         period_start -= timedelta(days=period_start.weekday())
@@ -70,12 +65,13 @@ def get_journal_tree(
         db.query(BookmarkRating)
         .filter(
             BookmarkRating.user_id == user_id,
-            BookmarkRating.period_type.in_(JOURNAL_LEVELS),
+            BookmarkRating.period_type == "day",
             BookmarkRating.period_start >= query_start,
             BookmarkRating.period_start <= query_end,
         )
         .all()
     )
+    derived_ratings = build_derived_ratings(list(ratings))
     reviews = (
         db.query(BookmarkReview)
         .filter(
@@ -120,6 +116,8 @@ def get_journal_tree(
                 "goal": None,
                 "rating": None,
                 "review": None,
+                "rating_count": 0,
+                "average_rating": None,
                 "children": {},
             }
             nodes[key] = node
@@ -210,8 +208,26 @@ def get_journal_tree(
     ):
         node = ensure_chain(level, period_start)
         node["goal"] = goals_by_key.get((level, period_start))
-        node["rating"] = ratings_by_key.get((level, period_start))
         node["review"] = reviews_by_key.get((level, period_start))
+        if level == "day":
+            rating = ratings_by_key.get((level, period_start))
+            node["rating"] = rating
+            if rating is not None:
+                node["rating_count"] = 1
+                node["average_rating"] = float(rating.rating)
+
+    for (level, period_start), node in nodes.items():
+        if level == "day":
+            continue
+        info = derived_ratings.get((level, period_start))
+        if info is None:
+            continue
+        rating_count, average = info
+        node["rating"] = derived_rating_read(
+            level, period_start, average
+        )
+        node["rating_count"] = rating_count
+        node["average_rating"] = round(average, 2)
 
     def has_record(node: dict[str, Any]) -> bool:
         goal = node["goal"]
@@ -243,9 +259,7 @@ def get_journal_tree(
         }
         return node
 
-    def aggregate(
-        node: dict[str, Any],
-    ) -> tuple[int, int, int, int, int]:
+    def aggregate(node: dict[str, Any]) -> tuple[int, int]:
         goal_count = (
             1
             if node["goal"] is not None
@@ -258,35 +272,13 @@ def get_journal_tree(
             and node["review"].content.strip()
             else 0
         )
-        rating_count = 1 if node["rating"] else 0
-        rating_sum = node["rating"].rating if node["rating"] else 0
         for child in node["children"].values():
-            (
-                child_goals,
-                child_reviews,
-                child_ratings,
-                child_rating_sum,
-                _child_total,
-            ) = aggregate(child)
+            child_goals, child_reviews = aggregate(child)
             goal_count += child_goals
             review_count += child_reviews
-            rating_count += child_ratings
-            rating_sum += child_rating_sum
         node["goal_count"] = goal_count
         node["review_count"] = review_count
-        node["rating_count"] = rating_count
-        node["average_rating"] = (
-            round(rating_sum / rating_count, 2)
-            if rating_count
-            else None
-        )
-        return (
-            goal_count,
-            review_count,
-            rating_count,
-            rating_sum,
-            len(node["children"]),
-        )
+        return goal_count, review_count
 
     def finalize(node: dict[str, Any]) -> dict[str, Any]:
         return {
@@ -389,6 +381,11 @@ def save_rating(
     user_id: int,
 ) -> BookmarkRating | None:
     _validate_period(payload.period_type, payload.period_start)
+    if payload.period_type != "day":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="별점은 일별 기록에서만 입력할 수 있습니다.",
+        )
     rating = (
         db.query(BookmarkRating)
         .filter(

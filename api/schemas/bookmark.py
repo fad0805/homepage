@@ -336,6 +336,7 @@ class BookmarkRatingRead(BaseModel):
     rating: int
     created_at: datetime
     updated_at: datetime
+    derived: bool = False
 
     class Config:
         from_attributes = True
