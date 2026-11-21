@@ -770,7 +770,12 @@ export function RichTextEditor({
                 disabled={!editor}
                 onChange={(event) => {
                   const size = event.target.value;
-                  if (size) {
+                  // 13pt is Scrivener's logical default. Outside the manuscript
+                  // workspace there is no -3pt CSS, so writing it explicitly
+                  // makes the text jump larger. Clear the override instead and
+                  // let the editor's base size (already 10pt for published
+                  // chapters) take over.
+                  if (size && size !== "13pt") {
                     editor?.chain().focus().setFontSize(size).run();
                   } else {
                     editor?.chain().focus().unsetFontSize().run();
