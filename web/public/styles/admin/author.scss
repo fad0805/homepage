@@ -114,12 +114,12 @@
 /* Keep the chapter editor's reading typography in step with the public view. */
 .admin-editor--chapter {
   .admin-editor__content .tiptap {
-    font-size: 0.92rem;
+    font-size: 10pt;
     line-height: 1.7;
 
     p {
       margin: 0 0 0.7rem;
-      font-size: 0.92rem;
+      font-size: 10pt;
       line-height: 1.7;
     }
 
@@ -130,12 +130,12 @@
 
     ul,
     ol {
-      font-size: 0.92rem;
+      font-size: 10pt;
       line-height: 1.7;
     }
 
     blockquote {
-      font-size: 0.9rem;
+      font-size: 9.5pt;
       line-height: 1.65;
     }
 
@@ -484,6 +484,7 @@
   .tiptap {
     min-height: 20rem;
     outline: none;
+    font-size: 10pt;
     white-space: pre-wrap;
     white-space: break-spaces;
     tab-size: 4;

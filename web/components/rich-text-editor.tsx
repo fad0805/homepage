@@ -258,10 +258,10 @@ export function RichTextEditor({
   onEditorReady,
   scrollResetKey,
 }: RichTextEditorProps) {
-  // Published chapter bodies already carry the 3pt reduction baked in, so the
-  // picker writes the final size there. The manuscript workspace keeps logical
-  // Scrivener sizes and scales them down with CSS instead.
-  const fontSizeOffset = variant === "chapter" ? -3 : 0;
+  // All editors expose logical Scrivener sizes. Only the manuscript workspace
+  // keeps those values in the document and scales them with CSS; every other
+  // editor stores the reduced size directly so the public HTML matches.
+  const fontSizeOffset = variant === "workspace" ? 0 : -3;
   const defaultFontSizeValue = storedFontSize(DEFAULT_FONT_SIZE, fontSizeOffset);
 
   const onChangeRef = useRef(onChange);
