@@ -18,7 +18,13 @@ import { PublicToc } from "@/components/public-toc";
 import { RssSubscribe } from "@/components/rss-subscribe";
 import { formatDateTime } from "@/lib/datetime";
 import { tagSearchHref } from "@/lib/search";
-import type { Book, BookCategory, Chapter, TocNode } from "./types";
+import {
+  CHAPTER_PREVIEW_STORAGE_KEY,
+  type Book,
+  type BookCategory,
+  type Chapter,
+  type TocNode,
+} from "./types";
 
 import "@/public/styles/books.scss";
 
@@ -418,6 +424,7 @@ interface BooksClientProps {
   initialChapterId: number | null;
   initialIsMobile: boolean;
   initialUnlockedCategoryIds?: number[];
+  previewMode?: boolean;
 }
 
 export default function BooksClient({
@@ -429,6 +436,7 @@ export default function BooksClient({
   initialChapterId,
   initialIsMobile,
   initialUnlockedCategoryIds = [],
+  previewMode = false,
 }: BooksClientProps) {
   const { isLoggedIn, isAdmin } = useAuth();
   const books = initialBooks;
@@ -461,6 +469,9 @@ export default function BooksClient({
   });
   const [activeChapterId, setActiveChapterId] = useState<number | null>(
     initialChapterId,
+  );
+  const [previewChapter, setPreviewChapter] = useState<Chapter | null>(
+    null,
   );
   const [fallbackChapter, setFallbackChapter] = useState<Chapter | null>(null);
   const [chapterBody, setChapterBody] = useState<{
@@ -507,6 +518,32 @@ export default function BooksClient({
     bookId: activeBookId,
     chapterId: activeChapterId,
   });
+
+  // The chapter editor writes the current draft here before opening this page
+  // in a new tab. Preview mode renders that payload instead of stored data.
+  useEffect(() => {
+    if (!previewMode) return;
+    try {
+      const raw = localStorage.getItem(CHAPTER_PREVIEW_STORAGE_KEY);
+      if (!raw) return;
+      const payload = JSON.parse(raw) as Chapter;
+      if (
+        !payload ||
+        typeof payload.id !== "number" ||
+        typeof payload.book_id !== "number"
+      ) {
+        return;
+      }
+      setPreviewChapter(payload);
+      setActiveBookId(payload.book_id);
+      setActiveChapterId(payload.id);
+      setFallbackChapter(null);
+      setChapterBody(null);
+      setChapterBodyLoading(false);
+    } catch {
+      // Ignore malformed preview payloads and fall back to stored data.
+    }
+  }, [previewMode]);
 
   // Book-level search runs on the API and matches only book metadata/tags.
   // Chapter matches are fetched separately below so books are never marked as
@@ -742,6 +779,11 @@ export default function BooksClient({
       setChapterBodyLoading(false);
       return;
     }
+    if (previewChapter && activeChapterId === previewChapter.id) {
+      setChapterBody(null);
+      setChapterBodyLoading(false);
+      return;
+    }
     const known = chapterLookupRef.current.get(activeChapterId);
     if (known?.locked) {
       setChapterBody(null);
@@ -781,7 +823,7 @@ export default function BooksClient({
     return () => {
       cancelled = true;
     };
-  }, [activeChapterId]);
+  }, [activeChapterId, previewChapter]);
 
   // The bottom of a post shows two posts on either side by publication date
   // (newest first). Load the full metadata list once per book so a chapter
@@ -875,12 +917,13 @@ export default function BooksClient({
 
   useEffect(() => {
     if (activeChapterId === null) return;
+    if (previewChapter && activeChapterId === previewChapter.id) return;
     fetch(`/api/chapters/${activeChapterId}/view`, {
       method: "POST",
     }).catch(() => {
       // View counting must never break the reading experience.
     });
-  }, [activeChapterId]);
+  }, [activeChapterId, previewChapter]);
 
   const visibleBooks = useMemo(
     () =>
@@ -1016,10 +1059,12 @@ export default function BooksClient({
 
   const activeChapter =
     activeBook && activeChapterId !== null
-      ? [...activePinnedChapters, ...activeChapters].find(
-          (chapter) => chapter.id === activeChapterId,
-        ) ??
-        (fallbackChapter?.id === activeChapterId ? fallbackChapter : null)
+      ? previewChapter?.id === activeChapterId
+        ? previewChapter
+        : [...activePinnedChapters, ...activeChapters].find(
+            (chapter) => chapter.id === activeChapterId,
+          ) ??
+          (fallbackChapter?.id === activeChapterId ? fallbackChapter : null)
       : null;
 
   useEffect(() => {
@@ -1555,7 +1600,7 @@ export default function BooksClient({
           >
             ← 게시글 목록
           </button>
-          {isLoggedIn ? (
+          {isLoggedIn && !previewMode ? (
             <Link
               className="books-detail__edit"
               href={`/admin/books/${activeBook.id}/chapters/${activeChapter.id}`}
@@ -1568,7 +1613,11 @@ export default function BooksClient({
           chapter={{
             ...activeChapter,
             body:
-              chapterBody?.id === activeChapter.id ? chapterBody.body : null,
+              previewChapter?.id === activeChapter.id
+                ? previewChapter.body
+                : chapterBody?.id === activeChapter.id
+                  ? chapterBody.body
+                  : null,
           }}
           bookTitle={activeBook.title}
           bodyLoading={chapterBodyLoading}

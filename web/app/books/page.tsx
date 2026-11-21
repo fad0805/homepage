@@ -42,11 +42,15 @@ export default async function BooksPage({
   searchParams: Promise<{
     book?: string | string[];
     chapter?: string | string[];
+    preview?: string | string[];
   }>;
 }) {
   const params = await searchParams;
   const requestedBookId = parseId(params.book);
   const initialChapterId = parseId(params.chapter);
+  const previewParam = Array.isArray(params.preview)
+    ? params.preview[0]
+    : params.preview;
   const headerStore = await headers();
   const userAgent = headerStore.get("user-agent") ?? "";
   const initialIsMobile = /Mobi|Android|iPhone|iPad|iPod/i.test(userAgent);
@@ -146,6 +150,7 @@ export default async function BooksPage({
       initialChapterId={initialChapterId}
       initialIsMobile={initialIsMobile}
       initialUnlockedCategoryIds={[...grants.categories]}
+      previewMode={previewParam === "1"}
     />
   );
 }

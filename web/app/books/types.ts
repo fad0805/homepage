@@ -1,3 +1,5 @@
+export const CHAPTER_PREVIEW_STORAGE_KEY = "homepage:chapter-preview";
+
 export interface BookCategory {
   id: number;
   name: string;

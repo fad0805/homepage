@@ -13,10 +13,10 @@ import { useParams, useRouter } from "next/navigation";
 import { RichTextEditor } from "@/components/rich-text-editor";
 import { TagInput } from "@/components/tag-input";
 import { TocManager } from "@/components/toc-manager";
+import { CHAPTER_PREVIEW_STORAGE_KEY } from "@/app/books/types";
+import type { Chapter } from "@/app/books/types";
 import { apiFetch } from "@/lib/api";
 import { formatDateTime } from "@/lib/datetime";
-
-import { ChapterSearch, type ChapterSearchResult } from "./chapter-search";
 
 import "@/public/styles/admin/books.scss";
 
@@ -155,7 +155,6 @@ export default function AdminChapterEdit() {
   const [draftViewOpen, setDraftViewOpen] = useState(false);
   const [autosaveReady, setAutosaveReady] = useState(false);
   const [notice, setNotice] = useState<Notice | null>(null);
-  const [searchOpen, setSearchOpen] = useState(false);
 
   const noticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastSavedSignatureRef = useRef<string | null>(null);
@@ -337,42 +336,6 @@ export default function AdminChapterEdit() {
     load();
   }, [load]);
 
-  const navigateToChapter = useCallback(
-    (target: { id: number; book_id: number }) => {
-      if (target.id === chapterId) return;
-      const signature = getDraftSignature({
-        title,
-        subtitle,
-        body,
-        tagsInput,
-        visible,
-        pinned,
-        publishedAt,
-        targetBookId,
-      });
-      if (signature !== lastSavedSignatureRef.current) {
-        const confirmed = window.confirm(
-          "저장하지 않은 변경 내용이 있습니다. 다른 글으로 이동할까요?",
-        );
-        if (!confirmed) return;
-      }
-      setSearchOpen(false);
-      router.push(`/admin/books/${target.book_id}/chapters/${target.id}`);
-    },
-    [
-      body,
-      chapterId,
-      pinned,
-      publishedAt,
-      router,
-      subtitle,
-      tagsInput,
-      targetBookId,
-      title,
-      visible,
-    ],
-  );
-
   useEffect(() => {
     if (!draftPreviewOpen && !draftViewOpen) return;
 
@@ -445,6 +408,63 @@ export default function AdminChapterEdit() {
     setDraftPreviewOpen(false);
     setAutosaveReady(true);
   }, []);
+
+  const handleOpenViewPreview = useCallback(() => {
+    const selectedBook =
+      books.find((item) => item.id === targetBookId) ??
+      (book?.id === targetBookId ? book : null);
+    const parsedPublishedAt = publishedAt
+      ? new Date(publishedAt)
+      : null;
+    const payload: Chapter = {
+      id: chapterId ?? 0,
+      book_id: targetBookId,
+      title: title.trim() || "제목 없음",
+      subtitle: subtitle.trim() || null,
+      body,
+      tags: parseTags(tagsInput),
+      order: chapter?.order ?? 0,
+      visible,
+      pinned,
+      protected: chapterProtected,
+      view_count: chapter?.view_count ?? 0,
+      created_at: chapter?.created_at ?? null,
+      published_at:
+        parsedPublishedAt && !Number.isNaN(parsedPublishedAt.getTime())
+          ? parsedPublishedAt.toISOString()
+          : (chapter?.published_at ?? null),
+      book: {
+        id: targetBookId,
+        title: selectedBook?.title ?? "책",
+      },
+    };
+    try {
+      localStorage.setItem(
+        CHAPTER_PREVIEW_STORAGE_KEY,
+        JSON.stringify(payload),
+      );
+    } catch {
+      // Preview still opens without the draft payload if storage is blocked.
+    }
+    window.open(
+      `/books?book=${targetBookId}&preview=1`,
+      "_blank",
+      "noopener,noreferrer",
+    );
+  }, [
+    book,
+    books,
+    body,
+    chapter,
+    chapterId,
+    chapterProtected,
+    pinned,
+    publishedAt,
+    subtitle,
+    targetBookId,
+    title,
+    visible,
+  ]);
 
   const handleDeleteDraft = useCallback(async () => {
     if (!draftKey || draftDeleting) return;
@@ -934,9 +954,9 @@ export default function AdminChapterEdit() {
               <button
                 type="button"
                 className="admin-button"
-                onClick={() => setSearchOpen(true)}
+                onClick={handleOpenViewPreview}
               >
-                전체 검색
+                미리보기
               </button>
             </div>
           </header>
@@ -1266,11 +1286,6 @@ export default function AdminChapterEdit() {
         </div>
       ) : null}
 
-      <ChapterSearch
-        open={searchOpen}
-        onClose={() => setSearchOpen(false)}
-        onSelect={(result: ChapterSearchResult) => navigateToChapter(result)}
-      />
     </div>
   );
 }
