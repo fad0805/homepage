@@ -31,6 +31,16 @@ interface Book {
 
 type Notice = { type: "success" | "error"; text: string };
 
+function isStandaloneWebApp(): boolean {
+  if (typeof window === "undefined") return false;
+  return (
+    window.matchMedia?.("(display-mode: standalone)").matches === true ||
+    window.matchMedia?.("(display-mode: minimal-ui)").matches === true ||
+    window.matchMedia?.("(display-mode: fullscreen)").matches === true ||
+    (window.navigator as Navigator & { standalone?: boolean }).standalone === true
+  );
+}
+
 export default function AdminManuscriptPage() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [query, setQuery] = useState("");
@@ -44,6 +54,11 @@ export default function AdminManuscriptPage() {
   const [bookLoading, setBookLoading] = useState(false);
   const [fileBusyId, setFileBusyId] = useState<number | null>(null);
   const [importing, setImporting] = useState(false);
+  const [standalone, setStandalone] = useState(false);
+
+  useEffect(() => {
+    setStandalone(isStandaloneWebApp());
+  }, []);
 
   const load = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
@@ -213,8 +228,11 @@ export default function AdminManuscriptPage() {
   const manuscriptHref = (project: Project) =>
     `/manuscript?project=${project.id}`;
 
-  // Anchors let the browser handle new-tab navigation. window.open() is
-  // unreliable in installed/PWA contexts and can leave an empty window.
+  // Installed PWAs have no tab strip; a _blank navigation can fall back to the
+  // existing window. Stay in-app there, and use a real new tab in browsers.
+  const workspaceTarget = standalone ? undefined : "_blank";
+  const workspaceRel = standalone ? undefined : "noopener noreferrer";
+
   const handleOpenClick =
     (project: Project) => (event: ReactMouseEvent<HTMLAnchorElement>) => {
       if (project.import_status !== "importing") return;
@@ -231,7 +249,7 @@ export default function AdminManuscriptPage() {
         <div>
           <h1>원고 관리</h1>
           <p className="admin-manuscript-hint">
-            프로젝트 이름을 클릭하면 새 탭에서 원고 편집기가 열립니다.
+            프로젝트 이름을 클릭하면 원고 편집기가 열립니다.
           </p>
         </div>
         <div className="admin-manuscript-actions">
@@ -333,8 +351,8 @@ export default function AdminManuscriptPage() {
                 <a
                   className="admin-manuscript-title"
                   href={manuscriptHref(project)}
-                  target="_blank"
-                  rel="noopener noreferrer"
+                  target={workspaceTarget}
+                  rel={workspaceRel}
                   onClick={handleOpenClick(project)}
                   aria-disabled={project.import_status === "importing"}
                   title={project.import_error ?? "클릭하여 편집기에서 열기"}
@@ -366,8 +384,8 @@ export default function AdminManuscriptPage() {
                 </button>
                 <a
                   href={manuscriptHref(project)}
-                  target="_blank"
-                  rel="noopener noreferrer"
+                  target={workspaceTarget}
+                  rel={workspaceRel}
                   onClick={handleOpenClick(project)}
                   aria-disabled={project.import_status === "importing"}
                 >
@@ -375,8 +393,8 @@ export default function AdminManuscriptPage() {
                 </a>
                 <a
                   href={manuscriptHref(project)}
-                  target="_blank"
-                  rel="noopener noreferrer"
+                  target={workspaceTarget}
+                  rel={workspaceRel}
                   onClick={handleOpenClick(project)}
                   aria-disabled={project.import_status === "importing"}
                   title={project.updated_at ?? undefined}
