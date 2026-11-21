@@ -271,13 +271,15 @@
 
 .admin-editor__font-size {
   display: inline-flex;
+  flex: 0 0 auto;
   align-items: center;
   gap: 0.25rem;
+  white-space: nowrap;
   color: var(--admin-muted);
   font-size: 0.72rem;
 
   select {
-    max-width: 6.5rem;
+    width: 7.2rem;
     padding: 0.3rem 0.4rem;
     border: 1px solid var(--admin-border);
     border-radius: 0.4rem;
@@ -293,8 +295,7 @@
     font-size: 0.75rem;
 
     select {
-      min-width: 4.4rem;
-      max-width: 4.8rem;
+      width: 6.6rem;
       padding: 0.28rem 0.4rem;
       font-size: 0.72rem;
     }
