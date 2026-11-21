@@ -978,8 +978,9 @@ p.admin-books-draft-preview-empty {
     }
 
     > .admin-book-card {
-      flex: 0 0 var(--admin-books-card-width);
+      flex: 0 0 auto;
       width: var(--admin-books-card-width);
+      min-width: var(--admin-books-card-width);
       max-width: none;
     }
   }
