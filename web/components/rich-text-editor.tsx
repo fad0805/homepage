@@ -39,6 +39,25 @@ const ALLOWED_IMAGE_TYPES = [
 
 export type EditorNotice = { type: "success" | "error"; text: string };
 
+const FONT_SIZE_OPTIONS = [
+  "10",
+  "11",
+  "12",
+  "13",
+  "14",
+  "16",
+  "18",
+  "21",
+  "24",
+  "30",
+  "36",
+];
+const DEFAULT_FONT_SIZE = "13";
+
+function storedFontSize(logicalPt: string, offset: number): string {
+  return `${Math.max(1, Number(logicalPt) + offset)}pt`;
+}
+
 interface RichTextEditorProps {
   value: string;
   onChange: (html: string) => void;
@@ -239,6 +258,12 @@ export function RichTextEditor({
   onEditorReady,
   scrollResetKey,
 }: RichTextEditorProps) {
+  // Published chapter bodies already carry the 3pt reduction baked in, so the
+  // picker writes the final size there. The manuscript workspace keeps logical
+  // Scrivener sizes and scales them down with CSS instead.
+  const fontSizeOffset = variant === "chapter" ? -3 : 0;
+  const defaultFontSizeValue = storedFontSize(DEFAULT_FONT_SIZE, fontSizeOffset);
+
   const onChangeRef = useRef(onChange);
   const onNoticeRef = useRef(onNotice);
   const contentRef = useRef<HTMLDivElement | null>(null);
@@ -765,35 +790,30 @@ export function RichTextEditor({
               <select
                 value={
                   (editor?.getAttributes("textStyle").fontSize as string) ??
-                  "13pt"
+                  defaultFontSizeValue
                 }
                 disabled={!editor}
                 onChange={(event) => {
-                  const size = event.target.value;
-                  // 13pt is Scrivener's logical default. Outside the manuscript
-                  // workspace there is no -3pt CSS, so writing it explicitly
-                  // makes the text jump larger. Clear the override instead and
-                  // let the editor's base size (already 10pt for published
-                  // chapters) take over.
-                  if (size && size !== "13pt") {
-                    editor?.chain().focus().setFontSize(size).run();
-                  } else {
+                  const stored = event.target.value;
+                  // 13pt is the logical default. Clearing the override keeps
+                  // the manuscript CSS size or the published chapter's baked
+                  // 10pt wrapper instead of writing a literal 13pt span.
+                  if (!stored || stored === defaultFontSizeValue) {
                     editor?.chain().focus().unsetFontSize().run();
+                  } else {
+                    editor?.chain().focus().setFontSize(stored).run();
                   }
                 }}
               >
                 <option value="">기본</option>
-                <option value="10pt">10pt</option>
-                <option value="11pt">11pt</option>
-                <option value="12pt">12pt</option>
-                <option value="13pt">13pt (기본)</option>
-                <option value="14pt">14pt</option>
-                <option value="16pt">16pt</option>
-                <option value="18pt">18pt</option>
-                <option value="21pt">21pt</option>
-                <option value="24pt">24pt</option>
-                <option value="30pt">30pt</option>
-                <option value="36pt">36pt</option>
+                {FONT_SIZE_OPTIONS.map((logical) => (
+                  <option
+                    key={logical}
+                    value={storedFontSize(logical, fontSizeOffset)}
+                  >
+                    {logical}pt{logical === DEFAULT_FONT_SIZE ? " (기본)" : ""}
+                  </option>
+                ))}
               </select>
             </label>
           ) : null}
