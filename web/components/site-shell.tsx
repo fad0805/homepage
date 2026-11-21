@@ -410,7 +410,6 @@ export function SiteShell({
               <Navbar />
             )}
             <div className="site-drawer__theme">
-              <span>테마</span>
               <FloatingSearch variant="drawer" />
               <ThemeToggle variant="drawer" />
             </div>
