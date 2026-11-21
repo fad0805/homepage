@@ -276,28 +276,28 @@
   gap: 0.25rem;
   white-space: nowrap;
   color: var(--admin-muted);
-  font-size: 0.72rem;
+  font-size: 0.68rem;
 
   select {
-    width: 7.2rem;
-    padding: 0.3rem 0.4rem;
+    width: 5.9rem;
+    padding: 0.25rem 0.35rem;
     border: 1px solid var(--admin-border);
     border-radius: 0.4rem;
     background: var(--admin-card-bg);
     color: var(--foreground);
     font: inherit;
-    font-size: 0.74rem;
+    font-size: 0.68rem;
     cursor: pointer;
   }
 
   @media (max-width: 600px) {
     gap: 0.3rem;
-    font-size: 0.75rem;
+    font-size: 0.68rem;
 
     select {
-      width: 6.6rem;
-      padding: 0.28rem 0.4rem;
-      font-size: 0.72rem;
+      width: 5.6rem;
+      padding: 0.24rem 0.32rem;
+      font-size: 0.66rem;
     }
   }
 }
