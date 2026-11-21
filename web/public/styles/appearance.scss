@@ -967,8 +967,8 @@ html[data-appearance='drawer'] .floating-search:not(.floating-search--drawer) {
 .site-drawer__theme {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
+  justify-content: flex-start;
+  gap: 0.4rem;
   margin-top: 1rem;
   padding-top: 0.9rem;
   border-top: 1px solid rgba(255, 255, 255, 0.14);
@@ -976,6 +976,10 @@ html[data-appearance='drawer'] .floating-search:not(.floating-search--drawer) {
   font-size: 0.68rem;
   font-weight: 700;
   letter-spacing: 0.08em;
+
+  > span {
+    margin-right: auto;
+  }
 }
 
 .site-drawer .theme-toggle.theme-toggle--drawer {
