@@ -202,7 +202,8 @@
     opacity: 0.75;
   }
 
-  > span {
+  > span,
+  > a {
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -210,12 +211,23 @@
   }
 
   &:not(.is-head) > span,
+  &:not(.is-head) > a,
   &:not(.is-head) .admin-manuscript-book {
     font-size: 0.9em;
   }
 
-  &:not(.is-head) > span {
+  &:not(.is-head) > span,
+  &:not(.is-head) > a {
     cursor: pointer;
+  }
+
+  > a {
+    color: inherit;
+    text-decoration: none;
+
+    &[aria-disabled='true'] {
+      cursor: not-allowed;
+    }
   }
 
   &:not(.is-head) > :nth-child(4) {

@@ -1,6 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type MouseEvent as ReactMouseEvent,
+} from "react";
 
 import { apiDownload, apiFetch } from "@/lib/api";
 
@@ -204,20 +210,20 @@ export default function AdminManuscriptPage() {
     }
   };
 
-  const openProject = (project: Project) => {
-    if (project.import_status === "importing") {
+  const manuscriptHref = (project: Project) =>
+    `/manuscript?project=${project.id}`;
+
+  // Anchors let the browser handle new-tab navigation. window.open() is
+  // unreliable in installed/PWA contexts and can leave an empty window.
+  const handleOpenClick =
+    (project: Project) => (event: ReactMouseEvent<HTMLAnchorElement>) => {
+      if (project.import_status !== "importing") return;
+      event.preventDefault();
       setNotice({
         type: "error",
         text: "아직 가져오는 중입니다. 준비가 끝나면 열 수 있습니다.",
       });
-      return;
-    }
-    window.open(
-      `/manuscript?project=${project.id}`,
-      "_blank",
-      "noopener,noreferrer",
-    );
-  };
+    };
 
   return (
     <div id="admin-manuscript">
@@ -324,17 +330,13 @@ export default function AdminManuscriptPage() {
                   project.import_status === "importing" ? " is-importing" : ""
                 }`}
               >
-                <span
+                <a
                   className="admin-manuscript-title"
-                  role="button"
-                  tabIndex={0}
-                  onClick={() => openProject(project)}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter" || event.key === " ") {
-                      event.preventDefault();
-                      openProject(project);
-                    }
-                  }}
+                  href={manuscriptHref(project)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={handleOpenClick(project)}
+                  aria-disabled={project.import_status === "importing"}
                   title={project.import_error ?? "클릭하여 편집기에서 열기"}
                 >
                   <span className="admin-manuscript-title-text">
@@ -353,7 +355,7 @@ export default function AdminManuscriptPage() {
                       가져오기 실패
                     </span>
                   ) : null}
-                </span>
+                </a>
                 <button
                   type="button"
                   className="admin-manuscript-book"
@@ -362,35 +364,27 @@ export default function AdminManuscriptPage() {
                 >
                   {project.linked_book_title ?? "연결된 책 없음"}
                 </button>
-                <span
-                  role="button"
-                  tabIndex={0}
-                  onClick={() => openProject(project)}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter" || event.key === " ") {
-                      event.preventDefault();
-                      openProject(project);
-                    }
-                  }}
+                <a
+                  href={manuscriptHref(project)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={handleOpenClick(project)}
+                  aria-disabled={project.import_status === "importing"}
                 >
                   {project.node_count}
-                </span>
-                <span
-                  role="button"
-                  tabIndex={0}
-                  onClick={() => openProject(project)}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter" || event.key === " ") {
-                      event.preventDefault();
-                      openProject(project);
-                    }
-                  }}
+                </a>
+                <a
+                  href={manuscriptHref(project)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={handleOpenClick(project)}
+                  aria-disabled={project.import_status === "importing"}
                   title={project.updated_at ?? undefined}
                 >
                   {project.updated_at
                     ? project.updated_at.slice(0, 19).replace("T", " ")
                     : "—"}
-                </span>
+                </a>
                 <div className="admin-manuscript-row-actions">
                   <button
                     type="button"
