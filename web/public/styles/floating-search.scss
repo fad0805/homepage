@@ -139,10 +139,19 @@ html[data-appearance='collapsible']
 
   .floating-search__popover {
     position: fixed;
-    right: auto;
+    right: calc(
+      1rem + env(safe-area-inset-right, 0px) + 2.75rem + 0.5rem
+    );
     bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
-    left: 50%;
-    transform: translateX(-50%);
+    left: calc(1rem + env(safe-area-inset-left, 0px));
+    width: auto;
+    transform: none;
+
+    input[type='search'] {
+      flex: 1 1 auto;
+      width: auto;
+      min-width: 0;
+    }
   }
 
   html:not([data-appearance='collapsible'])
