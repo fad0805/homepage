@@ -37,8 +37,6 @@ interface Preview {
 }
 
 const MAX_FILES = 100;
-const MAX_BATCH_FILES = 10;
-const MAX_BATCH_BYTES = 40 * 1024 * 1024;
 const MAX_IMAGE_BYTES = 50 * 1024 * 1024;
 const LIST_PAGE_SIZE = 12;
 const MAX_VIDEO_SECONDS = 10;
@@ -169,35 +167,6 @@ function listPageNumbers(page: number, totalPages: number) {
   return pages;
 }
 
-function createBatches(files: File[]) {
-  const batches: File[][] = [];
-  let current: File[] = [];
-  let currentBytes = 0;
-
-  for (const file of files) {
-    // Raw video size is allowed to be much larger than the stored WebP, so
-    // it does not consume the regular image batch budget.
-    const batchBytes = ILLUSTRATION_VIDEO_TYPES.has(file.type)
-      ? 0
-      : file.size;
-    const full =
-      current.length >= MAX_BATCH_FILES ||
-      (current.length > 0 && currentBytes + batchBytes > MAX_BATCH_BYTES);
-    if (full) {
-      batches.push(current);
-      current = [];
-      currentBytes = 0;
-    }
-    current.push(file);
-    currentBytes += batchBytes;
-  }
-
-  if (current.length > 0) {
-    batches.push(current);
-  }
-  return batches;
-}
-
 function moveItem<T>(items: T[], from: number, to: number) {
   if (from === to || from < 0 || to < 0 || from >= items.length || to >= items.length) {
     return items;
@@ -260,10 +229,6 @@ export default function AdminIllustrations() {
   const [listQuery, setListQuery] = useState("");
   const [listQueryInput, setListQueryInput] = useState("");
   const [uploading, setUploading] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState<{
-    done: number;
-    total: number;
-  } | null>(null);
   const [savingId, setSavingId] = useState<number | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(
@@ -295,6 +260,7 @@ export default function AdminIllustrations() {
   const modalRepresentativeInputRef = useRef<HTMLInputElement>(null);
   const handledEditParamRef = useRef(false);
   const trimVideoRefs = useRef<(HTMLVideoElement | null)[]>([]);
+  const backgroundUploadIdsRef = useRef<Set<number>>(new Set());
   const today = todayDateInputValue();
 
   useEffect(() => {
@@ -308,8 +274,8 @@ export default function AdminIllustrations() {
   const currentPage = Math.min(listPage, totalPages);
   const visibleItems = items;
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  const load = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
     try {
       const params = new URLSearchParams({
         page: String(listPage),
@@ -321,23 +287,55 @@ export default function AdminIllustrations() {
       >(`/api/illustrations/admin?${params.toString()}`);
       setItems(data.map((item) => ({ ...item, images: [] })));
       setTotalCount(total ?? data.length);
-      setSelectedIds(new Set());
+      if (!silent) setSelectedIds(new Set());
     } catch (error) {
-      setNotice({
-        type: "error",
-        text:
-          error instanceof Error
-            ? error.message
-            : "삽화 목록을 불러오지 못했습니다.",
-      });
+      if (!silent) {
+        setNotice({
+          type: "error",
+          text:
+            error instanceof Error
+              ? error.message
+              : "삽화 목록을 불러오지 못했습니다.",
+        });
+      }
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, [listPage, listQuery]);
 
   useEffect(() => {
     void load();
   }, [load]);
+
+  const hasBackgroundUploads = items.some(
+    (item) => item.upload_status === "processing",
+  );
+
+  useEffect(() => {
+    if (!hasBackgroundUploads) return;
+    const timer = window.setInterval(() => void load(true), 2000);
+    return () => window.clearInterval(timer);
+  }, [hasBackgroundUploads, load]);
+
+  useEffect(() => {
+    const remaining = new Set<number>();
+    let failed = 0;
+    backgroundUploadIdsRef.current.forEach((id) => {
+      const item = items.find((candidate) => candidate.id === id);
+      if (!item) {
+        failed += 1;
+      } else if (item.upload_status === "processing") {
+        remaining.add(id);
+      }
+    });
+    backgroundUploadIdsRef.current = remaining;
+    if (failed > 0) {
+      setNotice({
+        type: "error",
+        text: `${failed}개의 삽화 업로드에 실패해 등록이 취소되었습니다.`,
+      });
+    }
+  }, [items]);
 
   useEffect(() => {
     const next = files.map((file) => ({
@@ -567,90 +565,49 @@ export default function AdminIllustrations() {
       return;
     }
 
-    const selectedFiles = files;
-    const batches = createBatches(selectedFiles);
-    let groupId: number | null = null;
-    let detail: IllustrationDetailItem | null = null;
-    let processed = 0;
-    let representativeError: string | null = null;
+    const formData = new FormData();
+    files.forEach((file) => formData.append("files", file));
+    const ranges = files
+      .filter((file) => ILLUSTRATION_VIDEO_TYPES.has(file.type))
+      .map(
+        (file) =>
+          videoRangesByFile.get(file) ?? {
+            start: 0,
+            seconds: MAX_VIDEO_SECONDS,
+          },
+      );
+    if (ranges.length > 0) {
+      formData.append("video_ranges", JSON.stringify(ranges));
+    }
+    formData.append("title", normalizedTitle);
+    if (description.trim()) {
+      formData.append("description", description.trim());
+    }
+    if (tagsInput.trim()) {
+      formData.append("tags", tagsInput.trim());
+    }
+    if (takenAt) {
+      formData.append("taken_at", takenAt);
+    }
+    formData.append("visible", String(createVisibility !== "private"));
+    formData.append("protected", String(createVisibility === "protected"));
+    if (createRepresentativeFile) {
+      formData.append("representative_file", createRepresentativeFile);
+    }
 
     setUploading(true);
-    setUploadProgress({ done: 0, total: selectedFiles.length });
     setNotice(null);
-
     try {
-      for (const batch of batches) {
-        const formData = new FormData();
-        batch.forEach((file) => formData.append("files", file));
-        const batchVideoRanges = batch
-          .filter((file) => ILLUSTRATION_VIDEO_TYPES.has(file.type))
-          .map(
-            (file) =>
-              videoRangesByFile.get(file) ?? {
-                start: 0,
-                seconds: MAX_VIDEO_SECONDS,
-              },
-          );
-        if (batchVideoRanges.length > 0) {
-          formData.append("video_ranges", JSON.stringify(batchVideoRanges));
-        }
-        formData.append("title", normalizedTitle);
-        if (description.trim()) {
-          formData.append("description", description.trim());
-        }
-        if (tagsInput.trim()) {
-          formData.append("tags", tagsInput.trim());
-        }
-        if (takenAt) {
-          formData.append("taken_at", takenAt);
-        }
-        formData.append(
-          "visible",
-          String(createVisibility !== "private"),
-        );
-        formData.append(
-          "protected",
-          String(createVisibility === "protected"),
-        );
-        if (groupId !== null) {
-          formData.append("illustration_id", String(groupId));
-        }
-
-        const result = await apiFetch<IllustrationDetailItem>(
-          "/api/illustrations/bulk",
-          {
-            method: "POST",
-            body: formData,
-          },
-        );
-        groupId = result.id;
-        detail = result;
-        processed += batch.length;
-        setUploadProgress({
-          done: processed,
-          total: selectedFiles.length,
-        });
-        upsertItem(result);
-      }
-
-      if (detail && createRepresentativeFile) {
-        try {
-          const representativeForm = new FormData();
-          representativeForm.append("file", createRepresentativeFile);
-          const updated = await apiFetch<IllustrationDetailItem>(
-            `/api/illustrations/${detail.id}/representative`,
-            { method: "PUT", body: representativeForm },
-          );
-          detail = updated;
-          upsertItem(updated);
-        } catch (error) {
-          representativeError =
-            error instanceof Error
-              ? error.message
-              : "대표 이미지를 업로드하지 못했습니다.";
-        }
-      }
-
+      const result = await apiFetch<IllustrationDetailItem>(
+        "/api/illustrations/bulk",
+        {
+          method: "POST",
+          body: formData,
+        },
+      );
+      backgroundUploadIdsRef.current.add(result.id);
+      upsertItem(result);
+      void load(true);
       setFiles([]);
       setVideoRangesByFile(new Map());
       setTitle("");
@@ -659,36 +616,20 @@ export default function AdminIllustrations() {
       setCreateVisibility("public");
       setCreateRepresentativeFile(null);
       setCreateRepresentativePreview(null);
-      setNotice(
-        representativeError
-          ? {
-              type: "error",
-              text: `삽화는 올렸지만 대표 이미지를 저장하지 못했습니다. ${representativeError}`,
-            }
-          : {
-              type: "success",
-              text: `${detail?.image_count ?? selectedFiles.length}장을 하나의 삽화로 올렸습니다.`,
-            },
-      );
+      setNotice({
+        type: "success",
+        text: "삽화를 등록했습니다. 이미지 업로드는 백그라운드에서 진행됩니다.",
+      });
     } catch (error) {
-      if (groupId === null) {
-        // Nothing was created, so keep the selection for another attempt.
-      } else {
-        // A partial group exists; avoid accidentally creating a second one.
-        setFiles([]);
-        setVideoRangesByFile(new Map());
-      }
       setNotice({
         type: "error",
         text:
           error instanceof Error
             ? error.message
-            : "삽화를 올리지 못했습니다.",
+            : "삽화를 등록하지 못했습니다.",
       });
     } finally {
       setUploading(false);
-      setUploadProgress(null);
-      void load();
     }
   };
 
@@ -1679,9 +1620,7 @@ export default function AdminIllustrations() {
               disabled={uploading || !title.trim()}
             >
               {uploading
-                ? uploadProgress
-                  ? `${uploadProgress.done}/${uploadProgress.total} 올리는 중...`
-                  : "올리는 중..."
+                ? "등록 중..."
                 : `${files.length}장으로 삽화 만들기`}
             </button>
           </div>
@@ -1923,8 +1862,16 @@ export default function AdminIllustrations() {
                         촬영 {formatDate(item.taken_at)}
                       </p>
                     </div>
-                    <span>
-                      {item.image_count}장 · 조회 {item.view_count ?? 0}회
+                    <span
+                      className={
+                        item.upload_status === "processing"
+                          ? "admin-illustration-card__upload-status"
+                          : undefined
+                      }
+                    >
+                      {item.upload_status === "processing"
+                        ? "업로드 중..."
+                        : `${item.image_count}장 · 조회 ${item.view_count ?? 0}회`}
                     </span>
                   </div>
                 </article>

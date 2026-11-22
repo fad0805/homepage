@@ -11,6 +11,7 @@ export interface IllustrationItem {
   taken_at: string | null;
   visible: boolean;
   protected: boolean;
+  upload_status: string;
   locked?: boolean;
   representative_image_id: number | null;
   representative_url: string | null;

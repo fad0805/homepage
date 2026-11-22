@@ -796,6 +796,12 @@
   }
 }
 
+.admin-illustration-card__upload-status {
+  color: var(--title-color);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
 .admin-illustration-card__compact-copy {
   display: flex;
   flex-direction: column;

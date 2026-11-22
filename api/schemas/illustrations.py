@@ -35,6 +35,7 @@ class IllustrationListItem(BaseModel):
     taken_at: date | None = None
     visible: bool
     protected: bool = False
+    upload_status: str = "ready"
     representative_image_id: int | None = None
     representative_url: str | None = None
     image_count: int

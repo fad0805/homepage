@@ -9,6 +9,8 @@ from sqlalchemy.pool import StaticPool
 from crud.illustrations import (
     _utc_boundary,
     create_illustration_group,
+    create_pending_illustration_group,
+    finish_illustration_upload,
     get_all_illustrations,
     get_visible_illustrations,
 )
@@ -82,6 +84,37 @@ class IllustrationListTests(unittest.TestCase):
         self.assertTrue(protected["protected"])
         self.assertFalse(private["visible"])
         self.assertFalse(private["protected"])
+
+    def test_pending_upload_is_admin_only_until_finished(self) -> None:
+        pending = create_pending_illustration_group(
+            self.db,
+            user_id=self.owner.id,
+            title="업로드 중인 삽화",
+        )
+        self.assertEqual(pending["upload_status"], "processing")
+
+        admin_rows, _ = get_all_illustrations(
+            self.db, owner_user_id=self.owner.id
+        )
+        self.assertEqual(
+            [row["upload_status"] for row in admin_rows], ["processing"]
+        )
+        public_rows, public_total = get_visible_illustrations(
+            self.db, author_user_id=self.owner.id
+        )
+        self.assertEqual(public_rows, [])
+        self.assertEqual(public_total, 0)
+
+        finish_illustration_upload(
+            self.db,
+            pending["id"],
+            ["/uploads/illustrations/done.png"],
+        )
+        public_rows, public_total = get_visible_illustrations(
+            self.db, author_user_id=self.owner.id
+        )
+        self.assertEqual([row["title"] for row in public_rows], ["업로드 중인 삽화"])
+        self.assertEqual(public_total, 1)
 
     def test_tag_filter_matches_exact_tag(self) -> None:
         first = self._illustration("첫 번째")

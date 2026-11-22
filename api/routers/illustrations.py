@@ -1,9 +1,12 @@
 import hashlib
 import json
+import logging
+from dataclasses import dataclass
 from datetime import date
 
 from fastapi import (
     APIRouter,
+    BackgroundTasks,
     Depends,
     File,
     Form,
@@ -16,14 +19,24 @@ from fastapi import (
 )
 from sqlalchemy.orm import Session
 
-from core.uploads import VIDEO_CONTENT_TYPES, delete_uploaded_file, save_banner
+from core.mastodon import maybe_notify_illustration
+from core.uploads import (
+    MAX_UPLOAD_SIZE,
+    MAX_VIDEO_UPLOAD_SIZE,
+    VIDEO_CONTENT_TYPES,
+    _read_upload,
+    delete_uploaded_file,
+    save_banner,
+    save_uploaded_bytes,
+)
 from crud.illustrations import (
     append_illustration_images,
     bulk_delete_illustrations,
     bulk_update_illustrations,
-    create_illustration_group,
+    create_pending_illustration_group,
     delete_illustration,
     delete_illustration_image,
+    finish_illustration_upload,
     get_all_illustrations,
     get_illustration_stats,
     get_popular_illustrations,
@@ -35,7 +48,7 @@ from crud.illustrations import (
     set_illustration_representative,
     update_illustration,
 )
-from db.session import get_db
+from db.session import SessionLocal, get_db
 from models.illustrations import Illustration
 from schemas.illustrations import (
     IllustrationAdminListItem,
@@ -61,7 +74,124 @@ from .utils import (
 
 router = APIRouter()
 
+logger = logging.getLogger(__name__)
 MAX_BULK_ILLUSTRATIONS = 100
+
+
+@dataclass(frozen=True)
+class PendingIllustrationFile:
+    content: bytes
+    content_type: str | None
+    max_seconds: float | None = None
+    start_seconds: float | None = None
+
+
+async def _capture_upload(
+    file: UploadFile,
+    *,
+    allow_video: bool = True,
+    max_seconds: float | None = None,
+    start_seconds: float | None = None,
+) -> PendingIllustrationFile:
+    """Read an upload before the request ends so a task can process it later."""
+    is_video = bool(file.content_type in VIDEO_CONTENT_TYPES and allow_video)
+    try:
+        content = await _read_upload(
+            file,
+            limit=MAX_VIDEO_UPLOAD_SIZE if is_video else MAX_UPLOAD_SIZE,
+            label="영상" if is_video else "이미지",
+        )
+    finally:
+        await file.close()
+    return PendingIllustrationFile(
+        content=content,
+        content_type=file.content_type,
+        max_seconds=max_seconds,
+        start_seconds=start_seconds,
+    )
+
+
+def _process_illustration_upload(
+    illustration_id: int,
+    user_id: int,
+    files: list[PendingIllustrationFile],
+    representative: PendingIllustrationFile | None,
+) -> None:
+    """Save files off the request path, then publish or remove the row."""
+    db = SessionLocal()
+    gallery_urls: list[str] = []
+    cleanup_urls: list[str] = []
+    committed = False
+    try:
+        for item in files:
+            url = save_uploaded_bytes(
+                item.content,
+                item.content_type,
+                folder="illustrations",
+                allow_video=True,
+                max_video_seconds=item.max_seconds,
+                video_start_seconds=item.start_seconds,
+            )
+            gallery_urls.append(url)
+            cleanup_urls.append(url)
+        representative_url: str | None = None
+        if representative is not None:
+            representative_url = save_uploaded_bytes(
+                representative.content,
+                representative.content_type,
+                folder="illustrations",
+                allow_video=False,
+            )
+            cleanup_urls.append(representative_url)
+
+        group = (
+            db.query(Illustration)
+            .filter(
+                Illustration.id == illustration_id,
+                Illustration.user_id == user_id,
+            )
+            .first()
+        )
+        if group is None:
+            # The admin deleted the row while the upload was running.
+            for url in cleanup_urls:
+                delete_uploaded_file(url)
+            return
+
+        finish_illustration_upload(
+            db,
+            illustration_id,
+            gallery_urls,
+            representative_url,
+        )
+        committed = True
+        db.refresh(group)
+        if group.visible:
+            maybe_notify_illustration(db, group)
+    except Exception:
+        db.rollback()
+        logger.exception(
+            "Background illustration upload failed for id=%s", illustration_id
+        )
+        if not committed:
+            for url in cleanup_urls:
+                delete_uploaded_file(url)
+            try:
+                pending = (
+                    db.query(Illustration)
+                    .filter(
+                        Illustration.id == illustration_id,
+                        Illustration.user_id == user_id,
+                    )
+                    .first()
+                )
+                if pending is not None:
+                    db.delete(pending)
+                    db.commit()
+            except Exception:  # noqa: BLE001 - cleanup must never mask the original failure
+                db.rollback()
+    finally:
+        db.close()
 
 
 def _parse_tags(value: str | None) -> list[str]:
@@ -190,6 +320,8 @@ def read_popular_illustrations(
 
 @router.post("/bulk", response_model=IllustrationDetail)
 async def upload_illustrations(
+    background_tasks: BackgroundTasks,
+    response: Response,
     files: list[UploadFile] = File(...),
     title: str | None = Form(default=None),
     description: str | None = Form(default=None),
@@ -200,13 +332,15 @@ async def upload_illustrations(
     visible: bool = Form(default=True),
     protected: bool = Form(default=False),
     video_ranges: str | None = Form(default=None),
+    representative_file: UploadFile | None = File(default=None),
     db: Session = Depends(get_db),
     user=Depends(require_auth),
 ):
-    """Upload several photos as one illustration group.
+    """Register an illustration immediately and save its files in background.
 
-    ``illustration_id`` lets the client append later batches to the same
-    group, so large uploads still become a single board entry.
+    ``illustration_id`` keeps the older synchronous append path used by the
+    edit dialog. New groups return ``202`` with a `processing` row; a failed
+    background job removes that row entirely.
     """
     if len(files) > MAX_BULK_ILLUSTRATIONS:
         raise HTTPException(
@@ -252,46 +386,73 @@ async def upload_illustrations(
                 detail="영상 자르기 구간 값이 올바르지 않습니다.",
             ) from exc
 
-    uploaded: list[str] = []
     requested_ranges = iter(parsed_ranges)
-    try:
-        for file in files:
-            is_video = file.content_type in VIDEO_CONTENT_TYPES
-            selected_range = next(requested_ranges, None) if is_video else None
-            url = await save_banner(
-                file,
-                folder="illustrations",
-                allow_video=True,
-                max_video_seconds=selected_range[1] if selected_range else None,
-                video_start_seconds=(
-                    selected_range[0] if selected_range else None
-                ),
-            )
-            uploaded.append(url)
 
-        if illustration_id is None:
-            return create_illustration_group(
+    if illustration_id is not None:
+        uploaded: list[str] = []
+        try:
+            for file in files:
+                is_video = file.content_type in VIDEO_CONTENT_TYPES
+                selected_range = next(requested_ranges, None) if is_video else None
+                uploaded.append(
+                    await save_banner(
+                        file,
+                        folder="illustrations",
+                        allow_video=True,
+                        max_video_seconds=(
+                            selected_range[1] if selected_range else None
+                        ),
+                        video_start_seconds=(
+                            selected_range[0] if selected_range else None
+                        ),
+                    )
+                )
+            return append_illustration_images(
                 db,
-                user_id=user.id,
-                title=normalized_title,
-                description=normalized_description,
-                tags=_parse_tags(tags),
+                illustration_id=illustration_id,
                 uploads=uploaded,
-                taken_at=taken_at,
-                representative_index=representative_index,
-                visible=visible,
-                protected=protected,
             )
+        except Exception:
+            for url in uploaded:
+                delete_uploaded_file(url)
+            raise
 
-        return append_illustration_images(
-            db,
-            illustration_id=illustration_id,
-            uploads=uploaded,
+    pending_files: list[PendingIllustrationFile] = []
+    for file in files:
+        is_video = file.content_type in VIDEO_CONTENT_TYPES
+        selected_range = next(requested_ranges, None) if is_video else None
+        pending_files.append(
+            await _capture_upload(
+                file,
+                max_seconds=(selected_range[1] if selected_range else None),
+                start_seconds=(selected_range[0] if selected_range else None),
+            )
         )
-    except Exception:
-        for url, _ in uploaded:
-            delete_uploaded_file(url)
-        raise
+    pending_representative = (
+        await _capture_upload(representative_file, allow_video=False)
+        if representative_file is not None
+        else None
+    )
+
+    detail = create_pending_illustration_group(
+        db,
+        user_id=user.id,
+        title=normalized_title,
+        description=normalized_description,
+        tags=_parse_tags(tags),
+        visible=visible,
+        protected=protected,
+        taken_at=taken_at,
+    )
+    background_tasks.add_task(
+        _process_illustration_upload,
+        detail["id"],
+        user.id,
+        pending_files,
+        pending_representative,
+    )
+    response.status_code = status.HTTP_202_ACCEPTED
+    return detail
 
 
 @router.put("/reorder")

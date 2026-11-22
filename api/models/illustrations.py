@@ -53,6 +53,14 @@ class Illustration(Base):
         default=0,
         server_default="0",
     )
+    # Files for a newly registered illustration are saved in the background.
+    # Public queries only show `ready`; a failed upload deletes the whole row.
+    upload_status = Column(
+        String(16),
+        nullable=False,
+        default="ready",
+        server_default="ready",
+    )
     mastodon_status_id = Column(String(255), nullable=True)
     mastodon_posted_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=func.now(), nullable=False)

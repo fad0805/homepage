@@ -550,6 +550,84 @@ def save_image_bytes(
     return _save_to_local(content, extension, folder, name)
 
 
+def save_uploaded_bytes(
+    content: bytes,
+    content_type: str | None,
+    folder: str = "illustrations",
+    name: str | None = None,
+    *,
+    allow_video: bool = False,
+    max_video_seconds: float | None = None,
+    video_start_seconds: float | None = None,
+) -> str:
+    """Store an already-read upload, optionally converting a short video.
+
+    Unlike :func:`save_banner` this is synchronous so it can run in a background
+    task after the request's ``UploadFile`` objects have been closed.
+    """
+    video_suffix = VIDEO_CONTENT_TYPES.get(content_type or "")
+    if video_suffix and not allow_video:
+        video_suffix = None
+    if video_suffix:
+        allowed = True
+        limit = MAX_VIDEO_UPLOAD_SIZE
+    else:
+        allowed = content_type in ALLOWED_CONTENT_TYPES
+        limit = MAX_UPLOAD_SIZE
+
+    if not allowed:
+        detail = "PNG, JPEG, WEBP, GIF 이미지만 업로드할 수 있습니다."
+        if allow_video:
+            detail = "PNG, JPEG, WEBP, GIF 이미지 또는 MP4, MOV, WEBM 영상만 업로드할 수 있습니다."
+        raise HTTPException(
+            status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+            detail=detail,
+        )
+    if len(content) > limit:
+        label = "영상" if video_suffix else "이미지"
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail=(
+                f"{label} 크기는 {limit // (1024 * 1024)}MB 이하여야 합니다."
+            ),
+        )
+
+    if video_suffix:
+        content, content_type, extension = (
+            _video_to_animated_webp(
+                content,
+                video_suffix,
+                max_seconds=max_video_seconds,
+                start_seconds=video_start_seconds,
+            ),
+            "image/webp",
+            ".webp",
+        )
+    else:
+        content, content_type, extension = _sanitize_image(content)
+
+    if len(content) > MAX_UPLOAD_SIZE:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail=(
+                "변환된 이미지가 "
+                f"{MAX_UPLOAD_SIZE // (1024 * 1024)}MB를 넘습니다. "
+                "영상 구간을 짧게 줄이거나 화질을 낮춰주세요."
+            ),
+        )
+
+    if _s3_is_configured():
+        return _save_to_s3(content, content_type, extension, folder, name)
+
+    if S3_BUCKET or S3_PUBLIC_BASE_URL:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="S3 설정이 불완전합니다.",
+        )
+
+    return _save_to_local(content, extension, folder, name)
+
+
 async def save_banner(
     file: UploadFile,
     folder: str = "banners",
@@ -596,39 +674,12 @@ async def save_banner(
     finally:
         await file.close()
 
-    if video_suffix:
-        content, content_type, extension = (
-            _video_to_animated_webp(
-                content,
-                video_suffix,
-                max_seconds=max_video_seconds,
-                start_seconds=video_start_seconds,
-            ),
-            "image/webp",
-            ".webp",
-        )
-    else:
-        content, content_type, extension = _sanitize_image(content)
-
-    if len(content) > MAX_UPLOAD_SIZE:
-        raise HTTPException(
-            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-            detail=(
-                "변환된 이미지가 "
-                f"{MAX_UPLOAD_SIZE // (1024 * 1024)}MB를 넘습니다. "
-                "영상 구간을 짧게 줄이거나 화질을 낮춰주세요."
-            ),
-        )
-
-    if _s3_is_configured():
-        return _save_to_s3(content, content_type, extension, folder, name)
-
-    # Partial S3 configuration is a deployment error. If no S3 settings are
-    # present at all, local storage is used in every environment.
-    if S3_BUCKET or S3_PUBLIC_BASE_URL:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="S3 설정이 불완전합니다.",
-        )
-
-    return _save_to_local(content, extension, folder, name)
+    return save_uploaded_bytes(
+        content,
+        file.content_type,
+        folder,
+        name,
+        allow_video=allow_video,
+        max_video_seconds=max_video_seconds,
+        video_start_seconds=video_start_seconds,
+    )

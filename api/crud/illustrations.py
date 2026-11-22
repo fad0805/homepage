@@ -27,6 +27,18 @@ ILLUSTRATION_VIEW_DEDUP_MINUTES = int(
 )
 
 
+def _ready_upload_filter():
+    """Exclude illustrations whose files are still being saved.
+
+    ``NULL`` is treated as ready so rows created before the status column
+    remain visible after the migration.
+    """
+    return or_(
+        Illustration.upload_status.is_(None),
+        Illustration.upload_status == "ready",
+    )
+
+
 def _clean_tags(tags: list[str] | None) -> list[str]:
     cleaned: list[str] = []
     seen: set[str] = set()
@@ -71,6 +83,7 @@ def _serialize_summary(illustration: Illustration) -> dict:
         "taken_at": illustration.taken_at,
         "visible": illustration.visible,
         "protected": bool(illustration.protected),
+        "upload_status": illustration.upload_status or "ready",
         "view_count": illustration.view_count or 0,
         "representative_image_id": (
             representative.id if representative else None
@@ -101,6 +114,7 @@ def _serialize_list_item(
         "taken_at": illustration.taken_at,
         "visible": illustration.visible,
         "protected": bool(illustration.protected),
+        "upload_status": illustration.upload_status or "ready",
         "view_count": illustration.view_count or 0,
         "representative_image_id": illustration.representative_image_id,
         "representative_url": illustration.representative_url,
@@ -240,6 +254,8 @@ def _list_query(
                 Illustration.user_id == viewer_user_id,
             )
         )
+    if not include_hidden:
+        illustrations_query = illustrations_query.filter(_ready_upload_filter())
 
     tokens = search_tokens(query)
     for token in tokens:
@@ -404,6 +420,8 @@ def get_visible_illustration(
 ):
     """Return one illustration, masking its images while it stays locked."""
     query = _group_query(db).filter(Illustration.id == illustration_id)
+    if not include_hidden and owner_user_id is None:
+        query = query.filter(_ready_upload_filter())
     if owner_user_id is not None:
         query = query.filter(Illustration.user_id == owner_user_id)
     elif not include_hidden:
@@ -627,6 +645,68 @@ def create_illustration_group(
 
     maybe_notify_illustration(db, group)
     return _serialize_detail(_get_illustration_or_404(db, group.id))
+
+
+def create_pending_illustration_group(
+    db: Session,
+    *,
+    user_id: int,
+    title: str,
+    description: str | None = None,
+    tags: list[str] | None = None,
+    taken_at: date | None = None,
+    visible: bool = True,
+    protected: bool = False,
+):
+    """Register the admin row before its files finish uploading."""
+    group = Illustration(
+        user_id=user_id,
+        title=title,
+        description=description,
+        tags=_clean_tags(tags),
+        taken_at=taken_at,
+        visible=visible,
+        protected=bool(visible and protected),
+        order=_next_illustration_order(db),
+        images=[],
+        upload_status="processing",
+    )
+    try:
+        db.add(group)
+        db.flush()
+        sync_illustration_tags(db, group)
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+
+    return _serialize_detail(_get_illustration_or_404(db, group.id))
+
+
+def finish_illustration_upload(
+    db: Session,
+    illustration_id: int,
+    uploads: list[str],
+    representative_url: str | None = None,
+):
+    """Attach background-saved files and publish the illustration row."""
+    group = _get_illustration_or_404(db, illustration_id)
+    start_order = max((image.order for image in group.images), default=-1) + 1
+    images = _build_images(uploads, start_order=start_order)
+    group.images.extend(images)
+    if representative_url:
+        group.representative_url = representative_url
+    elif group.representative_image_id is None and images:
+        group.representative_image_id = images[0].id
+    group.upload_status = "ready"
+
+    try:
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+
+    return _serialize_detail(_get_illustration_or_404(db, illustration_id))
 
 
 def append_illustration_images(
