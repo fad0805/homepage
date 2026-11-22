@@ -469,6 +469,11 @@
   }
 }
 
+.admin-illustration-card.is-uploading {
+  cursor: default;
+  opacity: 0.62;
+}
+
 .admin-illustration-card__body {
   display: flex;
   flex-direction: column;
@@ -727,6 +732,14 @@
   cursor: pointer;
   transition: border-color 0.15s ease, box-shadow 0.15s ease,
     opacity 0.15s ease;
+
+  &.is-uploading {
+    cursor: default;
+
+    .admin-illustration-card__drag {
+      visibility: hidden;
+    }
+  }
 
   > img {
     height: 7rem;

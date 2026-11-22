@@ -2,23 +2,28 @@
 import unittest
 from datetime import date, datetime
 
+from fastapi import HTTPException
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from crud.illustrations import (
     _utc_boundary,
+    bulk_delete_illustrations,
     create_illustration_group,
     create_pending_illustration_group,
+    delete_illustration,
     finish_illustration_upload,
     get_all_illustrations,
     get_visible_illustrations,
+    update_illustration,
 )
 from crud.tags import sync_illustration_tags
 from db.base import Base
 from models.illustrations import Illustration, IllustrationImage
 from models.tags import IllustrationTag, Tag
 from models.users import User
+from schemas.illustrations import IllustrationUpdate
 
 
 class IllustrationListTests(unittest.TestCase):
@@ -115,6 +120,33 @@ class IllustrationListTests(unittest.TestCase):
         )
         self.assertEqual([row["title"] for row in public_rows], ["업로드 중인 삽화"])
         self.assertEqual(public_total, 1)
+
+    def test_processing_row_rejects_mutations(self) -> None:
+        pending = create_pending_illustration_group(
+            self.db,
+            user_id=self.owner.id,
+            title="업로드 중인 삽화",
+        )
+
+        with self.assertRaises(HTTPException):
+            delete_illustration(self.db, pending["id"])
+        with self.assertRaises(HTTPException):
+            bulk_delete_illustrations(
+                self.db, [pending["id"]], self.owner.id
+            )
+        with self.assertRaises(HTTPException):
+            update_illustration(
+                self.db,
+                pending["id"],
+                IllustrationUpdate(title="수정 시도"),
+            )
+
+        admin_rows, _ = get_all_illustrations(
+            self.db, owner_user_id=self.owner.id
+        )
+        self.assertEqual(
+            [row["upload_status"] for row in admin_rows], ["processing"]
+        )
 
     def test_ready_row_without_image_is_admin_only(self) -> None:
         empty = create_illustration_group(

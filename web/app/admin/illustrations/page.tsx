@@ -301,6 +301,9 @@ export default function AdminIllustrations() {
   );
   const currentPage = Math.min(listPage, totalPages);
   const visibleItems = items;
+  const selectableItems = items.filter(
+    (item) => item.upload_status !== "processing",
+  );
 
   const load = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
@@ -666,6 +669,13 @@ export default function AdminIllustrations() {
       const detail = await apiFetch<IllustrationDetailItem>(
         `/api/illustrations/${id}?mine=true`,
       );
+      if (detail.upload_status === "processing") {
+        setNotice({
+          type: "error",
+          text: "이미지 업로드가 완료된 뒤 수정할 수 있습니다.",
+        });
+        return;
+      }
       setEditingItem({
         ...detail,
         images: [...(detail.images ?? [])],
@@ -1105,10 +1115,12 @@ export default function AdminIllustrations() {
   };
 
   const toggleSelectAll = () => {
+    const selectableIds = selectableItems.map((item) => item.id);
     setSelectedIds((previous) =>
-      previous.size === items.length
+      selectableIds.length > 0 &&
+      selectableIds.every((id) => previous.has(id))
         ? new Set()
-        : new Set(items.map((item) => item.id)),
+        : new Set(selectableIds),
     );
   };
 
@@ -1683,8 +1695,10 @@ export default function AdminIllustrations() {
               <input
                 type="checkbox"
                 checked={
-                  items.length > 0 && selectedIds.size === items.length
+                  selectableItems.length > 0 &&
+                  selectableItems.every((item) => selectedIds.has(item.id))
                 }
+                disabled={selectableItems.length === 0}
                 onChange={toggleSelectAll}
               />
               전체 선택
@@ -1792,74 +1806,91 @@ export default function AdminIllustrations() {
           <>
             <div className="admin-illustrations-grid">
               {visibleItems.map((item) => {
-              return (
-                <article
-                  className={`admin-illustration-card is-compact${
-                    selectedIds.has(item.id) ? " is-selected" : ""
-                  }${
-                    cardDragId === item.id ? " is-card-dragging" : ""
-                  }${
-                    cardDragOverId === item.id && cardDragId !== item.id
-                      ? " is-card-drag-over"
-                      : ""
-                  }`}
-                  key={item.id}
-                  role="button"
-                  tabIndex={0}
-                  onClick={() => void openEdit(item.id)}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter" || event.key === " ") {
-                      event.preventDefault();
-                      void openEdit(item.id);
-                    }
-                  }}
-                  onDragOver={(event) => {
-                    if (cardDragId === null) return;
-                    event.preventDefault();
-                    event.dataTransfer.dropEffect = "move";
-                    setCardDragOverId(item.id);
-                  }}
-                  onDragLeave={() => {
-                    setCardDragOverId((current) =>
-                      current === item.id ? null : current,
-                    );
-                  }}
-                  onDrop={(event) => {
-                    if (cardDragId === null) return;
-                    event.preventDefault();
-                    moveCard(cardDragId, item.id);
-                    setCardDragId(null);
-                    setCardDragOverId(null);
-                  }}
-                >
-                  <span
-                    className="admin-illustration-card__drag"
-                    draggable
-                    title="드래그해서 순서 변경"
-                    onClick={(event) => event.stopPropagation()}
-                    onDragStart={(event) => {
-                      event.stopPropagation();
-                      setCardDragId(item.id);
-                      event.dataTransfer.effectAllowed = "move";
+                const isProcessing = item.upload_status === "processing";
+                return (
+                  <article
+                    className={`admin-illustration-card is-compact${
+                      isProcessing ? " is-uploading" : ""
+                    }${
+                      selectedIds.has(item.id) ? " is-selected" : ""
+                    }${
+                      cardDragId === item.id ? " is-card-dragging" : ""
+                    }${
+                      cardDragOverId === item.id && cardDragId !== item.id
+                        ? " is-card-drag-over"
+                        : ""
+                    }`}
+                    key={item.id}
+                    role={isProcessing ? undefined : "button"}
+                    tabIndex={isProcessing ? undefined : 0}
+                    aria-disabled={isProcessing || undefined}
+                    title={isProcessing ? "이미지 업로드 중" : undefined}
+                    onClick={() => {
+                      if (!isProcessing) void openEdit(item.id);
                     }}
-                    onDragEnd={() => {
+                    onKeyDown={(event) => {
+                      if (isProcessing) return;
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        void openEdit(item.id);
+                      }
+                    }}
+                    onDragOver={(event) => {
+                      if (cardDragId === null || isProcessing) return;
+                      event.preventDefault();
+                      event.dataTransfer.dropEffect = "move";
+                      setCardDragOverId(item.id);
+                    }}
+                    onDragLeave={() => {
+                      setCardDragOverId((current) =>
+                        current === item.id ? null : current,
+                      );
+                    }}
+                    onDrop={(event) => {
+                      if (cardDragId === null || isProcessing) return;
+                      event.preventDefault();
+                      moveCard(cardDragId, item.id);
                       setCardDragId(null);
                       setCardDragOverId(null);
                     }}
                   >
-                    ⠿
-                  </span>
-                  <label
-                    className="admin-illustration-card__select"
-                    onClick={(event) => event.stopPropagation()}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={selectedIds.has(item.id)}
-                      onChange={() => toggleSelected(item.id)}
-                    />
-                    선택
-                  </label>
+                    <span
+                      className="admin-illustration-card__drag"
+                      draggable={!isProcessing}
+                      title={
+                        isProcessing
+                          ? undefined
+                          : "드래그해서 순서 변경"
+                      }
+                      onClick={(event) => event.stopPropagation()}
+                      onDragStart={(event) => {
+                        if (isProcessing) {
+                          event.preventDefault();
+                          return;
+                        }
+                        event.stopPropagation();
+                        setCardDragId(item.id);
+                        event.dataTransfer.effectAllowed = "move";
+                      }}
+                      onDragEnd={() => {
+                        setCardDragId(null);
+                        setCardDragOverId(null);
+                      }}
+                    >
+                      ⠿
+                    </span>
+                    <label
+                      className="admin-illustration-card__select"
+                      onClick={(event) => event.stopPropagation()}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={!isProcessing && selectedIds.has(item.id)}
+                        disabled={isProcessing}
+                        onChange={() => toggleSelected(item.id)}
+                      />
+                      선택
+                    </label>
                   {item.representative_url ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img

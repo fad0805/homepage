@@ -47,6 +47,15 @@ def _has_image_filter():
     )
 
 
+def _ensure_editable(illustration: Illustration) -> None:
+    """Block edits while the background upload still owns the row."""
+    if illustration.upload_status == "processing":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="이미지 업로드가 완료된 뒤 이용할 수 있습니다.",
+        )
+
+
 def _clean_tags(tags: list[str] | None) -> list[str]:
     cleaned: list[str] = []
     seen: set[str] = set()
@@ -727,6 +736,7 @@ def append_illustration_images(
 ):
     """Add more uploaded images to an existing illustration group."""
     group = _get_illustration_or_404(db, illustration_id)
+    _ensure_editable(group)
     start_order = max((image.order for image in group.images), default=-1) + 1
     images = _build_images(uploads, start_order=start_order)
 
@@ -751,6 +761,7 @@ def set_illustration_representative(
 ):
     """Replace an illustration's separately uploaded representative image."""
     illustration = _get_illustration_or_404(db, illustration_id)
+    _ensure_editable(illustration)
     old_url = illustration.representative_url
 
     illustration.representative_url = url
@@ -773,6 +784,7 @@ def update_illustration(
     payload: IllustrationUpdate,
 ):
     illustration = _get_illustration_or_404(db, illustration_id)
+    _ensure_editable(illustration)
     was_visible = illustration.visible is not False
     data = payload.model_dump(exclude_unset=True)
     replaced_representative_url: str | None = None
@@ -836,6 +848,7 @@ def delete_illustration_image(
 ):
     """Remove one photo from a group and keep the remaining order valid."""
     illustration = _get_illustration_or_404(db, illustration_id)
+    _ensure_editable(illustration)
     image = next(
         (item for item in illustration.images if item.id == image_id),
         None,
@@ -881,6 +894,7 @@ def reorder_illustration_images(
 ):
     """Persist the order of photos inside one illustration group."""
     illustration = _get_illustration_or_404(db, illustration_id)
+    _ensure_editable(illustration)
     images = {
         image.id: image for image in (illustration.images or [])
     }
@@ -918,6 +932,9 @@ def reorder_illustrations(
     illustrations = {
         illustration.id: illustration for illustration in query.all()
     }
+
+    for illustration in illustrations.values():
+        _ensure_editable(illustration)
 
     missing = set(ids) - set(illustrations)
     if missing:
@@ -957,6 +974,8 @@ def bulk_update_illustrations(
     illustrations = query.all()
     if not illustrations:
         return 0
+    for illustration in illustrations:
+        _ensure_editable(illustration)
 
     became_visible: list[Illustration] = []
     for illustration in illustrations:
@@ -998,6 +1017,8 @@ def bulk_delete_illustrations(
     illustrations = query.all()
     if not illustrations:
         return 0
+    for illustration in illustrations:
+        _ensure_editable(illustration)
 
     urls = {
         image.url
@@ -1020,6 +1041,7 @@ def bulk_delete_illustrations(
 
 def delete_illustration(db: Session, illustration_id: int):
     illustration = _get_illustration_or_404(db, illustration_id)
+    _ensure_editable(illustration)
     urls = [image.url for image in illustration.images]
     if illustration.representative_url:
         urls.append(illustration.representative_url)
