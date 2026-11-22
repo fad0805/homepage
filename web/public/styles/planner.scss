@@ -1235,6 +1235,13 @@
   font-size: 0.66rem;
   line-height: 1.45;
   opacity: 0.78;
+
+  &.is-error {
+    border: 1px solid rgba(179, 74, 74, 0.35);
+    background: rgba(179, 74, 74, 0.08);
+    color: #b34a4a;
+    opacity: 1;
+  }
 }
 
 .planner-checkbox {
@@ -1705,7 +1712,8 @@
   font-size: 0.72rem;
 }
 
-[data-theme='dark'] .planner-error {
+[data-theme='dark'] .planner-error,
+[data-theme='dark'] .planner-form-hint.is-error {
   color: #ff9b9b;
 }
 

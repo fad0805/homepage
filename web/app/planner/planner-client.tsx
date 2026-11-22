@@ -887,9 +887,9 @@ export default function PlannerClient({ username }: { username: string }) {
       !recordCompleted &&
       !form.undated &&
       form.scheduleType === "single" &&
-      form.deadlineDays > 14
+      (form.deadlineDays < 1 || form.deadlineDays > 14)
     ) {
-      setError("마감 기간은 14일 이하로 입력해주세요.");
+      setError("마감 기간은 1~14일로 입력해주세요.");
       return;
     }
 

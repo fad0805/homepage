@@ -158,6 +158,18 @@ class PlannerCrudTests(
         self.assertTrue(delete_color(self.db, second["id"], 1)["success"])
         self.assertEqual(len(get_colors(self.db, 1)["colors"]), 1)
 
+    def test_create_rejects_out_of_range_deadline(self) -> None:
+        for value in (0, 15):
+            payload = PlannerTaskCreate(
+                title=f"마감 초과 {value}",
+                schedule_type="single",
+                start_date=date(2026, 11, 17),
+                deadline_days=7,
+            )
+            payload.deadline_days = value
+            with self.assertRaises(HTTPException):
+                create_task(self.db, payload, 1)
+
     def test_create_single_range_and_undated_tasks(self) -> None:
         now = datetime(2026, 11, 17, 9, tzinfo=KST)
         with patch(
