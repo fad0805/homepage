@@ -134,6 +134,7 @@ class _RtfStyle:
     strike: bool = False
     size: float | None = None
     color: str | None = None
+    highlight: str | None = None
 
 
 @dataclass
@@ -226,6 +227,11 @@ def _prepare_rtf(
 
 
 def _render_rtf_segment(content: str, style: _RtfStyle) -> str:
+    if style.highlight:
+        content = (
+            f'<mark style="background-color: {style.highlight}; color: inherit">'
+            f"{content}</mark>"
+        )
     if style.color:
         content = f'<span style="color: {style.color}">{content}</span>'
     if style.size is not None and abs(style.size - SCRIVENER_DEFAULT_PT) > 0.01:
@@ -614,6 +620,20 @@ def _rtf_to_html_with_images(
                         if 0 <= color_index < len(colors)
                         else None
                     )
+                elif word in {"highlight", "cb", "chcbpat"}:
+                    color_index = int(param or "0")
+                    highlight = (
+                        colors[color_index]
+                        if 0 < color_index < len(colors)
+                        else None
+                    )
+                    # RTF uses white for "no background"; don't turn that into
+                    # an actual highlight mark in the editor.
+                    style.highlight = (
+                        None
+                        if highlight is None or highlight.lower() == "#ffffff"
+                        else highlight
+                    )
                 elif word == "plain":
                     style = _RtfStyle()
                 index += match.end()
@@ -901,6 +921,10 @@ class _RtfBodyParser(HTMLParser):
             controls.append(f"\\fs{current_size} ")
         if current.color != previous.color:
             controls.append(f"\\cf{self._color_number(current.color)} ")
+        if current.highlight != previous.highlight:
+            controls.append(
+                f"\\highlight{self._color_number(current.highlight)} "
+            )
         if controls:
             self.parts.append("".join(controls))
         self._emitted_style = replace(current)
@@ -1023,7 +1047,18 @@ class _RtfBodyParser(HTMLParser):
             self.parts.append("\\tab ")
             self._tab_depth += 1
             return
-        if tag in {"strong", "b", "em", "i", "u", "s", "strike", "del", "span"}:
+        if tag in {
+            "strong",
+            "b",
+            "em",
+            "i",
+            "u",
+            "s",
+            "strike",
+            "del",
+            "mark",
+            "span",
+        }:
             self._style_stack.append(replace(self._style))
             if tag in {"strong", "b"}:
                 self._style.bold = True
@@ -1033,6 +1068,14 @@ class _RtfBodyParser(HTMLParser):
                 self._style.underline = True
             elif tag in {"s", "strike", "del"}:
                 self._style.strike = True
+            elif tag == "mark":
+                styles = _style_map(values.get("style"))
+                highlight = _parse_css_color(
+                    values.get("data-color")
+                    or styles.get("background-color")
+                )
+                if highlight:
+                    self._style.highlight = highlight
             elif tag == "span":
                 styles = _style_map(values.get("style"))
                 color = _parse_css_color(styles.get("color"))
@@ -1064,6 +1107,7 @@ class _RtfBodyParser(HTMLParser):
             "s",
             "strike",
             "del",
+            "mark",
             "span",
         }:
             if self._style_stack:

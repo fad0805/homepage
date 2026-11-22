@@ -1307,6 +1307,41 @@ class ManuscriptTests(unittest.TestCase):
         )
         self.assertNotIn("$Scr", body)
 
+    def test_import_scrivener_applies_character_background_color(self) -> None:
+        manifest = """<?xml version="1.0" encoding="UTF-8"?>
+<ScrivenerProject Version="2.0">
+  <ProjectProperties><ProjectTitle>배경색 원고</ProjectTitle></ProjectProperties>
+  <Binder>
+    <BinderItem UUID="DRAFT" Type="DraftFolder">
+      <Title>Draft</Title>
+      <Children>
+        <BinderItem UUID="T1" Type="Text"><Title>1장</Title></BinderItem>
+      </Children>
+    </BinderItem>
+  </Binder>
+</ScrivenerProject>"""
+        rtf = (
+            "{\\rtf1\\ansi\\ansicpg1252\\uc0"
+            "{\\colortbl;\\red230\\green230\\blue230;"
+            "\\red255\\green255\\blue255;}"
+            "\\pard\\cb1 Highlighted\\cb2 Plain\\par}"
+        )
+        buffer = BytesIO()
+        with ZipFile(buffer, "w") as archive:
+            archive.writestr("bg.scrivx", manifest)
+            archive.writestr("Files/Data/T1/content.rtf", rtf)
+
+        result = crud.import_scrivener(
+            self.db, self.owner.id, buffer.getvalue()
+        )
+        tree = crud.get_tree(self.db, result["project_id"], self.owner.id)
+        body = crud.get_node(self.db, tree[0]["id"], self.owner.id)["body"]
+        self.assertEqual(
+            body,
+            '<p><mark style="background-color: #e6e6e6; color: inherit">'
+            "Highlighted</mark>Plain</p>",
+        )
+
     def test_import_scrivener_keeps_children_under_documents(self) -> None:
         manifest = """<?xml version="1.0" encoding="UTF-8"?>
 <ScrivenerProject Version="2.0">
@@ -1788,6 +1823,28 @@ class ManuscriptTests(unittest.TestCase):
             )
         self.assertIn(b"\\fs26", rtf)
         self.assertNotIn(b"\\fs20", rtf)
+
+    def test_export_scrivener_preserves_character_background(self) -> None:
+        project = self._project()
+        self._node(
+            project,
+            "강조",
+            body=(
+                '<p><mark style="background-color: #e6e6e6; color: inherit">'
+                "강조 문장</mark></p>"
+            ),
+        )
+        self.db.commit()
+
+        data, _ = crud.export_scrivener(self.db, project.id, self.owner.id)
+        with ZipFile(BytesIO(data)) as archive:
+            rtf = next(
+                archive.read(name)
+                for name in archive.namelist()
+                if name.endswith("/content.rtf")
+            )
+        self.assertIn(b"\\highlight", rtf)
+        self.assertIn(b"\\red230\\green230\\blue230", rtf)
 
     def test_export_scrivener_embeds_body_images(self) -> None:
         png = base64.b64decode(
