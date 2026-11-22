@@ -35,7 +35,12 @@ logger = logging.getLogger(__name__)
 # Local storage is used when S3 is not configured, including production
 # deployments without object storage. Files are served from ``/uploads``.
 UPLOAD_DIR = Path(os.getenv("UPLOAD_DIR", "uploads"))
-MAX_UPLOAD_SIZE = int(os.getenv("MAX_UPLOAD_SIZE", 50 * 1024 * 1024))
+MAX_UPLOAD_SIZE = int(os.getenv("MAX_UPLOAD_SIZE", str(50 * 1024 * 1024)))
+# Raw clips may be much larger than the stored animated WebP. Their size is
+# checked before conversion with this separate, more generous limit.
+MAX_VIDEO_UPLOAD_SIZE = int(
+    os.getenv("MAX_VIDEO_UPLOAD_SIZE", str(200 * 1024 * 1024))
+)
 URL_PREFIX = "/uploads"
 
 ALLOWED_CONTENT_TYPES = {
@@ -332,14 +337,18 @@ def _save_to_local(
     return key
 
 
-async def _read_upload(file: UploadFile) -> bytes:
-    content = await file.read(MAX_UPLOAD_SIZE + 1)
-    if len(content) > MAX_UPLOAD_SIZE:
+async def _read_upload(
+    file: UploadFile,
+    limit: int | None = None,
+    label: str = "이미지",
+) -> bytes:
+    limit = MAX_UPLOAD_SIZE if limit is None else limit
+    content = await file.read(limit + 1)
+    if len(content) > limit:
         raise HTTPException(
             status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
             detail=(
-                f"이미지 크기는 {MAX_UPLOAD_SIZE // (1024 * 1024)}MB 이하여야 "
-                "합니다."
+                f"{label} 크기는 {limit // (1024 * 1024)}MB 이하여야 합니다."
             ),
         )
     return content
@@ -579,7 +588,11 @@ async def save_banner(
         )
 
     try:
-        content = await _read_upload(file)
+        content = await _read_upload(
+            file,
+            limit=MAX_VIDEO_UPLOAD_SIZE if video_suffix else MAX_UPLOAD_SIZE,
+            label="영상" if video_suffix else "이미지",
+        )
     finally:
         await file.close()
 
@@ -596,6 +609,16 @@ async def save_banner(
         )
     else:
         content, content_type, extension = _sanitize_image(content)
+
+    if len(content) > MAX_UPLOAD_SIZE:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail=(
+                "변환된 이미지가 "
+                f"{MAX_UPLOAD_SIZE // (1024 * 1024)}MB를 넘습니다. "
+                "영상 구간을 짧게 줄이거나 화질을 낮춰주세요."
+            ),
+        )
 
     if _s3_is_configured():
         return _save_to_s3(content, content_type, extension, folder, name)

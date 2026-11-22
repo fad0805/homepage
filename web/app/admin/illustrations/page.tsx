@@ -41,6 +41,7 @@ const MAX_IMAGE_BYTES = 50 * 1024 * 1024;
 const LIST_PAGE_SIZE = 12;
 const MAX_VIDEO_SECONDS = 10;
 const MAX_VIDEO_BYTES = 20 * 1024 * 1024;
+const MAX_VIDEO_UPLOAD_BYTES = 200 * 1024 * 1024;
 const ILLUSTRATION_ACCEPT =
   "image/png,image/jpeg,image/webp,image/gif,video/mp4,video/quicktime,video/webm,video/x-m4v";
 const ILLUSTRATION_VIDEO_TYPES = new Set([
@@ -108,6 +109,14 @@ async function inspectVideos(files: File[]): Promise<VideoCandidateBase[]> {
   );
 }
 
+function oversizedVideo(files: File[]) {
+  return files.find(
+    (file) =>
+      ILLUSTRATION_VIDEO_TYPES.has(file.type) &&
+      file.size > MAX_VIDEO_UPLOAD_BYTES,
+  );
+}
+
 function needsTrim(candidate: VideoCandidateBase) {
   if (candidate.file.size > MAX_VIDEO_BYTES) return true;
   return candidate.duration !== null && candidate.duration > MAX_VIDEO_SECONDS;
@@ -168,16 +177,21 @@ function createBatches(files: File[]) {
   let currentBytes = 0;
 
   for (const file of files) {
+    // Raw video size is allowed to be much larger than the stored WebP, so
+    // it does not consume the regular image batch budget.
+    const batchBytes = ILLUSTRATION_VIDEO_TYPES.has(file.type)
+      ? 0
+      : file.size;
     const full =
       current.length >= MAX_BATCH_FILES ||
-      (current.length > 0 && currentBytes + file.size > MAX_BATCH_BYTES);
+      (current.length > 0 && currentBytes + batchBytes > MAX_BATCH_BYTES);
     if (full) {
       batches.push(current);
       current = [];
       currentBytes = 0;
     }
     current.push(file);
-    currentBytes += file.size;
+    currentBytes += batchBytes;
   }
 
   if (current.length > 0) {
@@ -417,6 +431,17 @@ export default function AdminIllustrations() {
 
     const media = Array.from(list).filter(isIllustrationFile);
     if (media.length === 0) return;
+
+    if (oversizedVideo(media)) {
+      setNotice({
+        type: "error",
+        text: `원본 영상은 ${
+          MAX_VIDEO_UPLOAD_BYTES / (1024 * 1024)
+        }MB 이하만 업로드할 수 있습니다.`,
+      });
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      return;
+    }
 
     setInspectingVideos(true);
     try {
@@ -850,6 +875,17 @@ export default function AdminIllustrations() {
 
     const media = Array.from(list).filter(isIllustrationFile);
     if (media.length === 0) return;
+
+    if (oversizedVideo(media)) {
+      setModalNotice({
+        type: "error",
+        text: `원본 영상은 ${
+          MAX_VIDEO_UPLOAD_BYTES / (1024 * 1024)
+        }MB 이하만 업로드할 수 있습니다.`,
+      });
+      if (modalFileInputRef.current) modalFileInputRef.current.value = "";
+      return;
+    }
 
     setInspectingVideos(true);
     try {

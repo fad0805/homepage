@@ -1,3 +1,4 @@
+import asyncio
 import shutil
 import subprocess
 import tempfile
@@ -5,6 +6,7 @@ import unittest
 from io import BytesIO
 from pathlib import Path
 
+from fastapi import HTTPException, UploadFile
 from PIL import Image
 
 from core import uploads
@@ -35,6 +37,13 @@ class VideoWebpTests(unittest.TestCase):
             stderr=subprocess.DEVNULL,
         )
         return target.read_bytes()
+
+    def test_video_upload_limit_uses_video_label(self) -> None:
+        upload = UploadFile(filename="clip.mp4", file=BytesIO(b"x" * 11))
+        with self.assertRaises(HTTPException) as raised:
+            asyncio.run(uploads._read_upload(upload, limit=10, label="영상"))
+        self.assertEqual(raised.exception.status_code, 413)
+        self.assertIn("영상", raised.exception.detail)
 
     def test_short_clip_becomes_animated_webp(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
