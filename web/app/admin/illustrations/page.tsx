@@ -39,6 +39,20 @@ const MAX_BATCH_FILES = 10;
 const MAX_BATCH_BYTES = 40 * 1024 * 1024;
 const MAX_IMAGE_BYTES = 50 * 1024 * 1024;
 const LIST_PAGE_SIZE = 12;
+const ILLUSTRATION_ACCEPT =
+  "image/png,image/jpeg,image/webp,image/gif,video/mp4,video/quicktime,video/webm,video/x-m4v";
+const ILLUSTRATION_VIDEO_TYPES = new Set([
+  "video/mp4",
+  "video/quicktime",
+  "video/webm",
+  "video/x-m4v",
+]);
+
+function isIllustrationFile(file: File) {
+  return (
+    file.type.startsWith("image/") || ILLUSTRATION_VIDEO_TYPES.has(file.type)
+  );
+}
 
 const REPRESENTATIVE_CROP_STAGES: CropStageConfig[] = [
   {
@@ -276,14 +290,12 @@ export default function AdminIllustrations() {
   const addFiles = (list: FileList | null) => {
     if (!list) return;
 
-    const images = Array.from(list).filter((file) =>
-      file.type.startsWith("image/"),
-    );
-    if (images.length === 0) return;
+    const media = Array.from(list).filter(isIllustrationFile);
+    if (media.length === 0) return;
 
     setFiles((previous) => {
       const available = Math.max(0, MAX_FILES - previous.length);
-      return [...previous, ...images.slice(0, available)];
+      return [...previous, ...media.slice(0, available)];
     });
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
@@ -621,16 +633,14 @@ export default function AdminIllustrations() {
   const addImagesToEditing = async (list: FileList | null) => {
     if (!editingItem || !list || addingImages) return;
 
-    const images = Array.from(list).filter((file) =>
-      file.type.startsWith("image/"),
-    );
-    if (images.length === 0) return;
+    const media = Array.from(list).filter(isIllustrationFile);
+    if (media.length === 0) return;
 
     setAddingImages(true);
     setModalNotice(null);
 
     const formData = new FormData();
-    images.forEach((file) => formData.append("files", file));
+    media.forEach((file) => formData.append("files", file));
     formData.append("illustration_id", String(editingItem.id));
 
     try {
@@ -656,7 +666,7 @@ export default function AdminIllustrations() {
       });
       setModalNotice({
         type: "success",
-        text: `${images.length}장의 사진을 추가했습니다.`,
+        text: `${media.length}개의 파일을 추가했습니다.`,
       });
     } catch (error) {
       setModalNotice({
@@ -1102,7 +1112,7 @@ export default function AdminIllustrations() {
           <input
             ref={fileInputRef}
             type="file"
-            accept="image/png,image/jpeg,image/webp,image/gif"
+            accept={ILLUSTRATION_ACCEPT}
             multiple
             onChange={(event) => addFiles(event.target.files)}
           />
@@ -1112,13 +1122,13 @@ export default function AdminIllustrations() {
               className="admin-illustrations-picker__empty"
               onClick={() => fileInputRef.current?.click()}
             >
-              <strong>사진 선택</strong>
-              <span>또는 이 영역에 사진을 끌어다 놓으세요.</span>
+              <strong>사진·영상 선택</strong>
+              <span>또는 이 영역에 사진·영상을 끌어다 놓으세요.</span>
             </button>
           ) : (
             <>
               <div className="admin-illustrations-picker__head">
-                <span>선택한 사진 {files.length}장</span>
+                <span>선택한 파일 {files.length}개</span>
                 <button
                   type="button"
                   className="admin-button"
@@ -1185,8 +1195,19 @@ export default function AdminIllustrations() {
                     >
                       ⠿
                     </span>
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={preview.url} alt={preview.file.name} />
+                    {ILLUSTRATION_VIDEO_TYPES.has(preview.file.type) ? (
+                      <video
+                        src={preview.url}
+                        aria-label={preview.file.name}
+                        muted
+                        loop
+                        autoPlay
+                        playsInline
+                      />
+                    ) : (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={preview.url} alt={preview.file.name} />
+                    )}
                     <button
                       type="button"
                       onClick={() => removeFile(index)}
@@ -1801,7 +1822,7 @@ export default function AdminIllustrations() {
                     <input
                       ref={modalFileInputRef}
                       type="file"
-                      accept="image/png,image/jpeg,image/webp,image/gif"
+                      accept={ILLUSTRATION_ACCEPT}
                       multiple
                       onChange={(event) =>
                         void addImagesToEditing(event.target.files)

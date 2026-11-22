@@ -1,5 +1,9 @@
 FROM python:3.11-alpine
 
+# ffmpeg decodes short illustration clips before Pillow assembles them into
+# animated WebP files.
+RUN apk add --no-cache ffmpeg
+
 # Install python and pip
 WORKDIR /app
 

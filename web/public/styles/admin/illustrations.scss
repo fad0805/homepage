@@ -319,7 +319,8 @@
     box-shadow: 0 0 0 1px var(--admin-primary) inset;
   }
 
-  img {
+  img,
+  video {
     display: block;
     width: 100%;
     height: 6rem;

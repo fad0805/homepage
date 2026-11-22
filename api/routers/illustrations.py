@@ -233,7 +233,11 @@ async def upload_illustrations(
     uploaded: list[str] = []
     try:
         for file in files:
-            url = await save_banner(file, folder="illustrations")
+            url = await save_banner(
+                file,
+                folder="illustrations",
+                allow_video=True,
+            )
             uploaded.append(url)
 
         if illustration_id is None:

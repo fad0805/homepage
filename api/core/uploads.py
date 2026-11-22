@@ -1,6 +1,9 @@
 import logging
 import mimetypes
 import os
+import shutil
+import subprocess
+import tempfile
 import uuid
 from contextlib import contextmanager
 from io import BytesIO
@@ -42,6 +45,18 @@ ALLOWED_CONTENT_TYPES = {
     "image/webp": ".webp",
     "image/gif": ".gif",
 }
+
+# Short clips uploaded as illustrations are transcoded to animated WebP.
+# Longer clips are truncated to the first N seconds instead of rejected.
+VIDEO_CONTENT_TYPES = {
+    "video/mp4": ".mp4",
+    "video/quicktime": ".mov",
+    "video/webm": ".webm",
+    "video/x-m4v": ".m4v",
+}
+MAX_VIDEO_SECONDS = max(1, int(os.getenv("MAX_VIDEO_SECONDS", "10")))
+VIDEO_FPS = max(1, int(os.getenv("VIDEO_FPS", "12")))
+VIDEO_MAX_EDGE = max(2, int(os.getenv("VIDEO_MAX_EDGE", "640")))
 
 # The client-provided content type is only used as a cheap pre-check. The
 # extension and MIME type that are actually stored come from the decoded image.
@@ -393,6 +408,83 @@ def _sanitize_image(content: bytes) -> tuple[bytes, str, str]:
         ) from exc
 
 
+def _video_to_animated_webp(content: bytes, suffix: str) -> bytes:
+    """Render the first seconds of a clip as an animated WebP image."""
+    if shutil.which("ffmpeg") is None:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="영상 변환 기능을 사용할 수 없습니다.",
+        )
+
+    max_frames = MAX_VIDEO_SECONDS * VIDEO_FPS
+    scale = f"scale=w='min({VIDEO_MAX_EDGE},iw)':h=-2"
+    with tempfile.TemporaryDirectory(prefix="illustration-video-") as tmp:
+        directory = Path(tmp)
+        source = directory / f"source{suffix}"
+        source.write_bytes(content)
+        pattern = directory / "frame_%05d.png"
+        command = [
+            "ffmpeg",
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-i",
+            str(source),
+            "-t",
+            str(MAX_VIDEO_SECONDS),
+            "-vf",
+            f"fps={VIDEO_FPS},{scale}",
+            "-frames:v",
+            str(max_frames),
+            str(pattern),
+        ]
+        try:
+            result = subprocess.run(
+                command,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.PIPE,
+                timeout=120,
+                check=False,
+            )
+        except subprocess.TimeoutExpired as exc:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="영상의 웹피 변환이 너무 오래 걸렸습니다.",
+            ) from exc
+        if result.returncode != 0:
+            logger.warning(
+                "Rejected a video that ffmpeg could not decode: %s",
+                result.stderr.decode("utf-8", "replace")[-500:],
+            )
+            raise HTTPException(
+                status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+                detail="영상 파일을 읽을 수 없습니다.",
+            )
+
+        frames: list[Any] = []
+        for path in sorted(directory.glob("frame_*.png")):
+            with Image.open(path) as frame:
+                frames.append(frame.convert("RGB"))
+        if not frames:
+            raise HTTPException(
+                status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+                detail="영상에서 재생할 프레임을 찾지 못했습니다.",
+            )
+
+        output = BytesIO()
+        frames[0].save(
+            output,
+            format="WEBP",
+            save_all=True,
+            append_images=frames[1:],
+            duration=max(1, round(1000 / VIDEO_FPS)),
+            loop=0,
+            quality=80,
+            method=4,
+        )
+        return output.getvalue()
+
+
 def save_image_bytes(
     content: bytes,
     folder: str = "chapters",
@@ -430,17 +522,34 @@ async def save_banner(
     file: UploadFile,
     folder: str = "banners",
     name: str | None = None,
+    *,
+    allow_video: bool = False,
 ) -> str:
     """Upload an image and return its storage key.
 
     Database models persist this relative key through their ``ImageUrl`` type.
     Callers that return the image to a browser should pass it through
     :func:`core.image_urls.public_url` first.
+
+    Illustration uploads may also send a short video. It is stored as an
+    animated WebP (truncated to ``MAX_VIDEO_SECONDS``) so every consumer can
+    keep using the existing image URLs.
     """
-    if file.content_type not in ALLOWED_CONTENT_TYPES:
+    video_suffix = VIDEO_CONTENT_TYPES.get(file.content_type or "")
+    if video_suffix and not allow_video:
+        video_suffix = None
+    if video_suffix:
+        allowed = True
+    else:
+        allowed = file.content_type in ALLOWED_CONTENT_TYPES
+
+    if not allowed:
+        detail = "PNG, JPEG, WEBP, GIF 이미지만 업로드할 수 있습니다."
+        if allow_video:
+            detail = "PNG, JPEG, WEBP, GIF 이미지 또는 MP4, MOV, WEBM 영상만 업로드할 수 있습니다."
         raise HTTPException(
             status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
-            detail="PNG, JPEG, WEBP, GIF 이미지만 업로드할 수 있습니다.",
+            detail=detail,
         )
 
     try:
@@ -448,7 +557,14 @@ async def save_banner(
     finally:
         await file.close()
 
-    content, content_type, extension = _sanitize_image(content)
+    if video_suffix:
+        content, content_type, extension = (
+            _video_to_animated_webp(content, video_suffix),
+            "image/webp",
+            ".webp",
+        )
+    else:
+        content, content_type, extension = _sanitize_image(content)
 
     if _s3_is_configured():
         return _save_to_s3(content, content_type, extension, folder, name)
