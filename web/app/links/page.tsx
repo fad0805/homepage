@@ -51,7 +51,12 @@ export default async function Links() {
   }
 
   const grouped = [...categoriesById.values()]
-    .sort((a, b) => a.order - b.order || a.id - b.id)
+    .sort(
+      (a, b) =>
+        Number(b.is_special) - Number(a.is_special) ||
+        a.order - b.order ||
+        a.id - b.id,
+    )
     .map((category) => ({
       category,
       items: links

@@ -130,7 +130,12 @@ async function apiFetch<T>(url: string, init: RequestInit = {}): Promise<T> {
 }
 
 function sortCategories(categories: Category[]) {
-  return [...categories].sort((a, b) => a.order - b.order || a.id - b.id);
+  return [...categories].sort(
+    (a, b) =>
+      Number(b.is_special) - Number(a.is_special) ||
+      a.order - b.order ||
+      a.id - b.id,
+  );
 }
 
 function sortLinks(links: LinkItem[]) {
@@ -300,6 +305,7 @@ function SortableCategorySection({
   } = useSortable({
     id: `${CATEGORY_TYPE}-${category.id}`,
     data: { type: CATEGORY_TYPE },
+    disabled: category.is_special,
   });
 
   const style = {
@@ -316,7 +322,7 @@ function SortableCategorySection({
       className={`admin-links-category${isDragging ? " is-dragging" : ""}`}
     >
       <header className="admin-links-category-header">
-        {canManageCategory ? (
+        {canManageCategory && !category.is_special ? (
           <button
             type="button"
             className="admin-drag-handle"
@@ -439,6 +445,9 @@ export default function AdminLinks() {
     null,
   );
   const [categoryIsSpecial, setCategoryIsSpecial] = useState(false);
+  const hasOtherSpecialCategory = categories.some(
+    (category) => category.is_special && category.id !== editingCategory?.id,
+  );
 
   const [isDirty, setIsDirty] = useState(false);
   const [deletedLinkIds, setDeletedLinkIds] = useState<number[]>([]);
@@ -576,10 +585,21 @@ export default function AdminLinks() {
       const activeData = active.data.current;
 
       if (activeData?.type === CATEGORY_TYPE) {
-        const oldIndex = categories.findIndex(
+        const activeCategory = categories.find(
           (category) => `${CATEGORY_TYPE}-${category.id}` === active.id,
         );
-        const newIndex = categories.findIndex(
+        if (activeCategory?.is_special) {
+          return;
+        }
+
+        const pinned = categories.filter((category) => category.is_special);
+        const reorderable = categories.filter(
+          (category) => !category.is_special,
+        );
+        const oldIndex = reorderable.findIndex(
+          (category) => `${CATEGORY_TYPE}-${category.id}` === active.id,
+        );
+        const newIndex = reorderable.findIndex(
           (category) => `${CATEGORY_TYPE}-${category.id}` === over.id,
         );
         if (oldIndex < 0 || newIndex < 0) {
@@ -587,10 +607,12 @@ export default function AdminLinks() {
         }
 
         setCategories(
-          arrayMove(categories, oldIndex, newIndex).map((category, index) => ({
-            ...category,
-            order: index,
-          })),
+          [...pinned, ...arrayMove(reorderable, oldIndex, newIndex)].map(
+            (category, index) => ({
+              ...category,
+              order: index,
+            }),
+          ),
         );
         setCategoriesReordered(true);
         setIsDirty(true);
@@ -1528,6 +1550,7 @@ export default function AdminLinks() {
                 name="is_special"
                 type="checkbox"
                 checked={categoryIsSpecial}
+                disabled={hasOtherSpecialCategory && !categoryIsSpecial}
                 onChange={(event) => setCategoryIsSpecial(event.target.checked)}
               />
               <span>
@@ -1536,6 +1559,9 @@ export default function AdminLinks() {
                   선택하면 이 카테고리에 링크를 넣을 수 없고, 배너와
                   상세설명만 표시됩니다.
                 </small>
+                {hasOtherSpecialCategory ? (
+                  <small>배너 카테고리는 하나만 지정할 수 있습니다.</small>
+                ) : null}
               </span>
             </label>
 
