@@ -42,7 +42,6 @@ const LIST_PAGE_SIZE = 12;
 const MAX_VIDEO_SECONDS = 10;
 const MAX_VIDEO_BYTES = 20 * 1024 * 1024;
 const MAX_VIDEO_UPLOAD_BYTES = 200 * 1024 * 1024;
-const MAX_PROXY_BODY_BYTES = 2 * 1024 * 1024 * 1024;
 const ILLUSTRATION_ACCEPT =
   "image/png,image/jpeg,image/webp,image/gif,video/mp4,video/quicktime,video/webm,video/x-m4v";
 const ILLUSTRATION_VIDEO_TYPES = new Set([
@@ -138,12 +137,19 @@ function formatClock(totalSeconds: number) {
     .join(":");
 }
 
-function parseClock(value: string) {
-  const parts = value.split(":").map(Number);
-  if (parts.length < 2 || parts.length > 3) return null;
-  if (parts.some((part) => !Number.isFinite(part) || part < 0)) return null;
-  const [hours, minutes, seconds] =
-    parts.length === 2 ? [0, parts[0], parts[1]] : parts;
+function formatClockDraft(value: string) {
+  const digits = value.replace(/\D/g, "").slice(0, 6);
+  return [digits.slice(0, 2), digits.slice(2, 4), digits.slice(4, 6)]
+    .filter(Boolean)
+    .join(":");
+}
+
+function parseClockDraft(value: string) {
+  const digits = value.replace(/\D/g, "");
+  if (digits.length !== 6) return null;
+  const hours = Number(digits.slice(0, 2));
+  const minutes = Number(digits.slice(2, 4));
+  const seconds = Number(digits.slice(4, 6));
   if (minutes > 59 || seconds > 59) return null;
   return hours * 3600 + minutes * 60 + seconds;
 }
@@ -220,6 +226,7 @@ export default function AdminIllustrations() {
   const [videoTrimRequest, setVideoTrimRequest] =
     useState<VideoTrimRequest | null>(null);
   const [videoTrimStarts, setVideoTrimStarts] = useState<number[]>([]);
+  const [clockDrafts, setClockDrafts] = useState<Record<number, string>>({});
   const [videoTrimSeconds, setVideoTrimSeconds] = useState<number[]>([]);
   const [trimPreviewPlaying, setTrimPreviewPlaying] = useState<number | null>(
     null,
@@ -583,17 +590,6 @@ export default function AdminIllustrations() {
     const normalizedTitle = title.trim();
     if (!normalizedTitle) {
       setNotice({ type: "error", text: "삽화 제목을 입력해주세요." });
-      return;
-    }
-
-    const totalBytes =
-      files.reduce((sum, file) => sum + file.size, 0) +
-      (createRepresentativeFile?.size ?? 0);
-    if (totalBytes > MAX_PROXY_BODY_BYTES) {
-      setNotice({
-        type: "error",
-        text: "한 번에 올리는 파일 총 용량이 2GB를 넘었습니다. 나눠서 등록해주세요.",
-      });
       return;
     }
 
@@ -2313,6 +2309,19 @@ export default function AdminIllustrations() {
                   const start = videoTrimStarts[index] ?? 0;
                   const seconds = videoTrimSeconds[index] ?? MAX_VIDEO_SECONDS;
                   const end = start + seconds;
+                  const maxStart = startMax(candidate, seconds);
+                  const clockDraft = clockDrafts[index] ?? formatClock(start);
+                  const setStart = (value: number) => {
+                    const clamped = Math.min(
+                      Math.max(Math.round(value), 0),
+                      maxStart,
+                    );
+                    setVideoTrimStarts((current) => {
+                      const next = [...current];
+                      next[index] = clamped;
+                      return next;
+                    });
+                  };
                   const previewTime = Math.min(
                     Math.max(trimPreviewTimes[index] ?? start, start),
                     end,
@@ -2424,30 +2433,49 @@ export default function AdminIllustrations() {
                         <label className="admin-illustrations-trim-modal__input admin-illustrations-trim-modal__input--time">
                           <span>시작</span>
                           <input
-                            type="time"
-                            min="00:00:00"
-                            max={formatClock(startMax(candidate, seconds))}
-                            step={1}
-                            value={formatClock(start)}
+                            type="text"
+                            inputMode="numeric"
+                            autoComplete="off"
+                            aria-label="시작 시각 (시:분:초)"
+                            value={formatClockDraft(clockDraft)}
                             onChange={(event) => {
-                              const parsed = parseClock(event.target.value);
-                              const clamped =
-                                parsed === null
-                                  ? 0
-                                  : Math.min(
-                                      Math.max(parsed, 0),
-                                      startMax(candidate, seconds),
-                                    );
-                              setVideoTrimStarts((current) => {
-                                const next = [...current];
-                                next[index] = clamped;
+                              const digits = event.target.value
+                                .replace(/\D/g, "")
+                                .slice(0, 6);
+                              setClockDrafts((current) => ({
+                                ...current,
+                                [index]: digits,
+                              }));
+                              const parsed = parseClockDraft(digits);
+                              if (parsed !== null) setStart(parsed);
+                            }}
+                            onKeyDown={(event) => {
+                              if (
+                                event.key !== "ArrowUp" &&
+                                event.key !== "ArrowDown"
+                              ) {
+                                return;
+                              }
+                              event.preventDefault();
+                              const next =
+                                start + (event.key === "ArrowUp" ? 1 : -1);
+                              setStart(next);
+                              setClockDrafts((current) => ({
+                                ...current,
+                                [index]: formatClock(next).replace(/:/g, ""),
+                              }));
+                            }}
+                            onBlur={() => {
+                              const parsed = parseClockDraft(clockDraft);
+                              if (parsed !== null) setStart(parsed);
+                              setClockDrafts((current) => {
+                                const next = { ...current };
+                                delete next[index];
                                 return next;
                               });
                             }}
                           />
-                          <small>
-                            최대 {formatClock(startMax(candidate, seconds))}
-                          </small>
+                          <small>최대 {formatClock(maxStart)}</small>
                         </label>
                         <label className="admin-illustrations-trim-modal__input">
                           <span>길이</span>
