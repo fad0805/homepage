@@ -4,6 +4,7 @@ import os
 import shutil
 import subprocess
 import tempfile
+import time
 import uuid
 from contextlib import contextmanager
 from io import BytesIO
@@ -60,15 +61,22 @@ VIDEO_CONTENT_TYPES = {
     "video/x-m4v": ".m4v",
 }
 MAX_VIDEO_SECONDS = max(1, int(os.getenv("MAX_VIDEO_SECONDS", "10")))
+VIDEO_CONVERSION_ATTEMPTS = max(
+    1, int(os.getenv("VIDEO_CONVERSION_ATTEMPTS", "3"))
+)
 VIDEO_FPS = max(1, int(os.getenv("VIDEO_FPS", "12")))
 VIDEO_MAX_EDGE = max(2, int(os.getenv("VIDEO_MAX_EDGE", "640")))
 
 # Illustration uploads are split into small sequential chunks so no single
 # request has to be buffered in full by the proxy or held in API memory.
 MAX_BULK_ILLUSTRATIONS = 1
-# The browser trims clips to 10 seconds before upload, so one file plus the
-# cropped 1024px representative image stays below the 60MB proxy body limit.
+# Every request stays below the 60MB proxy body limit. Videos are sent as
+# byte chunks and assembled on disk before the server converts them.
 MAX_BULK_REQUEST_BYTES = 60 * 1024 * 1024
+MAX_STAGING_PART_BYTES = 48 * 1024 * 1024
+MAX_STAGING_REPRESENTATIVE_BYTES = 16 * 1024 * 1024
+STAGING_DIR = UPLOAD_DIR / ".illustration-staging"
+STAGING_TTL_SECONDS = 60 * 60
 MAX_VIDEOS_PER_ILLUSTRATION = 5
 
 
@@ -105,6 +113,69 @@ def validate_upload_batch(
                 f"{MAX_VIDEOS_PER_ILLUSTRATION}개까지 업로드할 수 있습니다."
             ),
         )
+
+
+def staging_session_dir(session_id: str) -> Path:
+    """Resolve a client upload session id to a safe local directory."""
+    try:
+        parsed = uuid.UUID(session_id)
+    except (AttributeError, TypeError, ValueError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="업로드 세션 값이 올바르지 않습니다.",
+        ) from exc
+    return STAGING_DIR / str(parsed)
+
+
+def cleanup_stale_staging_sessions() -> None:
+    """Drop abandoned staging sessions so uploads do not leak disk space."""
+    if not STAGING_DIR.exists():
+        return
+    now = time.time()
+    for child in STAGING_DIR.iterdir():
+        if not child.is_dir():
+            continue
+        if now - child.stat().st_mtime > STAGING_TTL_SECONDS:
+            shutil.rmtree(child, ignore_errors=True)
+
+
+async def stream_upload_to_path(
+    upload: UploadFile,
+    path: Path,
+    limit: int,
+) -> int:
+    """Stream an upload part to disk without holding it all in memory."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    written = 0
+    try:
+        with path.open("wb") as handle:
+            while True:
+                piece = await upload.read(1024 * 1024)
+                if not piece:
+                    break
+                written += len(piece)
+                if written > limit:
+                    raise HTTPException(
+                        status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                        detail="요청당 업로드 용량이 큽니다. 파일을 나눠 올려주세요.",
+                    )
+                handle.write(piece)
+    except Exception:
+        path.unlink(missing_ok=True)
+        raise
+    finally:
+        await upload.close()
+    return written
+
+
+def assemble_staged_file(parts: list[Path], target: Path) -> None:
+    """Join staged byte chunks into one file using a bounded buffer."""
+    target.parent.mkdir(parents=True, exist_ok=True)
+    with target.open("wb") as output:
+        for part in parts:
+            with part.open("rb") as source:
+                shutil.copyfileobj(source, output, 1024 * 1024)
+
 
 # The client-provided content type is only used as a cheap pre-check. The
 # extension and MIME type that are actually stored come from the decoded image.
@@ -466,38 +537,48 @@ def _video_to_animated_webp(
     max_seconds: float | None = None,
     start_seconds: float | None = None,
 ) -> bytes:
-    """Render the first seconds of a clip as an animated WebP image."""
-    if shutil.which("ffmpeg") is None:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="영상 변환 기능을 사용할 수 없습니다.",
+    """Render the first seconds of an in-memory clip as an animated WebP."""
+    with tempfile.TemporaryDirectory(prefix="illustration-video-") as tmp:
+        source = Path(tmp) / f"source{suffix}"
+        source.write_bytes(content)
+        return convert_video_file_to_webp_bytes(
+            source,
+            suffix,
+            max_seconds=max_seconds,
+            start_seconds=start_seconds,
         )
 
-    seconds = MAX_VIDEO_SECONDS
-    if max_seconds is not None:
-        try:
-            seconds = max(0.5, min(float(max_seconds), MAX_VIDEO_SECONDS))
-        except (TypeError, ValueError):
-            seconds = MAX_VIDEO_SECONDS
-    start = 0.0
-    if start_seconds is not None:
-        try:
-            start = max(0.0, float(start_seconds))
-        except (TypeError, ValueError):
-            start = 0.0
+
+_has_webp_anim_encoder: bool | None = None
+
+
+def _ffmpeg_supports_webp_anim() -> bool:
+    global _has_webp_anim_encoder
+    if _has_webp_anim_encoder is None:
+        result = subprocess.run(
+            ["ffmpeg", "-hide_banner", "-encoders"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            check=False,
+        )
+        _has_webp_anim_encoder = "libwebp_anim" in result.stdout
+    return _has_webp_anim_encoder
+
+
+def _video_file_to_webp_via_frames(
+    source: Path,
+    suffix: str,
+    seconds: float,
+    start: float,
+) -> bytes:
+    """Fallback for ffmpeg builds without a direct animated WebP encoder."""
     max_frames = max(1, int(seconds * VIDEO_FPS) + 1)
     scale = f"scale=w='min({VIDEO_MAX_EDGE},iw)':h=-2"
     with tempfile.TemporaryDirectory(prefix="illustration-video-") as tmp:
         directory = Path(tmp)
-        source = directory / f"source{suffix}"
-        source.write_bytes(content)
         pattern = directory / "frame_%05d.png"
-        command = [
-            "ffmpeg",
-            "-hide_banner",
-            "-loglevel",
-            "error",
-        ]
+        command = ["ffmpeg", "-hide_banner", "-loglevel", "error"]
         if start > 0:
             command.extend(["-ss", f"{start:.2f}"])
         command.extend(
@@ -545,7 +626,6 @@ def _video_to_animated_webp(
                 status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
                 detail="영상에서 재생할 프레임을 찾지 못했습니다.",
             )
-
         output = BytesIO()
         frames[0].save(
             output,
@@ -557,7 +637,142 @@ def _video_to_animated_webp(
             quality=80,
             method=4,
         )
-        return output.getvalue()
+        content = output.getvalue()
+    if len(content) > MAX_UPLOAD_SIZE:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail=(
+                "변환된 이미지가 "
+                f"{MAX_UPLOAD_SIZE // (1024 * 1024)}MB를 넘습니다. "
+                "영상 구간을 짧게 줄이거나 화질을 낮춰주세요."
+            ),
+        )
+    return content
+
+
+def convert_video_file_to_webp_bytes(
+    source: Path,
+    suffix: str,
+    max_seconds: float | None = None,
+    start_seconds: float | None = None,
+) -> bytes:
+    """Convert a video on disk to a small animated WebP byte payload.
+
+    ffmpeg reads and encodes as streams here, so a 200MB source clip never has
+    to be materialized in Python memory.
+    """
+    if shutil.which("ffmpeg") is None:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="영상 변환 기능을 사용할 수 없습니다.",
+        )
+
+    seconds = MAX_VIDEO_SECONDS
+    if max_seconds is not None:
+        try:
+            seconds = max(0.5, min(float(max_seconds), MAX_VIDEO_SECONDS))
+        except (TypeError, ValueError):
+            seconds = MAX_VIDEO_SECONDS
+    start = 0.0
+    if start_seconds is not None:
+        try:
+            start = max(0.0, float(start_seconds))
+        except (TypeError, ValueError):
+            start = 0.0
+
+    if not _ffmpeg_supports_webp_anim():
+        return _video_file_to_webp_via_frames(source, suffix, seconds, start)
+
+    max_frames = max(1, int(seconds * VIDEO_FPS) + 1)
+    scale = f"scale=w='min({VIDEO_MAX_EDGE},iw)':h=-2"
+    with tempfile.TemporaryDirectory(prefix="illustration-video-") as tmp:
+        output = Path(tmp) / "clip.webp"
+        command = [
+            "ffmpeg",
+            "-hide_banner",
+            "-loglevel",
+            "error",
+        ]
+        if start > 0:
+            command.extend(["-ss", f"{start:.2f}"])
+        command.extend(
+            [
+                "-i",
+                str(source),
+                "-t",
+                f"{seconds:.2f}",
+                "-an",
+                "-vf",
+                f"fps={VIDEO_FPS},{scale}",
+                "-frames:v",
+                str(max_frames),
+                "-c:v",
+                "libwebp_anim",
+                "-loop",
+                "0",
+                "-quality",
+                "80",
+                "-compression_level",
+                "4",
+                str(output),
+            ]
+        )
+        try:
+            result = subprocess.run(
+                command,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.PIPE,
+                timeout=120,
+                check=False,
+            )
+        except subprocess.TimeoutExpired as exc:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="영상의 웹피 변환이 너무 오래 걸렸습니다.",
+            ) from exc
+        if result.returncode != 0 or not output.exists():
+            logger.warning(
+                "Rejected a video that ffmpeg could not decode: %s",
+                result.stderr.decode("utf-8", "replace")[-500:],
+            )
+            raise HTTPException(
+                status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+                detail="영상 파일을 읽을 수 없습니다.",
+            )
+        if output.stat().st_size > MAX_UPLOAD_SIZE:
+            raise HTTPException(
+                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                detail=(
+                    "변환된 이미지가 "
+                    f"{MAX_UPLOAD_SIZE // (1024 * 1024)}MB를 넘습니다. "
+                    "영상 구간을 짧게 줄이거나 화질을 낮춰주세요."
+                ),
+            )
+        return output.read_bytes()
+
+
+def save_converted_webp_bytes(
+    content: bytes,
+    folder: str = "illustrations",
+    name: str | None = None,
+) -> str:
+    """Persist an ffmpeg-produced WebP without re-encoding it in PIL."""
+    if len(content) > MAX_UPLOAD_SIZE:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail=(
+                "변환된 이미지가 "
+                f"{MAX_UPLOAD_SIZE // (1024 * 1024)}MB를 넘습니다."
+            ),
+        )
+    if _s3_is_configured():
+        return _save_to_s3(content, "image/webp", ".webp", folder, name)
+    if S3_BUCKET or S3_PUBLIC_BASE_URL:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="S3 설정이 불완전합니다.",
+        )
+    return _save_to_local(content, ".webp", folder, name)
 
 
 def save_image_bytes(

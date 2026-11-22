@@ -1,8 +1,12 @@
 import hashlib
 import json
 import logging
+import shutil
+import time
 from dataclasses import dataclass
 from datetime import date
+from pathlib import Path
+from typing import Any
 
 from fastapi import (
     APIRouter,
@@ -21,13 +25,23 @@ from sqlalchemy.orm import Session
 
 from core.mastodon import maybe_notify_illustration
 from core.uploads import (
+    ALLOWED_CONTENT_TYPES,
+    MAX_STAGING_PART_BYTES,
+    MAX_STAGING_REPRESENTATIVE_BYTES,
     MAX_UPLOAD_SIZE,
     MAX_VIDEO_UPLOAD_SIZE,
+    VIDEO_CONVERSION_ATTEMPTS,
     VIDEO_CONTENT_TYPES,
     _read_upload,
+    assemble_staged_file,
+    cleanup_stale_staging_sessions,
+    convert_video_file_to_webp_bytes,
     delete_uploaded_file,
     save_banner,
+    save_converted_webp_bytes,
     save_uploaded_bytes,
+    staging_session_dir,
+    stream_upload_to_path,
     validate_upload_batch,
 )
 from crud.illustrations import (
@@ -192,6 +206,150 @@ def _process_illustration_upload(
         db.close()
 
 
+def _process_staged_upload(
+    illustration_id: int,
+    user_id: int,
+    session_dir: Path,
+    meta: dict[str, Any],
+) -> None:
+    """Assemble and convert staged files, then publish the illustration."""
+    db = SessionLocal()
+    gallery_urls: list[str] = []
+    cleanup_urls: list[str] = []
+    committed = False
+    video_failed = False
+    try:
+        for entry in meta["files"]:
+            file_dir = session_dir / f"{entry['index']:04d}"
+            if entry["video"]:
+                suffix = VIDEO_CONTENT_TYPES[entry["content_type"]]
+                source = file_dir / f"source{suffix}"
+                assemble_staged_file(
+                    [
+                        file_dir / f"{chunk:06d}.part"
+                        for chunk in range(entry["chunk_count"])
+                    ],
+                    source,
+                )
+                converted_url: str | None = None
+                for attempt in range(VIDEO_CONVERSION_ATTEMPTS):
+                    try:
+                        content = convert_video_file_to_webp_bytes(
+                            source,
+                            suffix,
+                            max_seconds=entry.get("seconds"),
+                            start_seconds=entry.get("start"),
+                        )
+                        converted_url = save_converted_webp_bytes(
+                            content, folder="illustrations"
+                        )
+                        break
+                    except Exception as exc:  # noqa: BLE001 - retry any failure
+                        logger.warning(
+                            "Staged video conversion failed "
+                            "(illustration=%s, file=%s, attempt=%s): %s",
+                            illustration_id,
+                            entry["index"],
+                            attempt + 1,
+                            exc,
+                        )
+                        if attempt + 1 < VIDEO_CONVERSION_ATTEMPTS:
+                            time.sleep(attempt + 1)
+                if converted_url is None:
+                    video_failed = True
+                    continue
+                url = converted_url
+            else:
+                content = (file_dir / "000000.part").read_bytes()
+                url = save_uploaded_bytes(
+                    content,
+                    entry["content_type"],
+                    folder="illustrations",
+                )
+            gallery_urls.append(url)
+            cleanup_urls.append(url)
+
+        representative_url: str | None = None
+        if meta.get("representative_content_type"):
+            representative = (session_dir / "representative.part").read_bytes()
+            representative_url = save_uploaded_bytes(
+                representative,
+                meta["representative_content_type"],
+                folder="illustrations",
+                allow_video=False,
+            )
+            cleanup_urls.append(representative_url)
+
+        if meta["purpose"] == "append":
+            append_illustration_images(db, illustration_id, gallery_urls)
+            if not video_failed:
+                existing = (
+                    db.query(Illustration)
+                    .filter(
+                        Illustration.id == illustration_id,
+                        Illustration.user_id == user_id,
+                    )
+                    .first()
+                )
+                if existing is not None and existing.upload_status == "video_failed":
+                    existing.upload_status = "ready"
+                    db.commit()
+        else:
+            group = (
+                db.query(Illustration)
+                .filter(
+                    Illustration.id == illustration_id,
+                    Illustration.user_id == user_id,
+                )
+                .first()
+            )
+            if group is None:
+                for saved in cleanup_urls:
+                    delete_uploaded_file(saved)
+                return
+            finish_illustration_upload(
+                db,
+                illustration_id,
+                gallery_urls,
+                representative_url,
+            )
+            if video_failed:
+                group.visible = False
+                group.protected = False
+                group.upload_status = "video_failed"
+            db.commit()
+            db.refresh(group)
+            committed = True
+            if not video_failed and group.visible:
+                maybe_notify_illustration(db, group)
+        committed = True
+    except Exception:
+        db.rollback()
+        logger.exception(
+            "Background staged upload failed for id=%s", illustration_id
+        )
+        if not committed:
+            for saved in cleanup_urls:
+                delete_uploaded_file(saved)
+            try:
+                pending = (
+                    db.query(Illustration)
+                    .filter(
+                        Illustration.id == illustration_id,
+                        Illustration.user_id == user_id,
+                    )
+                    .first()
+                )
+                if pending is not None and meta["purpose"] == "create":
+                    db.delete(pending)
+                    db.commit()
+            except Exception:  # noqa: BLE001 - cleanup must not mask the original failure
+                db.rollback()
+    finally:
+        db.close()
+        shutil.rmtree(session_dir, ignore_errors=True)
+
+
 def _parse_tags(value: str | None) -> list[str]:
     return [tag.strip() for tag in (value or "").split(",") if tag.strip()]
 
@@ -307,6 +465,321 @@ def read_popular_illustrations(
 ):
     """Return the user's most viewed illustrations for the dashboard."""
     return get_popular_illustrations(db, user.id, limit=limit)
+
+
+def _write_staging_meta(session_dir: Path, meta: dict[str, Any]) -> None:
+    target = session_dir / "meta.json"
+    temporary = session_dir / "meta.tmp"
+    temporary.write_text(json.dumps(meta, ensure_ascii=False), encoding="utf-8")
+    temporary.replace(target)
+
+
+def _read_staging_meta(session_dir: Path) -> dict[str, Any]:
+    meta_path = session_dir / "meta.json"
+    if not meta_path.exists():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="업로드 세션이 없습니다. 처음부터 다시 올려주세요.",
+        )
+    try:
+        return json.loads(meta_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="업로드 세션을 읽을 수 없습니다.",
+        ) from exc
+
+
+@router.post("/upload-stage")
+async def stage_upload(
+    request: Request,
+    chunk: UploadFile = File(...),
+    session_id: str = Form(...),
+    file_index: int = Form(...),
+    file_count: int = Form(...),
+    chunk_index: int = Form(0),
+    chunk_count: int = Form(1),
+    file_name: str = Form(...),
+    content_type: str = Form(""),
+    total_size: int = Form(...),
+    purpose: str = Form("create"),
+    illustration_id: int | None = Form(None),
+    title: str | None = Form(None),
+    description: str | None = Form(None),
+    tags: str | None = Form(None),
+    taken_at: date | None = Form(None),
+    visible: bool = Form(True),
+    protected: bool = Form(False),
+    video_start_seconds: float | None = Form(None),
+    video_seconds: float | None = Form(None),
+    representative_file: UploadFile | None = File(None),
+    db: Session = Depends(get_db),
+    user=Depends(require_auth),
+):
+    """Store one byte chunk of a staged illustration upload."""
+    # A single video is split across many chunks, so do not count each chunk
+    # as a separate video here. Video totals are validated in the session meta.
+    validate_upload_batch([], request.headers.get("content-length"))
+    cleanup_stale_staging_sessions()
+
+    is_video = content_type in VIDEO_CONTENT_TYPES
+    if not is_video and content_type not in ALLOWED_CONTENT_TYPES:
+        raise HTTPException(
+            status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+            detail="PNG, JPEG, WEBP, GIF 이미지 또는 MP4, MOV, WEBM 영상만 업로드할 수 있습니다.",
+        )
+    if purpose not in {"create", "append"}:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="업로드 방식이 올바르지 않습니다.",
+        )
+    if file_count < 1 or file_count > 100:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="한 번에 최대 100개 파일까지 업로드할 수 있습니다.",
+        )
+    if file_index < 0 or file_index >= file_count:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="파일 순서가 올바르지 않습니다.",
+        )
+    if chunk_count < 1 or chunk_index < 0 or chunk_index >= chunk_count:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="청크 순서가 올바르지 않습니다.",
+        )
+    size_limit = MAX_VIDEO_UPLOAD_SIZE if is_video else MAX_UPLOAD_SIZE
+    if total_size <= 0 or total_size > size_limit:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail=(
+                "영상" if is_video else "이미지"
+            ) + f" 크기는 {size_limit // (1024 * 1024)}MB 이하여야 합니다.",
+        )
+
+    session_dir = staging_session_dir(session_id)
+    session_dir.mkdir(parents=True, exist_ok=True)
+    meta_path = session_dir / "meta.json"
+    if meta_path.exists():
+        meta = _read_staging_meta(session_dir)
+        if meta["user_id"] != user.id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="다른 사용자의 업로드 세션입니다.",
+            )
+        if (
+            meta["purpose"] != purpose
+            or meta["file_count"] != file_count
+            or meta.get("illustration_id") != illustration_id
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="업로드 세션 정보가 일치하지 않습니다.",
+            )
+    else:
+        if file_index != 0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="첫 파일부터 순서대로 올려주세요.",
+            )
+        if taken_at is not None and taken_at > today_kst():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="촬영 일자는 오늘 이후로 지정할 수 없습니다.",
+            )
+        if purpose == "create":
+            if not (title or "").strip():
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="삽화 제목을 입력해주세요.",
+                )
+        else:
+            if illustration_id is None:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="삽화 정보가 없습니다.",
+                )
+            _require_owned_illustration(db, illustration_id, user)
+        meta = {
+            "user_id": user.id,
+            "purpose": purpose,
+            "illustration_id": illustration_id,
+            "file_count": file_count,
+            "files": [],
+            "details": {
+                "title": (title or "").strip() or None,
+                "description": (description or "").strip() or None,
+                "tags": _parse_tags(tags),
+                "taken_at": taken_at.isoformat() if taken_at else None,
+                "visible": visible,
+                "protected": bool(visible and protected),
+            },
+        }
+
+    entry = {
+        "index": file_index,
+        "name": file_name,
+        "content_type": content_type,
+        "total_size": total_size,
+        "video": is_video,
+        "chunk_count": chunk_count,
+        "start": video_start_seconds,
+        "seconds": video_seconds,
+    }
+    if file_index == len(meta["files"]):
+        if meta["files"]:
+            previous = meta["files"][-1]
+            previous_dir = session_dir / f"{previous['index']:04d}"
+            received = len(list(previous_dir.glob("*.part")))
+            if received != previous["chunk_count"]:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="이전 파일의 업로드가 끝나지 않았습니다.",
+                )
+        if is_video and sum(1 for item in meta["files"] if item["video"]) >= 5:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="삽화 한 개당 영상은 최대 5개까지 업로드할 수 있습니다.",
+            )
+        meta["files"].append(entry)
+    elif file_index < len(meta["files"]):
+        existing_entry = meta["files"][file_index]
+        if (
+            existing_entry["content_type"] != content_type
+            or existing_entry["total_size"] != total_size
+            or existing_entry["chunk_count"] != chunk_count
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="업로드 세션의 파일 정보가 일치하지 않습니다.",
+            )
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="파일을 순서대로 올려주세요.",
+        )
+
+    file_dir = session_dir / f"{file_index:04d}"
+    received = {
+        int(part.stem)
+        for part in file_dir.glob("*.part")
+        if part.stem.isdigit()
+    }
+    if any(index not in received for index in range(chunk_index)) or any(
+        index > chunk_index for index in received
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="청크를 순서대로 올려주세요.",
+        )
+    # A client may retry a chunk whose metadata write did not complete.
+    (file_dir / f"{chunk_index:06d}.part").unlink(missing_ok=True)
+    await stream_upload_to_path(
+        chunk,
+        file_dir / f"{chunk_index:06d}.part",
+        MAX_STAGING_PART_BYTES,
+    )
+
+    if representative_file is not None:
+        if file_index != 0 or purpose != "create" or meta.get(
+            "representative_content_type"
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="대표 이미지는 첫 요청에만 보낼 수 있습니다.",
+            )
+        if representative_file.content_type not in ALLOWED_CONTENT_TYPES:
+            raise HTTPException(
+                status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+                detail="대표 이미지는 PNG, JPEG, WEBP, GIF만 가능합니다.",
+            )
+        await stream_upload_to_path(
+            representative_file,
+            session_dir / "representative.part",
+            MAX_STAGING_REPRESENTATIVE_BYTES,
+        )
+        meta["representative_content_type"] = representative_file.content_type
+
+    if chunk_index == chunk_count - 1:
+        received_size = sum(
+            part.stat().st_size for part in file_dir.glob("*.part")
+        )
+        if received_size != total_size:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="업로드된 파일 크기가 일치하지 않습니다.",
+            )
+
+    _write_staging_meta(session_dir, meta)
+    return {"accepted": True}
+
+
+@router.post("/upload-finalize")
+async def finalize_upload(
+    request: Request,
+    response: Response,
+    background_tasks: BackgroundTasks,
+    session_id: str = Form(...),
+    db: Session = Depends(get_db),
+    user=Depends(require_auth),
+):
+    """Publish a staged upload only after every file has arrived."""
+    session_dir = staging_session_dir(session_id)
+    meta = _read_staging_meta(session_dir)
+    if meta["user_id"] != user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="다른 사용자의 업로드 세션입니다.",
+        )
+    if len(meta["files"]) != meta["file_count"]:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="모든 파일을 먼저 업로드해주세요.",
+        )
+    for entry in meta["files"]:
+        file_dir = session_dir / f"{entry['index']:04d}"
+        received = len(list(file_dir.glob("*.part")))
+        if received != entry["chunk_count"]:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="모든 파일을 먼저 업로드해주세요.",
+            )
+
+    if meta["purpose"] == "append":
+        illustration_id = meta["illustration_id"]
+        _require_owned_illustration(db, illustration_id, user)
+        background_tasks.add_task(
+            _process_staged_upload,
+            illustration_id,
+            user.id,
+            session_dir,
+            meta,
+        )
+        return {"accepted": True, "illustration_id": illustration_id}
+
+    details = meta["details"]
+    taken_at = (
+        date.fromisoformat(details["taken_at"]) if details["taken_at"] else None
+    )
+    detail = create_pending_illustration_group(
+        db,
+        user_id=user.id,
+        title=details["title"],
+        description=details["description"],
+        tags=details["tags"],
+        visible=details["visible"],
+        protected=details["protected"],
+        taken_at=taken_at,
+    )
+    background_tasks.add_task(
+        _process_staged_upload,
+        detail["id"],
+        user.id,
+        session_dir,
+        meta,
+    )
+    response.status_code = status.HTTP_202_ACCEPTED
+    return detail
 
 
 @router.post("/bulk", response_model=IllustrationDetail)

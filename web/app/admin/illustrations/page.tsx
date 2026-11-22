@@ -38,17 +38,13 @@ interface Preview {
 
 const MAX_FILES = 100;
 const MAX_VIDEOS_PER_ILLUSTRATION = 5;
-const MAX_CHUNK_FILES = 1;
-// One file per request, with room left for the 1024px representative image.
-const MAX_CHUNK_BYTES = 50 * 1024 * 1024;
-const MAX_IMAGE_BYTES = 50 * 1024 * 1024;
+const MAX_CHUNK_BYTES = 32 * 1024 * 1024;
+const MAX_IMAGE_BYTES = 40 * 1024 * 1024;
+const MAX_REPRESENTATIVE_BYTES = 16 * 1024 * 1024;
 const LIST_PAGE_SIZE = 12;
 const MAX_VIDEO_SECONDS = 10;
 const MAX_VIDEO_BYTES = 20 * 1024 * 1024;
 const MAX_VIDEO_UPLOAD_BYTES = 200 * 1024 * 1024;
-const VIDEO_CROP_MAX_EDGE = 640;
-const VIDEO_CROP_FPS = 12;
-const VIDEO_CROP_BITS_PER_SECOND = 1_500_000;
 const ILLUSTRATION_ACCEPT =
   "image/png,image/jpeg,image/webp,image/gif,video/mp4,video/quicktime,video/webm,video/x-m4v";
 const ILLUSTRATION_VIDEO_TYPES = new Set([
@@ -68,53 +64,116 @@ function countVideos(files: File[]) {
   return files.filter((file) => ILLUSTRATION_VIDEO_TYPES.has(file.type)).length;
 }
 
-interface UploadChunk {
+interface StageFilesOptions {
   files: File[];
-  ranges: Map<File, VideoRange>;
+  ranges?: Map<File, VideoRange>;
+  purpose: "create" | "append";
+  illustrationId?: number;
+  title?: string;
+  description?: string;
+  tags?: string;
+  takenAt?: string;
+  visible?: boolean;
+  protected?: boolean;
+  representativeFile?: File | null;
+  onChunk?: (file: File, index: number, total: number) => void;
 }
 
-function chunkFiles(files: File[], ranges: Map<File, VideoRange>) {
-  const chunks: UploadChunk[] = [];
-  let current: File[] = [];
-  let currentRanges = new Map<File, VideoRange>();
-  let bytes = 0;
+/**
+ * Store every file on the server first. Videos are split into byte-sized
+ * requests; nothing is published until finalize runs.
+ */
+async function stageFiles(options: StageFilesOptions): Promise<string> {
+  const sessionId = crypto.randomUUID();
+  for (const [fileIndex, file] of options.files.entries()) {
+    const isVideo = ILLUSTRATION_VIDEO_TYPES.has(file.type);
+    const chunkCount = isVideo
+      ? Math.max(1, Math.ceil(file.size / MAX_CHUNK_BYTES))
+      : 1;
+    const range = options.ranges?.get(file) ?? {
+      start: 0,
+      seconds: MAX_VIDEO_SECONDS,
+    };
 
-  const flush = () => {
-    if (current.length === 0) return;
-    chunks.push({ files: current, ranges: currentRanges });
-    current = [];
-    currentRanges = new Map();
-    bytes = 0;
-  };
+    for (let chunkIndex = 0; chunkIndex < chunkCount; chunkIndex += 1) {
+      options.onChunk?.(file, chunkIndex + 1, chunkCount);
+      const start = chunkIndex * MAX_CHUNK_BYTES;
+      const formData = new FormData();
+      formData.append(
+        "chunk",
+        file.slice(start, Math.min(start + MAX_CHUNK_BYTES, file.size)),
+        `${file.name}.part${chunkIndex}`,
+      );
+      formData.append("session_id", sessionId);
+      formData.append("purpose", options.purpose);
+      formData.append("file_index", String(fileIndex));
+      formData.append("file_count", String(options.files.length));
+      formData.append("chunk_index", String(chunkIndex));
+      formData.append("chunk_count", String(chunkCount));
+      formData.append("file_name", file.name);
+      formData.append("content_type", file.type);
+      formData.append("total_size", String(file.size));
+      if (options.illustrationId) {
+        formData.append("illustration_id", String(options.illustrationId));
+      }
+      if (isVideo) {
+        formData.append("video_start_seconds", String(range.start));
+        formData.append("video_seconds", String(range.seconds));
+      }
 
-  for (const file of files) {
-    if (
-      current.length > 0 &&
-      (current.length >= MAX_CHUNK_FILES ||
-        bytes + file.size > MAX_CHUNK_BYTES)
-    ) {
-      flush();
+      if (fileIndex === 0 && chunkIndex === 0) {
+        if (options.title) formData.append("title", options.title);
+        if (options.description) {
+          formData.append("description", options.description);
+        }
+        if (options.tags) formData.append("tags", options.tags);
+        if (options.takenAt) formData.append("taken_at", options.takenAt);
+        if (options.visible !== undefined) {
+          formData.append("visible", String(options.visible));
+        }
+        if (options.protected !== undefined) {
+          formData.append("protected", String(options.protected));
+        }
+        if (options.representativeFile) {
+          formData.append("representative_file", options.representativeFile);
+        }
+      }
+
+      await apiFetch("/api/illustrations/upload-stage", {
+        method: "POST",
+        body: formData,
+      });
     }
-    current.push(file);
-    bytes += file.size;
-    const range = ranges.get(file);
-    if (range) currentRanges.set(file, range);
   }
-  flush();
-  return chunks;
+  return sessionId;
 }
 
-function appendChunkFiles(formData: FormData, chunk: UploadChunk) {
-  chunk.files.forEach((file) => formData.append("files", file));
-  const ranges = chunk.files
-    .filter((file) => ILLUSTRATION_VIDEO_TYPES.has(file.type))
-    .map(
-      (file) =>
-        chunk.ranges.get(file) ?? { start: 0, seconds: MAX_VIDEO_SECONDS },
+async function finalizeStagedUpload(sessionId: string) {
+  const formData = new FormData();
+  formData.append("session_id", sessionId);
+  return apiFetch<
+    IllustrationDetailItem | { accepted: boolean; illustration_id: number }
+  >("/api/illustrations/upload-finalize", {
+    method: "POST",
+    body: formData,
+  });
+}
+
+async function waitForAppendImages(id: number, expected: number) {
+  const deadline = Date.now() + 10 * 60 * 1000;
+  while (Date.now() < deadline) {
+    const detail = await apiFetch<IllustrationDetailItem>(
+      `/api/illustrations/${id}?mine=true`,
     );
-  if (ranges.length > 0) {
-    formData.append("video_ranges", JSON.stringify(ranges));
+    if (
+      detail.upload_status !== "processing" &&
+      (detail.images?.length ?? 0) >= expected
+    ) {
+      return detail;
+    }
+    await new Promise((resolve) => window.setTimeout(resolve, 1000));
   }
+  throw new Error("영상 처리가 완료되지 않았습니다.");
 }
 
 async function waitForIllustrationReady(id: number) {
@@ -238,158 +297,6 @@ function trimDefault(candidate: VideoCandidateBase) {
   );
 }
 
-function videoRecorderMimeType() {
-  if (typeof MediaRecorder === "undefined") return null;
-  const candidates = [
-    "video/webm;codecs=vp9",
-    "video/webm;codecs=vp8",
-    "video/webm",
-    "video/mp4",
-  ];
-  return (
-    candidates.find((type) => MediaRecorder.isTypeSupported(type)) ?? null
-  );
-}
-
-interface CroppedVideoResult {
-  file: File;
-  cropped: boolean;
-}
-
-/**
- * Record only the selected 10-second segment at WebP-friendly dimensions.
- * The server still converts the small clip to animated WebP; this just keeps
- * each browser upload below the 60MB proxy body limit.
- */
-async function cropVideoClip(
-  file: File,
-  range: VideoRange,
-): Promise<CroppedVideoResult> {
-  const mimeType = videoRecorderMimeType();
-  if (!mimeType) return { file, cropped: false };
-
-  const url = URL.createObjectURL(file);
-  const video = document.createElement("video");
-  video.muted = true;
-  video.playsInline = true;
-  video.preload = "auto";
-  let recorder: MediaRecorder | null = null;
-  let stream: MediaStream | null = null;
-  let frame = 0;
-
-  try {
-    await new Promise<void>((resolve, reject) => {
-      video.onloadedmetadata = () => resolve();
-      video.onerror = () => reject(new Error("영상을 읽을 수 없습니다."));
-      video.src = url;
-    });
-    if (!(video.duration > 0)) return { file, cropped: false };
-
-    const start = Math.max(
-      0,
-      Math.min(range.start, Math.max(0, video.duration - 0.1)),
-    );
-    const seconds = Math.max(
-      0.5,
-      Math.min(range.seconds, MAX_VIDEO_SECONDS, video.duration - start),
-    );
-    await new Promise<void>((resolve) => {
-      if (Math.abs(video.currentTime - start) < 0.05) {
-        resolve();
-        return;
-      }
-      const onSeeked = () => {
-        video.removeEventListener("seeked", onSeeked);
-        resolve();
-      };
-      video.addEventListener("seeked", onSeeked);
-      video.currentTime = start;
-    });
-
-    const canvas = document.createElement("canvas");
-    const width = video.videoWidth || VIDEO_CROP_MAX_EDGE;
-    const height = video.videoHeight || VIDEO_CROP_MAX_EDGE;
-    const scale = Math.min(1, VIDEO_CROP_MAX_EDGE / Math.max(width, height));
-    canvas.width = Math.max(2, Math.round(width * scale));
-    canvas.height = Math.max(2, Math.round(height * scale));
-    const context = canvas.getContext("2d");
-    if (!context) return { file, cropped: false };
-
-    stream = canvas.captureStream(VIDEO_CROP_FPS);
-    recorder = new MediaRecorder(stream, {
-      mimeType,
-      videoBitsPerSecond: VIDEO_CROP_BITS_PER_SECOND,
-    });
-    const chunks: Blob[] = [];
-    recorder.ondataavailable = (event) => {
-      if (event.data.size > 0) chunks.push(event.data);
-    };
-    const stopped = new Promise<Blob>((resolve, reject) => {
-      if (!recorder) return;
-      recorder.onstop = () =>
-        resolve(new Blob(chunks, { type: recorder?.mimeType || mimeType }));
-      recorder.onerror = () => reject(new Error("영상 자르기에 실패했습니다."));
-    });
-
-    recorder.start(250);
-    const draw = () => {
-      context.drawImage(video, 0, 0, canvas.width, canvas.height);
-      frame = window.requestAnimationFrame(draw);
-    };
-    draw();
-    await video.play();
-    await new Promise((resolve) => window.setTimeout(resolve, seconds * 1000));
-    recorder.stop();
-    video.pause();
-    const blob = await stopped;
-    const extension = mimeType.startsWith("video/mp4") ? ".mp4" : ".webm";
-    const base = file.name.replace(/\.[^.]+$/, "") || "video";
-    return {
-      file: new File([blob], `${base}-cut.${extension}`, {
-        type: recorder.mimeType || mimeType,
-        lastModified: Date.now(),
-      }),
-      cropped: true,
-    };
-  } catch {
-    return { file, cropped: false };
-  } finally {
-    if (frame) window.cancelAnimationFrame(frame);
-    if (recorder && recorder.state !== "inactive") recorder.stop();
-    stream?.getTracks().forEach((track) => track.stop());
-    video.removeAttribute("src");
-    video.load();
-    URL.revokeObjectURL(url);
-  }
-}
-
-async function prepareUploadFiles(
-  files: File[],
-  ranges: Map<File, VideoRange>,
-) {
-  const preparedFiles: File[] = [];
-  const preparedRanges = new Map<File, VideoRange>();
-  for (const file of files) {
-    if (!ILLUSTRATION_VIDEO_TYPES.has(file.type)) {
-      preparedFiles.push(file);
-      continue;
-    }
-    const range = ranges.get(file) ?? { start: 0, seconds: MAX_VIDEO_SECONDS };
-    const result = await cropVideoClip(file, range);
-    if (result.file.size > MAX_CHUNK_BYTES) {
-      throw new Error(
-        "영상을 10초 구간으로 자를 수 없습니다. 다른 브라우저에서 다시 시도해주세요.",
-      );
-    }
-    preparedFiles.push(result.file);
-    preparedRanges.set(
-      result.file,
-      result.cropped ? { start: 0, seconds: range.seconds } : range,
-    );
-  }
-  return { files: preparedFiles, ranges: preparedRanges };
-}
-
 const REPRESENTATIVE_CROP_STAGES: CropStageConfig[] = [
   {
     key: "representative",
@@ -450,6 +357,11 @@ export default function AdminIllustrations() {
   const [previews, setPreviews] = useState<Preview[]>([]);
   const [sentFiles, setSentFiles] = useState<Set<File>>(() => new Set());
   const [sendingFile, setSendingFile] = useState<File | null>(null);
+  const [sendingChunk, setSendingChunk] = useState<{
+    file: File;
+    index: number;
+    total: number;
+  } | null>(null);
   const [uploadProgressOpen, setUploadProgressOpen] = useState(false);
   const [uploadFiles, setUploadFiles] = useState<File[]>([]);
   const [uploadModalStatus, setUploadModalStatus] = useState<
@@ -468,7 +380,6 @@ export default function AdminIllustrations() {
   );
   const [trimPreviewTimes, setTrimPreviewTimes] = useState<number[]>([]);
   const [inspectingVideos, setInspectingVideos] = useState(false);
-  const [preparingVideos, setPreparingVideos] = useState(false);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [tagsInput, setTagsInput] = useState("");
@@ -709,7 +620,7 @@ export default function AdminIllustrations() {
   };
 
   const addFiles = async (list: FileList | null) => {
-    if (!list || inspectingVideos || preparingVideos) return;
+    if (!list || inspectingVideos) return;
 
     const media = Array.from(list).filter(isIllustrationFile);
     if (media.length === 0) return;
@@ -832,7 +743,7 @@ export default function AdminIllustrations() {
   };
 
   const handleUpload = async () => {
-    if (files.length === 0 || uploading || preparingVideos) return;
+    if (files.length === 0 || uploading) return;
 
     if (takenAt && takenAt > today) {
       setNotice({
@@ -856,98 +767,62 @@ export default function AdminIllustrations() {
     }
 
     const uploadedCount = files.length;
-    const hasVideos = countVideos(files) > 0;
-    setPreparingVideos(true);
-    if (hasVideos) {
-      setNotice({
-        type: "success",
-        text: "영상을 10초 구간으로 자르는 중입니다...",
-      });
-    }
-    let prepared: Awaited<ReturnType<typeof prepareUploadFiles>>;
-    try {
-      prepared = await prepareUploadFiles(files, videoRangesByFile);
-    } catch (error) {
-      setPreparingVideos(false);
-      setNotice({
-        type: "error",
-        text:
-          error instanceof Error
-            ? error.message
-            : "영상을 자르지 못했습니다.",
-      });
-      return;
-    }
-    setPreparingVideos(false);
-
     if (
       createRepresentativeFile &&
-      prepared.files[0] &&
-      createRepresentativeFile.size + prepared.files[0].size >
-        55 * 1024 * 1024
+      createRepresentativeFile.size > MAX_REPRESENTATIVE_BYTES
     ) {
       setNotice({
         type: "error",
-        text: "대표 이미지와 첫 파일이 60MB를 넘습니다. 더 작은 이미지를 선택해주세요.",
+        text: "대표 이미지는 16MB 이하로 선택해주세요.",
       });
       return;
     }
 
-    const chunks = chunkFiles(prepared.files, prepared.ranges);
-    let createdItem: IllustrationDetailItem | null = null;
-    setUploadFiles(prepared.files);
-    setUploadModalStatus("running");
-    setUploadProgressOpen(true);
-    setUploading(true);
-    setSentFiles(new Set());
-    setNotice(null);
     try {
-      for (const [chunkIndex, chunk] of chunks.entries()) {
-        const formData = new FormData();
-        appendChunkFiles(formData, chunk);
-        if (chunkIndex === 0) {
-          formData.append("title", normalizedTitle);
-          if (description.trim()) {
-            formData.append("description", description.trim());
-          }
-          if (tagsInput.trim()) {
-            formData.append("tags", tagsInput.trim());
-          }
-          if (takenAt) {
-            formData.append("taken_at", takenAt);
-          }
-          formData.append("visible", String(createVisibility !== "private"));
-          formData.append(
-            "protected",
-            String(createVisibility === "protected"),
-          );
-          if (createRepresentativeFile) {
-            formData.append("representative_file", createRepresentativeFile);
-          }
-        } else {
-          if (!createdItem) throw new Error("삽화 정보를 찾을 수 없습니다.");
-          formData.append("illustration_id", String(createdItem.id));
-        }
-
-        const currentFile = chunk.files[0];
-        setSendingFile(currentFile);
-        const result = await apiFetch<IllustrationDetailItem>(
-          "/api/illustrations/bulk",
-          { method: "POST", body: formData },
-        );
-        setSentFiles((previous) => new Set(previous).add(currentFile));
-
-        if (chunkIndex === 0) {
-          createdItem = result;
-          backgroundUploadIdsRef.current.add(result.id);
-          upsertItem(result);
-          const ready = await waitForIllustrationReady(result.id);
-          upsertItem(ready);
-        } else {
-          applyMediaUpdate(result);
-        }
+      const sessionId = await stageFiles({
+        files,
+        ranges: videoRangesByFile,
+        purpose: "create",
+        title: normalizedTitle,
+        description: description.trim() || undefined,
+        tags: tagsInput.trim() || undefined,
+        takenAt: takenAt || undefined,
+        visible: createVisibility !== "private",
+        protected: createVisibility === "protected",
+        representativeFile: createRepresentativeFile,
+        onChunk: (file, index, total) => {
+          setSendingFile(file);
+          setSendingChunk({ file, index, total });
+        },
+      });
+      setSendingChunk(null);
+      setSentFiles(new Set(files));
+      setNotice({
+        type: "success",
+        text: "모든 파일을 받았습니다. 서버에서 처리하는 중입니다...",
+      });
+      const finalized = await finalizeStagedUpload(sessionId);
+      if ("accepted" in finalized) {
+        throw new Error("삽화 등록을 시작하지 못했습니다.");
       }
-
+      backgroundUploadIdsRef.current.add(finalized.id);
+      upsertItem(finalized);
+      const ready = await waitForIllustrationReady(finalized.id);
+      upsertItem(ready);
+      setUploadModalStatus(
+        ready.upload_status === "video_failed" ? "error" : "success",
+      );
+      setNotice(
+        ready.upload_status === "video_failed"
+          ? {
+              type: "error",
+              text: "영상 변환에 실패해 비공개로 저장했습니다. 영상을 다시 추가하거나 이 상태로 수정할 수 있습니다.",
+            }
+          : {
+              type: "success",
+              text: `${uploadedCount}개의 파일로 삽화를 등록했습니다.`,
+            },
+      );
       setFiles([]);
       setVideoRangesByFile(new Map());
       setTitle("");
@@ -956,11 +831,6 @@ export default function AdminIllustrations() {
       setCreateVisibility("public");
       setCreateRepresentativeFile(null);
       setCreateRepresentativePreview(null);
-      setUploadModalStatus("success");
-      setNotice({
-        type: "success",
-        text: `${uploadedCount}개의 파일로 삽화를 등록했습니다.`,
-      });
     } catch (error) {
       setUploadModalStatus("error");
       setNotice({
@@ -973,6 +843,7 @@ export default function AdminIllustrations() {
     } finally {
       setUploading(false);
       setSendingFile(null);
+      setSendingChunk(null);
     }
   };
 
@@ -1048,6 +919,7 @@ export default function AdminIllustrations() {
       image_count: updated.image_count,
       representative_image_id: updated.representative_image_id,
       representative_url: updated.representative_url,
+      upload_status: updated.upload_status,
       updated_at: updated.updated_at,
     };
     setItems((previous) =>
@@ -1120,63 +992,51 @@ export default function AdminIllustrations() {
     media: File[],
     ranges: Map<File, VideoRange> = new Map(),
   ) => {
-    if (!editingItem || addingImages || preparingVideos) return;
+    if (!editingItem || addingImages) return;
 
-    setPreparingVideos(true);
+    const targetId = editingItem.id;
+    const expectedImages = editingItem.images.length + media.length;
     setAddingImages(true);
-    if (countVideos(media) > 0) {
+    setModalNotice(null);
+
+    try {
+      const sessionId = await stageFiles({
+        files: media,
+        ranges,
+        purpose: "append",
+        illustrationId: targetId,
+        onChunk: (file, index, total) =>
+          setSendingChunk({ file, index, total }),
+      });
       setModalNotice({
         type: "success",
-        text: "영상을 10초 구간으로 자르는 중입니다...",
+        text: "모든 파일을 받았습니다. 서버에서 처리하는 중입니다...",
       });
-    } else {
-      setModalNotice(null);
-    }
-
-    let prepared: Awaited<ReturnType<typeof prepareUploadFiles>>;
-    try {
-      prepared = await prepareUploadFiles(media, ranges);
-    } catch (error) {
-      setPreparingVideos(false);
-      setAddingImages(false);
-      setModalNotice({
-        type: "error",
-        text:
-          error instanceof Error ? error.message : "영상을 자르지 못했습니다.",
-      });
-      return;
-    }
-    setPreparingVideos(false);
-
-    const chunks = chunkFiles(prepared.files, prepared.ranges);
-
-    try {
-      for (const chunk of chunks) {
-        const formData = new FormData();
-        appendChunkFiles(formData, chunk);
-        formData.append("illustration_id", String(editingItem.id));
-        const updated = await apiFetch<IllustrationDetailItem>(
-          "/api/illustrations/bulk",
-          { method: "POST", body: formData },
-        );
-        const mediaPatch = applyMediaUpdate(updated);
-        setEditingItem((current) => {
-          if (!current) return current;
-          const existingIds = new Set(current.images.map((image) => image.id));
-          const added = updated.images.filter(
-            (image) => !existingIds.has(image.id),
-          );
-          return {
-            ...current,
-            ...mediaPatch,
-            images: [...current.images, ...added],
-          };
-        });
+      const finalized = await finalizeStagedUpload(sessionId);
+      if (!("accepted" in finalized)) {
+        throw new Error("파일 추가를 시작하지 못했습니다.");
       }
-      setModalNotice({
-        type: "success",
-        text: `${prepared.files.length}개의 파일을 추가했습니다.`,
+      const updated = await waitForAppendImages(targetId, expectedImages);
+      const mediaPatch = applyMediaUpdate(updated);
+      setEditingItem((current) => {
+        if (!current) return current;
+        const existingIds = new Set(current.images.map((image) => image.id));
+        const added = updated.images.filter(
+          (image) => !existingIds.has(image.id),
+        );
+        return { ...current, ...mediaPatch, images: [...current.images, ...added] };
       });
+      setModalNotice(
+        updated.upload_status === "video_failed"
+          ? {
+              type: "error",
+              text: "영상 변환에 실패했습니다. 다른 파일은 저장되었고 삽화는 비공개로 유지됩니다.",
+            }
+          : {
+              type: "success",
+              text: `${media.length}개의 파일을 추가했습니다.`,
+            },
+      );
     } catch (error) {
       setModalNotice({
         type: "error",
@@ -1187,6 +1047,7 @@ export default function AdminIllustrations() {
       });
     } finally {
       setAddingImages(false);
+      setSendingChunk(null);
       if (modalFileInputRef.current) {
         modalFileInputRef.current.value = "";
       }
@@ -1194,15 +1055,7 @@ export default function AdminIllustrations() {
   };
 
   const addImagesToEditing = async (list: FileList | null) => {
-    if (
-      !editingItem ||
-      !list ||
-      addingImages ||
-      inspectingVideos ||
-      preparingVideos
-    ) {
-      return;
-    }
+    if (!editingItem || !list || addingImages || inspectingVideos) return;
 
     const media = Array.from(list).filter(isIllustrationFile);
     if (media.length === 0) return;
@@ -1386,6 +1239,10 @@ export default function AdminIllustrations() {
             taken_at: editingItem.taken_at || null,
             visible: editingItem.visible,
             protected: editingItem.protected,
+            ...(editingItem.upload_status === "video_failed" &&
+            editingItem.visible !== false
+              ? { upload_status: "ready" }
+              : {}),
           }),
         },
       );
@@ -1743,7 +1600,7 @@ export default function AdminIllustrations() {
                   type="button"
                   className="admin-button"
                   onClick={() => fileInputRef.current?.click()}
-                  disabled={uploading || preparingVideos}
+                  disabled={uploading}
                 >
                   사진 추가
                 </button>
@@ -1844,7 +1701,7 @@ export default function AdminIllustrations() {
                     <button
                       type="button"
                       onClick={() => removeFile(index)}
-                      disabled={uploading || preparingVideos}
+                      disabled={uploading}
                       aria-label={`${preview.file.name} 선택 해제`}
                     >
                       ×
@@ -1893,7 +1750,7 @@ export default function AdminIllustrations() {
                 onClick={() =>
                   createRepresentativeInputRef.current?.click()
                 }
-                disabled={uploading || preparingVideos}
+                disabled={uploading}
               >
                 {createRepresentativeFile
                   ? "대표 이미지 다시 선택"
@@ -1964,7 +1821,7 @@ export default function AdminIllustrations() {
                   event.target.value as IllustrationVisibility,
                 )
               }
-              disabled={uploading || preparingVideos}
+              disabled={uploading}
             >
               <option value="public">공개</option>
               <option value="protected">보호</option>
@@ -1985,7 +1842,7 @@ export default function AdminIllustrations() {
                 setFiles([]);
                 setVideoRangesByFile(new Map());
               }}
-              disabled={uploading || preparingVideos}
+              disabled={uploading}
             >
               선택 비우기
             </button>
@@ -1993,13 +1850,11 @@ export default function AdminIllustrations() {
               type="button"
               className="admin-button primary"
               onClick={() => void handleUpload()}
-              disabled={uploading || preparingVideos || !title.trim()}
+              disabled={uploading || !title.trim()}
             >
-              {preparingVideos
-                ? "영상 자르는 중..."
-                : uploading
-                  ? "등록 중..."
-                  : `${files.length}장으로 삽화 만들기`}
+              {uploading
+                ? "등록 중..."
+                : `${files.length}장으로 삽화 만들기`}
             </button>
           </div>
         ) : null}
@@ -2261,14 +2116,17 @@ export default function AdminIllustrations() {
                     </div>
                     <span
                       className={
-                        item.upload_status === "processing"
+                        item.upload_status === "processing" ||
+                        item.upload_status === "video_failed"
                           ? "admin-illustration-card__upload-status"
                           : undefined
                       }
                     >
                       {item.upload_status === "processing"
                         ? "업로드 중..."
-                        : `${item.image_count}장 · 조회 ${item.view_count ?? 0}회`}
+                        : item.upload_status === "video_failed"
+                          ? "영상 처리 실패 · 비공개"
+                          : `${item.image_count}장 · 조회 ${item.view_count ?? 0}회`}
                     </span>
                   </div>
                 </article>
@@ -2397,9 +2255,11 @@ export default function AdminIllustrations() {
                       <span className="admin-illustrations-upload-modal__state">
                         {sent
                           ? "서버 전송 완료"
-                          : sending
-                            ? "전송 중"
-                            : "전송 대기"}
+                          : sendingChunk?.file === file
+                            ? `전송 중 (${sendingChunk.index}/${sendingChunk.total})`
+                            : sending
+                              ? "전송 중"
+                              : "전송 대기"}
                       </span>
                     </li>
                   );
@@ -2609,6 +2469,13 @@ export default function AdminIllustrations() {
                   </div>
                 </div>
 
+                {editingItem.upload_status === "video_failed" ? (
+                  <p className="admin-illustrations-notice is-error">
+                    영상 변환에 실패해 비공개로 저장했습니다. 영상을 다시
+                    추가하거나, 이 상태로 두고 싶으면 공개 상태를 변경해
+                    저장하세요.
+                  </p>
+                ) : null}
                 {modalNotice ? (
                   <p
                     className={`admin-illustrations-notice is-${modalNotice.type}`}

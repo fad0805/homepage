@@ -88,6 +88,9 @@ class IllustrationUpdate(BaseModel):
     representative_image_id: int | None = None
     visible: bool | None = None
     protected: bool | None = None
+    # Owners acknowledge a failed video upload by publishing the illustration
+    # or by adding media again.
+    upload_status: str | None = Field(default=None, pattern="^ready$")
 
     @field_validator("taken_at")
     @classmethod
