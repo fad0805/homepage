@@ -556,6 +556,13 @@ def _link_data(
         {
             "id": category.id,
             "name": category.name,
+            "banner_url": category.banner_url,
+            "banner_archive_path": plan.register(
+                category.banner_url,
+                "links",
+            ),
+            "description": category.description,
+            "is_special": category.is_special,
             "order": category.order,
         }
         for category in category_query.order_by(
@@ -1172,6 +1179,12 @@ def _prune_missing_paths(
     links = sections.get(DATA_LINKS, {}).get("links", [])
     for link in links:
         link["banner_archive_path"] = keep(link.get("banner_archive_path"))
+
+    link_categories = sections.get(DATA_LINKS, {}).get("link_categories", [])
+    for category in link_categories:
+        category["banner_archive_path"] = keep(
+            category.get("banner_archive_path")
+        )
 
 
 def _included_keys(section: str) -> list[str]:

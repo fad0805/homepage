@@ -29,6 +29,9 @@ def _serialize_link(link: Link) -> dict:
         "category": {
             "id": category.id,
             "name": category.name,
+            "banner_url": category.banner_url,
+            "description": category.description,
+            "is_special": category.is_special,
             "order": category.order,
         } if category else None,
     }
@@ -38,6 +41,9 @@ def _serialize_category(category: Category) -> dict:
     return {
         "id": category.id,
         "name": category.name,
+        "banner_url": category.banner_url,
+        "description": category.description,
+        "is_special": category.is_special,
         "order": category.order,
     }
 
@@ -60,10 +66,29 @@ def _next_category_order(db: Session, user_id: int) -> int:
     return 0 if max_order is None else max_order + 1
 
 
+def _clear_other_special_categories(
+    db: Session,
+    user_id: int,
+    category_id: int | None = None,
+) -> None:
+    query = db.query(Category).filter(
+        Category.user_id == user_id,
+        Category.is_special.is_(True),
+    )
+    if category_id is not None:
+        query = query.filter(Category.id != category_id)
+    query.update(
+        {Category.is_special: False},
+        synchronize_session=False,
+    )
+
+
 def _get_link_category_or_404(
     db: Session,
     category_id: int,
     user_id: int,
+    *,
+    allow_special: bool = True,
 ) -> Category:
     category = (
         db.query(Category)
@@ -77,6 +102,11 @@ def _get_link_category_or_404(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Does not exist link's category",
+        )
+    if category.is_special and not allow_special:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="배너 소개 카테고리에는 링크를 추가할 수 없습니다.",
         )
     return category
 
@@ -134,7 +164,7 @@ def create_link(
     """
     Create a new link owned by the signed-in author.
     """
-    _get_link_category_or_404(db, link.category, user_id)
+    _get_link_category_or_404(db, link.category, user_id, allow_special=False)
     data = link.model_dump(exclude={"owner", "order"})
     data["user_id"] = user_id
     data["owner"] = owner or "admin"
@@ -178,7 +208,9 @@ def update_link(
 
     data = updated_link.model_dump(exclude_unset=True)
     if "category" in data:
-        _get_link_category_or_404(db, data["category"], user_id)
+        _get_link_category_or_404(
+            db, data["category"], user_id, allow_special=False
+        )
     if (
         "category" in data
         and "order" not in data
@@ -270,7 +302,9 @@ def reorder_links(
         for item in payload.items:
             link = links[item.id]
             if item.category is not None:
-                _get_link_category_or_404(db, item.category, user_id)
+                _get_link_category_or_404(
+                    db, item.category, user_id, allow_special=False
+                )
                 link.category = item.category
             link.order = item.order
         db.commit()
@@ -308,7 +342,16 @@ def create_link_category(
         if category.order is not None
         else _next_category_order(db, user_id)
     )
-    db_category = Category(user_id=user_id, name=category.name, order=order)
+    if category.is_special:
+        _clear_other_special_categories(db, user_id)
+    db_category = Category(
+        user_id=user_id,
+        name=category.name,
+        banner_url=category.banner_url,
+        description=category.description,
+        is_special=category.is_special,
+        order=order,
+    )
     db.add(db_category)
     db.commit()
     db.refresh(db_category)
@@ -325,13 +368,38 @@ def update_link_category(
     Update one of the signed-in author's categories.
     """
     category = _get_link_category_or_404(db, category_id, user_id)
+    old_banner_url = category.banner_url
 
-    category.name = updated_category.name
-    if updated_category.order is not None:
-        category.order = updated_category.order
+    data = updated_category.model_dump(exclude_unset=True)
+    is_special = data.get("is_special", category.is_special)
+    if is_special and not category.is_special:
+        link_count = (
+            db.query(Link).filter(Link.category == category_id).count()
+        )
+        if link_count > 0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=(
+                    "링크가 있는 카테고리는 배너 소개 카테고리로 "
+                    "변경할 수 없습니다."
+                ),
+            )
+    if is_special:
+        _clear_other_special_categories(db, user_id, category_id)
+
+    for key, value in data.items():
+        setattr(category, key, value)
 
     db.commit()
     db.refresh(category)
+
+    if (
+        old_banner_url
+        and "banner_url" in data
+        and old_banner_url != category.banner_url
+    ):
+        delete_replaced_upload(old_banner_url, category.banner_url)
+
     return _serialize_category(category)
 
 
@@ -355,8 +423,11 @@ def delete_link_category(
             ),
         )
 
+    banner_url = category.banner_url
     db.delete(category)
     db.commit()
+    if banner_url:
+        delete_uploaded_file(banner_url)
     return True
 
 

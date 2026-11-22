@@ -241,7 +241,8 @@ TRACKED: dict[type, _Tracked] = {
         "link_category",
         _link_category_title,
         _owner_from_user_id,
-        frozenset({"name"}),
+        frozenset({"name", "banner_url", "description", "is_special"}),
+        image_fields=frozenset({"banner_url"}),
     ),
     Profile: _Tracked(
         "profile",

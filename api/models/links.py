@@ -1,4 +1,13 @@
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, func
+from sqlalchemy import (
+    Boolean,
+    Column,
+    Integer,
+    String,
+    Text,
+    DateTime,
+    ForeignKey,
+    func,
+)
 from sqlalchemy.orm import relationship
 
 from db.base import Base
@@ -16,6 +25,11 @@ class Category(Base):
         index=True,
     )
     name = Column(String(255), nullable=False)
+    banner_url = Column(ImageUrl(255), nullable=True)
+    description = Column(Text, nullable=True)
+    is_special = Column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
     order = Column(Integer, nullable=False, default=0, server_default="0")
 
     links = relationship("Link", back_populates="category_relation")

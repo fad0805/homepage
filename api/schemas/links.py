@@ -4,6 +4,9 @@ from pydantic import BaseModel, Field
 class Category(BaseModel):
     """Model for Link's Category."""
     name: str
+    banner_url: str | None = None
+    description: str | None = None
+    is_special: bool = False
     order: int | None = None
 
 

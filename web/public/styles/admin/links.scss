@@ -235,6 +235,32 @@ a.admin-button.primary:visited {
   color: var(--admin-muted);
 }
 
+.admin-links-category-banner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  padding: 0.75rem;
+  background: rgba(0, 0, 0, 0.04);
+
+  img {
+    display: block;
+    width: 200px;
+    max-width: 100%;
+    height: 40px;
+    object-fit: contain;
+  }
+
+  span {
+    color: var(--admin-muted);
+    font-size: 0.7rem;
+  }
+}
+
+[data-theme='dark'] .admin-links-category-banner {
+  background: rgba(255, 255, 255, 0.05);
+}
+
 .admin-links-category-actions {
   display: flex;
   flex-wrap: wrap;
@@ -578,6 +604,66 @@ a.admin-button.primary:visited {
   color: var(--admin-muted);
 }
 
+.admin-checkbox-field {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.55rem;
+  margin: 0.5rem 0;
+  font-size: 0.82rem;
+
+  input {
+    margin-top: 0.2rem;
+    accent-color: var(--subtheme);
+  }
+
+  small {
+    display: block;
+    margin-top: 0.2rem;
+    color: var(--admin-muted);
+    font-size: 0.7rem;
+    line-height: 1.4;
+  }
+}
+
+.admin-links-banner-field {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+}
+
+.admin-links-banner-preview {
+  display: flex;
+  flex: 0 0 8rem;
+  align-items: center;
+  justify-content: center;
+  width: 8rem;
+  aspect-ratio: 1 / 1;
+  overflow: hidden;
+  border: 1px dashed var(--admin-border);
+  border-radius: 0.6rem;
+  background: rgba(0, 0, 0, 0.04);
+  color: var(--admin-muted);
+  font-size: 0.72rem;
+
+  img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+  }
+}
+
+.admin-links-banner-controls {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+[data-theme='dark'] .admin-links-banner-preview {
+  background: rgba(255, 255, 255, 0.05);
+}
+
 @media (width < 600px) {
   #admin-links {
     padding: 1rem 0.75rem;
@@ -590,5 +676,15 @@ a.admin-button.primary:visited {
   .admin-links-category-actions {
     width: 100%;
     margin-left: 0;
+  }
+
+  .admin-links-banner-field {
+    flex-direction: column;
+  }
+
+  .admin-links-banner-preview {
+    flex-basis: auto;
+    width: 100%;
+    max-width: 10rem;
   }
 }

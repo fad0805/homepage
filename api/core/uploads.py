@@ -83,13 +83,14 @@ def _get_s3_client():
     return _s3_client
 
 
-def _build_key(folder: str, extension: str) -> str:
+def _build_key(folder: str, extension: str, name: str | None = None) -> str:
     parts = [
         part
         for part in (S3_KEY_PREFIX.strip("/"), folder.strip("/"))
         if part
     ]
-    parts.append(f"{uuid.uuid4().hex}{extension}")
+    filename = (name or "").strip("/\\") or uuid.uuid4().hex
+    parts.append(f"{filename}{extension}")
     return "/".join(parts)
 
 
@@ -264,8 +265,9 @@ def _save_to_s3(
     content_type: str,
     extension: str,
     folder: str,
+    name: str | None = None,
 ) -> str:
-    key = _build_key(folder, extension)
+    key = _build_key(folder, extension, name)
     put_kwargs: dict[str, Any] = {
         "Bucket": S3_BUCKET,
         "Key": key,
@@ -288,14 +290,19 @@ def _save_to_s3(
     return key
 
 
-def _save_to_local(content: bytes, extension: str, folder: str) -> str:
+def _save_to_local(
+    content: bytes,
+    extension: str,
+    folder: str,
+    name: str | None = None,
+) -> str:
     """Local fallback when S3 is not configured.
 
     The bucket's key prefix (for example ``images``) is omitted locally, so
     the file lives directly under ``uploads/<folder>/``. The returned key
     still includes the prefix for a consistent database representation.
     """
-    key = _build_key(folder, extension)
+    key = _build_key(folder, extension, name)
     destination = ensure_upload_dir() / _local_key_from_storage_key(key)
     destination.parent.mkdir(parents=True, exist_ok=True)
     try:
@@ -386,7 +393,11 @@ def _sanitize_image(content: bytes) -> tuple[bytes, str, str]:
         ) from exc
 
 
-def save_image_bytes(content: bytes, folder: str = "chapters") -> str:
+def save_image_bytes(
+    content: bytes,
+    folder: str = "chapters",
+    name: str | None = None,
+) -> str:
     """Store an image that already exists in memory.
 
     Used by importers that extract images from a document archive.
@@ -406,16 +417,20 @@ def save_image_bytes(content: bytes, folder: str = "chapters") -> str:
         )
     content, content_type, extension = _sanitize_image(content)
     if _s3_is_configured():
-        return _save_to_s3(content, content_type, extension, folder)
+        return _save_to_s3(content, content_type, extension, folder, name)
     if S3_BUCKET or S3_PUBLIC_BASE_URL:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="S3 설정이 불완전합니다.",
         )
-    return _save_to_local(content, extension, folder)
+    return _save_to_local(content, extension, folder, name)
 
 
-async def save_banner(file: UploadFile, folder: str = "banners") -> str:
+async def save_banner(
+    file: UploadFile,
+    folder: str = "banners",
+    name: str | None = None,
+) -> str:
     """Upload an image and return its storage key.
 
     Database models persist this relative key through their ``ImageUrl`` type.
@@ -436,7 +451,7 @@ async def save_banner(file: UploadFile, folder: str = "banners") -> str:
     content, content_type, extension = _sanitize_image(content)
 
     if _s3_is_configured():
-        return _save_to_s3(content, content_type, extension, folder)
+        return _save_to_s3(content, content_type, extension, folder, name)
 
     # Partial S3 configuration is a deployment error. If no S3 settings are
     # present at all, local storage is used in every environment.
@@ -446,4 +461,4 @@ async def save_banner(file: UploadFile, folder: str = "banners") -> str:
             detail="S3 설정이 불완전합니다.",
         )
 
-    return _save_to_local(content, extension, folder)
+    return _save_to_local(content, extension, folder, name)

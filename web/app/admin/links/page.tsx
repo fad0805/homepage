@@ -37,7 +37,12 @@ import "@/public/styles/admin/links.scss";
 interface Category {
   id: number;
   name: string;
+  banner_url: string | null;
+  description: string | null;
+  is_special: boolean;
   order: number;
+  file?: File | null;
+  preview_url?: string | null;
 }
 
 interface LinkItem {
@@ -329,19 +334,23 @@ function SortableCategorySection({
             <span className="admin-draft-badge">미저장</span>
           ) : null}
         </h2>
-        <span className="admin-links-count">{links.length}개</span>
+        <span className="admin-links-count">
+          {category.is_special ? "배너 카테고리" : `${links.length}개`}
+        </span>
 
         <div className="admin-links-category-actions">
-          <button type="button" onClick={() => onAddLink(category.id)}>
-            링크 추가
-          </button>
+          {category.is_special ? null : (
+            <button type="button" onClick={() => onAddLink(category.id)}>
+              링크 추가
+            </button>
+          )}
           {canManageCategory ? (
             <>
               <button
                 type="button"
                 onClick={() => onEditCategory(category)}
               >
-                이름 변경
+                편집
               </button>
               <button
                 type="button"
@@ -361,8 +370,26 @@ function SortableCategorySection({
         </div>
       </header>
 
+      {category.is_special ? (
+        <div className="admin-links-category-banner">
+          {category.preview_url ?? category.banner_url ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={category.preview_url ?? category.banner_url ?? undefined}
+              alt="banner"
+            />
+          ) : (
+            <span>배너 이미지 없음</span>
+          )}
+        </div>
+      ) : null}
+
       {links.length === 0 ? (
-        <p className="admin-links-empty">아직 링크가 없습니다.</p>
+        <p className="admin-links-empty">
+          {category.is_special
+            ? category.description || "배너 소개 카테고리입니다."
+            : "아직 링크가 없습니다."}
+        </p>
       ) : (
         <SortableContext
           items={links.map((link) => `${LINK_TYPE}-${link.id}`)}
@@ -403,6 +430,15 @@ export default function AdminLinks() {
 
   const [categoryModalOpen, setCategoryModalOpen] = useState(false);
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
+  const [categoryBannerPreview, setCategoryBannerPreview] = useState<
+    string | null
+  >(null);
+  const [categoryBannerFileName, setCategoryBannerFileName] = useState("");
+  const [categoryBannerUrlInput, setCategoryBannerUrlInput] = useState("");
+  const [categoryBannerFile, setCategoryBannerFile] = useState<File | null>(
+    null,
+  );
+  const [categoryIsSpecial, setCategoryIsSpecial] = useState(false);
 
   const [isDirty, setIsDirty] = useState(false);
   const [deletedLinkIds, setDeletedLinkIds] = useState<number[]>([]);
@@ -448,7 +484,7 @@ export default function AdminLinks() {
     setLoading(true);
     try {
       const [categoryData, linkData] = await Promise.all([
-        apiFetch<Category[]>("/api/links/categories"),
+        apiFetch<Category[]>("/api/links/categories?mine=true"),
         apiFetch<LinkItem[]>("/api/links?mine=true"),
       ]);
       revokeObjectUrls();
@@ -602,6 +638,19 @@ export default function AdminLinks() {
     return uploaded.url;
   }, []);
 
+  const uploadCategoryBanner = useCallback(async (file: File) => {
+    const body = new FormData();
+    body.append("file", file);
+    const uploaded = await apiFetch<{ url: string }>(
+      "/api/links/category-upload",
+      {
+        method: "POST",
+        body,
+      },
+    );
+    return uploaded.url;
+  }, []);
+
   const handleSaveAll = useCallback(async () => {
     if (!isDirty || saving) {
       return;
@@ -614,9 +663,18 @@ export default function AdminLinks() {
       const deletedLinkSet = new Set(deletedLinkIds);
 
       for (const category of categories.filter((item) => item.id < 0)) {
+        const bannerUrl = category.file
+          ? await uploadCategoryBanner(category.file)
+          : category.banner_url;
         const created = await apiFetch<Category>("/api/links/categories", {
           method: "POST",
-          body: JSON.stringify({ name: category.name, order: category.order }),
+          body: JSON.stringify({
+            name: category.name,
+            banner_url: bannerUrl,
+            description: category.description,
+            is_special: category.is_special,
+            order: category.order,
+          }),
         });
         categoryIdMap.set(category.id, created.id);
       }
@@ -630,9 +688,17 @@ export default function AdminLinks() {
           !deletedCategorySet.has(item.id),
       );
       for (const category of dirtyExistingCategories) {
+        const bannerUrl = category.file
+          ? await uploadCategoryBanner(category.file)
+          : category.banner_url;
         await apiFetch(`/api/links/categories/${category.id}`, {
           method: "PUT",
-          body: JSON.stringify({ name: category.name }),
+          body: JSON.stringify({
+            name: category.name,
+            banner_url: bannerUrl,
+            description: category.description,
+            is_special: category.is_special,
+          }),
         });
       }
 
@@ -763,6 +829,7 @@ export default function AdminLinks() {
     reorderedCategoryIds,
     saving,
     uploadBanner,
+    uploadCategoryBanner,
   ]);
 
   const handleDiscard = useCallback(async () => {
@@ -790,12 +857,21 @@ export default function AdminLinks() {
   }, [isDirty]);
 
   const openCreateLink = (categoryId?: number) => {
+    if (categoryId !== undefined) {
+      const category = categories.find((item) => item.id === categoryId);
+      if (category?.is_special) {
+        notify("error", "배너 소개 카테고리에는 링크를 추가할 수 없습니다.");
+        return;
+      }
+    }
+    const defaultCategory =
+      categories.find((category) => !category.is_special) ?? null;
     setEditingLink(null);
     setBannerPreview(null);
     setBannerFileName("");
     setBannerUrlInput("");
     setBannerFile(null);
-    setFormCategoryId(categoryId ?? categories[0]?.id ?? null);
+    setFormCategoryId(categoryId ?? defaultCategory?.id ?? null);
     setLinkModalOpen(true);
   };
 
@@ -962,44 +1038,149 @@ export default function AdminLinks() {
 
   const openCreateCategory = () => {
     setEditingCategory(null);
+    setCategoryBannerPreview(null);
+    setCategoryBannerFileName("");
+    setCategoryBannerUrlInput("");
+    setCategoryBannerFile(null);
+    setCategoryIsSpecial(false);
     setCategoryModalOpen(true);
   };
 
   const openEditCategory = (category: Category) => {
     setEditingCategory(category);
+    setCategoryBannerPreview(category.preview_url ?? category.banner_url);
+    setCategoryBannerFileName(category.file?.name ?? "");
+    setCategoryBannerUrlInput(category.banner_url ?? "");
+    setCategoryBannerFile(null);
+    setCategoryIsSpecial(category.is_special);
     setCategoryModalOpen(true);
   };
 
   const closeCategoryModal = useCallback(() => {
     setCategoryModalOpen(false);
     setEditingCategory(null);
+    setCategoryBannerPreview(null);
+    setCategoryBannerFileName("");
+    setCategoryBannerUrlInput("");
+    setCategoryBannerFile(null);
+    setCategoryIsSpecial(false);
   }, []);
+
+  const handleCategoryBannerChange = (
+    event: ChangeEvent<HTMLInputElement>,
+  ) => {
+    const file = event.target.files?.[0];
+    if (!file) {
+      const urlValue = categoryBannerUrlInput.trim();
+      const urlChanged =
+        urlValue !== (editingCategory?.banner_url ?? "");
+      setCategoryBannerFile(null);
+      setCategoryBannerFileName(
+        urlChanged ? "" : editingCategory?.file?.name ?? "",
+      );
+      setCategoryBannerPreview(
+        urlChanged
+          ? urlValue || null
+          : editingCategory?.preview_url ?? (urlValue || null),
+      );
+      return;
+    }
+    if (!ALLOWED_BANNER_TYPES.includes(file.type)) {
+      event.target.value = "";
+      notify("error", "PNG / JPEG / WEBP / GIF 이미지만 업로드할 수 있습니다.");
+      return;
+    }
+    if (file.size > MAX_BANNER_SIZE) {
+      event.target.value = "";
+      notify("error", "배너 이미지는 50MB 이하만 업로드할 수 있습니다.");
+      return;
+    }
+    const objectUrl = URL.createObjectURL(file);
+    objectUrls.current.add(objectUrl);
+    setCategoryBannerFile(file);
+    setCategoryBannerFileName("banner");
+    setCategoryBannerPreview(objectUrl);
+  };
+
+  const handleCategoryBannerUrlChange = (
+    event: ChangeEvent<HTMLInputElement>,
+  ) => {
+    const value = event.target.value;
+    setCategoryBannerUrlInput(value);
+    if (!categoryBannerFile) {
+      setCategoryBannerFileName("");
+      setCategoryBannerPreview(value.trim() || null);
+    }
+  };
 
   const handleCategorySubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
     const form = new FormData(event.currentTarget);
     const name = String(form.get("name") ?? "").trim();
+    const description = String(form.get("description") ?? "").trim();
+    const isSpecial = form.get("is_special") === "on";
     if (!name) {
       notify("error", "카테고리 이름을 입력해주세요.");
       return;
     }
+    if (
+      isSpecial &&
+      editingCategory &&
+      links.some((link) => link.category.id === editingCategory.id)
+    ) {
+      notify("error", "링크가 있는 카테고리는 배너 소개 카테고리로 변경할 수 없습니다.");
+      return;
+    }
 
-    if (editingCategory) {
-      setCategories((prev) =>
-        prev.map((category) =>
+    const file = form.get("banner_file");
+    const bannerUrlValue = String(form.get("banner_url") ?? "").trim();
+    const hasNewFile = file instanceof File && file.size > 0;
+    const urlChanged = bannerUrlValue !== (editingCategory?.banner_url ?? "");
+    const nextFile = hasNewFile
+      ? (file as File)
+      : urlChanged
+        ? null
+        : (editingCategory?.file ?? null);
+    const nextBannerUrl =
+      hasNewFile || !urlChanged
+        ? (editingCategory?.banner_url ?? null)
+        : bannerUrlValue || null;
+    const nextPreview = hasNewFile
+      ? categoryBannerPreview
+      : nextFile
+        ? (editingCategory?.preview_url ?? null)
+        : bannerUrlValue || null;
+
+    const updatedFields = {
+      name,
+      description: description || null,
+      banner_url: nextBannerUrl,
+      file: nextFile,
+      preview_url: nextPreview,
+      is_special: isSpecial,
+    };
+
+    setCategories((prev) => {
+      const base = isSpecial
+        ? prev.map((category) =>
+            category.id === editingCategory?.id
+              ? category
+              : { ...category, is_special: false },
+          )
+        : prev;
+      if (editingCategory) {
+        return base.map((category) =>
           category.id === editingCategory.id
-            ? { ...category, name }
+            ? { ...category, ...updatedFields }
             : category,
-        ),
-      );
-    } else {
+        );
+      }
       const id = nextTempId.current--;
       const order =
-        categories.reduce((max, category) => Math.max(max, category.order), -1) +
-        1;
-      setCategories((prev) => [...prev, { id, name, order }]);
-    }
+        base.reduce((max, category) => Math.max(max, category.order), -1) + 1;
+      return [...base, { id, order, ...updatedFields }];
+    });
 
     if (editingCategory && editingCategory.id > 0) {
       setDirtyCategoryIds((prev) => {
@@ -1108,7 +1289,7 @@ export default function AdminLinks() {
             type="button"
             className="admin-button"
             onClick={() => openCreateLink()}
-            disabled={categories.length === 0}
+            disabled={!categories.some((category) => !category.is_special)}
           >
             링크 추가
           </button>
@@ -1233,14 +1414,18 @@ export default function AdminLinks() {
                 name="category"
                 required
                 defaultValue={
-                  formCategoryId ?? categories[0]?.id ?? ""
+                  formCategoryId ??
+                  categories.find((category) => !category.is_special)?.id ??
+                  ""
                 }
               >
-                {categories.map((category) => (
-                  <option key={category.id} value={category.id}>
-                    {category.name}
-                  </option>
-                ))}
+                {categories
+                  .filter((category) => !category.is_special)
+                  .map((category) => (
+                    <option key={category.id} value={category.id}>
+                      {category.name}
+                    </option>
+                  ))}
               </select>
             </label>
 
@@ -1301,7 +1486,7 @@ export default function AdminLinks() {
 
       {categoryModalOpen ? (
         <ModalShell
-          title={editingCategory ? "카테고리 이름 변경" : "카테고리 추가"}
+          title={editingCategory ? "카테고리 편집" : "카테고리 추가"}
           onClose={closeCategoryModal}
           footer={
             <>
@@ -1334,9 +1519,80 @@ export default function AdminLinks() {
                 required
                 autoFocus
                 defaultValue={editingCategory?.name ?? ""}
-                placeholder="예: 방랑자들"
+                placeholder="예: 내 배너"
               />
             </label>
+
+            <label className="admin-checkbox-field">
+              <input
+                name="is_special"
+                type="checkbox"
+                checked={categoryIsSpecial}
+                onChange={(event) => setCategoryIsSpecial(event.target.checked)}
+              />
+              <span>
+                배너 소개 카테고리
+                <small>
+                  선택하면 이 카테고리에 링크를 넣을 수 없고, 배너와
+                  상세설명만 표시됩니다.
+                </small>
+              </span>
+            </label>
+
+            {categoryIsSpecial ? (
+              <>
+                <label className="admin-field">
+                  <span>상세설명</span>
+                  <textarea
+                    name="description"
+                    rows={4}
+                    defaultValue={editingCategory?.description ?? ""}
+                    placeholder="카테고리를 소개하는 설명을 입력해주세요."
+                  />
+                </label>
+
+                <div className="admin-field">
+                  <span>카테고리 배너</span>
+                  <div className="admin-links-banner-field">
+                    <div className="admin-links-banner-preview">
+                      {categoryBannerPreview ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={categoryBannerPreview}
+                          alt="banner"
+                        />
+                      ) : (
+                        <span>이미지 없음</span>
+                      )}
+                    </div>
+                    <div className="admin-links-banner-controls">
+                      <input
+                        name="banner_url"
+                        type="text"
+                        value={categoryBannerUrlInput}
+                        onChange={handleCategoryBannerUrlChange}
+                        placeholder="이미지 URL 또는 파일 업로드"
+                      />
+                      <input
+                        name="banner_file"
+                        type="file"
+                        accept="image/png,image/jpeg,image/webp,image/gif"
+                        onChange={handleCategoryBannerChange}
+                      />
+                      {categoryBannerFileName ? (
+                        <span className="admin-banner-filename">
+                          선택됨: {categoryBannerFileName}
+                        </span>
+                      ) : null}
+                      <span className="admin-banner-help">
+                        파일을 업로드하면 이름이 banner로 저장되며, 방문자가
+                        배너를 클릭하면 이미지 URL이 복사됩니다.
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </>
+            ) : null}
           </form>
         </ModalShell>
       ) : null}

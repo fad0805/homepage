@@ -40,13 +40,26 @@ router = APIRouter()
 # captured by the dynamic route.
 @router.get("/categories")
 def get_link_categories(
+    mine: bool = False,
     db: Session = Depends(get_db),
-    user=Depends(require_auth),
+    current_user=Depends(get_optional_user),
 ):
     """
-    Get the signed-in author's link categories.
+    Get the default author's public categories, or the signed-in author's
+    categories when ``mine`` is set.
     """
-    return get_all_link_categories(db, user.id)
+    if mine:
+        if current_user is None:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Not authenticated",
+            )
+        return get_all_link_categories(db, current_user.id)
+
+    author_id = get_default_author_id(db)
+    if author_id is None:
+        return []
+    return get_all_link_categories(db, author_id)
 
 
 @router.post("/categories")
@@ -161,6 +174,18 @@ async def upload_link_banner(
     Upload a banner image and return its public URL.
     """
     key = await save_banner(file, folder="banners")
+    return {"url": public_url(key)}
+
+
+@router.post("/category-upload", response_model=UploadResponse)
+async def upload_category_banner(
+    file: UploadFile = File(...),
+    _=Depends(require_auth),
+):
+    """
+    Upload the single category banner under the stable ``banner`` name.
+    """
+    key = await save_banner(file, folder="banners", name="banner")
     return {"url": public_url(key)}
 
 
