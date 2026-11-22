@@ -35,6 +35,9 @@ export function LinksCategoryBanner({
       <span className="links-category-banner__image">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={url} alt="banner" />
+        <span className="links-category-banner__overlay" aria-hidden="true">
+          클릭하기
+        </span>
       </span>
     </button>
   );
