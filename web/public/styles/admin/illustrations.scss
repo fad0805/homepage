@@ -1308,10 +1308,30 @@
   background: var(--admin-card-bg);
 }
 
+.admin-illustrations-trim-modal__player {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
 .admin-illustrations-trim-modal__play {
-  margin-left: auto;
+  flex: 0 0 auto;
   padding: 0.25rem 0.6rem;
   font-size: 0.72rem;
+}
+
+.admin-illustrations-trim-modal__seek {
+  flex: 1;
+  min-width: 0;
+}
+
+.admin-illustrations-trim-modal__time {
+  flex: 0 0 auto;
+  min-width: 5.5rem;
+  color: var(--admin-muted);
+  font-size: 0.7rem;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
 }
 
 .admin-illustrations-trim-modal__name {

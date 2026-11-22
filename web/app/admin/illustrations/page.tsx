@@ -237,6 +237,7 @@ export default function AdminIllustrations() {
   const [trimPreviewPlaying, setTrimPreviewPlaying] = useState<number | null>(
     null,
   );
+  const [trimPreviewTimes, setTrimPreviewTimes] = useState<number[]>([]);
   const [inspectingVideos, setInspectingVideos] = useState(false);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -430,6 +431,7 @@ export default function AdminIllustrations() {
     }));
     trimVideoRefs.current = [];
     setTrimPreviewPlaying(null);
+    setTrimPreviewTimes(candidates.map(() => 0));
     setVideoTrimRequest({ target, files: media, videos: candidates });
     setVideoTrimStarts(candidates.map(() => 0));
     setVideoTrimSeconds(candidates.map(trimDefault));
@@ -952,7 +954,30 @@ export default function AdminIllustrations() {
 
     const start = videoTrimStarts[index] ?? 0;
     video.currentTime = start;
+    setTrimPreviewTimes((current) => {
+      const next = [...current];
+      next[index] = start;
+      return next;
+    });
     void video.play().catch(() => undefined);
+  };
+
+  const toggleTrimRange = (index: number) => {
+    const video = trimVideoRefs.current[index];
+    if (!video) return;
+    if (trimPreviewPlaying === index) {
+      video.pause();
+      return;
+    }
+    playTrimRange(index);
+  };
+
+  const setTrimPreviewTime = (index: number, time: number) => {
+    setTrimPreviewTimes((current) => {
+      const next = [...current];
+      next[index] = time;
+      return next;
+    });
   };
 
   const removeImageFromEditing = async (
@@ -2275,13 +2300,17 @@ export default function AdminIllustrations() {
 
             <div className="admin-modal-body">
               <p className="admin-illustrations-trim-modal__hint">
-                시작과 길이를 움직인 뒤 `구간 재생`을 누르면 선택한 부분만 미리보기에서 재생됩니다. 해당 구간이 움직이는 WebP로 저장됩니다. 최대 {MAX_VIDEO_SECONDS}초까지 선택할 수 있습니다.
+                시작과 길이를 움직인 뒤 `구간 재생`을 누르면 선택한 부분만 재생됩니다. 재생바도 선택 구간만 움직이며, 해당 구간이 움직이는 WebP로 저장됩니다. 최대 {MAX_VIDEO_SECONDS}초까지 선택할 수 있습니다.
               </p>
               <div className="admin-illustrations-trim-modal__list">
                 {videoTrimRequest.videos.map((candidate, index) => {
                   const start = videoTrimStarts[index] ?? 0;
                   const seconds = videoTrimSeconds[index] ?? MAX_VIDEO_SECONDS;
                   const end = start + seconds;
+                  const previewTime = Math.min(
+                    Math.max(trimPreviewTimes[index] ?? start, start),
+                    end,
+                  );
                   return (
                     <div
                       className="admin-illustrations-trim-modal__row"
@@ -2294,12 +2323,12 @@ export default function AdminIllustrations() {
                         key={`${candidate.previewUrl}-${start}-${end}`}
                         className="admin-illustrations-trim-modal__preview"
                         src={`${candidate.previewUrl}#t=${start},${end}`}
-                        controls
                         muted
                         playsInline
                         preload="metadata"
                         onLoadedMetadata={(event) => {
                           event.currentTarget.currentTime = start;
+                          setTrimPreviewTime(index, start);
                         }}
                         onPlay={(event) => {
                           const video = event.currentTarget;
@@ -2316,7 +2345,13 @@ export default function AdminIllustrations() {
                           if (video.currentTime >= end - 0.05) {
                             video.pause();
                             video.currentTime = start;
+                            setTrimPreviewTime(index, start);
+                            return;
                           }
+                          setTrimPreviewTime(
+                            index,
+                            Math.min(Math.max(video.currentTime, start), end),
+                          );
                         }}
                         onPause={() =>
                           setTrimPreviewPlaying((current) =>
@@ -2325,6 +2360,7 @@ export default function AdminIllustrations() {
                         }
                         onEnded={(event) => {
                           event.currentTarget.currentTime = start;
+                          setTrimPreviewTime(index, start);
                           setTrimPreviewPlaying((current) =>
                             current === index ? null : current,
                           );
@@ -2344,15 +2380,39 @@ export default function AdminIllustrations() {
                         <span className="admin-illustrations-trim-modal__range">
                           선택 {start}초 ~ {end}초
                         </span>
+                      </div>
+                      <div className="admin-illustrations-trim-modal__player">
                         <button
                           type="button"
                           className="admin-button admin-illustrations-trim-modal__play"
-                          onClick={() => playTrimRange(index)}
+                          onClick={() => toggleTrimRange(index)}
                         >
                           {trimPreviewPlaying === index
-                            ? "다시 재생"
+                            ? "일시정지"
                             : "구간 재생"}
                         </button>
+                        <input
+                          className="admin-illustrations-trim-modal__seek"
+                          type="range"
+                          aria-label="미리보기 재생 위치"
+                          min={start}
+                          max={end}
+                          step={0.1}
+                          value={previewTime}
+                          onChange={(event) => {
+                            const value = Number(event.target.value);
+                            const clamped = Math.min(
+                              Math.max(value, start),
+                              end,
+                            );
+                            const video = trimVideoRefs.current[index];
+                            if (video) video.currentTime = clamped;
+                            setTrimPreviewTime(index, clamped);
+                          }}
+                        />
+                        <span className="admin-illustrations-trim-modal__time">
+                          {previewTime.toFixed(1)}초 / {end}초
+                        </span>
                       </div>
                       <div className="admin-illustrations-trim-modal__control">
                         <span>시작</span>
