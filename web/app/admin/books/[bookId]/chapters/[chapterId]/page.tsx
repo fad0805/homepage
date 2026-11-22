@@ -17,6 +17,7 @@ import { CHAPTER_PREVIEW_STORAGE_KEY } from "@/app/books/types";
 import type { Chapter } from "@/app/books/types";
 import { apiFetch } from "@/lib/api";
 import { formatDateTime } from "@/lib/datetime";
+import { useStandaloneWebApp } from "@/lib/standalone-webapp";
 
 import "@/public/styles/admin/books.scss";
 
@@ -112,6 +113,7 @@ function getDraftSignature(values: {
 export default function AdminChapterEdit() {
   const params = useParams<{ bookId: string; chapterId: string }>();
   const router = useRouter();
+  const standalone = useStandaloneWebApp();
   const bookId = Number(params.bookId);
   const chapterIdParam = params.chapterId;
   const isNew = chapterIdParam === "new";
@@ -446,11 +448,13 @@ export default function AdminChapterEdit() {
     } catch {
       // Preview still opens without the draft payload if storage is blocked.
     }
-    window.open(
-      `/books?book=${targetBookId}&preview=1`,
-      "_blank",
-      "noopener,noreferrer",
-    );
+    const previewUrl = `/books?book=${targetBookId}&preview=1`;
+    if (standalone) {
+      // Installed web apps have no tab strip; navigate in the same window.
+      router.push(previewUrl);
+    } else {
+      window.open(previewUrl, "_blank", "noopener,noreferrer");
+    }
   }, [
     book,
     books,
@@ -460,6 +464,8 @@ export default function AdminChapterEdit() {
     chapterProtected,
     pinned,
     publishedAt,
+    router,
+    standalone,
     subtitle,
     targetBookId,
     title,

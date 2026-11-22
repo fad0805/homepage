@@ -9,6 +9,7 @@ import {
 } from "react";
 
 import { apiDownload, apiFetch } from "@/lib/api";
+import { useStandaloneWebApp } from "@/lib/standalone-webapp";
 
 import "@/public/styles/admin/manuscript.scss";
 
@@ -31,16 +32,6 @@ interface Book {
 
 type Notice = { type: "success" | "error"; text: string };
 
-function isStandaloneWebApp(): boolean {
-  if (typeof window === "undefined") return false;
-  return (
-    window.matchMedia?.("(display-mode: standalone)").matches === true ||
-    window.matchMedia?.("(display-mode: minimal-ui)").matches === true ||
-    window.matchMedia?.("(display-mode: fullscreen)").matches === true ||
-    (window.navigator as Navigator & { standalone?: boolean }).standalone === true
-  );
-}
-
 export default function AdminManuscriptPage() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [query, setQuery] = useState("");
@@ -54,11 +45,7 @@ export default function AdminManuscriptPage() {
   const [bookLoading, setBookLoading] = useState(false);
   const [fileBusyId, setFileBusyId] = useState<number | null>(null);
   const [importing, setImporting] = useState(false);
-  const [standalone, setStandalone] = useState(false);
-
-  useEffect(() => {
-    setStandalone(isStandaloneWebApp());
-  }, []);
+  const standalone = useStandaloneWebApp();
 
   const load = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
