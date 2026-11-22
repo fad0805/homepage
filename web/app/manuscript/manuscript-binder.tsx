@@ -31,15 +31,12 @@ interface ManuscriptBinderProps {
   onPurgeTrash: () => void;
 }
 
-function dropMode(
-  event: ReactDragEvent<HTMLElement>,
-  node: ManuscriptNode,
-): DropMode {
+function dropMode(event: ReactDragEvent<HTMLElement>): DropMode {
   const rect = event.currentTarget.getBoundingClientRect();
   const offset = event.clientY - rect.top;
   if (offset < rect.height * 0.28) return "before";
   if (offset > rect.height * 0.72) return "after";
-  return node.node_type === "folder" ? "inside" : "after";
+  return "inside";
 }
 
 function targetForNode(
@@ -160,7 +157,7 @@ export function ManuscriptBinder({
                 setDropKey(null);
                 return;
               }
-              setDropKey(`${dropMode(event, node)}:${node.id}`);
+              setDropKey(`${dropMode(event)}:${node.id}`);
             }}
             onDragLeave={(event) => {
               if (
@@ -183,7 +180,7 @@ export function ManuscriptBinder({
               }
               const target = targetForNode(
                 node,
-                dropMode(event, node),
+                dropMode(event),
                 childrenMap,
               );
               onMoveNode(movingId, target.parentId, target.position);

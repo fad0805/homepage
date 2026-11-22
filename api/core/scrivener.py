@@ -1198,7 +1198,7 @@ def parse_scrivener_zip(data: bytes) -> tuple[str, list[ScrivenerNode]]:
                             image_sizes=image_sizes,
                         )
                     )
-                    child_parent = None
+                    child_parent = len(node_list) - 1
                 elif kind in {"image", "pdf"}:
                     identifier = item.get("UUID") or item.get("ID") or ""
                     image = (
@@ -1214,7 +1214,7 @@ def parse_scrivener_zip(data: bytes) -> tuple[str, list[ScrivenerNode]]:
                             images=[image] if image else [],
                         )
                     )
-                    child_parent = None
+                    child_parent = len(node_list) - 1
                 elif kind in {"folder", "draftfolder"}:
                     node_list.append(
                         ScrivenerNode(

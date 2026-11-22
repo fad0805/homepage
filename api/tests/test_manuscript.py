@@ -1187,6 +1187,40 @@ class ManuscriptTests(unittest.TestCase):
             .deleted_at
         )
 
+    def test_import_scrivener_keeps_children_under_documents(self) -> None:
+        manifest = """<?xml version="1.0" encoding="UTF-8"?>
+<ScrivenerProject Version="2.0">
+  <Binder>
+    <BinderItem UUID="DRAFT" Type="DraftFolder">
+      <Title>Draft</Title>
+      <Children>
+        <BinderItem UUID="T1" Type="Text">
+          <Title>본문이 있는 문서</Title>
+          <Children>
+            <BinderItem UUID="T2" Type="Text">
+              <Title>하위 문서</Title>
+            </BinderItem>
+          </Children>
+        </BinderItem>
+      </Children>
+    </BinderItem>
+  </Binder>
+</ScrivenerProject>"""
+        buffer = BytesIO()
+        with ZipFile(buffer, "w") as archive:
+            archive.writestr("nested.scrivx", manifest)
+
+        result = crud.import_scrivener(
+            self.db, self.owner.id, buffer.getvalue()
+        )
+
+        tree = crud.get_tree(self.db, result["project_id"], self.owner.id)
+        self.assertEqual(
+            [node["title"] for node in tree],
+            ["본문이 있는 문서", "하위 문서"],
+        )
+        self.assertEqual(tree[1]["parent_id"], tree[0]["id"])
+
     def test_import_scrivener_default_13pt_renders_as_editor_default(self) -> None:
         manifest = """<?xml version="1.0" encoding="UTF-8"?>
 <ScrivenerProject Version="2.0">

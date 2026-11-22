@@ -489,8 +489,13 @@ export default function ManuscriptWorkspace() {
     setTree(nodes);
     setExpanded((current) => {
       const next = new Set(current);
+      const parentsWithChildren = new Set(
+        nodes
+          .filter((node) => node.parent_id !== null)
+          .map((node) => node.parent_id as number),
+      );
       nodes.forEach((node) => {
-        if (node.node_type === "folder" && !next.has(node.id)) next.add(node.id);
+        if (parentsWithChildren.has(node.id)) next.add(node.id);
       });
       return next;
     });
@@ -629,8 +634,7 @@ export default function ManuscriptWorkspace() {
 
   const createNode = async (nodeType: "folder" | "chapter") => {
     if (!projectId || !(await flushAutosave())) return;
-    const parentId =
-      selected?.node_type === "folder" ? selected.id : (selected?.parent_id ?? null);
+    const parentId = selected?.id ?? null;
     try {
       const node = await apiFetch<ManuscriptNode>("/api/manuscript/nodes", {
         method: "POST",
