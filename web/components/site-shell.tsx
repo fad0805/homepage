@@ -34,6 +34,8 @@ interface SiteShellProps {
   sidePosition: SidePosition;
   colorTheme: ColorThemeKey;
   colorOverrides: ColorOverrides;
+  siteTitle: string;
+  siteSubtitle: string;
   children: ReactNode;
 }
 
@@ -62,12 +64,18 @@ function getFocusableElements(container: HTMLElement | null) {
   );
 }
 
-function SiteTitle() {
+function SiteTitle({
+  title,
+  subtitle,
+}: {
+  title: string;
+  subtitle: string;
+}) {
   return (
     <div id="title">
       <Link href="/">
-        <span className="title__text">어디에도 없는 섬</span>
-        <span className="title__caption">Missing Island</span>
+        <span className="title__text">{title}</span>
+        <span className="title__caption">{subtitle}</span>
       </Link>
     </div>
   );
@@ -78,6 +86,8 @@ export function SiteShell({
   sidePosition,
   colorTheme,
   colorOverrides,
+  siteTitle,
+  siteSubtitle,
   children,
 }: SiteShellProps) {
   const pathname = usePathname();
@@ -277,7 +287,7 @@ export function SiteShell({
       <div id="container" className={classes}>
         <aside className="site-sidebar">
           <div className="site-sidebar__header">
-            <SiteTitle />
+            <SiteTitle title={siteTitle} subtitle={siteSubtitle} />
             <button
               type="button"
               className="site-menu-toggle site-sidebar-menu-toggle"
@@ -316,7 +326,7 @@ export function SiteShell({
     return (
       <div id="container" className={classes}>
         <header className="site-bottom-header">
-          <SiteTitle />
+          <SiteTitle title={siteTitle} subtitle={siteSubtitle} />
         </header>
 
         <main>
@@ -344,7 +354,7 @@ export function SiteShell({
         ref={isDrawer ? topbarRef : undefined}
         className={isDrawer ? "site-topbar" : undefined}
       >
-        <SiteTitle />
+        <SiteTitle title={siteTitle} subtitle={siteSubtitle} />
         {isDrawer ? (
           <button
             ref={drawerTriggerRef}

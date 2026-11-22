@@ -1,26 +1,15 @@
 import { IndexContent } from "@/components/index-content";
-import { DEFAULT_INDEX_HTML } from "@/config/index-page";
-import { serverApiFetch } from "@/lib/server-api";
+import { getIntegratedIndexPage } from "@/lib/index-page";
 
 import "@/public/styles/main.scss";
 import "@/public/styles/index-content.scss";
 
 export default async function Home() {
-  let contentHtml = DEFAULT_INDEX_HTML;
-
-  try {
-    const page = await serverApiFetch<{ content_html: string }>(
-      "/index-page?scope=integrated",
-      { tags: ["index"] },
-    );
-    contentHtml = page.content_html;
-  } catch (error) {
-    console.error("Failed to load the integrated index page.", error);
-  }
+  const page = await getIntegratedIndexPage();
 
   return (
     <div id="main">
-      <IndexContent html={contentHtml} />
+      <IndexContent html={page.content_html} />
     </div>
   );
 }

@@ -119,7 +119,10 @@ def _profile_title(obj: Profile) -> str:
 
 
 def _index_title(obj: IndexPage) -> str:
-    return "통합 인덱스" if obj.scope == "integrated" else "작가 인덱스"
+    return (
+        _text(getattr(obj, "title", None))
+        or ("통합 인덱스" if obj.scope == "integrated" else "작가 인덱스")
+    )
 
 
 def _account_title(obj: AuthorSettings) -> str:
@@ -252,7 +255,7 @@ TRACKED: dict[type, _Tracked] = {
         "index",
         _index_title,
         _owner_from_actor_or_user,
-        frozenset({"content_html"}),
+        frozenset({"title", "subtitle", "content_html"}),
         html_fields=frozenset({"content_html"}),
         skip_create=True,
     ),

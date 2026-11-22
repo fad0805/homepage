@@ -17,6 +17,10 @@ class IndexPage(Base):
         nullable=True,
         index=True,
     )
+    # NULL means "not customized yet", so the public defaults are used.
+    # An empty string is an intentional choice to hide the field.
+    title = Column(String(120), nullable=True)
+    subtitle = Column(String(160), nullable=True)
     content_html = Column(Text, nullable=False, default="", server_default="")
     created_at = Column(DateTime, default=func.now(), nullable=False)
     updated_at = Column(

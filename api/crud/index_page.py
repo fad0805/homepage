@@ -2,6 +2,14 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from core.html_sanitizer import sanitize_index_html
+from core.index_page import (
+    DEFAULT_INDEX_BODY_HTML,
+    DEFAULT_INDEX_SUBTITLE,
+    DEFAULT_INDEX_TITLE,
+    MAX_SUBTITLE_LENGTH,
+    MAX_TITLE_LENGTH,
+    clean_index_text,
+)
 from models.index_page import IndexPage
 
 
@@ -9,8 +17,16 @@ def _serialize(page: IndexPage | None, scope: str, user_id: int | None) -> dict:
     return {
         "scope": scope,
         "user_id": user_id,
+        "title": (
+            page.title if page is not None and page.title is not None
+            else DEFAULT_INDEX_TITLE
+        ),
+        "subtitle": (
+            page.subtitle if page is not None and page.subtitle is not None
+            else DEFAULT_INDEX_SUBTITLE
+        ),
         "content_html": sanitize_index_html(
-            page.content_html if page else ""
+            page.content_html if page else DEFAULT_INDEX_BODY_HTML
         ),
     }
 
@@ -49,6 +65,8 @@ def get_index_page(
     page = IndexPage(
         scope="author",
         user_id=user_id,
+        title=integrated.title,
+        subtitle=integrated.subtitle,
         content_html=integrated.content_html,
     )
     db.add(page)
@@ -69,7 +87,9 @@ def get_index_page_content(
     user_id: int | None = None,
 ) -> str:
     page = get_index_page(db, scope=scope, user_id=user_id)
-    return sanitize_index_html(page.content_html if page else "")
+    return sanitize_index_html(
+        page.content_html if page else DEFAULT_INDEX_BODY_HTML
+    )
 
 
 def get_index_page_read(
@@ -88,17 +108,34 @@ def update_index_page(
     scope: str,
     user_id: int | None,
     content_html: str,
+    title: str | None = None,
+    subtitle: str | None = None,
 ) -> dict:
     page = get_index_page(db, scope=scope, user_id=user_id)
     safe_html = sanitize_index_html(content_html)
+    clean_title = (
+        None if title is None
+        else clean_index_text(title, MAX_TITLE_LENGTH)
+    )
+    clean_subtitle = (
+        None if subtitle is None
+        else clean_index_text(subtitle, MAX_SUBTITLE_LENGTH)
+    )
+
     if page is None:
         page = IndexPage(
             scope=scope,
             user_id=user_id if scope == "author" else None,
+            title=clean_title,
+            subtitle=clean_subtitle,
             content_html=safe_html,
         )
         db.add(page)
     else:
+        if title is not None:
+            page.title = clean_title
+        if subtitle is not None:
+            page.subtitle = clean_subtitle
         page.content_html = safe_html
     db.commit()
     db.refresh(page)

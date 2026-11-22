@@ -924,6 +924,8 @@ def _index_page_data(
             "id": page.id,
             "scope": page.scope,
             "user_id": page.user_id,
+            "title": page.title,
+            "subtitle": page.subtitle,
             "content_html": page.content_html,
             "created_at": _iso(page.created_at),
             "updated_at": _iso(page.updated_at),

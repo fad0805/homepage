@@ -11,11 +11,13 @@ import {
   type SidePosition,
   type ThemeMode,
 } from "@/config/appearance";
+import { DEFAULT_INDEX_TITLE } from "@/config/index-page";
 import {
   buildColorThemeStyle,
   getThemeMetaColors,
   type ColorOverrides,
 } from "@/lib/color-theme";
+import { getIntegratedIndexPage } from "@/lib/index-page";
 import { serverApiFetch } from "@/lib/server-api";
 
 import "@/public/styles/globals.scss";
@@ -31,19 +33,12 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { Shortcuts } from "@/components/shortcuts";
 import { VisitTracker } from "@/components/visit-tracker";
 
-export const metadata: Metadata = {
-  title: "어디에도 없는 섬",
+const BASE_METADATA: Metadata = {
   description: "한 소녀가 있었다.",
-  applicationName: "어디에도 없는 섬",
   formatDetection: {
     telephone: false,
     email: false,
     address: false,
-  },
-  appleWebApp: {
-    capable: true,
-    title: "어디에도 없는 섬",
-    statusBarStyle: "default",
   },
   other: {
     // Next emits the standardized flag; Safari still reads the Apple one.
@@ -65,6 +60,22 @@ export const metadata: Metadata = {
   },
 };
 
+export async function generateMetadata(): Promise<Metadata> {
+  const index = await getIntegratedIndexPage();
+  const title = index.title || DEFAULT_INDEX_TITLE;
+
+  return {
+    ...BASE_METADATA,
+    title,
+    applicationName: title,
+    appleWebApp: {
+      capable: true,
+      title,
+      statusBarStyle: "default",
+    },
+  };
+}
+
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
@@ -80,6 +91,9 @@ export default async function RootLayout({
   const requestHeaders = await headers();
   const authorSlug = requestHeaders.get("x-author-slug");
   const nonce = requestHeaders.get("x-nonce") ?? undefined;
+  const index = await getIntegratedIndexPage();
+  const siteTitle = index.title || DEFAULT_INDEX_TITLE;
+  const siteSubtitle = index.subtitle;
 
   let layoutKey: LayoutKey = DEFAULT_LAYOUT;
   let sidePosition: SidePosition = DEFAULT_SIDE_POSITION;
@@ -210,6 +224,8 @@ export default async function RootLayout({
                 sidePosition={sidePosition}
                 colorTheme={colorTheme}
                 colorOverrides={colorOverrides}
+                siteTitle={siteTitle}
+                siteSubtitle={siteSubtitle}
               >
                 {children}
               </SiteShell>

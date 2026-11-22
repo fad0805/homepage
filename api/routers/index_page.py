@@ -52,6 +52,8 @@ def put_index_page(
         scope=payload.scope,
         user_id=target_user_id,
         content_html=payload.content_html,
+        title=payload.title,
+        subtitle=payload.subtitle,
     )
 
 

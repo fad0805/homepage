@@ -16,14 +16,17 @@ import "@/public/styles/admin/index.scss";
 interface IndexPage {
   scope: "author" | "integrated";
   user_id: number | null;
+  title: string;
+  subtitle: string;
   content_html: string;
 }
 
 type Notice = { type: "success" | "error"; text: string };
 
 export default function AdminIndex() {
+  const [title, setTitle] = useState("");
+  const [subtitle, setSubtitle] = useState("");
   const [content, setContent] = useState("");
-  const [savedContent, setSavedContent] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState<Notice | null>(null);
@@ -32,8 +35,9 @@ export default function AdminIndex() {
     setLoading(true);
     try {
       const data = await apiFetch<IndexPage>("/api/index-page?scope=integrated");
+      setTitle(data.title);
+      setSubtitle(data.subtitle);
       setContent(data.content_html);
-      setSavedContent(data.content_html);
     } catch (error) {
       setNotice({
         type: "error",
@@ -60,11 +64,14 @@ export default function AdminIndex() {
         method: "PUT",
         body: JSON.stringify({
           scope: "integrated",
+          title,
+          subtitle,
           content_html: content,
         }),
       });
+      setTitle(updated.title);
+      setSubtitle(updated.subtitle);
       setContent(updated.content_html);
-      setSavedContent(updated.content_html);
       setNotice({ type: "success", text: "인덱스 페이지를 저장했습니다." });
     } catch (error) {
       setNotice({
@@ -85,7 +92,8 @@ export default function AdminIndex() {
         <div>
           <h1>인덱스 관리</h1>
           <p className="admin-author-hint">
-            메인 인덱스(/)에 표시할 내용을 편집합니다.
+            화면 상단에 표시할 사이트 제목·부제와 메인 인덱스(/) 내용을
+            편집합니다. 제목은 브라우저 탭 이름으로도 사용됩니다.
           </p>
         </div>
       </header>
@@ -100,6 +108,31 @@ export default function AdminIndex() {
         <p className="admin-author-loading">불러오는 중...</p>
       ) : (
         <form className="admin-author-form" onSubmit={handleSubmit}>
+          <div className="admin-field">
+            <span>화면에 표시되는 타이틀</span>
+            <input
+              type="text"
+              value={title}
+              onChange={(event) => setTitle(event.target.value)}
+              placeholder="상단 사이트 이름 · 브라우저 탭 제목"
+              maxLength={120}
+            />
+          </div>
+
+          <div className="admin-field">
+            <span>화면에 표시되는 부제</span>
+            <input
+              type="text"
+              value={subtitle}
+              onChange={(event) => setSubtitle(event.target.value)}
+              placeholder="사이트 이름 아래에 작게 표시됩니다."
+              maxLength={160}
+            />
+            <small className="admin-field-hint">
+              영문자는 화면에 대문자로 표시됩니다.
+            </small>
+          </div>
+
           <div className="admin-field">
             <span>인덱스 내용</span>
             <RichTextEditor

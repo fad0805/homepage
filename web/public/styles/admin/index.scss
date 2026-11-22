@@ -38,6 +38,12 @@
   font-size: 0.7rem;
 }
 
+.admin-field-hint {
+  color: var(--admin-muted);
+  font-size: 0.72rem;
+  line-height: 1.4;
+}
+
 @media (max-width: 600px) {
   .admin-index-meta {
     align-items: flex-start;
