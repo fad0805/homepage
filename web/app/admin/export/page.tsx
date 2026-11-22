@@ -75,6 +75,11 @@ const SECTIONS = [
     label: "인덱스",
     description: "통합/작가 인덱스 내용",
   },
+  {
+    section: "manuscript",
+    label: "원고",
+    description: "원고 프로젝트별 스크리브너 폴더(.scriv)",
+  },
 ] as const;
 
 const STATUS_LABELS: Record<JobStatus, string> = {
@@ -90,6 +95,7 @@ const STAGE_LABELS: Record<string, string> = {
   data: "데이터 저장 중",
   books: "책 저장 중",
   chapters: "챕터 저장 중",
+  manuscript: "원고 저장 중",
   finalizing: "마무리 중",
   completed: "완료",
   failed: "실패",
@@ -268,8 +274,8 @@ export default function AdminExportPage() {
           <div>
             <h2>전체 내보내기</h2>
             <p>
-              책·삽화·등장인물·링크·프로필·주석·책갈피·부록·인덱스를
-              모두 담습니다.
+              책·삽화·등장인물·링크·프로필·주석·책갈피·부록·인덱스와
+              원고 스크리브너 파일을 모두 담습니다.
             </p>
           </div>
         </header>

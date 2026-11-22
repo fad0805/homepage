@@ -8,6 +8,7 @@ makes the archive portable to another database or framework.
 from __future__ import annotations
 
 import hashlib
+import io
 import json
 import logging
 import mimetypes
@@ -15,7 +16,7 @@ import shutil
 import tempfile
 import time
 import zipfile
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Callable
@@ -38,6 +39,7 @@ from core.config import (
     ARCHIVE_THROTTLE_SECONDS,
 )
 from core.uploads import get_upload_source, open_uploaded_file
+from crud import manuscript as manuscript_crud
 from db.session import SessionLocal, get_db
 from models.bookmark import (
     BookmarkGoal,
@@ -87,6 +89,7 @@ DATA_PLANNER_TASKS = "data/planner/tasks.json"
 DATA_PLANNER_COLORS = "data/planner/colors.json"
 PLANNER_EVENTS_DIR = "data/planner/events"
 DATA_INDEX_PAGES = "data/index_pages.json"
+MANUSCRIPT_DIR = "manuscript"
 CHAPTER_LAYOUT = "per_chapter"
 
 CONTENT_KEYS = [
@@ -106,6 +109,7 @@ CONTENT_KEYS = [
     "planner_colors",
     "planner_events",
     "index_pages",
+    "manuscripts",
 ]
 
 SECTION_LABELS = {
@@ -119,6 +123,7 @@ SECTION_LABELS = {
     "bookmark": "책갈피",
     "planner": "부록",
     "index": "인덱스",
+    "manuscript": "원고",
 }
 
 SECTION_CONTENT_KEYS = {
@@ -141,6 +146,7 @@ SECTION_CONTENT_KEYS = {
         "planner_events",
     ],
     "index": ["index_pages"],
+    "manuscript": ["manuscripts"],
 }
 
 
@@ -227,6 +233,7 @@ class _PreparedArchive:
     counts: dict[str, int]
     user_id: int | None
     scope_label: str
+    manuscript_files: list[dict[str, Any]] = field(default_factory=list)
 
 
 def _book_categories_data(
@@ -925,6 +932,32 @@ def _index_page_data(
     ]
 
 
+def _manuscript_data(
+    db: Session,
+    user_id: int,
+) -> list[dict[str, Any]]:
+    """Build one Scrivener ZIP per manuscript project owned by the user."""
+    files: list[dict[str, Any]] = []
+    for project in manuscript_crud.get_projects(db, user_id):
+        data, filename = manuscript_crud.export_scrivener(
+            db,
+            project["id"],
+            user_id,
+        )
+        stem = filename.removesuffix(".scriv.zip")
+        files.append(
+            {
+                "path": f"{MANUSCRIPT_DIR}/{project['id']}-{stem}.scriv",
+                "data": data,
+                "project": {
+                    "id": project["id"],
+                    "title": project["title"],
+                },
+            }
+        )
+    return files
+
+
 def _build_export(
     db: Session,
     section: str,
@@ -938,6 +971,7 @@ def _build_export(
     sections: dict[str, dict[str, Any]] = {}
     book_index: list[dict[str, Any]] = []
     counts: dict[str, int] = {}
+    manuscript_files: list[dict[str, Any]] = []
 
     if section in ("all", "books"):
         book_categories = _book_categories_data(db, user_id)
@@ -1085,6 +1119,10 @@ def _build_export(
         }
         counts["index_pages"] = len(pages)
 
+    if section in ("all", "manuscript"):
+        manuscript_files = _manuscript_data(db, user_id)
+        counts["manuscripts"] = len(manuscript_files)
+
     return _PreparedArchive(
         section=section,
         sections=sections,
@@ -1093,6 +1131,7 @@ def _build_export(
         counts=counts,
         user_id=user_id,
         scope_label=scope_label,
+        manuscript_files=manuscript_files,
     )
 
 
@@ -1140,6 +1179,7 @@ def _build_manifest(
     prepared: _PreparedArchive,
     json_files: list[dict[str, Any]],
     image_files: list[dict[str, Any]],
+    manuscript_files: list[dict[str, Any]],
     generated_at: datetime,
     skipped_books: list[dict[str, str]],
 ) -> dict[str, Any]:
@@ -1156,9 +1196,10 @@ def _build_manifest(
             for descriptor in book_files
         )
 
-    completed_files = json_files + image_files
+    completed_files = json_files + image_files + manuscript_files
     counts["json_files"] = len(json_files)
     counts["image_files"] = len(image_files)
+    counts["manuscript_files"] = len(manuscript_files)
     counts["files"] = len(completed_files)
     counts["file_bytes"] = sum(
         int(descriptor.get("size") or 0)
@@ -1188,6 +1229,7 @@ def _build_manifest(
         "layout": {
             "data": "data/",
             "images": "images/",
+            "manuscript": f"{MANUSCRIPT_DIR}/",
             "chapters": CHAPTER_LAYOUT,
         },
         "counts": counts,
@@ -1197,6 +1239,13 @@ def _build_manifest(
                 "path": descriptor["path"],
             }
             for descriptor in book_files
+        ],
+        "manuscripts": [
+            {
+                **descriptor["project"],
+                "path": descriptor["path"],
+            }
+            for descriptor in manuscript_files
         ],
         "files": completed_files,
         "skipped_files": list(prepared.plan.skipped) + skipped_books,
@@ -1276,6 +1325,10 @@ def _readme(
     if "index_pages" in included:
         components.append(
             "- `data/index_pages.json` — 통합/작가 인덱스 내용"
+        )
+    if "manuscripts" in included:
+        components.append(
+            "- `manuscript/` — 원고 프로젝트별 스크리브너 `.scriv` 폴더"
         )
     if includes_images:
         components.append(
@@ -1413,6 +1466,46 @@ def _write_json_entry(
     }
 
 
+def _write_scrivener_entry(
+    archive: zipfile.ZipFile,
+    path: str,
+    data: bytes,
+    *,
+    project: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Expand a built Scrivener ZIP into a ``.scriv`` project folder."""
+    hasher = hashlib.sha256()
+    size = 0
+    file_count = 0
+    manifest_path: str | None = None
+
+    with zipfile.ZipFile(io.BytesIO(data)) as source:
+        for info in source.infolist():
+            content = source.read(info.filename)
+            member_path = f"{path}/{info.filename}"
+            archive.writestr(member_path, content)
+            hasher.update(info.filename.encode("utf-8"))
+            hasher.update(content)
+            size += len(content)
+            if not info.is_dir():
+                file_count += 1
+            if info.filename.lower().endswith(".scrivx"):
+                manifest_path = member_path
+
+    descriptor: dict[str, Any] = {
+        "path": path,
+        "kind": "manuscript",
+        "size": size,
+        "sha256": hasher.hexdigest(),
+        "file_count": file_count,
+    }
+    if manifest_path is not None:
+        descriptor["manifest"] = manifest_path
+    if project is not None:
+        descriptor["project"] = dict(project)
+    return descriptor
+
+
 def _throttle() -> None:
     if ARCHIVE_THROTTLE_SECONDS > 0:
         time.sleep(ARCHIVE_THROTTLE_SECONDS)
@@ -1433,6 +1526,7 @@ def _write_archive(
             int(item.get("chapters") or 0)
             for item in prepared.book_index
         )
+        + len(prepared.manuscript_files)
         + 1
     )
     processed = 0
@@ -1580,12 +1674,27 @@ def _write_archive(
             progress("chapters", processed, total)
             _throttle()
 
+    manuscript_descriptors: list[dict[str, Any]] = []
+    for item in prepared.manuscript_files:
+        manuscript_descriptors.append(
+            _write_scrivener_entry(
+                archive,
+                item["path"],
+                item["data"],
+                project=item["project"],
+            )
+        )
+        processed += 1
+        progress("manuscript", processed, total)
+        _throttle()
+
     progress("finalizing", processed, total)
     generated_at = datetime.now(timezone.utc)
     manifest = _build_manifest(
         prepared,
         json_files,
         image_files,
+        manuscript_descriptors,
         generated_at,
         skipped_books,
     )
