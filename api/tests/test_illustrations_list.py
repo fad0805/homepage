@@ -116,9 +116,30 @@ class IllustrationListTests(unittest.TestCase):
         self.assertEqual([row["title"] for row in public_rows], ["업로드 중인 삽화"])
         self.assertEqual(public_total, 1)
 
+    def test_ready_row_without_image_is_admin_only(self) -> None:
+        empty = create_illustration_group(
+            self.db,
+            user_id=self.owner.id,
+            title="이미지 없는 삽화",
+            uploads=[],
+        )
+        self.assertEqual(empty["upload_status"], "ready")
+
+        admin_rows, _ = get_all_illustrations(
+            self.db, owner_user_id=self.owner.id
+        )
+        self.assertIn(empty["id"], [row["id"] for row in admin_rows])
+
+        public_rows, _ = get_visible_illustrations(
+            self.db, author_user_id=self.owner.id
+        )
+        self.assertNotIn(empty["id"], [row["id"] for row in public_rows])
+
     def test_tag_filter_matches_exact_tag(self) -> None:
         first = self._illustration("첫 번째")
         second = self._illustration("두 번째")
+        self._image(first, "/images/first.jpg")
+        self._image(second, "/images/second.jpg")
         first.tags = ["판타지"]
         second.tags = ["판타지 소설"]
         self.db.commit()
@@ -166,18 +187,22 @@ class IllustrationListTests(unittest.TestCase):
         self.assertEqual(items[0]["representative_url"], "/images/14-1.jpg")
 
     def test_sort_and_taken_date_filter(self) -> None:
-        self._illustration(
+        old = self._illustration(
             "오래된 것",
             taken_at=date(2026, 1, 1),
             created_at=datetime(2026, 1, 3),
         )
+        self._image(old, "/images/old.jpg")
         newest = self._illustration(
             "최신 것",
             taken_at=date(2026, 1, 3),
             created_at=datetime(2026, 1, 1),
         )
         self._image(newest, "/images/newest.jpg")
-        self._illustration("날짜 없음", created_at=datetime(2026, 1, 2))
+        undated = self._illustration(
+            "날짜 없음", created_at=datetime(2026, 1, 2)
+        )
+        self._image(undated, "/images/undated.jpg")
         self.db.commit()
 
         items, total = get_visible_illustrations(
@@ -212,14 +237,16 @@ class IllustrationListTests(unittest.TestCase):
 
     def test_created_date_filter_uses_kst_calendar_days(self) -> None:
         # 2026-01-02 00:00 KST is 2026-01-01 15:00 UTC.
-        self._illustration(
+        next_day = self._illustration(
             "KST 다음날",
             created_at=datetime(2026, 1, 1, 15),
         )
-        self._illustration(
+        previous_day = self._illustration(
             "KST 전날",
             created_at=datetime(2026, 1, 1, 14, 59),
         )
+        self._image(next_day, "/images/next-day.jpg")
+        self._image(previous_day, "/images/previous-day.jpg")
         self.db.commit()
 
         items, total = get_visible_illustrations(
@@ -238,6 +265,7 @@ class IllustrationListTests(unittest.TestCase):
 
     def test_locked_flag_depends_on_viewer_and_grants(self) -> None:
         protected = self._illustration("보호", protected=True)
+        self._image(protected, "/images/protected.jpg")
         self.db.commit()
 
         items, _ = get_visible_illustrations(

@@ -39,6 +39,14 @@ def _ready_upload_filter():
     )
 
 
+def _has_image_filter():
+    """Keep rows with no stored image in the admin list only."""
+    return or_(
+        Illustration.images.any(),
+        Illustration.representative_url.isnot(None),
+    )
+
+
 def _clean_tags(tags: list[str] | None) -> list[str]:
     cleaned: list[str] = []
     seen: set[str] = set()
@@ -255,7 +263,10 @@ def _list_query(
             )
         )
     if not include_hidden:
-        illustrations_query = illustrations_query.filter(_ready_upload_filter())
+        illustrations_query = illustrations_query.filter(
+            _ready_upload_filter(),
+            _has_image_filter(),
+        )
 
     tokens = search_tokens(query)
     for token in tokens:
@@ -421,7 +432,7 @@ def get_visible_illustration(
     """Return one illustration, masking its images while it stays locked."""
     query = _group_query(db).filter(Illustration.id == illustration_id)
     if not include_hidden and owner_user_id is None:
-        query = query.filter(_ready_upload_filter())
+        query = query.filter(_ready_upload_filter(), _has_image_filter())
     if owner_user_id is not None:
         query = query.filter(Illustration.user_id == owner_user_id)
     elif not include_hidden:
