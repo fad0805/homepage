@@ -90,6 +90,104 @@ function targetForNode(node: ManageTocNode, mode: DropMode): DropTarget {
   };
 }
 
+type PendingOp =
+  | { kind: "create-folder"; tempId: number; label: string; parentId: number | null }
+  | {
+      kind: "create-post";
+      tempId: number;
+      chapterId: number;
+      parentId: number | null;
+      position: number;
+    }
+  | { kind: "rename"; id: number; label: string }
+  | { kind: "move"; id: number; parentId: number | null }
+  | { kind: "delete"; id: number };
+
+function findNode(
+  nodes: ManageTocNode[],
+  id: number,
+): ManageTocNode | null {
+  for (const node of nodes) {
+    if (node.id === id) return node;
+    const found = findNode(node.children, id);
+    if (found) return found;
+  }
+  return null;
+}
+
+function containsNode(node: ManageTocNode, id: number): boolean {
+  return node.id === id || node.children.some((child) => containsNode(child, id));
+}
+
+function normalizePositions(nodes: ManageTocNode[]): ManageTocNode[] {
+  return nodes.map((node, index) => ({
+    ...node,
+    position: index,
+    children: normalizePositions(node.children),
+  }));
+}
+
+function removeNodeLocal(nodes: ManageTocNode[], id: number): ManageTocNode[] {
+  return nodes
+    .filter((node) => node.id !== id)
+    .map((node) => ({ ...node, children: removeNodeLocal(node.children, id) }));
+}
+
+function insertNodeLocal(
+  nodes: ManageTocNode[],
+  parentId: number | null,
+  node: ManageTocNode,
+  position: number,
+): ManageTocNode[] {
+  if (parentId === null) {
+    const next = [...nodes];
+    next.splice(Math.max(0, Math.min(position, next.length)), 0, node);
+    return normalizePositions(next);
+  }
+  return nodes.map((current) => {
+    if (current.id === parentId) {
+      const children = [...current.children];
+      children.splice(Math.max(0, Math.min(position, children.length)), 0, node);
+      return { ...current, children: normalizePositions(children) };
+    }
+    return {
+      ...current,
+      children: insertNodeLocal(current.children, parentId, node, position),
+    };
+  });
+}
+
+function updateNodeLocal(
+  nodes: ManageTocNode[],
+  id: number,
+  patch: Partial<ManageTocNode>,
+): ManageTocNode[] {
+  return nodes.map((node) =>
+    node.id === id
+      ? { ...node, ...patch }
+      : { ...node, children: updateNodeLocal(node.children, id, patch) },
+  );
+}
+
+function childCount(nodes: ManageTocNode[], parentId: number | null): number {
+  if (parentId === null) return nodes.length;
+  return findNode(nodes, parentId)?.children.length ?? 0;
+}
+
+function positionOf(
+  nodes: ManageTocNode[],
+  id: number,
+  parentId: number | null = null,
+): { parentId: number | null; position: number } | null {
+  const index = nodes.findIndex((node) => node.id === id);
+  if (index >= 0) return { parentId, position: index };
+  for (const node of nodes) {
+    const found = positionOf(node.children, id, node.id);
+    if (found) return found;
+  }
+  return null;
+}
+
 export function TocManager({
   bookId,
   chapters,
@@ -115,9 +213,12 @@ export function TocManager({
   const [folderLabel, setFolderLabel] = useState("");
   const [renamingId, setRenamingId] = useState<number | null>(null);
   const [renameLabel, setRenameLabel] = useState("");
+  const [pending, setPending] = useState<PendingOp[]>([]);
   const dragRef = useRef<{ kind: "node" | "chapter"; id: number } | null>(
     null,
   );
+  const tempIdRef = useRef(-1);
+  const savedIdsRef = useRef<Set<number>>(new Set());
   const onSelectParentRef = useRef(onSelectParent);
   onSelectParentRef.current = onSelectParent;
 
@@ -127,6 +228,10 @@ export function TocManager({
       const next = await apiFetch<ManageTocNode[]>(
         `/api/books/${bookId}/toc/manage`,
       );
+      savedIdsRef.current = new Set(
+        flattenNodes(next).map((node) => node.id).filter((id) => id > 0),
+      );
+      setPending([]);
       setChapterCounts(collectChapterCounts(next));
       setTree(folderTree(next));
       if (selectedChapterId !== null) {
@@ -160,114 +265,225 @@ export function TocManager({
       ),
     [allNodes],
   );
-  const run = async (
-    action: () => Promise<ManageTocNode[]>,
-    success: string,
-  ) => {
-    setWorking(true);
-    try {
-      const next = await action();
-      setChapterCounts(collectChapterCounts(next));
-      setTree(folderTree(next));
-      notify("success", success);
-    } catch (caught) {
-      notify("error", (caught as Error).message);
-    } finally {
-      setWorking(false);
-    }
-  };
-
   const selectParent = (parentId: number | null) => {
     onSelectParentRef.current?.(parentId);
   };
 
-  const createFolder = async (parentId: number | null, label: string) => {
+  const createFolder = (parentId: number | null, label: string) => {
     const title = label.trim();
     if (!title) return;
-    await run(
-      () =>
-        apiFetch<ManageTocNode[]>(`/api/books/${bookId}/toc/folders`, {
-          method: "POST",
-          body: JSON.stringify({ label: title, parent_id: parentId }),
-        }),
-      "폴더를 만들었습니다.",
+    const tempId = tempIdRef.current--;
+    const node: ManageTocNode = {
+      id: tempId,
+      parent_id: parentId,
+      node_type: "folder",
+      label: title,
+      position: 0,
+      chapter_id: null,
+      pinned: false,
+      locked: false,
+      children: [],
+    };
+    const next = normalizePositions(
+      insertNodeLocal(tree, parentId, node, childCount(tree, parentId)),
     );
+    setTree(next);
+    setChapterCounts(collectChapterCounts(next));
+    setPending((current) => [
+      ...current,
+      { kind: "create-folder", tempId, label: title, parentId },
+    ]);
     setFolderParentId(undefined);
     setFolderLabel("");
     selectParent(parentId);
   };
 
-  const createPost = async (
+  const createPost = (
     chapterId: number,
     parentId: number | null,
     position?: number,
   ) => {
-    await run(
-      () =>
-        apiFetch<ManageTocNode[]>(`/api/books/${bookId}/toc/posts`, {
-          method: "POST",
-          body: JSON.stringify({
-            chapter_id: chapterId,
-            parent_id: parentId,
-            ...(position === undefined ? {} : { position }),
-          }),
-        }),
-      "게시글을 목차에 등록했습니다.",
-    );
+    setPending((current) => [
+      ...current,
+      {
+        kind: "create-post",
+        tempId: tempIdRef.current--,
+        chapterId,
+        parentId,
+        position: position ?? childCount(tree, parentId),
+      },
+    ]);
     if (chapterId === selectedChapterId) selectParent(parentId);
   };
 
-  const renameFolder = async (node: ManageTocNode) => {
+  const renameFolder = (node: ManageTocNode) => {
     const title = renameLabel.trim();
     if (!title) return;
-    await run(
-      () =>
-        apiFetch<ManageTocNode[]>(
-          `/api/books/${bookId}/toc/nodes/${node.id}`,
-          {
-            method: "PATCH",
-            body: JSON.stringify({ label: title }),
-          },
+    if (node.id < 0) {
+      setPending((current) =>
+        current.map((op) =>
+          op.kind === "create-folder" && op.tempId === node.id
+            ? { ...op, label: title }
+            : op,
         ),
-      "이름을 변경했습니다.",
-    );
+      );
+    } else {
+      setPending((current) => [
+        ...current.filter(
+          (op) => !(op.kind === "rename" && op.id === node.id),
+        ),
+        { kind: "rename", id: node.id, label: title },
+      ]);
+    }
+    setTree((current) => updateNodeLocal(current, node.id, { label: title }));
     setRenamingId(null);
   };
 
-  const moveNode = async (
+  const moveNode = (
     nodeId: number,
     parentId: number | null,
     position: number,
   ) => {
-    const movedNode = allNodes.find((node) => node.id === nodeId);
-    await run(
-      () =>
-        apiFetch<ManageTocNode[]>(
-          `/api/books/${bookId}/toc/nodes/${nodeId}/move`,
-          {
-            method: "POST",
-            body: JSON.stringify({ parent_id: parentId, position }),
-          },
-        ),
-      "목차 위치를 변경했습니다.",
+    const node = findNode(tree, nodeId);
+    if (!node) return;
+    if (parentId !== null && containsNode(node, parentId)) return;
+    const without = removeNodeLocal(tree, nodeId);
+    const moved = { ...node, parent_id: parentId };
+    const next = normalizePositions(
+      insertNodeLocal(without, parentId, moved, position),
     );
+    setTree(next);
+    setChapterCounts(collectChapterCounts(next));
+    if (node.id < 0) {
+      setPending((current) =>
+        current.map((op) =>
+          op.kind === "create-folder" && op.tempId === node.id
+            ? { ...op, parentId }
+            : op,
+        ),
+      );
+    } else {
+      setPending((current) => [
+        ...current.filter((op) => !(op.kind === "move" && op.id === nodeId)),
+        { kind: "move", id: nodeId, parentId },
+      ]);
+    }
     if (
       selectedChapterId !== null &&
-      movedNode?.chapter_id === selectedChapterId
+      node.chapter_id === selectedChapterId
     ) {
       selectParent(parentId);
     }
   };
 
-  const removeNode = async (node: ManageTocNode) => {
-    await run(
-      () =>
-        apiFetch<ManageTocNode[]>(
-          `/api/books/${bookId}/toc/nodes/${node.id}`,
-          { method: "DELETE" },
-        ),
-      "목차에서 삭제했습니다.",
+  const removeNode = (node: ManageTocNode) => {
+    const removedTemps = new Set(
+      flattenNodes([node]).map((item) => item.id).filter((id) => id < 0),
     );
+    const next = removeNodeLocal(tree, node.id);
+    setTree(next);
+    setChapterCounts(collectChapterCounts(next));
+    setPending((current) =>
+      current.filter((op) => {
+        if ("tempId" in op && removedTemps.has(op.tempId)) return false;
+        if (
+          "parentId" in op &&
+          op.parentId !== null &&
+          removedTemps.has(op.parentId)
+        ) {
+          return false;
+        }
+        if (node.id >= 0 && "id" in op && op.id === node.id) return false;
+        return true;
+      }),
+    );
+    if (node.id >= 0) {
+      setPending((current) => [...current, { kind: "delete", id: node.id }]);
+    }
+  };
+
+  const save = async () => {
+    setWorking(true);
+    const ids = new Map<number, number>();
+    let knownIds = new Set(savedIdsRef.current);
+    const resolve = (id: number | null) =>
+      id === null ? null : id < 0 ? (ids.get(id) ?? id) : id;
+    try {
+      for (const op of pending) {
+        if (op.kind !== "delete") continue;
+        await apiFetch(`/api/books/${bookId}/toc/nodes/${op.id}`, {
+          method: "DELETE",
+        });
+      }
+      for (const op of pending) {
+        if (op.kind !== "create-folder" && op.kind !== "create-post") {
+          continue;
+        }
+        const location = positionOf(tree, op.tempId) ?? {
+          parentId: op.parentId,
+          position: "position" in op ? op.position : 0,
+        };
+        const parentId = resolve(location.parentId);
+        const next = await apiFetch<ManageTocNode[]>(
+          op.kind === "create-folder"
+            ? `/api/books/${bookId}/toc/folders`
+            : `/api/books/${bookId}/toc/posts`,
+          {
+            method: "POST",
+            body: JSON.stringify(
+              op.kind === "create-folder"
+                ? { label: op.label, parent_id: parentId }
+                : {
+                    chapter_id: op.chapterId,
+                    parent_id: parentId,
+                    position: location.position,
+                  },
+            ),
+          },
+        );
+        const flat = flattenNodes(next);
+        const fresh = flat.filter(
+          (node) => node.id > 0 && !knownIds.has(node.id),
+        );
+        const created =
+          fresh.find((node) =>
+            op.kind === "create-folder"
+              ? node.label === op.label && node.parent_id === parentId
+              : node.chapter_id === op.chapterId &&
+                node.parent_id === parentId,
+          ) ?? fresh[0];
+        if (created) ids.set(op.tempId, created.id);
+        knownIds = new Set(flat.map((node) => node.id));
+      }
+      for (const op of pending) {
+        if (op.kind !== "rename") continue;
+        const id = resolve(op.id);
+        if (id === null || id < 0) continue;
+        await apiFetch(`/api/books/${bookId}/toc/nodes/${id}`, {
+          method: "PATCH",
+          body: JSON.stringify({ label: op.label }),
+        });
+      }
+      for (const op of pending) {
+        if (op.kind !== "move") continue;
+        const id = resolve(op.id);
+        const location = positionOf(tree, op.id);
+        if (id === null || id < 0 || !location) continue;
+        await apiFetch(`/api/books/${bookId}/toc/nodes/${id}/move`, {
+          method: "POST",
+          body: JSON.stringify({
+            parent_id: resolve(location.parentId),
+            position: location.position,
+          }),
+        });
+      }
+      await load();
+      notify("success", "목차를 저장했습니다.");
+    } catch (caught) {
+      notify("error", (caught as Error).message);
+    } finally {
+      setWorking(false);
+    }
   };
 
   const applyDrop = async (event: DragEvent<HTMLElement>, target: DropTarget) => {
@@ -362,7 +578,7 @@ export function TocManager({
                 onKeyDown={(event) => {
                   if (event.key === "Enter") {
                     event.preventDefault();
-                    void renameFolder(node);
+                    renameFolder(node);
                   } else if (event.key === "Escape") {
                     setRenamingId(null);
                   }
@@ -371,9 +587,9 @@ export function TocManager({
               <button
                 type="button"
                 className="admin-button"
-                onClick={() => void renameFolder(node)}
+                onClick={() => renameFolder(node)}
               >
-                저장
+                적용
               </button>
               <button
                 type="button"
@@ -425,7 +641,7 @@ export function TocManager({
               <button
                 type="button"
                 className="admin-button danger"
-                onClick={() => void removeNode(node)}
+                onClick={() => removeNode(node)}
                 disabled={working || node.children.length > 0}
                 title={
                   node.children.length > 0
@@ -449,7 +665,7 @@ export function TocManager({
               onKeyDown={(event) => {
                 if (event.key === "Enter") {
                   event.preventDefault();
-                  void createFolder(node.id, folderLabel);
+                  createFolder(node.id, folderLabel);
                 } else if (event.key === "Escape") {
                   setFolderParentId(undefined);
                 }
@@ -458,7 +674,7 @@ export function TocManager({
             <button
               type="button"
               className="admin-button primary"
-              onClick={() => void createFolder(node.id, folderLabel)}
+              onClick={() => createFolder(node.id, folderLabel)}
             >
               만들기
             </button>
@@ -541,10 +757,45 @@ export function TocManager({
               <button
                 type="button"
                 className="admin-button"
-                onClick={() => void load()}
-                disabled={loading}
+                onClick={() => {
+                  if (
+                    pending.length === 0 ||
+                    window.confirm("저장하지 않은 변경을 버리고 다시 불러올까요?")
+                  ) {
+                    void load();
+                  }
+                }}
+                disabled={loading || working}
               >
                 새로고침
+              </button>
+              {pending.length > 0 ? (
+                <span className="admin-books-toc__dirty">
+                  저장 안 됨 · {pending.length}개 변경
+                </span>
+              ) : null}
+              <button
+                type="button"
+                className="admin-button primary"
+                onClick={() => void save()}
+                disabled={working || pending.length === 0}
+              >
+                저장
+              </button>
+              <button
+                type="button"
+                className="admin-button"
+                onClick={() => {
+                  if (
+                    pending.length === 0 ||
+                    window.confirm("저장하지 않은 변경을 버릴까요?")
+                  ) {
+                    void load();
+                  }
+                }}
+                disabled={working || pending.length === 0}
+              >
+                변경 취소
               </button>
             </div>
 
@@ -569,7 +820,7 @@ export function TocManager({
                     type="button"
                     className="admin-button"
                     onClick={() =>
-                      void createPost(selectedChapterId, selectedParentId)
+                      createPost(selectedChapterId, selectedParentId)
                     }
                   >
                     이 챕터를 목차에 등록
@@ -590,7 +841,7 @@ export function TocManager({
                 onKeyDown={(event) => {
                   if (event.key === "Enter") {
                     event.preventDefault();
-                    void createFolder(null, folderLabel);
+                    createFolder(null, folderLabel);
                   } else if (event.key === "Escape") {
                     setFolderParentId(undefined);
                   }
@@ -599,7 +850,7 @@ export function TocManager({
               <button
                 type="button"
                 className="admin-button primary"
-                onClick={() => void createFolder(null, folderLabel)}
+                onClick={() => createFolder(null, folderLabel)}
               >
                 만들기
               </button>
