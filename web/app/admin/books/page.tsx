@@ -41,6 +41,7 @@ interface BookCategory {
   order: number;
   visible: boolean;
   protected: boolean;
+  expanded_by_default: boolean;
 }
 
 interface Book {
@@ -197,6 +198,9 @@ function CategoryManagerModal({
         ? "private"
         : "public",
   );
+  const [expandedByDefault, setExpandedByDefault] = useState(
+    category.expanded_by_default === true,
+  );
   const [saving, setSaving] = useState(false);
   const [code, setCode] = useState<string | null>(null);
   const [issuing, setIssuing] = useState(false);
@@ -230,6 +234,7 @@ function CategoryManagerModal({
           name: nextName,
           visible: visibility !== "private",
           protected: visibility === "protected",
+          expanded_by_default: expandedByDefault,
         }),
       });
       onChanged();
@@ -317,6 +322,18 @@ function CategoryManagerModal({
               <option value="public">공개</option>
               <option value="private">비공개</option>
               <option value="protected">보호</option>
+            </select>
+          </label>
+          <label className="admin-field">
+            <span>목차 기본 상태</span>
+            <select
+              value={expandedByDefault ? "expanded" : "collapsed"}
+              onChange={(event) =>
+                setExpandedByDefault(event.target.value === "expanded")
+              }
+            >
+              <option value="collapsed">접어두기</option>
+              <option value="expanded">펼쳐두기</option>
             </select>
           </label>
           {visibility === "protected" ? (

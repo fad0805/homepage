@@ -86,6 +86,7 @@ def _serialize_book(book: Book) -> dict:
                 "order": category.order,
                 "visible": category.visible,
                 "protected": bool(category.protected),
+                "expanded_by_default": bool(category.expanded_by_default),
             }
             if category
             else None
@@ -105,6 +106,7 @@ def _serialize_book_category(category: BookCategory) -> dict:
         "order": category.order,
         "visible": category.visible,
         "protected": bool(category.protected),
+        "expanded_by_default": bool(category.expanded_by_default),
     }
 
 
@@ -242,6 +244,7 @@ def create_book_category(
         order=order,
         visible=payload.visible,
         protected=payload.protected,
+        expanded_by_default=payload.expanded_by_default,
     )
     db.add(category)
     db.commit()

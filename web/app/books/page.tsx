@@ -150,6 +150,7 @@ export default async function BooksPage({
       initialChapterId={initialChapterId}
       initialIsMobile={initialIsMobile}
       initialUnlockedCategoryIds={[...grants.categories]}
+      initialIsAdmin={isAdmin}
       previewMode={previewParam === "1"}
     />
   );

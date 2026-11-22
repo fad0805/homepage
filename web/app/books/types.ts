@@ -6,6 +6,7 @@ export interface BookCategory {
   order: number;
   visible: boolean;
   protected: boolean;
+  expanded_by_default: boolean;
 }
 
 export interface Book {

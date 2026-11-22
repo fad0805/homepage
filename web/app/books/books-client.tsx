@@ -424,6 +424,7 @@ interface BooksClientProps {
   initialChapterId: number | null;
   initialIsMobile: boolean;
   initialUnlockedCategoryIds?: number[];
+  initialIsAdmin?: boolean;
   previewMode?: boolean;
 }
 
@@ -436,6 +437,7 @@ export default function BooksClient({
   initialChapterId,
   initialIsMobile,
   initialUnlockedCategoryIds = [],
+  initialIsAdmin = false,
   previewMode = false,
 }: BooksClientProps) {
   const { isLoggedIn, isAdmin } = useAuth();
@@ -481,7 +483,23 @@ export default function BooksClient({
   const [chapterBodyLoading, setChapterBodyLoading] = useState(false);
   const [nearbyChapters, setNearbyChapters] = useState<Chapter[]>([]);
   const [expandedCategories, setExpandedCategories] = useState<Set<number>>(
-    () => new Set(),
+    () => {
+      const unlocked = new Set(initialUnlockedCategoryIds);
+      const expanded = new Set<number>();
+      for (const book of initialBooks) {
+        const category = book.category;
+        if (!category || category.expanded_by_default !== true) continue;
+        if (
+          category.protected &&
+          !initialIsAdmin &&
+          !unlocked.has(category.id)
+        ) {
+          continue;
+        }
+        expanded.add(category.id);
+      }
+      return expanded;
+    },
   );
   const [bookSort, setBookSort] = useState<"order" | "latest">("order");
   const [chapterSort, setChapterSort] = useState<"newest" | "oldest">(

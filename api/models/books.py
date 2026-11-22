@@ -36,6 +36,12 @@ class BookCategory(Base):
         default=False,
         server_default="false",
     )
+    expanded_by_default = Column(
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default="false",
+    )
 
     books = relationship("Book", back_populates="category_relation")
     user = relationship(User)

@@ -8,6 +8,7 @@ class BookCategoryBase(BaseModel):
     order: int | None = None
     visible: bool = True
     protected: bool = False
+    expanded_by_default: bool = False
 
 
 class BookCategoryCreate(BookCategoryBase):
@@ -19,6 +20,7 @@ class BookCategoryUpdate(BaseModel):
     order: int | None = None
     visible: bool | None = None
     protected: bool | None = None
+    expanded_by_default: bool | None = None
 
 
 class BookCategoryReorderItem(BaseModel):
