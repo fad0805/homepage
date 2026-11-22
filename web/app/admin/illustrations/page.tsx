@@ -33,6 +33,7 @@ type IllustrationVisibility = "public" | "protected" | "private";
 interface Preview {
   file: File;
   url: string;
+  range?: VideoRange;
 }
 
 const MAX_FILES = 100;
@@ -346,13 +347,14 @@ export default function AdminIllustrations() {
     const next = files.map((file) => ({
       file,
       url: URL.createObjectURL(file),
+      range: videoRangesByFile.get(file),
     }));
     setPreviews(next);
 
     return () => {
       next.forEach((preview) => URL.revokeObjectURL(preview.url));
     };
-  }, [files]);
+  }, [files, videoRangesByFile]);
 
   useEffect(() => {
     return () => {
@@ -1439,7 +1441,16 @@ export default function AdminIllustrations() {
                 따로 업로드할 수 있습니다.
               </p>
               <div className="admin-illustrations-previews">
-                {previews.map((preview, index) => (
+                {previews.map((preview, index) => {
+                  const previewRange = preview.range;
+                  const previewEnd = previewRange
+                    ? previewRange.start + previewRange.seconds
+                    : null;
+                  const previewSrc =
+                    previewRange && previewEnd !== null
+                      ? `${preview.url}#t=${previewRange.start},${previewEnd}`
+                      : preview.url;
+                  return (
                   <div
                     className={`admin-illustrations-preview${
                       dragIndex === index ? " is-dragging" : ""
@@ -1493,12 +1504,26 @@ export default function AdminIllustrations() {
                     </span>
                     {ILLUSTRATION_VIDEO_TYPES.has(preview.file.type) ? (
                       <video
-                        src={preview.url}
+                        key={previewSrc}
+                        src={previewSrc}
                         aria-label={preview.file.name}
                         muted
-                        loop
+                        loop={!previewRange}
                         autoPlay
                         playsInline
+                        onLoadedMetadata={(event) => {
+                          if (previewRange) {
+                            event.currentTarget.currentTime =
+                              previewRange.start;
+                          }
+                        }}
+                        onTimeUpdate={(event) => {
+                          if (!previewRange || previewEnd === null) return;
+                          if (event.currentTarget.currentTime >= previewEnd - 0.05) {
+                            event.currentTarget.currentTime =
+                              previewRange.start;
+                          }
+                        }}
                       />
                     ) : (
                       // eslint-disable-next-line @next/next/no-img-element
@@ -1517,8 +1542,14 @@ export default function AdminIllustrations() {
                     <span className="admin-illustrations-preview__name">
                       {preview.file.name}
                     </span>
+                    {previewRange && previewEnd !== null ? (
+                      <span className="admin-illustrations-preview__range">
+                        구간 {previewRange.start}~{previewEnd}초
+                      </span>
+                    ) : null}
                   </div>
-                ))}
+                  );
+                })}
               </div>
             </>
           )}
