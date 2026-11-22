@@ -28,6 +28,7 @@ from core.uploads import (
     delete_uploaded_file,
     save_banner,
     save_uploaded_bytes,
+    validate_upload_batch,
 )
 from crud.illustrations import (
     append_illustration_images,
@@ -75,9 +76,6 @@ from .utils import (
 router = APIRouter()
 
 logger = logging.getLogger(__name__)
-MAX_BULK_ILLUSTRATIONS = 100
-
-
 @dataclass(frozen=True)
 class PendingIllustrationFile:
     content: bytes
@@ -313,6 +311,7 @@ def read_popular_illustrations(
 
 @router.post("/bulk", response_model=IllustrationDetail)
 async def upload_illustrations(
+    request: Request,
     background_tasks: BackgroundTasks,
     response: Response,
     files: list[UploadFile] = File(...),
@@ -329,20 +328,13 @@ async def upload_illustrations(
     db: Session = Depends(get_db),
     user=Depends(require_auth),
 ):
-    """Register an illustration immediately and save its files in background.
+    """Register one chunk of an illustration upload.
 
-    ``illustration_id`` keeps the older synchronous append path used by the
-    edit dialog. New groups return ``202`` with a `processing` row; a failed
-    background job removes that row entirely.
+    The UI splits a large selection into requests of at most three files.
+    ``illustration_id`` is the append path used for later chunks and the edit
+    dialog; new groups return ``202`` with a `processing` row.
     """
-    if len(files) > MAX_BULK_ILLUSTRATIONS:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=(
-                f"한 번에 최대 {MAX_BULK_ILLUSTRATIONS}장까지 업로드할 수 "
-                "있습니다."
-            ),
-        )
+    validate_upload_batch(files, request.headers.get("content-length"))
 
     if taken_at is not None and taken_at > today_kst():
         raise HTTPException(

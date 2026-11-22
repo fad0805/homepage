@@ -63,6 +63,48 @@ MAX_VIDEO_SECONDS = max(1, int(os.getenv("MAX_VIDEO_SECONDS", "10")))
 VIDEO_FPS = max(1, int(os.getenv("VIDEO_FPS", "12")))
 VIDEO_MAX_EDGE = max(2, int(os.getenv("VIDEO_MAX_EDGE", "640")))
 
+# Illustration uploads are split into small sequential chunks so no single
+# request has to be buffered in full by the proxy or held in API memory.
+MAX_BULK_ILLUSTRATIONS = 1
+# One 200MB clip plus a 50MB representative image, with multipart overhead.
+MAX_BULK_REQUEST_BYTES = 280 * 1024 * 1024
+MAX_VIDEOS_PER_ILLUSTRATION = 5
+
+
+def validate_upload_batch(
+    files: list[UploadFile],
+    content_length: str | None,
+) -> None:
+    """Reject upload batches that are too large or contain too many videos."""
+    if content_length:
+        try:
+            if int(content_length) > MAX_BULK_REQUEST_BYTES:
+                raise HTTPException(
+                    status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                    detail="요청당 업로드 용량이 큽니다. 파일을 나눠 올려주세요.",
+                )
+        except ValueError:
+            pass
+
+    if len(files) > MAX_BULK_ILLUSTRATIONS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                f"한 번에 최대 {MAX_BULK_ILLUSTRATIONS}개 파일까지 업로드할 수 "
+                "있습니다."
+            ),
+        )
+    if sum(
+        1 for file in files if file.content_type in VIDEO_CONTENT_TYPES
+    ) > MAX_VIDEOS_PER_ILLUSTRATION:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "삽화 한 개당 영상은 최대 "
+                f"{MAX_VIDEOS_PER_ILLUSTRATION}개까지 업로드할 수 있습니다."
+            ),
+        )
+
 # The client-provided content type is only used as a cheap pre-check. The
 # extension and MIME type that are actually stored come from the decoded image.
 _IMAGE_FORMATS = {

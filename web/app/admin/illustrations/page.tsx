@@ -37,6 +37,9 @@ interface Preview {
 }
 
 const MAX_FILES = 100;
+const MAX_VIDEOS_PER_ILLUSTRATION = 5;
+const MAX_CHUNK_FILES = 1;
+const MAX_CHUNK_BYTES = 220 * 1024 * 1024;
 const MAX_IMAGE_BYTES = 50 * 1024 * 1024;
 const LIST_PAGE_SIZE = 12;
 const MAX_VIDEO_SECONDS = 10;
@@ -55,6 +58,75 @@ function isIllustrationFile(file: File) {
   return (
     file.type.startsWith("image/") || ILLUSTRATION_VIDEO_TYPES.has(file.type)
   );
+}
+
+function countVideos(files: File[]) {
+  return files.filter((file) => ILLUSTRATION_VIDEO_TYPES.has(file.type)).length;
+}
+
+interface UploadChunk {
+  files: File[];
+  ranges: Map<File, VideoRange>;
+}
+
+function chunkFiles(files: File[], ranges: Map<File, VideoRange>) {
+  const chunks: UploadChunk[] = [];
+  let current: File[] = [];
+  let currentRanges = new Map<File, VideoRange>();
+  let bytes = 0;
+
+  const flush = () => {
+    if (current.length === 0) return;
+    chunks.push({ files: current, ranges: currentRanges });
+    current = [];
+    currentRanges = new Map();
+    bytes = 0;
+  };
+
+  for (const file of files) {
+    if (
+      current.length > 0 &&
+      (current.length >= MAX_CHUNK_FILES ||
+        bytes + file.size > MAX_CHUNK_BYTES)
+    ) {
+      flush();
+    }
+    current.push(file);
+    bytes += file.size;
+    const range = ranges.get(file);
+    if (range) currentRanges.set(file, range);
+  }
+  flush();
+  return chunks;
+}
+
+function appendChunkFiles(formData: FormData, chunk: UploadChunk) {
+  chunk.files.forEach((file) => formData.append("files", file));
+  const ranges = chunk.files
+    .filter((file) => ILLUSTRATION_VIDEO_TYPES.has(file.type))
+    .map(
+      (file) =>
+        chunk.ranges.get(file) ?? { start: 0, seconds: MAX_VIDEO_SECONDS },
+    );
+  if (ranges.length > 0) {
+    formData.append("video_ranges", JSON.stringify(ranges));
+  }
+}
+
+async function waitForIllustrationReady(id: number) {
+  const deadline = Date.now() + 10 * 60 * 1000;
+  while (Date.now() < deadline) {
+    try {
+      const detail = await apiFetch<IllustrationDetailItem>(
+        `/api/illustrations/${id}?mine=true`,
+      );
+      if (detail.upload_status !== "processing") return detail;
+    } catch {
+      throw new Error("삽화 이미지 업로드에 실패해 등록이 취소되었습니다.");
+    }
+    await new Promise((resolve) => window.setTimeout(resolve, 1000));
+  }
+  throw new Error("이미지 업로드가 완료되지 않았습니다.");
 }
 
 interface VideoRange {
@@ -220,6 +292,13 @@ export default function AdminIllustrations() {
   const [uploadOpen, setUploadOpen] = useState(false);
   const [files, setFiles] = useState<File[]>([]);
   const [previews, setPreviews] = useState<Preview[]>([]);
+  const [sentFiles, setSentFiles] = useState<Set<File>>(() => new Set());
+  const [sendingFile, setSendingFile] = useState<File | null>(null);
+  const [uploadProgressOpen, setUploadProgressOpen] = useState(false);
+  const [uploadFiles, setUploadFiles] = useState<File[]>([]);
+  const [uploadModalStatus, setUploadModalStatus] = useState<
+    "running" | "success" | "error"
+  >("running");
   const [videoRangesByFile, setVideoRangesByFile] = useState<
     Map<File, VideoRange>
   >(() => new Map());
@@ -434,6 +513,14 @@ export default function AdminIllustrations() {
   ) => {
     const available = Math.max(0, MAX_FILES - files.length);
     const chosen = media.slice(0, available);
+    if (files.length + countVideos(chosen) > MAX_VIDEOS_PER_ILLUSTRATION) {
+      setNotice({
+        type: "error",
+        text: `영상은 삽화 하나당 최대 ${MAX_VIDEOS_PER_ILLUSTRATION}개까지 넣을 수 있습니다.`,
+      });
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      return;
+    }
     setFiles((previous) => [...previous, ...chosen]);
     if (ranges.size > 0) {
       setVideoRangesByFile((previous) => {
@@ -476,6 +563,14 @@ export default function AdminIllustrations() {
         text: `원본 영상은 ${
           MAX_VIDEO_UPLOAD_BYTES / (1024 * 1024)
         }MB 이하만 업로드할 수 있습니다.`,
+      });
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      return;
+    }
+    if (files.length + countVideos(media) > MAX_VIDEOS_PER_ILLUSTRATION) {
+      setNotice({
+        type: "error",
+        text: `영상은 삽화 하나당 최대 ${MAX_VIDEOS_PER_ILLUSTRATION}개까지 넣을 수 있습니다.`,
       });
       if (fileInputRef.current) fileInputRef.current.value = "";
       return;
@@ -595,50 +690,70 @@ export default function AdminIllustrations() {
       setNotice({ type: "error", text: "삽화 제목을 입력해주세요." });
       return;
     }
-
-    const formData = new FormData();
-    files.forEach((file) => formData.append("files", file));
-    const ranges = files
-      .filter((file) => ILLUSTRATION_VIDEO_TYPES.has(file.type))
-      .map(
-        (file) =>
-          videoRangesByFile.get(file) ?? {
-            start: 0,
-            seconds: MAX_VIDEO_SECONDS,
-          },
-      );
-    if (ranges.length > 0) {
-      formData.append("video_ranges", JSON.stringify(ranges));
-    }
-    formData.append("title", normalizedTitle);
-    if (description.trim()) {
-      formData.append("description", description.trim());
-    }
-    if (tagsInput.trim()) {
-      formData.append("tags", tagsInput.trim());
-    }
-    if (takenAt) {
-      formData.append("taken_at", takenAt);
-    }
-    formData.append("visible", String(createVisibility !== "private"));
-    formData.append("protected", String(createVisibility === "protected"));
-    if (createRepresentativeFile) {
-      formData.append("representative_file", createRepresentativeFile);
+    if (countVideos(files) > MAX_VIDEOS_PER_ILLUSTRATION) {
+      setNotice({
+        type: "error",
+        text: `영상은 삽화 하나당 최대 ${MAX_VIDEOS_PER_ILLUSTRATION}개까지 넣을 수 있습니다.`,
+      });
+      return;
     }
 
+    const uploadedCount = files.length;
+    const chunks = chunkFiles(files, videoRangesByFile);
+    let createdItem: IllustrationDetailItem | null = null;
+    setUploadFiles(files);
+    setUploadModalStatus("running");
+    setUploadProgressOpen(true);
     setUploading(true);
+    setSentFiles(new Set());
     setNotice(null);
     try {
-      const result = await apiFetch<IllustrationDetailItem>(
-        "/api/illustrations/bulk",
-        {
-          method: "POST",
-          body: formData,
-        },
-      );
-      backgroundUploadIdsRef.current.add(result.id);
-      upsertItem(result);
-      void load(true);
+      for (const [chunkIndex, chunk] of chunks.entries()) {
+        const formData = new FormData();
+        appendChunkFiles(formData, chunk);
+        if (chunkIndex === 0) {
+          formData.append("title", normalizedTitle);
+          if (description.trim()) {
+            formData.append("description", description.trim());
+          }
+          if (tagsInput.trim()) {
+            formData.append("tags", tagsInput.trim());
+          }
+          if (takenAt) {
+            formData.append("taken_at", takenAt);
+          }
+          formData.append("visible", String(createVisibility !== "private"));
+          formData.append(
+            "protected",
+            String(createVisibility === "protected"),
+          );
+          if (createRepresentativeFile) {
+            formData.append("representative_file", createRepresentativeFile);
+          }
+        } else {
+          if (!createdItem) throw new Error("삽화 정보를 찾을 수 없습니다.");
+          formData.append("illustration_id", String(createdItem.id));
+        }
+
+        const currentFile = chunk.files[0];
+        setSendingFile(currentFile);
+        const result = await apiFetch<IllustrationDetailItem>(
+          "/api/illustrations/bulk",
+          { method: "POST", body: formData },
+        );
+        setSentFiles((previous) => new Set(previous).add(currentFile));
+
+        if (chunkIndex === 0) {
+          createdItem = result;
+          backgroundUploadIdsRef.current.add(result.id);
+          upsertItem(result);
+          const ready = await waitForIllustrationReady(result.id);
+          upsertItem(ready);
+        } else {
+          applyMediaUpdate(result);
+        }
+      }
+
       setFiles([]);
       setVideoRangesByFile(new Map());
       setTitle("");
@@ -647,11 +762,13 @@ export default function AdminIllustrations() {
       setCreateVisibility("public");
       setCreateRepresentativeFile(null);
       setCreateRepresentativePreview(null);
+      setUploadModalStatus("success");
       setNotice({
         type: "success",
-        text: "삽화를 등록했습니다. 이미지 업로드는 백그라운드에서 진행됩니다.",
+        text: `${uploadedCount}개의 파일로 삽화를 등록했습니다.`,
       });
     } catch (error) {
+      setUploadModalStatus("error");
       setNotice({
         type: "error",
         text:
@@ -661,6 +778,7 @@ export default function AdminIllustrations() {
       });
     } finally {
       setUploading(false);
+      setSendingFile(null);
     }
   };
 
@@ -813,40 +931,31 @@ export default function AdminIllustrations() {
     setAddingImages(true);
     setModalNotice(null);
 
-    const formData = new FormData();
-    media.forEach((file) => formData.append("files", file));
-    const mediaVideoRanges = media
-      .filter((file) => ILLUSTRATION_VIDEO_TYPES.has(file.type))
-      .map(
-        (file) =>
-          ranges.get(file) ?? { start: 0, seconds: MAX_VIDEO_SECONDS },
-      );
-    if (mediaVideoRanges.length > 0) {
-      formData.append("video_ranges", JSON.stringify(mediaVideoRanges));
-    }
-    formData.append("illustration_id", String(editingItem.id));
+    const chunks = chunkFiles(media, ranges);
 
     try {
-      const updated = await apiFetch<IllustrationDetailItem>(
-        "/api/illustrations/bulk",
-        {
-          method: "POST",
-          body: formData,
-        },
-      );
-      const mediaPatch = applyMediaUpdate(updated);
-      setEditingItem((current) => {
-        if (!current) return current;
-        const existingIds = new Set(current.images.map((image) => image.id));
-        const added = updated.images.filter(
-          (image) => !existingIds.has(image.id),
+      for (const chunk of chunks) {
+        const formData = new FormData();
+        appendChunkFiles(formData, chunk);
+        formData.append("illustration_id", String(editingItem.id));
+        const updated = await apiFetch<IllustrationDetailItem>(
+          "/api/illustrations/bulk",
+          { method: "POST", body: formData },
         );
-        return {
-          ...current,
-          ...mediaPatch,
-          images: [...current.images, ...added],
-        };
-      });
+        const mediaPatch = applyMediaUpdate(updated);
+        setEditingItem((current) => {
+          if (!current) return current;
+          const existingIds = new Set(current.images.map((image) => image.id));
+          const added = updated.images.filter(
+            (image) => !existingIds.has(image.id),
+          );
+          return {
+            ...current,
+            ...mediaPatch,
+            images: [...current.images, ...added],
+          };
+        });
+      }
       setModalNotice({
         type: "success",
         text: `${media.length}개의 파일을 추가했습니다.`,
@@ -1313,8 +1422,9 @@ export default function AdminIllustrations() {
         <div>
           <h1>삽화 관리</h1>
           <p className="admin-illustrations-hint">
-            사진을 여러 장 선택해 한 번에 하나의 삽화로 올릴 수 있습니다.
-            최대 {MAX_FILES}장.
+            사진을 여러 장 선택해 하나의 삽화로 올릴 수 있습니다. 최대{' '}
+            {MAX_FILES}장, 영상 {MAX_VIDEOS_PER_ILLUSTRATION}개. 파일은 하나씩
+            순서대로 서버에 전송됩니다.
           </p>
         </div>
         <div className="admin-illustrations-toolbar-actions">
@@ -1509,6 +1619,7 @@ export default function AdminIllustrations() {
                     <button
                       type="button"
                       onClick={() => removeFile(index)}
+                      disabled={uploading}
                       aria-label={`${preview.file.name} 선택 해제`}
                     >
                       ×
@@ -1995,6 +2106,92 @@ export default function AdminIllustrations() {
           </>
         )}
       </section>
+
+      {uploadProgressOpen ? (
+        <div
+          className="admin-modal-backdrop"
+          onMouseDown={(event) => {
+            if (event.target !== event.currentTarget || uploading) return;
+            setUploadProgressOpen(false);
+          }}
+        >
+          <div
+            className="admin-modal admin-illustrations-upload-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-label="파일 업로드 진행 상황"
+          >
+            <header className="admin-modal-header">
+              <h2>파일 업로드</h2>
+              {uploading ? null : (
+                <button
+                  type="button"
+                  className="admin-modal-close"
+                  onClick={() => setUploadProgressOpen(false)}
+                  aria-label="닫기"
+                >
+                  ×
+                </button>
+              )}
+            </header>
+            <div className="admin-modal-body">
+              <p className="admin-illustrations-upload-modal__summary">
+                {sentFiles.size} / {uploadFiles.length}개 파일 서버 전송 완료
+              </p>
+              {uploadModalStatus === "error" ? (
+                <p className="admin-illustrations-upload-modal__message is-error">
+                  {notice?.type === "error"
+                    ? notice.text
+                    : "업로드에 실패했습니다."}
+                </p>
+              ) : null}
+              {uploadModalStatus === "success" ? (
+                <p className="admin-illustrations-upload-modal__message is-success">
+                  모든 파일을 서버에 전송했습니다.
+                </p>
+              ) : null}
+              <ol className="admin-illustrations-upload-modal__list">
+                {uploadFiles.map((file, index) => {
+                  const sent = sentFiles.has(file);
+                  const sending = sendingFile === file;
+                  return (
+                    <li
+                      key={`${file.name}-${index}`}
+                      className={`admin-illustrations-upload-modal__row${
+                        sent ? " is-sent" : ""
+                      }${sending ? " is-sending" : ""}`}
+                    >
+                      <span className="admin-illustrations-upload-modal__index">
+                        {index + 1}
+                      </span>
+                      <span className="admin-illustrations-upload-modal__name">
+                        {file.name}
+                      </span>
+                      <span className="admin-illustrations-upload-modal__state">
+                        {sent
+                          ? "서버 전송 완료"
+                          : sending
+                            ? "전송 중"
+                            : "전송 대기"}
+                      </span>
+                    </li>
+                  );
+                })}
+              </ol>
+            </div>
+            <footer className="admin-modal-footer">
+              <button
+                type="button"
+                className="admin-button"
+                disabled={uploading}
+                onClick={() => setUploadProgressOpen(false)}
+              >
+                {uploading ? "업로드 중..." : "닫기"}
+              </button>
+            </footer>
+          </div>
+        </div>
+      ) : null}
 
       {editingItem ? (
         <div
