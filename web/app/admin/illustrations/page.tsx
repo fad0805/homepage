@@ -124,21 +124,17 @@ function needsTrim(candidate: VideoCandidateBase) {
   return candidate.duration !== null && candidate.duration > MAX_VIDEO_SECONDS;
 }
 
-function startMax(candidate: VideoCandidateBase) {
+function startMax(candidate: VideoCandidateBase, seconds: number) {
   if (candidate.duration === null) return 0;
-  return Math.max(0, Math.floor(candidate.duration) - 1);
-}
-
-function trimMax(candidate: VideoCandidateBase, start = 0) {
-  if (candidate.duration === null) return MAX_VIDEO_SECONDS;
-  return Math.min(
-    MAX_VIDEO_SECONDS,
-    Math.max(1, Math.floor(candidate.duration - start)),
-  );
+  return Math.max(0, Math.floor(candidate.duration - seconds));
 }
 
 function trimDefault(candidate: VideoCandidateBase) {
-  return trimMax(candidate, 0);
+  if (candidate.duration === null) return MAX_VIDEO_SECONDS;
+  return Math.min(
+    MAX_VIDEO_SECONDS,
+    Math.max(1, Math.floor(candidate.duration)),
+  );
 }
 
 const REPRESENTATIVE_CROP_STAGES: CropStageConfig[] = [
@@ -2331,7 +2327,7 @@ export default function AdminIllustrations() {
 
             <div className="admin-modal-body">
               <p className="admin-illustrations-trim-modal__hint">
-                시작과 길이를 움직인 뒤 `구간 재생`을 누르면 선택한 부분만 재생됩니다. 재생바도 선택 구간만 움직이며, 해당 구간이 움직이는 WebP로 저장됩니다. 최대 {MAX_VIDEO_SECONDS}초까지 선택할 수 있습니다.
+                시작과 길이를 입력한 뒤 `구간 재생`을 누르면 선택한 부분만 재생됩니다. 재생바도 선택 구간만 움직이며, 해당 구간이 움직이는 WebP로 저장됩니다. 길이는 최대 {MAX_VIDEO_SECONDS}초입니다.
               </p>
               <div className="admin-illustrations-trim-modal__list">
                 {videoTrimRequest.videos.map((candidate, index) => {
@@ -2445,51 +2441,73 @@ export default function AdminIllustrations() {
                           {previewTime.toFixed(1)}초 / {end}초
                         </span>
                       </div>
-                      <div className="admin-illustrations-trim-modal__control">
-                        <span>시작</span>
-                        <input
-                          type="range"
-                          min={0}
-                          max={startMax(candidate)}
-                          step={1}
-                          value={start}
-                          onChange={(event) => {
-                            const value = Number(event.target.value);
-                            setVideoTrimStarts((current) => {
-                              const next = [...current];
-                              next[index] = value;
-                              return next;
-                            });
-                            setVideoTrimSeconds((current) => {
-                              const next = [...current];
-                              next[index] = Math.min(
-                                current[index] ?? MAX_VIDEO_SECONDS,
-                                trimMax(candidate, value),
-                              );
-                              return next;
-                            });
-                          }}
-                        />
-                        <strong>{start}초</strong>
-                      </div>
-                      <div className="admin-illustrations-trim-modal__control">
-                        <span>길이</span>
-                        <input
-                          type="range"
-                          min={1}
-                          max={trimMax(candidate, start)}
-                          step={1}
-                          value={seconds}
-                          onChange={(event) => {
-                            const value = Number(event.target.value);
-                            setVideoTrimSeconds((current) => {
-                              const next = [...current];
-                              next[index] = value;
-                              return next;
-                            });
-                          }}
-                        />
-                        <strong>{seconds}초</strong>
+                      <div className="admin-illustrations-trim-modal__inputs">
+                        <label className="admin-illustrations-trim-modal__input">
+                          <span>시작</span>
+                          <input
+                            type="number"
+                            min={0}
+                            max={startMax(candidate, seconds)}
+                            step={1}
+                            value={start}
+                            onChange={(event) => {
+                              const value = Number(event.target.value);
+                              const clamped = Number.isFinite(value)
+                                ? Math.min(
+                                    Math.max(Math.round(value), 0),
+                                    startMax(candidate, seconds),
+                                  )
+                                : 0;
+                              setVideoTrimStarts((current) => {
+                                const next = [...current];
+                                next[index] = clamped;
+                                return next;
+                              });
+                            }}
+                          />
+                          <em>초</em>
+                          <small>최대 {startMax(candidate, seconds)}초</small>
+                        </label>
+                        <label className="admin-illustrations-trim-modal__input">
+                          <span>길이</span>
+                          <input
+                            type="number"
+                            min={1}
+                            max={MAX_VIDEO_SECONDS}
+                            step={1}
+                            value={seconds}
+                            onChange={(event) => {
+                              const value = Number(event.target.value);
+                              const clamped = Number.isFinite(value)
+                                ? Math.min(
+                                    Math.max(Math.round(value), 1),
+                                    MAX_VIDEO_SECONDS,
+                                  )
+                                : 1;
+                              setVideoTrimSeconds((current) => {
+                                const next = [...current];
+                                next[index] = clamped;
+                                return next;
+                              });
+                              if (
+                                candidate.duration !== null &&
+                                start + clamped > candidate.duration
+                              ) {
+                                setVideoTrimStarts((current) => {
+                                  const next = [...current];
+                                  next[index] = Math.max(
+                                    0,
+                                    Math.floor(candidate.duration ?? 0) -
+                                      clamped,
+                                  );
+                                  return next;
+                                });
+                              }
+                            }}
+                          />
+                          <em>초</em>
+                          <small>최대 {MAX_VIDEO_SECONDS}초</small>
+                        </label>
                       </div>
                     </div>
                   );
