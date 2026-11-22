@@ -58,6 +58,32 @@ class VideoWebpTests(unittest.TestCase):
         with Image.open(BytesIO(converted)) as image:
             self.assertLessEqual(image.n_frames, uploads.VIDEO_FPS + 1)
 
+    def test_requested_cut_length_is_honoured(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            content = self._clip(tmp, 3)
+            converted = uploads._video_to_animated_webp(
+                content,
+                ".mp4",
+                max_seconds=1,
+            )
+
+        with Image.open(BytesIO(converted)) as image:
+            self.assertLessEqual(image.n_frames, uploads.VIDEO_FPS + 1)
+
+    def test_requested_start_offset_is_honoured(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            content = self._clip(tmp, 3)
+            converted = uploads._video_to_animated_webp(
+                content,
+                ".mp4",
+                max_seconds=1,
+                start_seconds=1,
+            )
+
+        with Image.open(BytesIO(converted)) as image:
+            self.assertGreater(image.n_frames, 1)
+            self.assertLessEqual(image.n_frames, uploads.VIDEO_FPS + 1)
+
 
 if __name__ == "__main__":
     unittest.main()

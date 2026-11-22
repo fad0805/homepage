@@ -408,7 +408,12 @@ def _sanitize_image(content: bytes) -> tuple[bytes, str, str]:
         ) from exc
 
 
-def _video_to_animated_webp(content: bytes, suffix: str) -> bytes:
+def _video_to_animated_webp(
+    content: bytes,
+    suffix: str,
+    max_seconds: float | None = None,
+    start_seconds: float | None = None,
+) -> bytes:
     """Render the first seconds of a clip as an animated WebP image."""
     if shutil.which("ffmpeg") is None:
         raise HTTPException(
@@ -416,7 +421,19 @@ def _video_to_animated_webp(content: bytes, suffix: str) -> bytes:
             detail="영상 변환 기능을 사용할 수 없습니다.",
         )
 
-    max_frames = MAX_VIDEO_SECONDS * VIDEO_FPS
+    seconds = MAX_VIDEO_SECONDS
+    if max_seconds is not None:
+        try:
+            seconds = max(0.5, min(float(max_seconds), MAX_VIDEO_SECONDS))
+        except (TypeError, ValueError):
+            seconds = MAX_VIDEO_SECONDS
+    start = 0.0
+    if start_seconds is not None:
+        try:
+            start = max(0.0, float(start_seconds))
+        except (TypeError, ValueError):
+            start = 0.0
+    max_frames = max(1, int(seconds * VIDEO_FPS) + 1)
     scale = f"scale=w='min({VIDEO_MAX_EDGE},iw)':h=-2"
     with tempfile.TemporaryDirectory(prefix="illustration-video-") as tmp:
         directory = Path(tmp)
@@ -428,16 +445,22 @@ def _video_to_animated_webp(content: bytes, suffix: str) -> bytes:
             "-hide_banner",
             "-loglevel",
             "error",
-            "-i",
-            str(source),
-            "-t",
-            str(MAX_VIDEO_SECONDS),
-            "-vf",
-            f"fps={VIDEO_FPS},{scale}",
-            "-frames:v",
-            str(max_frames),
-            str(pattern),
         ]
+        if start > 0:
+            command.extend(["-ss", f"{start:.2f}"])
+        command.extend(
+            [
+                "-i",
+                str(source),
+                "-t",
+                f"{seconds:.2f}",
+                "-vf",
+                f"fps={VIDEO_FPS},{scale}",
+                "-frames:v",
+                str(max_frames),
+                str(pattern),
+            ]
+        )
         try:
             result = subprocess.run(
                 command,
@@ -524,6 +547,8 @@ async def save_banner(
     name: str | None = None,
     *,
     allow_video: bool = False,
+    max_video_seconds: float | None = None,
+    video_start_seconds: float | None = None,
 ) -> str:
     """Upload an image and return its storage key.
 
@@ -532,8 +557,9 @@ async def save_banner(
     :func:`core.image_urls.public_url` first.
 
     Illustration uploads may also send a short video. It is stored as an
-    animated WebP (truncated to ``MAX_VIDEO_SECONDS``) so every consumer can
-    keep using the existing image URLs.
+    animated WebP (truncated to ``max_video_seconds`` or
+    ``MAX_VIDEO_SECONDS``) so every consumer can keep using the existing
+    image URLs.
     """
     video_suffix = VIDEO_CONTENT_TYPES.get(file.content_type or "")
     if video_suffix and not allow_video:
@@ -559,7 +585,12 @@ async def save_banner(
 
     if video_suffix:
         content, content_type, extension = (
-            _video_to_animated_webp(content, video_suffix),
+            _video_to_animated_webp(
+                content,
+                video_suffix,
+                max_seconds=max_video_seconds,
+                start_seconds=video_start_seconds,
+            ),
             "image/webp",
             ".webp",
         )

@@ -39,6 +39,8 @@ const MAX_BATCH_FILES = 10;
 const MAX_BATCH_BYTES = 40 * 1024 * 1024;
 const MAX_IMAGE_BYTES = 50 * 1024 * 1024;
 const LIST_PAGE_SIZE = 12;
+const MAX_VIDEO_SECONDS = 10;
+const MAX_VIDEO_BYTES = 20 * 1024 * 1024;
 const ILLUSTRATION_ACCEPT =
   "image/png,image/jpeg,image/webp,image/gif,video/mp4,video/quicktime,video/webm,video/x-m4v";
 const ILLUSTRATION_VIDEO_TYPES = new Set([
@@ -52,6 +54,80 @@ function isIllustrationFile(file: File) {
   return (
     file.type.startsWith("image/") || ILLUSTRATION_VIDEO_TYPES.has(file.type)
   );
+}
+
+interface VideoRange {
+  start: number;
+  seconds: number;
+}
+
+interface VideoTrimCandidate {
+  file: File;
+  duration: number | null;
+  previewUrl: string;
+}
+
+type VideoCandidateBase = Omit<VideoTrimCandidate, "previewUrl">;
+
+interface VideoTrimRequest {
+  target: "create" | "edit";
+  files: File[];
+  videos: VideoTrimCandidate[];
+}
+
+function readVideoDuration(file: File): Promise<number | null> {
+  return new Promise((resolve) => {
+    const url = URL.createObjectURL(file);
+    const video = document.createElement("video");
+    const finish = (duration: number | null) => {
+      URL.revokeObjectURL(url);
+      video.removeAttribute("src");
+      video.load();
+      resolve(duration);
+    };
+    video.preload = "metadata";
+    video.onloadedmetadata = () => {
+      finish(
+        Number.isFinite(video.duration) && video.duration > 0
+          ? video.duration
+          : null,
+      );
+    };
+    video.onerror = () => finish(null);
+    video.src = url;
+  });
+}
+
+async function inspectVideos(files: File[]): Promise<VideoCandidateBase[]> {
+  const videos = files.filter((file) => ILLUSTRATION_VIDEO_TYPES.has(file.type));
+  return Promise.all(
+    videos.map(async (file) => ({
+      file,
+      duration: await readVideoDuration(file),
+    })),
+  );
+}
+
+function needsTrim(candidate: VideoCandidateBase) {
+  if (candidate.file.size > MAX_VIDEO_BYTES) return true;
+  return candidate.duration !== null && candidate.duration > MAX_VIDEO_SECONDS;
+}
+
+function startMax(candidate: VideoCandidateBase) {
+  if (candidate.duration === null) return 0;
+  return Math.max(0, Math.floor(candidate.duration) - 1);
+}
+
+function trimMax(candidate: VideoCandidateBase, start = 0) {
+  if (candidate.duration === null) return MAX_VIDEO_SECONDS;
+  return Math.min(
+    MAX_VIDEO_SECONDS,
+    Math.max(1, Math.floor(candidate.duration - start)),
+  );
+}
+
+function trimDefault(candidate: VideoCandidateBase) {
+  return trimMax(candidate, 0);
 }
 
 const REPRESENTATIVE_CROP_STAGES: CropStageConfig[] = [
@@ -136,6 +212,14 @@ export default function AdminIllustrations() {
   const [uploadOpen, setUploadOpen] = useState(false);
   const [files, setFiles] = useState<File[]>([]);
   const [previews, setPreviews] = useState<Preview[]>([]);
+  const [videoRangesByFile, setVideoRangesByFile] = useState<
+    Map<File, VideoRange>
+  >(() => new Map());
+  const [videoTrimRequest, setVideoTrimRequest] =
+    useState<VideoTrimRequest | null>(null);
+  const [videoTrimStarts, setVideoTrimStarts] = useState<number[]>([]);
+  const [videoTrimSeconds, setVideoTrimSeconds] = useState<number[]>([]);
+  const [inspectingVideos, setInspectingVideos] = useState(false);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [tagsInput, setTagsInput] = useState("");
@@ -287,30 +371,84 @@ export default function AdminIllustrations() {
     };
   }, [editingItem, representativeCrop]);
 
-  const addFiles = (list: FileList | null) => {
-    if (!list) return;
+  useEffect(() => {
+    return () => {
+      videoTrimRequest?.videos.forEach((video) =>
+        URL.revokeObjectURL(video.previewUrl),
+      );
+    };
+  }, [videoTrimRequest]);
 
-    const media = Array.from(list).filter(isIllustrationFile);
-    if (media.length === 0) return;
-
-    setFiles((previous) => {
-      const available = Math.max(0, MAX_FILES - previous.length);
-      return [...previous, ...media.slice(0, available)];
-    });
+  const appendSelectedFiles = (
+    media: File[],
+    ranges: Map<File, VideoRange> = new Map(),
+  ) => {
+    const available = Math.max(0, MAX_FILES - files.length);
+    const chosen = media.slice(0, available);
+    setFiles((previous) => [...previous, ...chosen]);
+    if (ranges.size > 0) {
+      setVideoRangesByFile((previous) => {
+        const next = new Map(previous);
+        ranges.forEach((range, file) => next.set(file, range));
+        return next;
+      });
+    }
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
     }
   };
 
+  const openVideoTrim = (
+    target: "create" | "edit",
+    media: File[],
+    videos: VideoCandidateBase[],
+  ) => {
+    const candidates: VideoTrimCandidate[] = videos.map((video) => ({
+      ...video,
+      previewUrl: URL.createObjectURL(video.file),
+    }));
+    setVideoTrimRequest({ target, files: media, videos: candidates });
+    setVideoTrimStarts(candidates.map(() => 0));
+    setVideoTrimSeconds(candidates.map(trimDefault));
+  };
+
+  const addFiles = async (list: FileList | null) => {
+    if (!list || inspectingVideos) return;
+
+    const media = Array.from(list).filter(isIllustrationFile);
+    if (media.length === 0) return;
+
+    setInspectingVideos(true);
+    try {
+      const videos = await inspectVideos(media);
+      const longVideos = videos.filter(needsTrim);
+      if (longVideos.length > 0) {
+        openVideoTrim("create", media, longVideos);
+        return;
+      }
+      appendSelectedFiles(media);
+    } finally {
+      setInspectingVideos(false);
+    }
+  };
+
   const handleDrop = (event: DragEvent<HTMLDivElement>) => {
     event.preventDefault();
-    addFiles(event.dataTransfer.files);
+    void addFiles(event.dataTransfer.files);
   };
 
   const removeFile = (index: number) => {
+    const removed = files[index];
     setFiles((previous) =>
       previous.filter((_, fileIndex) => fileIndex !== index),
     );
+    if (removed) {
+      setVideoRangesByFile((previous) => {
+        const next = new Map(previous);
+        next.delete(removed);
+        return next;
+      });
+    }
   };
 
   const moveFile = (from: number, to: number) => {
@@ -410,6 +548,18 @@ export default function AdminIllustrations() {
       for (const batch of batches) {
         const formData = new FormData();
         batch.forEach((file) => formData.append("files", file));
+        const batchVideoRanges = batch
+          .filter((file) => ILLUSTRATION_VIDEO_TYPES.has(file.type))
+          .map(
+            (file) =>
+              videoRangesByFile.get(file) ?? {
+                start: 0,
+                seconds: MAX_VIDEO_SECONDS,
+              },
+          );
+        if (batchVideoRanges.length > 0) {
+          formData.append("video_ranges", JSON.stringify(batchVideoRanges));
+        }
         formData.append("title", normalizedTitle);
         if (description.trim()) {
           formData.append("description", description.trim());
@@ -460,6 +610,7 @@ export default function AdminIllustrations() {
       }
 
       setFiles([]);
+      setVideoRangesByFile(new Map());
       setTitle("");
       setDescription("");
       setTagsInput("");
@@ -482,6 +633,7 @@ export default function AdminIllustrations() {
       } else {
         // A partial group exists; avoid accidentally creating a second one.
         setFiles([]);
+        setVideoRangesByFile(new Map());
       }
       setNotice({
         type: "error",
@@ -630,17 +782,26 @@ export default function AdminIllustrations() {
     }
   };
 
-  const addImagesToEditing = async (list: FileList | null) => {
-    if (!editingItem || !list || addingImages) return;
-
-    const media = Array.from(list).filter(isIllustrationFile);
-    if (media.length === 0) return;
+  const uploadEditingFiles = async (
+    media: File[],
+    ranges: Map<File, VideoRange> = new Map(),
+  ) => {
+    if (!editingItem || addingImages) return;
 
     setAddingImages(true);
     setModalNotice(null);
 
     const formData = new FormData();
     media.forEach((file) => formData.append("files", file));
+    const mediaVideoRanges = media
+      .filter((file) => ILLUSTRATION_VIDEO_TYPES.has(file.type))
+      .map(
+        (file) =>
+          ranges.get(file) ?? { start: 0, seconds: MAX_VIDEO_SECONDS },
+      );
+    if (mediaVideoRanges.length > 0) {
+      formData.append("video_ranges", JSON.stringify(mediaVideoRanges));
+    }
     formData.append("illustration_id", String(editingItem.id));
 
     try {
@@ -674,7 +835,7 @@ export default function AdminIllustrations() {
         text:
           error instanceof Error
             ? error.message
-            : "사진을 추가하지 못했습니다.",
+            : "파일을 추가하지 못했습니다.",
       });
     } finally {
       setAddingImages(false);
@@ -682,6 +843,50 @@ export default function AdminIllustrations() {
         modalFileInputRef.current.value = "";
       }
     }
+  };
+
+  const addImagesToEditing = async (list: FileList | null) => {
+    if (!editingItem || !list || addingImages || inspectingVideos) return;
+
+    const media = Array.from(list).filter(isIllustrationFile);
+    if (media.length === 0) return;
+
+    setInspectingVideos(true);
+    try {
+      const videos = await inspectVideos(media);
+      const longVideos = videos.filter(needsTrim);
+      if (longVideos.length > 0) {
+        openVideoTrim("edit", media, longVideos);
+        return;
+      }
+      await uploadEditingFiles(media);
+    } finally {
+      setInspectingVideos(false);
+    }
+  };
+
+  const confirmVideoTrim = (fromBeginning: boolean) => {
+    const request = videoTrimRequest;
+    if (!request) return;
+
+    const ranges = new Map<File, VideoRange>();
+    request.videos.forEach((candidate, index) => {
+      ranges.set(candidate.file, {
+        start: fromBeginning
+          ? 0
+          : (videoTrimStarts[index] ?? 0),
+        seconds: fromBeginning
+          ? MAX_VIDEO_SECONDS
+          : (videoTrimSeconds[index] ?? MAX_VIDEO_SECONDS),
+      });
+    });
+
+    if (request.target === "create") {
+      appendSelectedFiles(request.files, ranges);
+    } else {
+      void uploadEditingFiles(request.files, ranges);
+    }
+    setVideoTrimRequest(null);
   };
 
   const removeImageFromEditing = async (
@@ -1114,7 +1319,7 @@ export default function AdminIllustrations() {
             type="file"
             accept={ILLUSTRATION_ACCEPT}
             multiple
-            onChange={(event) => addFiles(event.target.files)}
+            onChange={(event) => void addFiles(event.target.files)}
           />
           {previews.length === 0 ? (
             <button
@@ -1319,7 +1524,10 @@ export default function AdminIllustrations() {
             <button
               type="button"
               className="admin-button"
-              onClick={() => setFiles([])}
+              onClick={() => {
+                setFiles([]);
+                setVideoRangesByFile(new Map());
+              }}
               disabled={uploading}
             >
               선택 비우기
@@ -1944,6 +2152,147 @@ export default function AdminIllustrations() {
                 }
               >
                 {savingId === editingItem.id ? "저장 중..." : "저장"}
+              </button>
+            </footer>
+          </div>
+        </div>
+      ) : null}
+
+      {videoTrimRequest ? (
+        <div
+          className="admin-modal-backdrop"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) {
+              setVideoTrimRequest(null);
+            }
+          }}
+        >
+          <div
+            className="admin-modal admin-illustrations-trim-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-label="영상 길이 자르기"
+          >
+            <header className="admin-modal-header">
+              <h2>영상 길이 자르기</h2>
+              <button
+                type="button"
+                className="admin-modal-close"
+                onClick={() => setVideoTrimRequest(null)}
+                aria-label="닫기"
+              >
+                ×
+              </button>
+            </header>
+
+            <div className="admin-modal-body">
+              <p className="admin-illustrations-trim-modal__hint">
+                미리보기에서 재생할 구간을 고르면 해당 부분만 움직이는 WebP로 저장됩니다. 최대 {MAX_VIDEO_SECONDS}초까지 선택할 수 있습니다.
+              </p>
+              <div className="admin-illustrations-trim-modal__list">
+                {videoTrimRequest.videos.map((candidate, index) => {
+                  const start = videoTrimStarts[index] ?? 0;
+                  const seconds = videoTrimSeconds[index] ?? MAX_VIDEO_SECONDS;
+                  const end = start + seconds;
+                  return (
+                    <div
+                      className="admin-illustrations-trim-modal__row"
+                      key={`${candidate.file.name}-${candidate.file.size}-${index}`}
+                    >
+                      <video
+                        key={`${candidate.previewUrl}-${start}-${end}`}
+                        className="admin-illustrations-trim-modal__preview"
+                        src={`${candidate.previewUrl}#t=${start},${end}`}
+                        controls
+                        muted
+                        playsInline
+                        preload="metadata"
+                      />
+                      <div className="admin-illustrations-trim-modal__head">
+                        <span className="admin-illustrations-trim-modal__name">
+                          {candidate.file.name}
+                        </span>
+                        <span className="admin-illustrations-trim-modal__meta">
+                          {candidate.duration === null
+                            ? "길이 정보 없음"
+                            : `원본 ${candidate.duration.toFixed(1)}초`}
+                          {" · "}
+                          {(candidate.file.size / (1024 * 1024)).toFixed(1)}MB
+                        </span>
+                      </div>
+                      <div className="admin-illustrations-trim-modal__control">
+                        <span>시작</span>
+                        <input
+                          type="range"
+                          min={0}
+                          max={startMax(candidate)}
+                          step={1}
+                          value={start}
+                          onChange={(event) => {
+                            const value = Number(event.target.value);
+                            setVideoTrimStarts((current) => {
+                              const next = [...current];
+                              next[index] = value;
+                              return next;
+                            });
+                            setVideoTrimSeconds((current) => {
+                              const next = [...current];
+                              next[index] = Math.min(
+                                current[index] ?? MAX_VIDEO_SECONDS,
+                                trimMax(candidate, value),
+                              );
+                              return next;
+                            });
+                          }}
+                        />
+                        <strong>{start}초</strong>
+                      </div>
+                      <div className="admin-illustrations-trim-modal__control">
+                        <span>길이</span>
+                        <input
+                          type="range"
+                          min={1}
+                          max={trimMax(candidate, start)}
+                          step={1}
+                          value={seconds}
+                          onChange={(event) => {
+                            const value = Number(event.target.value);
+                            setVideoTrimSeconds((current) => {
+                              const next = [...current];
+                              next[index] = value;
+                              return next;
+                            });
+                          }}
+                        />
+                        <strong>{seconds}초</strong>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            <footer className="admin-modal-footer">
+              <button
+                type="button"
+                className="admin-button"
+                onClick={() => setVideoTrimRequest(null)}
+              >
+                취소
+              </button>
+              <button
+                type="button"
+                className="admin-button"
+                onClick={() => confirmVideoTrim(true)}
+              >
+                처음 {MAX_VIDEO_SECONDS}초로 추가
+              </button>
+              <button
+                type="button"
+                className="admin-button primary"
+                onClick={() => confirmVideoTrim(false)}
+              >
+                선택 구간으로 추가
               </button>
             </footer>
           </div>

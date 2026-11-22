@@ -1250,3 +1250,81 @@
 #container.site-layout--collapsible .admin-illustration-card.is-compact > img {
   height: 5.5rem;
 }
+
+.admin-illustrations-trim-modal {
+  max-width: 34rem;
+}
+
+.admin-illustrations-trim-modal__hint {
+  margin: 0 0 0.9rem;
+  color: var(--admin-muted);
+  font-size: 0.82rem;
+  line-height: 1.5;
+}
+
+.admin-illustrations-trim-modal__list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.admin-illustrations-trim-modal__row {
+  display: grid;
+  gap: 0.45rem;
+  padding: 0.7rem 0.75rem;
+  border: 1px solid var(--admin-border);
+  border-radius: 0.55rem;
+  background: var(--admin-card-bg);
+}
+
+.admin-illustrations-trim-modal__preview {
+  display: block;
+  width: 100%;
+  max-height: 12rem;
+  border-radius: 0.4rem;
+  background: #000;
+  object-fit: contain;
+}
+
+.admin-illustrations-trim-modal__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.4rem;
+}
+
+.admin-illustrations-trim-modal__name {
+  overflow: hidden;
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-illustrations-trim-modal__meta {
+  color: var(--admin-muted);
+  font-size: 0.74rem;
+}
+
+.admin-illustrations-trim-modal__control {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+
+  span {
+    min-width: 2.2rem;
+    color: var(--admin-muted);
+    font-size: 0.74rem;
+  }
+
+  input {
+    flex: 1;
+    min-width: 0;
+  }
+
+  strong {
+    min-width: 3rem;
+    text-align: right;
+    font-size: 0.82rem;
+  }
+}

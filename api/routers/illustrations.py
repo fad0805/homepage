@@ -1,4 +1,5 @@
 import hashlib
+import json
 from datetime import date
 
 from fastapi import (
@@ -15,7 +16,7 @@ from fastapi import (
 )
 from sqlalchemy.orm import Session
 
-from core.uploads import delete_uploaded_file, save_banner
+from core.uploads import VIDEO_CONTENT_TYPES, delete_uploaded_file, save_banner
 from crud.illustrations import (
     append_illustration_images,
     bulk_delete_illustrations,
@@ -196,6 +197,7 @@ async def upload_illustrations(
     taken_at: date | None = Form(default=None),
     representative_index: int = Form(default=0),
     illustration_id: int | None = Form(default=None),
+    video_ranges: str | None = Form(default=None),
     db: Session = Depends(get_db),
     user=Depends(require_auth),
 ):
@@ -230,13 +232,38 @@ async def upload_illustrations(
     if illustration_id is not None:
         _require_owned_illustration(db, illustration_id, user)
 
+    parsed_ranges: list[tuple[float, float]] = []
+    if video_ranges:
+        try:
+            raw_ranges = json.loads(video_ranges)
+            if isinstance(raw_ranges, list):
+                for item in raw_ranges:
+                    parsed_ranges.append(
+                        (
+                            float(item.get("start", 0)),
+                            float(item.get("seconds", 0)),
+                        )
+                    )
+        except (AttributeError, TypeError, ValueError, json.JSONDecodeError) as exc:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="영상 자르기 구간 값이 올바르지 않습니다.",
+            ) from exc
+
     uploaded: list[str] = []
+    requested_ranges = iter(parsed_ranges)
     try:
         for file in files:
+            is_video = file.content_type in VIDEO_CONTENT_TYPES
+            selected_range = next(requested_ranges, None) if is_video else None
             url = await save_banner(
                 file,
                 folder="illustrations",
                 allow_video=True,
+                max_video_seconds=selected_range[1] if selected_range else None,
+                video_start_seconds=(
+                    selected_range[0] if selected_range else None
+                ),
             )
             uploaded.append(url)
 
