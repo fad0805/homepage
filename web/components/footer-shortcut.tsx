@@ -1,45 +1,80 @@
 "use client";
 
-import { useRef } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  type MouseEvent as ReactMouseEvent,
+  type PointerEvent as ReactPointerEvent,
+} from "react";
 import { usePathname, useRouter } from "next/navigation";
 
 import { isAuthenticated } from "@/components/authentication";
 
-const TAP_WINDOW_MS = 2500;
-const REQUIRED_TAPS = 5;
+const LONG_PRESS_MS = 700;
+const MOVE_TOLERANCE_PX = 10;
 
 export function FooterShortcut() {
   const router = useRouter();
   const pathname = usePathname();
-  const taps = useRef<number[]>([]);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const startPoint = useRef<{ x: number; y: number } | null>(null);
 
-  const handleTap = () => {
-    if (pathname.startsWith("/admin") || pathname === "/signin") {
-      return;
+  const clearPress = useCallback(() => {
+    if (timer.current !== null) {
+      clearTimeout(timer.current);
+      timer.current = null;
     }
+    startPoint.current = null;
+  }, []);
 
-    const now = Date.now();
-    taps.current = [
-      ...taps.current.filter((time) => now - time <= TAP_WINDOW_MS),
-      now,
-    ];
+  useEffect(() => () => clearPress(), [clearPress]);
 
-    if (taps.current.length < REQUIRED_TAPS) {
-      return;
+  const handlePointerDown = (event: ReactPointerEvent<HTMLSpanElement>) => {
+    // Desktop keeps the Q shortcut; this hidden entry is touch/pen only.
+    if (event.pointerType === "mouse") return;
+    if (pathname.startsWith("/admin") || pathname === "/signin") return;
+
+    // Block touch text selection / lookup while keeping scroll via touch-action.
+    event.preventDefault();
+    clearPress();
+    startPoint.current = { x: event.clientX, y: event.clientY };
+    timer.current = setTimeout(() => {
+      timer.current = null;
+      startPoint.current = null;
+      navigator.vibrate?.(15);
+      void isAuthenticated(router).then((isAuth) => {
+        router.push(isAuth ? "/admin" : "/signin");
+      });
+    }, LONG_PRESS_MS);
+  };
+
+  const handlePointerMove = (event: ReactPointerEvent<HTMLSpanElement>) => {
+    const start = startPoint.current;
+    if (!start) return;
+
+    if (
+      Math.abs(event.clientX - start.x) > MOVE_TOLERANCE_PX ||
+      Math.abs(event.clientY - start.y) > MOVE_TOLERANCE_PX
+    ) {
+      clearPress();
     }
+  };
 
-    taps.current = [];
-    isAuthenticated(router).then((isAuth) => {
-      if (isAuth) {
-        router.push("/admin");
-      } else {
-        router.push("/signin");
-      }
-    });
+  const handleContextMenu = (event: ReactMouseEvent<HTMLSpanElement>) => {
+    event.preventDefault();
   };
 
   return (
-    <span className="footer-shortcut" onClick={handleTap}>
+    <span
+      className="footer-shortcut"
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onPointerUp={clearPress}
+      onPointerCancel={clearPress}
+      onPointerLeave={clearPress}
+      onContextMenu={handleContextMenu}
+    >
       © Rimien Siarte. All rights reserved. No external use permitted.
     </span>
   );
