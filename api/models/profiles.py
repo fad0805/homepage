@@ -11,7 +11,6 @@ from sqlalchemy import (
 from sqlalchemy.orm import relationship
 
 from db.base import Base
-from db.types import ImageUrl
 from models.users import User
 
 
@@ -29,7 +28,6 @@ class Profile(Base):
     )
     title = Column(String(255))
     subtitle = Column(String(255), nullable=True)
-    banner_url = Column(ImageUrl(1000), nullable=True)
     profile = Column(Text)
     created_at = Column(DateTime, default=func.now())
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())

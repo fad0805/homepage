@@ -10,7 +10,6 @@ export interface AuthorProfile {
   nickname?: string | null;
   title: string;
   subtitle?: string | null;
-  banner_url?: string | null;
   author_banner_url?: string | null;
   character_modal_banner_url?: string | null;
   profile: string;

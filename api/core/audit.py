@@ -247,9 +247,8 @@ TRACKED: dict[type, _Tracked] = {
         "profile",
         _profile_title,
         _owner_from_user_id,
-        frozenset({"title", "subtitle", "banner_url", "profile"}),
+        frozenset({"title", "subtitle", "profile"}),
         html_fields=frozenset({"profile"}),
-        image_fields=frozenset({"banner_url"}),
     ),
     IndexPage: _Tracked(
         "index",
