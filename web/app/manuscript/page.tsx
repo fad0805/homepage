@@ -83,6 +83,13 @@ interface ScrivDoc {
   char_count_plain: number;
 }
 
+interface LinkableChapter {
+  id: number;
+  title: string;
+  subtitle: string | null;
+  visible: boolean;
+}
+
 type Notice = { type: "success" | "error"; text: string };
 
 const BLOCK_TAGS = new Set([
@@ -329,6 +336,11 @@ export default function ManuscriptWorkspace() {
   const [publishOpen, setPublishOpen] = useState(false);
   const [publishParentId, setPublishParentId] = useState<number | null>(null);
   const [publishing, setPublishing] = useState(false);
+  const [linkOpen, setLinkOpen] = useState(false);
+  const [linkChapters, setLinkChapters] = useState<LinkableChapter[]>([]);
+  const [linkQuery, setLinkQuery] = useState("");
+  const [linkLoading, setLinkLoading] = useState(false);
+  const [linking, setLinking] = useState(false);
   const [autoSaving, setAutoSaving] = useState(false);
   const autosaveRef = useRef<{ key: string | null; signature: string | null }>({
     key: null,
@@ -789,6 +801,49 @@ export default function ManuscriptWorkspace() {
     setPublishOpen(true);
   };
 
+  const openLink = async () => {
+    if (!selectedId || selected?.node_type !== "chapter" || !linkedBookId) return;
+    setLinkOpen(true);
+    setLinkQuery("");
+    setLinkChapters([]);
+    setLinkLoading(true);
+    try {
+      const chapters = await apiFetch<LinkableChapter[]>(
+        `/api/chapters?book_id=${linkedBookId}&mine=true&include_body=false` +
+          `&page=1&page_size=1000&sort=oldest`,
+      );
+      setLinkChapters(chapters);
+    } catch (error) {
+      notify((error as Error).message, "error");
+      setLinkOpen(false);
+    } finally {
+      setLinkLoading(false);
+    }
+  };
+
+  const confirmLink = async (chapterId: number) => {
+    if (!selectedId || linking) return;
+    if (!(await flushAutosave())) return;
+    setLinking(true);
+    try {
+      const node = await apiFetch<ManuscriptNode>(
+        `/api/manuscript/nodes/${selectedId}/link-chapter`,
+        {
+          method: "POST",
+          body: JSON.stringify({ chapter_id: chapterId }),
+        },
+      );
+      setSelected(node);
+      await refresh();
+      setLinkOpen(false);
+      notify("게시물과 연결했습니다.");
+    } catch (error) {
+      notify((error as Error).message, "error");
+    } finally {
+      setLinking(false);
+    }
+  };
+
   const confirmPublish = async () => {
     if (!selectedId || !linkedBookId || publishing) return;
     if (!(await flushAutosave())) return;
@@ -1174,6 +1229,25 @@ export default function ManuscriptWorkspace() {
     }
   };
 
+  const linkedChapterIds = new Set(
+    tree
+      .map((node) => node.published_chapter_id)
+      .filter((id): id is number => typeof id === "number" && id > 0),
+  );
+  const linkQueryTrimmed = linkQuery.trim().toLowerCase();
+  const visibleLinkChapters = linkChapters.filter((chapter) => {
+    if (
+      linkedChapterIds.has(chapter.id) &&
+      chapter.id !== selected?.published_chapter_id
+    ) {
+      return false;
+    }
+    if (!linkQueryTrimmed) return true;
+    return `${chapter.title} ${chapter.subtitle ?? ""}`
+      .toLowerCase()
+      .includes(linkQueryTrimmed);
+  });
+
   if (loading) {
     return <div className="ms-loading">원고 워크스페이스를 불러오는 중…</div>;
   }
@@ -1450,6 +1524,16 @@ export default function ManuscriptWorkspace() {
                     </button>
                   ) : null}
                   <div className="ms-inspector__actions-right">
+                    {selected.node_type === "chapter" && linkedBookId ? (
+                      <button
+                        type="button"
+                        className="ms-button"
+                        disabled={publishing || linking}
+                        onClick={() => void openLink()}
+                      >
+                        링크
+                      </button>
+                    ) : null}
                     {selected.node_type === "chapter" ? (
                     <button
                       type="button"
@@ -1591,6 +1675,74 @@ export default function ManuscriptWorkspace() {
               {query.trim() && results.length === 0 ? (
                 <p className="ms-search-results__empty">검색 결과가 없습니다.</p>
               ) : null}
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {linkOpen && linkedBookId ? (
+        <div
+          className="ms-modal-backdrop"
+          onClick={() => setLinkOpen(false)}
+        >
+          <div
+            className="ms-modal ms-modal--link"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="ms-modal__header">
+              <h2>게시물 연결</h2>
+              <button
+                type="button"
+                onClick={() => setLinkOpen(false)}
+                aria-label="닫기"
+              >
+                ×
+              </button>
+            </div>
+            <p className="ms-modal__hint">
+              연결된 게시판에 이미 있는 게시물을 이 문서에 연결합니다. 게시물
+              내용은 바뀌지 않습니다.
+            </p>
+            <input
+              className="ms-search-input"
+              value={linkQuery}
+              placeholder="게시물 제목 검색"
+              onChange={(event) => setLinkQuery(event.target.value)}
+            />
+            {linkLoading ? (
+              <p className="ms-link-empty">게시물을 불러오는 중…</p>
+            ) : visibleLinkChapters.length === 0 ? (
+              <p className="ms-link-empty">연결할 수 있는 게시물이 없습니다.</p>
+            ) : (
+              <div className="ms-link-list">
+                {visibleLinkChapters.map((chapter) => (
+                  <button
+                    key={chapter.id}
+                    type="button"
+                    className={`ms-link-row${
+                      chapter.id === selected?.published_chapter_id
+                        ? " is-current"
+                        : ""
+                    }`}
+                    disabled={linking}
+                    onClick={() => void confirmLink(chapter.id)}
+                  >
+                    <span className="ms-link-row__title">{chapter.title}</span>
+                    <span className="ms-link-row__meta">
+                      {chapter.id === selected?.published_chapter_id
+                        ? "현재 연결"
+                        : chapter.visible
+                          ? "공개"
+                          : "비공개"}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
+            <div className="ms-modal__footer">
+              <button type="button" onClick={() => setLinkOpen(false)}>
+                취소
+              </button>
             </div>
           </div>
         </div>

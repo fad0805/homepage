@@ -219,6 +219,16 @@ def restore_node(
     return crud.restore_node(db, node_id, user.id)
 
 
+@router.post("/nodes/{node_id}/link-chapter")
+def link_chapter(
+    node_id: int,
+    payload: schemas.ChapterLinkRequest,
+    db: Session = Depends(get_db),
+    user=Depends(require_auth),
+):
+    return crud.link_node_chapter(db, node_id, payload, user.id)
+
+
 @router.post("/nodes/{node_id}/publish")
 def publish_node(
     node_id: int,

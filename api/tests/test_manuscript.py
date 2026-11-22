@@ -558,6 +558,41 @@ class ManuscriptTests(unittest.TestCase):
         self.assertIn("찾을말", snippet)
         self.assertIn("뒤 문장입니다", snippet)
 
+    def test_link_existing_post_without_overwriting_it(self) -> None:
+        project = self._project()
+        node = self._node(project, "원고 문서", body="<p>원고</p>")
+        chapter = Chapter(
+            user_id=self.owner.id,
+            book_id=self.book.id,
+            title="기존 게시물",
+            body="<p>게시물 본문</p>",
+            tags=[],
+            order=0,
+        )
+        self.db.add(chapter)
+        self.db.flush()
+
+        linked = crud.link_node_chapter(
+            self.db,
+            node.id,
+            schemas.ChapterLinkRequest(chapter_id=chapter.id),
+            self.owner.id,
+        )
+
+        self.assertEqual(linked["published_chapter_id"], chapter.id)
+        self.db.refresh(chapter)
+        self.assertEqual(chapter.title, "기존 게시물")
+        self.assertEqual(chapter.body, "<p>게시물 본문</p>")
+
+        other = self._node(project, "다른 문서")
+        with self.assertRaises(HTTPException):
+            crud.link_node_chapter(
+                self.db,
+                other.id,
+                schemas.ChapterLinkRequest(chapter_id=chapter.id),
+                self.owner.id,
+            )
+
     def test_publish_republish_and_public_toc(self) -> None:
         project = self._project()
         folder = self._node(project, "1권", node_type="folder")

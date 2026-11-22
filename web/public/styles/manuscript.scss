@@ -661,6 +661,10 @@ html[data-workspace='manuscript'] .ms-editor--workspace .ms-editor__surface .tip
   &--export {
     width: min(34rem, 100%);
   }
+
+  &--link {
+    width: min(32rem, 100%);
+  }
 }
 
 .ms-export-section {
@@ -780,6 +784,56 @@ html[data-workspace='manuscript'] .ms-editor--workspace .ms-editor__surface .tip
   justify-content: flex-end;
   gap: 0.5rem;
   margin-top: 0.9rem;
+}
+
+.ms-link-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  max-height: 18rem;
+  overflow-y: auto;
+  margin-top: 0.75rem;
+  padding: 0.35rem;
+  border: 1px solid var(--ms-border);
+  border-radius: 0.45rem;
+}
+
+.ms-link-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  border-color: transparent !important;
+  text-align: left;
+
+  &__title {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &__meta {
+    flex: none;
+    color: var(--ms-muted);
+    font-size: 0.68rem;
+  }
+
+  &:hover,
+  &.is-current {
+    background: color-mix(in srgb, var(--ms-accent) 14%, transparent);
+  }
+
+  &:disabled {
+    opacity: 0.6;
+  }
+}
+
+.ms-link-empty {
+  margin: 0.75rem 0 0;
+  color: var(--ms-muted);
+  font-size: 0.78rem;
+  padding: 0.5rem;
 }
 
 .ms-search-input {

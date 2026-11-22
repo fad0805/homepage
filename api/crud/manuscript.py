@@ -1005,6 +1005,73 @@ def get_scrivenings(
     return [node for node in ordered if node["node_type"] == "chapter"]
 
 
+def link_node_chapter(
+    db: Session,
+    node_id: int,
+    payload: schemas.ChapterLinkRequest,
+    user_id: int,
+) -> dict:
+    """Link a chapter node to an already published post without overwriting it."""
+    node = _get_node_or_404(db, node_id, user_id)
+    if node.node_type != "chapter":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Only chapter nodes can be linked",
+        )
+
+    project = (
+        db.query(ManuscriptProject)
+        .filter(ManuscriptProject.id == node.project_id)
+        .first()
+    )
+    linked_book_id = project.linked_book_id if project else None
+    if linked_book_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="프로젝트에 연결된 책이 없습니다.",
+        )
+
+    chapter = (
+        db.query(Chapter)
+        .filter(
+            Chapter.id == payload.chapter_id,
+            Chapter.user_id == user_id,
+            Chapter.book_id == linked_book_id,
+        )
+        .first()
+    )
+    if chapter is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="연결된 책의 게시물이 아닙니다.",
+        )
+
+    conflict = (
+        db.query(ManuscriptNode.id)
+        .filter(
+            ManuscriptNode.published_chapter_id == chapter.id,
+            ManuscriptNode.id != node.id,
+        )
+        .first()
+    )
+    if conflict is not None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="이미 다른 원고에 연결된 게시물입니다.",
+        )
+
+    node.published_chapter_id = chapter.id
+    node.published_manuscript_hash = _content_hash(
+        node.title, node.subtitle, node.body
+    )
+    node.published_chapter_hash = _content_hash(
+        chapter.title, chapter.subtitle, chapter.body
+    )
+    db.commit()
+    db.refresh(node)
+    return get_node(db, node.id, user_id)
+
+
 def publish_node(
     db: Session,
     node_id: int,

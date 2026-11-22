@@ -76,6 +76,12 @@ class ScrivenerExportRequest(BaseModel):
     node_ids: list[int] | None = None
 
 
+class ChapterLinkRequest(BaseModel):
+    """Link a manuscript document to an existing post in the linked book."""
+
+    chapter_id: int
+
+
 class PublishRequest(BaseModel):
     """Publish a manuscript chapter into a book's table of contents.
 
