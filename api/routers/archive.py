@@ -1791,7 +1791,8 @@ def create_archive_job(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail=(
                 f"최근 {ARCHIVE_REEXPORT_HOURS}시간 이내에 생성된 "
-                "내보내기 파일이 있습니다. 잠시 후 다시 시도해주세요."
+                "내보내기 파일 때문에 이 범위는 만들 수 없습니다. "
+                "잠시 후 다시 시도해주세요."
             ),
             headers={"Retry-After": str(exc.retry_after)},
         ) from None

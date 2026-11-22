@@ -38,13 +38,14 @@ class ArchiveJobManagerTests(unittest.TestCase):
         completed_at: datetime | None = None,
         scope_user_id: int | None = None,
         scope_label: str = "전체",
+        section: str = "all",
     ) -> dict:
         now = datetime.now(timezone.utc)
         return {
             "id": uuid.uuid4().hex,
             "owner": owner,
-            "section": "all",
-            "label": "전체",
+            "section": section,
+            "label": "전체" if section == "all" else section,
             "scope_user_id": scope_user_id,
             "scope_label": scope_label,
             "status": status,
@@ -124,6 +125,38 @@ class ArchiveJobManagerTests(unittest.TestCase):
         job = self.manager.create("profile", "프로필", "member")
         self.assertEqual(job["status"], "queued")
         self._wait_for_completion(job["id"], "member")
+
+    def test_recent_partial_blocks_only_the_same_section(self) -> None:
+        partial = self._meta(
+            owner="admin",
+            status="completed",
+            completed_at=datetime.now(timezone.utc) - timedelta(hours=1),
+            section="profile",
+        )
+        self.manager._save(partial)
+
+        with self.assertRaises(ArchiveJobThrottled) as raised:
+            self.manager.create("profile", "프로필", "admin")
+        self.assertEqual(raised.exception.job["id"], partial["id"])
+
+        other = self.manager.create("memos", "주석", "admin")
+        self._wait_for_completion(other["id"], "admin")
+        full = self.manager.create("all", "전체", "admin")
+        self._wait_for_completion(full["id"], "admin")
+
+    def test_recent_full_blocks_every_section(self) -> None:
+        full = self._meta(
+            owner="admin",
+            status="completed",
+            completed_at=datetime.now(timezone.utc) - timedelta(hours=1),
+        )
+        self.manager._save(full)
+
+        for section in ("all", "profile"):
+            with self.subTest(section=section):
+                with self.assertRaises(ArchiveJobThrottled) as raised:
+                    self.manager.create(section, section, "admin")
+                self.assertEqual(raised.exception.job["id"], full["id"])
 
     def test_scope_filter_hides_other_users_jobs(self) -> None:
         other = self._meta(

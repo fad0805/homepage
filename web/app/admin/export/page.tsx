@@ -165,21 +165,39 @@ export default function AdminExportPage() {
     [jobs],
   );
   const hasActive = activeJob !== null;
-  const recentCompletedJob = useMemo(
-    () =>
-      jobs.find((job) => isWithinReexportCooldown(job, clock)) ?? null,
+
+  const recentJobs = useMemo(
+    () => jobs.filter((job) => isWithinReexportCooldown(job, clock)),
     [clock, jobs],
   );
-  const hasCooldown = recentCompletedJob !== null;
+  const allCooldownJob = useMemo(
+    () => recentJobs.find((job) => job.section === "all") ?? null,
+    [recentJobs],
+  );
+  const partialCooldownJobs = useMemo(
+    () => recentJobs.filter((job) => job.section !== "all"),
+    [recentJobs],
+  );
+  const partialCooldownSections = useMemo(
+    () => new Set(partialCooldownJobs.map((job) => job.section)),
+    [partialCooldownJobs],
+  );
+  const hasCooldown = recentJobs.length > 0;
+  const hasAllCooldown = allCooldownJob !== null;
+  const noticeJob = allCooldownJob ?? partialCooldownJobs[0] ?? null;
   const cooldownAvailableAt = useMemo(() => {
-    if (!recentCompletedJob?.completed_at) return null;
-    const completedAt = new Date(
-      recentCompletedJob.completed_at,
-    ).getTime();
+    if (!noticeJob?.completed_at) return null;
+    const completedAt = new Date(noticeJob.completed_at).getTime();
     if (!Number.isFinite(completedAt)) return null;
     return new Date(completedAt + REEXPORT_COOLDOWN_MS);
-  }, [recentCompletedJob]);
-  const startBlocked = hasActive || hasCooldown || starting !== null;
+  }, [noticeJob]);
+
+  // The worker is single-threaded, so any active/starting job is global.
+  const serverBlocked = hasActive || starting !== null;
+  const isSectionBlocked = (section: string) =>
+    serverBlocked ||
+    hasAllCooldown ||
+    (section !== "all" && partialCooldownSections.has(section));
 
   useEffect(() => {
     if (!hasActive) return;
@@ -201,7 +219,7 @@ export default function AdminExportPage() {
     .slice(0, 5);
 
   const startJob = async (section: string) => {
-    if (startBlocked) return;
+    if (isSectionBlocked(section)) return;
 
     const params = new URLSearchParams({ section });
 
@@ -242,11 +260,22 @@ export default function AdminExportPage() {
         <div className="admin-notice admin-notice-error">{error}</div>
       ) : null}
 
-      {hasCooldown && recentCompletedJob ? (
+      {hasCooldown && noticeJob ? (
         <div className="admin-notice admin-notice-info">
-          {formatDateTime(recentCompletedJob.completed_at)}에 생성된
-          내보내기 파일이 있습니다. 파일 생성 후 24시간 동안은 새로
-          만들 수 없습니다.
+          {hasAllCooldown ? (
+            <>
+              {formatDateTime(noticeJob.completed_at)}에 전체 내보내기
+              파일이 만들어졌습니다. 24시간 동안은 부분 내보내기를 포함해
+              새로 만들 수 없습니다.
+            </>
+          ) : (
+            <>
+              최근 만든 부분 내보내기 파일(
+              {partialCooldownJobs.map((job) => job.label).join(", ")})은
+              24시간 동안 다시 만들 수 없습니다. 다른 부분과 전체
+              내보내기는 가능합니다.
+            </>
+          )}
           {cooldownAvailableAt
             ? ` ${formatDateTime(
                 cooldownAvailableAt.toISOString(),
@@ -261,7 +290,7 @@ export default function AdminExportPage() {
           onDismiss={() => setDismissedId(featuredJob.id)}
           onRetry={() => startJob(featuredJob.section)}
           retrying={starting === featuredJob.section}
-          startBlocked={startBlocked}
+          retryDisabled={isSectionBlocked(featuredJob.section)}
         />
       ) : loading ? (
         <p className="admin-dashboard-state">
@@ -289,7 +318,7 @@ export default function AdminExportPage() {
             type="button"
             className="admin-button primary"
             onClick={() => startJob("all")}
-            disabled={startBlocked}
+            disabled={isSectionBlocked("all")}
           >
             {starting === "all" ? "시작 중..." : "전체 ZIP 만들기"}
           </button>
@@ -314,7 +343,7 @@ export default function AdminExportPage() {
                 type="button"
                 className="admin-button"
                 onClick={() => startJob(item.section)}
-                disabled={startBlocked}
+                disabled={isSectionBlocked(item.section)}
               >
                 {starting === item.section ? "시작 중..." : "만들기"}
               </button>
@@ -365,13 +394,13 @@ function JobPanel({
   onDismiss,
   onRetry,
   retrying,
-  startBlocked,
+  retryDisabled,
 }: {
   job: ArchiveJob;
   onDismiss: () => void;
   onRetry: () => void;
   retrying: boolean;
-  startBlocked: boolean;
+  retryDisabled: boolean;
 }) {
   const active = job.status === "queued" || job.status === "running";
   const percent = clampPercent(job.progress.percent);
@@ -469,7 +498,7 @@ function JobPanel({
           type="button"
           className="admin-button primary"
           onClick={onRetry}
-          disabled={startBlocked || retrying}
+          disabled={retryDisabled || retrying}
         >
           {retrying ? "시작 중..." : "다시 시도"}
         </button>

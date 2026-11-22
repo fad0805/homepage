@@ -70,7 +70,12 @@ class ArchiveJobManager:
             if active is not None:
                 raise ArchiveJobBusy(self._public(active))
 
-            recent = self._find_recent_completed(owner, now, user_id)
+            recent = self._find_recent_completed(
+                owner,
+                now,
+                user_id,
+                section,
+            )
             if recent is not None:
                 completed = _parse_datetime(
                     recent.get("completed_at")
@@ -281,7 +286,14 @@ class ArchiveJobManager:
         owner: str,
         now: datetime,
         user_id: int | None = None,
+        section: str = "all",
     ) -> dict[str, Any] | None:
+        """Find a fresh file that blocks the requested export section.
+
+        A recent full archive blocks every section. A recent partial archive
+        blocks only the same section, so the other partials and a fresh full
+        backup remain available.
+        """
         if ARCHIVE_REEXPORT_HOURS <= 0:
             return None
         cutoff = now - timedelta(hours=ARCHIVE_REEXPORT_HOURS)
@@ -296,6 +308,15 @@ class ArchiveJobManager:
                 )
             ):
                 continue
+
+            completed_section = meta.get("section")
+            if section == "all":
+                blocking = completed_section == "all"
+            else:
+                blocking = completed_section in ("all", section)
+            if not blocking:
+                continue
+
             completed = _parse_datetime(meta.get("completed_at"))
             if completed is not None and completed >= cutoff:
                 recent.append((completed, meta))
