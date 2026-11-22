@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import { useAuth } from "@/components/auth-provider";
 import { apiFetch } from "@/lib/api";
 import { formatDateTime } from "@/lib/datetime";
 
@@ -10,19 +9,10 @@ import "@/public/styles/admin/main.scss";
 
 type JobStatus = "queued" | "running" | "completed" | "failed";
 
-interface ArchiveUser {
-  id: number;
-  username: string;
-  role: string;
-  is_self: boolean;
-}
-
 interface ArchiveJob {
   id: string;
   section: string;
   label: string;
-  scope_user_id?: number | null;
-  scope_label?: string | null;
   status: JobStatus;
   created_at: string;
   started_at: string | null;
@@ -134,15 +124,11 @@ function clampPercent(value: number): number {
 }
 
 export default function AdminExportPage() {
-  const { ready, isAdmin } = useAuth();
   const [jobs, setJobs] = useState<ArchiveJob[]>([]);
   const [loading, setLoading] = useState(true);
   const [starting, setStarting] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [dismissedId, setDismissedId] = useState<string | null>(null);
-  const [users, setUsers] = useState<ArchiveUser[]>([]);
-  const [usersLoading, setUsersLoading] = useState(false);
-  const [scope, setScope] = useState<string>("all");
   const [clock, setClock] = useState(() => Date.now());
 
   const loadJobs = useCallback(async () => {
@@ -164,52 +150,6 @@ export default function AdminExportPage() {
   useEffect(() => {
     loadJobs();
   }, [loadJobs]);
-
-  useEffect(() => {
-    if (!ready) return;
-    if (!isAdmin) {
-      setScope("self");
-      setUsers([]);
-      return;
-    }
-
-    let cancelled = false;
-    setUsersLoading(true);
-    apiFetch<ArchiveUser[]>("/api/users")
-      .then((data) => {
-        if (!cancelled) setUsers(data);
-      })
-      .catch((err) => {
-        if (!cancelled) {
-          setError(
-            err instanceof Error
-              ? err.message
-              : "사용자 목록을 불러오지 못했습니다.",
-          );
-        }
-      })
-      .finally(() => {
-        if (!cancelled) setUsersLoading(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [ready, isAdmin]);
-
-  const selfUser = useMemo(
-    () => users.find((item) => item.is_self) ?? null,
-    [users],
-  );
-  const otherUsers = useMemo(
-    () => users.filter((item) => !item.is_self),
-    [users],
-  );
-  const scopeReady =
-    ready &&
-    (!isAdmin ||
-      scope === "all" ||
-      (scope === "self" ? selfUser !== null : true));
 
   const activeJob = useMemo(
     () =>
@@ -233,8 +173,7 @@ export default function AdminExportPage() {
     if (!Number.isFinite(completedAt)) return null;
     return new Date(completedAt + REEXPORT_COOLDOWN_MS);
   }, [recentCompletedJob]);
-  const startBlocked =
-    hasActive || hasCooldown || starting !== null || !scopeReady;
+  const startBlocked = hasActive || hasCooldown || starting !== null;
 
   useEffect(() => {
     if (!hasActive) return;
@@ -259,14 +198,6 @@ export default function AdminExportPage() {
     if (startBlocked) return;
 
     const params = new URLSearchParams({ section });
-    if (isAdmin && scope !== "all") {
-      if (scope === "self") {
-        if (!selfUser) return;
-        params.set("user_id", String(selfUser.id));
-      } else {
-        params.set("user_id", scope);
-      }
-    }
 
     setStarting(section);
     setError(null);
@@ -296,44 +227,8 @@ export default function AdminExportPage() {
           <p className="admin-dashboard-eyebrow">Missing Island · Admin</p>
           <h1 className="admin-dashboard-title">내보내기</h1>
           <p className="admin-dashboard-subtitle">
-            기록을 백그라운드에서 만들고, 완료되면 ZIP으로 내려받습니다.
+            내 기록을 백그라운드에서 만들고, 완료되면 ZIP으로 내려받습니다.
           </p>
-        </div>
-        <div className="admin-export-scope">
-          <label htmlFor="archive-scope">내보내기 대상</label>
-          {isAdmin ? (
-            <select
-              id="archive-scope"
-              value={scope}
-              onChange={(event) => setScope(event.target.value)}
-              disabled={
-                hasActive ||
-                hasCooldown ||
-                starting !== null ||
-                usersLoading
-              }
-            >
-              <option value="all">전체</option>
-              {selfUser ? (
-                <option value="self">
-                  내 것 ({selfUser.username})
-                </option>
-              ) : null}
-              {otherUsers.length ? (
-                <optgroup label="사용자별">
-                  {otherUsers.map((user) => (
-                    <option key={user.id} value={String(user.id)}>
-                      {user.username}
-                    </option>
-                  ))}
-                </optgroup>
-              ) : null}
-            </select>
-          ) : (
-            <select id="archive-scope" value="self" disabled>
-              <option value="self">내 것</option>
-            </select>
-          )}
         </div>
       </header>
 

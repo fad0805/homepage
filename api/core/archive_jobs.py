@@ -70,7 +70,7 @@ class ArchiveJobManager:
             if active is not None:
                 raise ArchiveJobBusy(self._public(active))
 
-            recent = self._find_recent_completed(owner, now)
+            recent = self._find_recent_completed(owner, now, user_id)
             if recent is not None:
                 completed = _parse_datetime(
                     recent.get("completed_at")
@@ -116,29 +116,52 @@ class ArchiveJobManager:
             self._queue.put(job_id)
             return self._public(meta)
 
-    def list(self, owner: str) -> list[dict[str, Any]]:
+    def list(
+        self,
+        owner: str,
+        *,
+        user_id: int | None = None,
+    ) -> list[dict[str, Any]]:
         with self._lock:
             jobs = [
                 meta
                 for meta in self._load_all()
                 if meta.get("owner") == owner
+                and (user_id is None or meta.get("scope_user_id") == user_id)
             ]
         jobs.sort(key=lambda meta: meta.get("created_at") or "", reverse=True)
         return [self._public(meta) for meta in jobs[:20]]
 
-    def get(self, job_id: str, owner: str) -> dict[str, Any] | None:
-        with self._lock:
-            meta = self._load(job_id)
-        if meta is None or meta.get("owner") != owner:
-            return None
-        return self._public(meta)
-
-    def download(self, job_id: str, owner: str) -> tuple[Path, str] | None:
+    def get(
+        self,
+        job_id: str,
+        owner: str,
+        *,
+        user_id: int | None = None,
+    ) -> dict[str, Any] | None:
         with self._lock:
             meta = self._load(job_id)
         if (
             meta is None
             or meta.get("owner") != owner
+            or (user_id is not None and meta.get("scope_user_id") != user_id)
+        ):
+            return None
+        return self._public(meta)
+
+    def download(
+        self,
+        job_id: str,
+        owner: str,
+        *,
+        user_id: int | None = None,
+    ) -> tuple[Path, str] | None:
+        with self._lock:
+            meta = self._load(job_id)
+        if (
+            meta is None
+            or meta.get("owner") != owner
+            or (user_id is not None and meta.get("scope_user_id") != user_id)
             or meta.get("status") != "completed"
         ):
             return None
@@ -257,6 +280,7 @@ class ArchiveJobManager:
         self,
         owner: str,
         now: datetime,
+        user_id: int | None = None,
     ) -> dict[str, Any] | None:
         if ARCHIVE_REEXPORT_HOURS <= 0:
             return None
@@ -266,6 +290,10 @@ class ArchiveJobManager:
             if (
                 meta.get("owner") != owner
                 or meta.get("status") != "completed"
+                or (
+                    user_id is not None
+                    and meta.get("scope_user_id") != user_id
+                )
             ):
                 continue
             completed = _parse_datetime(meta.get("completed_at"))

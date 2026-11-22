@@ -36,6 +36,8 @@ class ArchiveJobManagerTests(unittest.TestCase):
         owner: str,
         status: str,
         completed_at: datetime | None = None,
+        scope_user_id: int | None = None,
+        scope_label: str = "전체",
     ) -> dict:
         now = datetime.now(timezone.utc)
         return {
@@ -43,8 +45,8 @@ class ArchiveJobManagerTests(unittest.TestCase):
             "owner": owner,
             "section": "all",
             "label": "전체",
-            "scope_user_id": None,
-            "scope_label": "전체",
+            "scope_user_id": scope_user_id,
+            "scope_label": scope_label,
             "status": status,
             "created_at": now.isoformat(),
             "started_at": (
@@ -122,6 +124,42 @@ class ArchiveJobManagerTests(unittest.TestCase):
         job = self.manager.create("profile", "프로필", "member")
         self.assertEqual(job["status"], "queued")
         self._wait_for_completion(job["id"], "member")
+
+    def test_scope_filter_hides_other_users_jobs(self) -> None:
+        other = self._meta(
+            owner="admin",
+            status="completed",
+            scope_user_id=2,
+            scope_label="other",
+        )
+        self.manager._save(other)
+
+        self.assertEqual(self.manager.list("admin", user_id=1), [])
+        self.assertIsNone(self.manager.get(other["id"], "admin", user_id=1))
+        self.assertIsNone(
+            self.manager.download(other["id"], "admin", user_id=1)
+        )
+        self.assertIsNotNone(self.manager.get(other["id"], "admin"))
+
+    def test_cooldown_ignores_jobs_for_other_users(self) -> None:
+        other = self._meta(
+            owner="admin",
+            status="completed",
+            completed_at=datetime.now(timezone.utc) - timedelta(hours=1),
+            scope_user_id=2,
+            scope_label="other",
+        )
+        self.manager._save(other)
+
+        job = self.manager.create(
+            "profile",
+            "프로필",
+            "admin",
+            user_id=1,
+            scope_label="admin",
+        )
+        self.assertEqual(job["status"], "queued")
+        self._wait_for_completion(job["id"], "admin")
 
     def _wait_for_completion(self, job_id: str, owner: str) -> None:
         deadline = time.monotonic() + 2

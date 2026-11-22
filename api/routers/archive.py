@@ -60,7 +60,7 @@ from models.planner import PlannerColor, PlannerEvent, PlannerTask
 from models.profiles import Profile
 from models.users import User
 
-from .utils import is_admin, require_auth
+from .utils import require_auth
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -928,13 +928,11 @@ def _index_page_data(
 def _build_export(
     db: Session,
     section: str,
-    user_id: int | None,
+    user_id: int,
 ) -> _PreparedArchive:
-    scope_user = db.get(User, user_id) if user_id is not None else None
+    scope_user = db.get(User, user_id)
     scope_label = (
-        scope_user.username
-        if scope_user is not None
-        else ("전체" if user_id is None else f"user {user_id}")
+        scope_user.username if scope_user is not None else f"user {user_id}"
     )
     plan = _ArchivePlan()
     sections: dict[str, dict[str, Any]] = {}
@@ -1425,7 +1423,7 @@ def _write_archive(
     prepared: _PreparedArchive,
     book_db: Session,
     progress: Callable[[str, int, int], None],
-    user_id: int | None,
+    user_id: int,
 ) -> None:
     total = (
         len(prepared.plan.files)
@@ -1512,11 +1510,10 @@ def _write_archive(
             Chapter.id,
             Chapter.title,
             Chapter.order,
-        ).filter(Chapter.book_id == book.id)
-        if user_id is not None:
-            chapter_query = chapter_query.filter(
-                Chapter.user_id == user_id
-            )
+        ).filter(
+            Chapter.book_id == book.id,
+            Chapter.user_id == user_id,
+        )
         chapter_rows = chapter_query.order_by(
             Chapter.order,
             Chapter.id,
@@ -1555,12 +1552,9 @@ def _write_archive(
         _throttle()
 
         chapter_query = book_db.query(Chapter).filter(
-            Chapter.book_id == book.id
+            Chapter.book_id == book.id,
+            Chapter.user_id == user_id,
         )
-        if user_id is not None:
-            chapter_query = chapter_query.filter(
-                Chapter.user_id == user_id
-            )
         for chapter in chapter_query.order_by(
             Chapter.order,
             Chapter.id,
@@ -1613,7 +1607,7 @@ def _build_archive_file(
     section: str,
     output_path: Path,
     progress: Callable[[str, int, int], None],
-    user_id: int | None,
+    user_id: int,
 ) -> None:
     """Build one archive on disk. Runs in the background job worker."""
 
@@ -1658,11 +1652,9 @@ def _get_job_manager() -> ArchiveJobManager:
 @router.post("/jobs")
 def create_archive_job(
     section: str = "all",
-    user_id: int | None = None,
-    db: Session = Depends(get_db),
     user=Depends(require_auth),
 ):
-    """Queue an archive export for the signed-in user or an admin target."""
+    """Queue an archive export for the signed-in user only."""
 
     if section not in SECTION_LABELS:
         raise HTTPException(
@@ -1670,38 +1662,13 @@ def create_archive_job(
             detail="지원하지 않는 내보내기 범위입니다.",
         )
 
-    if is_admin(user):
-        if user_id is None:
-            scope_user_id = None
-            scope_label = "전체"
-            label = SECTION_LABELS[section]
-        else:
-            target = db.get(User, user_id)
-            if target is None:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail="내보낼 사용자를 찾을 수 없습니다.",
-                )
-            scope_user_id = target.id
-            scope_label = target.username
-            label = f"{SECTION_LABELS[section]} · {target.username}"
-    else:
-        if user_id is not None and user_id != user.id:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="다른 사용자의 기록은 내보낼 수 없습니다.",
-            )
-        scope_user_id = user.id
-        scope_label = user.username
-        label = f"{SECTION_LABELS[section]} · {user.username}"
-
     try:
         return _get_job_manager().create(
             section,
-            label,
+            f"{SECTION_LABELS[section]} · {user.username}",
             user.username,
-            user_id=scope_user_id,
-            scope_label=scope_label,
+            user_id=user.id,
+            scope_label=user.username,
         )
     except ArchiveJobBusy:
         raise HTTPException(
@@ -1723,7 +1690,7 @@ def create_archive_job(
 def list_archive_jobs(user=Depends(require_auth)):
     """List the signed-in user's recent archive jobs."""
 
-    return _get_job_manager().list(user.username)
+    return _get_job_manager().list(user.username, user_id=user.id)
 
 
 @router.get("/jobs/{job_id}")
@@ -1733,7 +1700,7 @@ def get_archive_job(
 ):
     """Return one of the signed-in user's archive jobs."""
 
-    job = _get_job_manager().get(job_id, user.username)
+    job = _get_job_manager().get(job_id, user.username, user_id=user.id)
     if job is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -1749,7 +1716,11 @@ def download_archive_job(
 ):
     """Download one of the signed-in user's completed archive ZIPs."""
 
-    found = _get_job_manager().download(job_id, user.username)
+    found = _get_job_manager().download(
+        job_id,
+        user.username,
+        user_id=user.id,
+    )
     if found is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
