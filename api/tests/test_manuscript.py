@@ -452,6 +452,37 @@ class ManuscriptTests(unittest.TestCase):
         with self.assertRaises(HTTPException):
             crud.convert_folder_to_document(self.db, folder_id, self.owner.id)
 
+    def test_parent_document_combines_with_children(self) -> None:
+        project = self._project()
+        parent = self._node(project, "부모 문서", body="<p>부모</p>")
+        child = self._node(
+            project, "하위 문서", parent_id=parent.id, body="<p>하위</p>"
+        )
+
+        docs = crud.get_scrivenings(
+            self.db, self.owner.id, root_id=parent.id
+        )
+        self.assertEqual([doc["id"] for doc in docs], [parent.id, child.id])
+
+        result = crud.save_combined(
+            self.db,
+            parent.id,
+            schemas.CombinedSaveRequest(
+                bodies={
+                    parent.id: "<p>새 부모</p>",
+                    child.id: "<p>새 하위</p>",
+                },
+                synopsis="부모 요약",
+            ),
+            self.owner.id,
+        )
+        self.assertEqual(result["saved"], 2)
+        self.db.refresh(parent)
+        self.db.refresh(child)
+        self.assertEqual(parent.body, "<p>새 부모</p>")
+        self.assertEqual(parent.synopsis, "부모 요약")
+        self.assertEqual(child.body, "<p>새 하위</p>")
+
     def test_scrivenings_can_read_deleted_folder(self) -> None:
         project = self._project()
         folder_id = self._node(project, "폴더", node_type="folder").id

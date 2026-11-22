@@ -463,32 +463,29 @@ def convert_folder_to_document(
 
 def save_combined(
     db: Session,
-    folder_id: int,
+    root_id: int,
     payload: schemas.CombinedSaveRequest,
     user_id: int,
 ) -> dict:
-    """Save every document body plus the folder metadata in one commit.
+    """Save every document body plus the root metadata in one commit.
 
     Validating all nodes before writing prevents a partial save when one id is
     stale or belongs to another project. A database error still triggers a
-    rollback so the folder view cannot show bodies that were never persisted.
+    rollback so the combined view cannot show bodies that were never persisted.
     """
-    folder = _get_node_or_404(db, folder_id, user_id)
-    if folder.node_type != "folder":
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "합본 저장은 폴더에서만 가능합니다.")
-
+    root = _get_node_or_404(db, root_id, user_id)
     data = payload.model_dump(exclude_unset=True)
     bodies = data.pop("bodies", {})
-    folder_fields = {
+    root_fields = {
         key: data[key] for key in ("subtitle", "synopsis", "notes") if key in data
     }
-    if not bodies and not folder_fields:
+    if not bodies and not root_fields:
         return {"saved": 0}
 
     updates: list[tuple[ManuscriptNode, str]] = []
     for node_id, body in bodies.items():
         node = _get_node_or_404(db, node_id, user_id)
-        if node.project_id != folder.project_id:
+        if node.project_id != root.project_id:
             raise HTTPException(
                 status.HTTP_400_BAD_REQUEST, "다른 프로젝트의 문서는 저장할 수 없습니다."
             )
@@ -502,8 +499,8 @@ def save_combined(
         for node, body in updates:
             node.body = body
             node.char_count_with_spaces, node.char_count_plain = count_characters(body)
-        for key, value in folder_fields.items():
-            setattr(folder, key, value)
+        for key, value in root_fields.items():
+            setattr(root, key, value)
         db.commit()
     except Exception:
         db.rollback()

@@ -460,7 +460,10 @@ export default function ManuscriptWorkspace() {
     setMobilePanel(null);
     selectNode(node.id);
     setScrivenings(null);
-    if (node.node_type === "folder") void openScrivenings(node.id);
+    const hasChildren = (childrenMap.get(node.id) ?? []).length > 0;
+    if (node.node_type === "folder" || hasChildren) {
+      void openScrivenings(node.id);
+    }
   };
 
   const handleOpenTrashItem = (item: TrashItem) => {
@@ -724,6 +727,7 @@ export default function ManuscriptWorkspace() {
 
   const convertToDocument = async () => {
     if (!selected || selected.node_type !== "folder") return;
+    const hadChildren = (childrenMap.get(selected.id) ?? []).length > 0;
     if (!(await flushAutosave())) return;
     try {
       const node = await apiFetch<ManuscriptNode>(
@@ -743,6 +747,7 @@ export default function ManuscriptWorkspace() {
       setScrivDirty(false);
       saveViewRef.current.folderActive = false;
       if (projectId) await loadTree(projectId);
+      if (hadChildren) await openScrivenings(node.id);
       notify("문서로 변환했습니다.");
     } catch (error) {
       notify((error as Error).message, "error");
@@ -812,9 +817,12 @@ export default function ManuscriptWorkspace() {
       const docs = await apiFetch<ScrivDoc[]>(
         `/api/manuscript/scrivenings?root_id=${rootId}`,
       );
-      // The API already sorts siblings, but keep the binder as the single
-      // source of truth so both views can never drift apart.
-      const binderIds = collectBinderChapterIds(rootId, childrenMap);
+      // The API returns a document root before its descendants. Keep the
+      // binder as the source of truth for the rest of the ordering.
+      const binderIds = [
+        ...(docs.some((doc) => doc.id === rootId) ? [rootId] : []),
+        ...collectBinderChapterIds(rootId, childrenMap),
+      ];
       const byId = new Map(docs.map((doc) => [doc.id, doc]));
       const ordered = binderIds
         .map((id) => byId.get(id))
@@ -848,7 +856,12 @@ export default function ManuscriptWorkspace() {
       return;
     }
     selectNode(lastId);
-    if (lastNode.node_type === "folder") void openScrivenings(lastId);
+    if (
+      lastNode.node_type === "folder" ||
+      (childrenMap.get(lastId) ?? []).length > 0
+    ) {
+      void openScrivenings(lastId);
+    }
   }, [projectId, tree, selectNode, openScrivenings]);
 
   const saveCombined = async (silent = false): Promise<boolean> => {
@@ -897,7 +910,11 @@ export default function ManuscriptWorkspace() {
                 form,
               );
             }
-            notify("폴더를 저장했습니다.");
+            notify(
+              selected.node_type === "folder"
+                ? "폴더를 저장했습니다."
+                : "문서를 저장했습니다.",
+            );
           }
           return true;
         } catch (error) {
@@ -1455,7 +1472,9 @@ export default function ManuscriptWorkspace() {
                         : autoSaving
                           ? "자동 저장 중…"
                           : scrivDirty || dirty
-                            ? "폴더 저장"
+                            ? selected.node_type === "folder"
+                              ? "폴더 저장"
+                              : "문서 저장"
                             : "저장됨"}
                     </button>
                   ) : (
@@ -1489,13 +1508,13 @@ export default function ManuscriptWorkspace() {
                     />
                   </label>
                 ) : null}
-                {selected.node_type === "folder" ? (
+                {scrivenings !== null ? (
                   <label className="ms-inspector__field">
                     시놉시스
                     <textarea
                       value={form.synopsis}
                       rows={4}
-                      placeholder="폴더 시놉시스를 입력하세요"
+                      placeholder="시놉시스를 입력하세요"
                       onChange={(event) => {
                         setForm({ ...form, synopsis: event.target.value });
                         setDirty(true);
