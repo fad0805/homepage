@@ -395,7 +395,6 @@ export default function AdminIllustrations() {
     src: string;
     fileName: string;
   } | null>(null);
-  const [savingRepresentative, setSavingRepresentative] = useState(false);
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
@@ -421,10 +420,20 @@ export default function AdminIllustrations() {
   const [modalDragOverIndex, setModalDragOverIndex] = useState<
     number | null
   >(null);
-  const [addingImages, setAddingImages] = useState(false);
-  const [deletingImageId, setDeletingImageId] = useState<number | null>(
-    null,
+  const [pendingEditFiles, setPendingEditFiles] = useState<File[]>([]);
+  const [pendingEditRanges, setPendingEditRanges] = useState<
+    Map<File, VideoRange>
+  >(() => new Map());
+  const [pendingEditPreviews, setPendingEditPreviews] = useState<Preview[]>(
+    [],
   );
+  const [pendingDeletedImageIds, setPendingDeletedImageIds] = useState<
+    Set<number>
+  >(() => new Set());
+  const [pendingRepresentativeFile, setPendingRepresentativeFile] =
+    useState<File | null>(null);
+  const [pendingRepresentativePreview, setPendingRepresentativePreview] =
+    useState<string | null>(null);
   const [modalNotice, setModalNotice] = useState<Notice | null>(null);
   const [notice, setNotice] = useState<Notice | null>(null);
   const [issuedCode, setIssuedCode] = useState<string | null>(null);
@@ -535,6 +544,30 @@ export default function AdminIllustrations() {
       }
     };
   }, [createRepresentativePreview]);
+
+  useEffect(() => {
+    const next = pendingEditFiles.map((file) => ({
+      file,
+      url: URL.createObjectURL(file),
+      range: pendingEditRanges.get(file),
+    }));
+    setPendingEditPreviews(next);
+    return () => {
+      next.forEach((preview) => URL.revokeObjectURL(preview.url));
+    };
+  }, [pendingEditFiles, pendingEditRanges]);
+
+  useEffect(() => {
+    if (editingItem) return;
+    setPendingEditFiles([]);
+    setPendingEditRanges(new Map());
+    setPendingDeletedImageIds(new Set());
+    setPendingRepresentativeFile(null);
+    setPendingRepresentativePreview((current) => {
+      if (current) URL.revokeObjectURL(current);
+      return null;
+    });
+  }, [editingItem]);
 
   useEffect(() => {
     if (files.length === 0) {
@@ -864,6 +897,14 @@ export default function AdminIllustrations() {
         images: [...(detail.images ?? [])],
       });
       setEditingTagsInput((detail.tags ?? []).join(", "));
+      setPendingEditFiles([]);
+      setPendingEditRanges(new Map());
+      setPendingDeletedImageIds(new Set());
+      setPendingRepresentativeFile(null);
+      setPendingRepresentativePreview((current) => {
+        if (current) URL.revokeObjectURL(current);
+        return null;
+      });
       setModalNotice(null);
       setModalDragIndex(null);
       setModalDragOverIndex(null);
@@ -913,23 +954,6 @@ export default function AdminIllustrations() {
     });
   };
 
-  const applyMediaUpdate = (updated: IllustrationDetailItem) => {
-    const mediaPatch = {
-      images: updated.images,
-      image_count: updated.image_count,
-      representative_image_id: updated.representative_image_id,
-      representative_url: updated.representative_url,
-      upload_status: updated.upload_status,
-      updated_at: updated.updated_at,
-    };
-    setItems((previous) =>
-      previous.map((item) =>
-        item.id === updated.id ? { ...item, ...mediaPatch } : item,
-      ),
-    );
-    return mediaPatch;
-  };
-
   const handleRepresentativeCropComplete = async (
     results: CroppedImageResult[],
   ) => {
@@ -957,105 +981,50 @@ export default function AdminIllustrations() {
       return;
     }
 
-    setSavingRepresentative(true);
-    setModalNotice(null);
-    try {
-      const formData = new FormData();
-      formData.append("file", result.file);
-      const updated = await apiFetch<IllustrationDetailItem>(
-        `/api/illustrations/${editingItem.id}/representative`,
-        { method: "PUT", body: formData },
-      );
-      const mediaPatch = applyMediaUpdate(updated);
-      setEditingItem((current) =>
-        current ? { ...current, ...mediaPatch } : current,
-      );
-      setModalNotice({
-        type: "success",
-        text: "대표 이미지를 변경했습니다.",
-      });
-    } catch (error) {
-      setModalNotice({
-        type: "error",
-        text:
-          error instanceof Error
-            ? error.message
-            : "대표 이미지를 업로드하지 못했습니다.",
-      });
-    } finally {
-      setSavingRepresentative(false);
-      closeRepresentativeCrop();
-    }
+    const preview = URL.createObjectURL(result.file);
+    setPendingRepresentativeFile(result.file);
+    setPendingRepresentativePreview((current) => {
+      if (current) URL.revokeObjectURL(current);
+      return preview;
+    });
+    setEditingItem((current) =>
+      current
+        ? {
+            ...current,
+            representative_url: preview,
+            representative_image_id: null,
+          }
+        : current,
+    );
+    setModalNotice({
+      type: "success",
+      text: "대표 이미지는 삽화를 저장할 때 반영됩니다.",
+    });
+    closeRepresentativeCrop();
   };
 
-  const uploadEditingFiles = async (
+  const appendPendingEditFiles = (
     media: File[],
     ranges: Map<File, VideoRange> = new Map(),
   ) => {
-    if (!editingItem || addingImages) return;
+    if (media.length === 0) return;
+    const nextRanges = new Map(pendingEditRanges);
+    ranges.forEach((range, file) => nextRanges.set(file, range));
+    setPendingEditRanges(nextRanges);
+    setPendingEditFiles((current) => [...current, ...media]);
+  };
 
-    const targetId = editingItem.id;
-    const expectedImages = editingItem.images.length + media.length;
-    setAddingImages(true);
-    setModalNotice(null);
-
-    try {
-      const sessionId = await stageFiles({
-        files: media,
-        ranges,
-        purpose: "append",
-        illustrationId: targetId,
-        onChunk: (file, index, total) =>
-          setSendingChunk({ file, index, total }),
-      });
-      setModalNotice({
-        type: "success",
-        text: "모든 파일을 받았습니다. 서버에서 처리하는 중입니다...",
-      });
-      const finalized = await finalizeStagedUpload(sessionId);
-      if (!("accepted" in finalized)) {
-        throw new Error("파일 추가를 시작하지 못했습니다.");
-      }
-      const updated = await waitForAppendImages(targetId, expectedImages);
-      const mediaPatch = applyMediaUpdate(updated);
-      setEditingItem((current) => {
-        if (!current) return current;
-        const existingIds = new Set(current.images.map((image) => image.id));
-        const added = updated.images.filter(
-          (image) => !existingIds.has(image.id),
-        );
-        return { ...current, ...mediaPatch, images: [...current.images, ...added] };
-      });
-      setModalNotice(
-        updated.upload_status === "video_failed"
-          ? {
-              type: "error",
-              text: "영상 변환에 실패했습니다. 다른 파일은 저장되었고 삽화는 비공개로 유지됩니다.",
-            }
-          : {
-              type: "success",
-              text: `${media.length}개의 파일을 추가했습니다.`,
-            },
-      );
-    } catch (error) {
-      setModalNotice({
-        type: "error",
-        text:
-          error instanceof Error
-            ? error.message
-            : "파일을 추가하지 못했습니다.",
-      });
-    } finally {
-      setAddingImages(false);
-      setSendingChunk(null);
-      if (modalFileInputRef.current) {
-        modalFileInputRef.current.value = "";
-      }
-    }
+  const removePendingEditFile = (file: File) => {
+    setPendingEditFiles((current) => current.filter((item) => item !== file));
+    setPendingEditRanges((current) => {
+      const next = new Map(current);
+      next.delete(file);
+      return next;
+    });
   };
 
   const addImagesToEditing = async (list: FileList | null) => {
-    if (!editingItem || !list || addingImages || inspectingVideos) return;
+    if (!editingItem || !list || inspectingVideos) return;
 
     const media = Array.from(list).filter(isIllustrationFile);
     if (media.length === 0) return;
@@ -1079,7 +1048,11 @@ export default function AdminIllustrations() {
         openVideoTrim("edit", media, longVideos);
         return;
       }
-      await uploadEditingFiles(media);
+      appendPendingEditFiles(media);
+      setModalNotice({
+        type: "success",
+        text: `${media.length}개의 파일을 저장 대기했습니다. 삽화를 저장하면 반영됩니다.`,
+      });
     } finally {
       setInspectingVideos(false);
     }
@@ -1104,7 +1077,11 @@ export default function AdminIllustrations() {
     if (request.target === "create") {
       appendSelectedFiles(request.files, ranges);
     } else {
-      void uploadEditingFiles(request.files, ranges);
+      appendPendingEditFiles(request.files, ranges);
+      setModalNotice({
+        type: "success",
+        text: "영상을 저장 대기했습니다. 삽화를 저장하면 반영됩니다.",
+      });
     }
     setVideoTrimRequest(null);
   };
@@ -1144,52 +1121,32 @@ export default function AdminIllustrations() {
     });
   };
 
-  const removeImageFromEditing = async (
+  const removeImageFromEditing = (
     image: IllustrationDetailItem["images"][number],
   ) => {
-    if (
-      !editingItem ||
-      deletingImageId !== null ||
-      editingItem.images.length <= 1
-    ) {
-      return;
-    }
+    if (!editingItem || editingItem.images.length <= 1) return;
     if (!window.confirm("이 사진을 삭제할까요?")) return;
 
-    setDeletingImageId(image.id);
-    setModalNotice(null);
-
-    try {
-      const updated = await apiFetch<IllustrationDetailItem>(
-        `/api/illustrations/${editingItem.id}/images/${image.id}`,
-        { method: "DELETE" },
-      );
-      const mediaPatch = applyMediaUpdate(updated);
-      setEditingItem((current) => {
-        if (!current) return current;
-        return {
-          ...current,
-          ...mediaPatch,
-          images: current.images
-            .filter((item) => item.id !== image.id)
-            .map((item, index) => ({ ...item, order: index })),
-        };
-      });
-      setModalNotice({
-        type: "success",
-        text: "사진을 삭제했습니다.",
-      });
-    } catch (error) {
-      setModalNotice({
-        type: "error",
-        text:
-          error instanceof Error
-            ? error.message
-            : "사진을 삭제하지 못했습니다.",
-      });
-    } finally {
-      setDeletingImageId(null);
-    }
+    setPendingDeletedImageIds((current) => new Set(current).add(image.id));
+    setEditingItem((current) => {
+      if (!current) return current;
+      const removesRepresentative =
+        current.representative_image_id === image.id;
+      return {
+        ...current,
+        images: current.images
+          .filter((item) => item.id !== image.id)
+          .map((item, index) => ({ ...item, order: index })),
+        image_count: Math.max(0, current.images.length - 1),
+        ...(removesRepresentative
+          ? { representative_image_id: null, representative_url: null }
+          : {}),
+      };
+    });
+    setModalNotice({
+      type: "success",
+      text: "삭제할 사진으로 표시했습니다. 삽화를 저장하면 반영됩니다.",
+    });
   };
 
   const saveEditing = async () => {
@@ -1211,25 +1168,81 @@ export default function AdminIllustrations() {
       return;
     }
 
-    setSavingId(editingItem.id);
+    const targetId = editingItem.id;
+    const deleteIds = [...pendingDeletedImageIds];
+    const keepIds = editingItem.images.map((image) => image.id);
+    const originalCount = keepIds.length + deleteIds.length;
+    const expectedImages = originalCount + pendingEditFiles.length;
+
+    setSavingId(targetId);
     setModalNotice(null);
     setNotice(null);
 
     try {
-      await apiFetch(
-        `/api/illustrations/${editingItem.id}/images/reorder`,
-        {
-          method: "PUT",
-          body: JSON.stringify({
-            items: editingItem.images.map((image, index) => ({
-              id: image.id,
-              order: index,
-            })),
-          }),
-        },
+      // Transfer bytes first. Staging alone does not change the illustration.
+      let stagedSessionId: string | null = null;
+      if (pendingEditFiles.length > 0) {
+        stagedSessionId = await stageFiles({
+          files: pendingEditFiles,
+          ranges: pendingEditRanges,
+          purpose: "append",
+          illustrationId: targetId,
+          onChunk: (_file, index, total) =>
+            setModalNotice({
+              type: "success",
+              text: `파일 전송 중 (${index}/${total})`,
+            }),
+        });
+      }
+
+      if (stagedSessionId) {
+        setModalNotice({
+          type: "success",
+          text: "모든 파일을 받았습니다. 서버에서 처리하는 중입니다...",
+        });
+        const finalized = await finalizeStagedUpload(stagedSessionId);
+        if (!("accepted" in finalized)) {
+          throw new Error("파일 추가를 시작하지 못했습니다.");
+        }
+        await waitForAppendImages(targetId, expectedImages);
+      }
+
+      // Add first so replacing the only image never leaves the group empty.
+      for (const imageId of deleteIds) {
+        await apiFetch(
+          `/api/illustrations/${targetId}/images/${imageId}`,
+          { method: "DELETE" },
+        );
+      }
+
+      if (pendingRepresentativeFile) {
+        const formData = new FormData();
+        formData.append("file", pendingRepresentativeFile);
+        await apiFetch<IllustrationDetailItem>(
+          `/api/illustrations/${targetId}/representative`,
+          { method: "PUT", body: formData },
+        );
+      }
+
+      const latest = await apiFetch<IllustrationDetailItem>(
+        `/api/illustrations/${targetId}?mine=true`,
       );
+      const localIds = new Set(keepIds);
+      const addedIds = latest.images
+        .filter((image) => !localIds.has(image.id))
+        .map((image) => image.id);
+      const orderedIds = [...keepIds, ...addedIds].filter(
+        (id) => !deleteIds.includes(id),
+      );
+      await apiFetch(`/api/illustrations/${targetId}/images/reorder`, {
+        method: "PUT",
+        body: JSON.stringify({
+          items: orderedIds.map((id, index) => ({ id, order: index })),
+        }),
+      });
+
       const updated = await apiFetch<IllustrationDetailItem>(
-        `/api/illustrations/${editingItem.id}`,
+        `/api/illustrations/${targetId}`,
         {
           method: "PUT",
           body: JSON.stringify({
@@ -1260,6 +1273,7 @@ export default function AdminIllustrations() {
       });
     } finally {
       setSavingId(null);
+      setSendingChunk(null);
     }
   };
 
@@ -2327,10 +2341,9 @@ export default function AdminIllustrations() {
                     onClick={() =>
                       modalRepresentativeInputRef.current?.click()
                     }
-                    disabled={savingRepresentative}
                   >
-                    {savingRepresentative
-                      ? "업로드 중..."
+                    {pendingRepresentativeFile
+                      ? "대표 이미지 다시 선택"
                       : "대표 이미지 변경"}
                   </button>
                   <input
@@ -2346,7 +2359,9 @@ export default function AdminIllustrations() {
                     }
                   />
                   <p className="admin-illustrations-modal__cover-hint">
-                    정사각형(1:1)으로 자동 크롭됩니다.
+                    {pendingRepresentativeFile
+                      ? "저장할 때 반영됩니다."
+                      : "정사각형(1:1)으로 자동 크롭됩니다."}
                   </p>
                 </div>
                 <div className="admin-illustrations-modal__fields">
@@ -2448,14 +2463,16 @@ export default function AdminIllustrations() {
                     <p>사진을 드래그해 순서를 바꾸세요.</p>
                   </div>
                   <div className="admin-illustrations-modal__images-actions">
-                    <span>{editingItem.image_count}장</span>
+                    <span>
+                      {editingItem.image_count + pendingEditFiles.length}장
+                    </span>
                     <button
                       type="button"
                       className="admin-button"
                       onClick={() => modalFileInputRef.current?.click()}
-                      disabled={addingImages}
+                      disabled={inspectingVideos || savingId !== null}
                     >
-                      {addingImages ? "추가 중..." : "사진 추가"}
+                      사진 추가
                     </button>
                     <input
                       ref={modalFileInputRef}
@@ -2469,6 +2486,14 @@ export default function AdminIllustrations() {
                   </div>
                 </div>
 
+                {pendingEditFiles.length > 0 ||
+                pendingDeletedImageIds.size > 0 ||
+                pendingRepresentativeFile ? (
+                  <p className="admin-illustrations-notice">
+                    저장하지 않은 파일 변경이 있습니다. 아래 저장 버튼을 누르면
+                    반영됩니다.
+                  </p>
+                ) : null}
                 {editingItem.upload_status === "video_failed" ? (
                   <p className="admin-illustrations-notice is-error">
                     영상 변환에 실패해 비공개로 저장했습니다. 영상을 다시
@@ -2546,20 +2571,48 @@ export default function AdminIllustrations() {
                         className="admin-illustrations-modal__image-delete"
                         draggable={false}
                         aria-label={`${index + 1}번째 사진 삭제`}
-                        disabled={
-                          editingItem.images.length <= 1 ||
-                          deletingImageId !== null
-                        }
+                        disabled={editingItem.images.length <= 1}
                         onClick={(event) => {
                           event.stopPropagation();
-                          void removeImageFromEditing(image);
+                          removeImageFromEditing(image);
                         }}
                       >
-                        {deletingImageId === image.id ? "…" : "×"}
+                        ×
                       </button>
                     </div>
                   ))}
                 </div>
+
+                {pendingEditPreviews.length > 0 ? (
+                  <div className="admin-illustrations-modal__image-list">
+                    {pendingEditPreviews.map((preview) => (
+                      <div
+                        className="admin-illustrations-modal__image is-pending"
+                        key={preview.url}
+                      >
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={preview.url}
+                          alt="저장 대기 중인 파일"
+                          loading="lazy"
+                          decoding="async"
+                        />
+                        <span className="admin-illustrations-modal__image-order">
+                          저장 대기
+                        </span>
+                        <button
+                          type="button"
+                          className="admin-illustrations-modal__image-delete"
+                          aria-label="저장 대기 파일 취소"
+                          disabled={savingId !== null}
+                          onClick={() => removePendingEditFile(preview.file)}
+                        >
+                          ×
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
               </div>
             </div>
 

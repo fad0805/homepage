@@ -1163,6 +1163,11 @@
     border-color: var(--admin-primary);
   }
 
+  &.is-pending {
+    border-color: var(--admin-primary);
+    cursor: default;
+  }
+
   > img {
     display: block;
     width: 100%;
