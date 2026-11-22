@@ -1676,6 +1676,54 @@ class ManuscriptTests(unittest.TestCase):
         self.assertEqual(chapter.images, [png])
         self.assertEqual(chapter.image_sizes, [(120, 80)])
 
+    def test_export_scrivener_selected_folder_includes_descendants(self) -> None:
+        project = self._project()
+        folder = self._node(project, "1권", node_type="folder")
+        self._node(project, "1장", parent_id=folder.id, body="<p>본문</p>")
+        sibling = self._node(project, "2권", node_type="folder")
+        self._node(project, "2장", parent_id=sibling.id, body="<p>제외</p>")
+        self.db.commit()
+
+        data, filename = crud.export_scrivener(
+            self.db, project.id, self.owner.id, [folder.id]
+        )
+        source_title, parsed = parse_scrivener_zip(data)
+        self.assertEqual(source_title, f"{project.title}-부분내보내기")
+        self.assertIn("부분내보내기", filename)
+        self.assertEqual([node.title for node in parsed], ["1권", "1장"])
+        self.assertEqual(parsed[1].parent_index, 0)
+        self.assertEqual(parsed[1].body, "<p>본문</p>")
+
+    def test_export_scrivener_selected_chapter_detaches_missing_parent(self) -> None:
+        project = self._project()
+        folder = self._node(project, "폴더", node_type="folder")
+        chapter = self._node(
+            project, "선택", parent_id=folder.id, body="<p>선택 본문</p>"
+        )
+        self._node(project, "제외", parent_id=folder.id, body="<p>제외 본문</p>")
+        self.db.commit()
+
+        data, _ = crud.export_scrivener(
+            self.db, project.id, self.owner.id, [chapter.id]
+        )
+        _, parsed = parse_scrivener_zip(data)
+        self.assertEqual([node.title for node in parsed], ["선택"])
+        self.assertIsNone(parsed[0].parent_index)
+        self.assertEqual(parsed[0].body, "<p>선택 본문</p>")
+
+    def test_export_scrivener_rejects_empty_or_unknown_selection(self) -> None:
+        project = self._project()
+        self._node(project, "문서", body="<p>본문</p>")
+        self.db.commit()
+
+        with self.assertRaises(HTTPException) as empty:
+            crud.export_scrivener(self.db, project.id, self.owner.id, [])
+        self.assertEqual(empty.exception.status_code, 400)
+
+        with self.assertRaises(HTTPException) as unknown:
+            crud.export_scrivener(self.db, project.id, self.owner.id, [99999])
+        self.assertEqual(unknown.exception.status_code, 400)
+
 
 if __name__ == "__main__":
     unittest.main()

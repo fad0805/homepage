@@ -657,6 +657,104 @@ html[data-workspace='manuscript'] .ms-editor--workspace .ms-editor__surface .tip
   &--search {
     width: min(44rem, 100%);
   }
+
+  &--export {
+    width: min(34rem, 100%);
+  }
+}
+
+.ms-export-section {
+  border-top: 1px solid var(--ms-border);
+  margin-top: 0.9rem;
+  padding-top: 0.9rem;
+
+  &__head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.75rem;
+    margin-bottom: 0.55rem;
+
+    strong {
+      font-size: 0.85rem;
+    }
+
+    span {
+      color: var(--ms-muted);
+      font-size: 0.72rem;
+    }
+  }
+}
+
+.ms-export-controls {
+  display: flex;
+  gap: 0.4rem;
+  margin-bottom: 0.45rem;
+
+  button {
+    border: 1px solid var(--ms-border);
+    border-radius: 0.4rem;
+    background: transparent;
+    color: var(--ms-muted);
+    font-family: inherit;
+    font-size: 0.72rem;
+    padding: 0.2rem 0.5rem;
+    cursor: pointer;
+
+    &:disabled {
+      opacity: 0.5;
+      cursor: default;
+    }
+  }
+}
+
+.ms-export-tree {
+  max-height: 16rem;
+  overflow-y: auto;
+  border: 1px solid var(--ms-border);
+  border-radius: 0.45rem;
+  padding: 0.35rem;
+}
+
+.ms-export-row {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-height: 1.7rem;
+  font-size: 0.78rem;
+
+  &__toggle {
+    flex: none;
+    width: 1.1rem;
+    border: 0;
+    background: transparent;
+    color: var(--ms-muted);
+    font-family: inherit;
+    font-size: 0.7rem;
+    text-align: center;
+    padding: 0;
+    cursor: pointer;
+  }
+
+  &__title {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &__type {
+    flex: none;
+    color: var(--ms-muted);
+    font-size: 0.68rem;
+  }
+}
+
+.ms-export-empty {
+  margin: 0;
+  color: var(--ms-muted);
+  font-size: 0.78rem;
+  padding: 0.5rem;
 }
 
 .ms-modal__header {

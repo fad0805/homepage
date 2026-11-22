@@ -8,6 +8,7 @@ import { apiFetch } from "@/lib/api";
 
 import { ManuscriptBinder } from "./manuscript-binder";
 import { ManuscriptBinderMenu } from "./manuscript-binder-menu";
+import { ManuscriptExportModal } from "./manuscript-export-modal";
 import type { MobilePanel, ManuscriptNode, TrashItem } from "./manuscript-types";
 
 import "@/public/styles/manuscript.scss";
@@ -309,6 +310,7 @@ export default function ManuscriptWorkspace() {
   const [form, setForm] = useState({ ...EMPTY_FORM });
   const [dirty, setDirty] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchResult[]>([]);
   const [trashExpanded, setTrashExpanded] = useState(false);
@@ -1182,6 +1184,13 @@ export default function ManuscriptWorkspace() {
           </span>
         )}
         <div className="ms-topbar__actions">
+          <button
+            type="button"
+            onClick={() => setExportOpen(true)}
+            disabled={!projectId}
+          >
+            원고 내보내기
+          </button>
           <button type="button" onClick={() => setSearchOpen(true)}>
             전체 검색
           </button>
@@ -1578,6 +1587,19 @@ export default function ManuscriptWorkspace() {
             </div>
           </div>
         </div>
+      ) : null}
+
+      {exportOpen && projectId ? (
+        <ManuscriptExportModal
+          projectId={projectId}
+          projectTitle={
+            projects.find((project) => project.id === projectId)?.title ?? "원고"
+          }
+          tree={tree}
+          onClose={() => setExportOpen(false)}
+          onBeforeExport={flushAutosave}
+          notify={notify}
+        />
       ) : null}
 
     </div>

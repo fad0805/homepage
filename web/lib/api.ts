@@ -87,11 +87,13 @@ export async function apiFetchWithTotal<T>(
 /** Download a binary response while sharing the API's auth/error handling. */
 export async function apiDownload(
   url: string,
+  init: RequestInit = {},
 ): Promise<{ blob: Blob; filename: string | null }> {
-  let response = await fetch(url, { credentials: "include" });
+  const request = () => fetch(url, { ...init, credentials: "include" });
+  let response = await request();
   if (response.status === 401) {
     await new Promise((resolve) => setTimeout(resolve, 300));
-    response = await fetch(url, { credentials: "include" });
+    response = await request();
   }
   if (response.status === 401) {
     window.location.href = "/signin";

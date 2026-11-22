@@ -86,13 +86,7 @@ async def import_scrivener(
     return project
 
 
-@router.get("/projects/{project_id}/scrivener/export")
-def export_scrivener(
-    project_id: int,
-    db: Session = Depends(get_db),
-    user=Depends(require_auth),
-):
-    data, filename = crud.export_scrivener(db, project_id, user.id)
+def _zip_download(data: bytes, filename: str) -> Response:
     return Response(
         content=data,
         media_type="application/zip",
@@ -102,6 +96,32 @@ def export_scrivener(
             )
         },
     )
+
+
+@router.get("/projects/{project_id}/scrivener/export")
+def export_scrivener(
+    project_id: int,
+    db: Session = Depends(get_db),
+    user=Depends(require_auth),
+):
+    data, filename = crud.export_scrivener(db, project_id, user.id)
+    return _zip_download(data, filename)
+
+
+@router.post("/projects/{project_id}/scrivener/export")
+def export_scrivener_selection(
+    project_id: int,
+    payload: schemas.ScrivenerExportRequest,
+    db: Session = Depends(get_db),
+    user=Depends(require_auth),
+):
+    data, filename = crud.export_scrivener(
+        db,
+        project_id,
+        user.id,
+        payload.node_ids,
+    )
+    return _zip_download(data, filename)
 
 
 @router.get("/projects/{project_id}/tree")

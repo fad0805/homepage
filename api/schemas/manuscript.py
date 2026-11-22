@@ -70,6 +70,12 @@ class RestoreRequest(BaseModel):
     ids: list[int] = Field(default_factory=list)
 
 
+class ScrivenerExportRequest(BaseModel):
+    """Optional node selection; omitting ``node_ids`` exports the whole project."""
+
+    node_ids: list[int] | None = None
+
+
 class PublishRequest(BaseModel):
     """Publish a manuscript chapter into a book's table of contents.
 

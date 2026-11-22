@@ -1472,10 +1472,11 @@ def export_scrivener(
     db: Session,
     project_id: int,
     user_id: int,
+    node_ids: list[int] | None = None,
 ) -> tuple[bytes, str]:
-    """Return a zipped Scrivener project for the given manuscript project."""
+    """Return a zipped Scrivener project, optionally for selected nodes."""
     project = _get_project_or_404(db, project_id, user_id)
-    nodes = (
+    all_nodes = (
         db.query(ManuscriptNode)
         .filter(
             ManuscriptNode.project_id == project_id,
@@ -1485,6 +1486,37 @@ def export_scrivener(
         .order_by(ManuscriptNode.position.asc(), ManuscriptNode.id.asc())
         .all()
     )
+    nodes = all_nodes
+    export_title = project.title
+    if node_ids is not None:
+        requested = set(node_ids)
+        if not requested:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="내보낼 원고를 선택해주세요.",
+            )
+        by_id = {node.id: node for node in all_nodes}
+        unknown = requested - by_id.keys()
+        if unknown:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="선택한 원고를 찾을 수 없습니다.",
+            )
+
+        children: dict[int | None, list[int]] = defaultdict(list)
+        for node in all_nodes:
+            children[node.parent_id].append(node.id)
+        included = set(requested)
+        queue = deque(requested)
+        while queue:
+            current = queue.popleft()
+            for child_id in children.get(current, []):
+                if child_id not in included:
+                    included.add(child_id)
+                    queue.append(child_id)
+
+        nodes = [node for node in all_nodes if node.id in included]
+        export_title = f"{project.title}-부분내보내기"
     live_ids = {node.id for node in nodes}
 
     def load_body_image(src: str) -> bytes | None:
@@ -1513,6 +1545,6 @@ def export_scrivener(
         for node in nodes
     ]
     return (
-        build_scrivener_zip(project.title, export_nodes),
-        safe_filename(project.title),
+        build_scrivener_zip(export_title, export_nodes),
+        safe_filename(export_title),
     )
