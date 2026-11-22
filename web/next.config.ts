@@ -20,9 +20,9 @@ const securityHeaders = [
 const nextConfig: NextConfig = {
   poweredByHeader: false,
   experimental: {
-    // Illustration uploads are proxied through Next.js to the API. Keep
-    // enough headroom for a batch of high-resolution photos.
-    middlewareClientMaxBodySize: "100mb",
+    // Illustration uploads are proxied through Next.js to the API. A raw
+    // video may be 200MB on its own, so allow several clips in one request.
+    middlewareClientMaxBodySize: 2 * 1024 * 1024 * 1024,
     // Next.js rewrites time out after 30s by default. A large Scrivener
     // import can take longer than that even though the API still succeeds.
     proxyTimeout: 5 * 60 * 1000,

@@ -42,6 +42,7 @@ const LIST_PAGE_SIZE = 12;
 const MAX_VIDEO_SECONDS = 10;
 const MAX_VIDEO_BYTES = 20 * 1024 * 1024;
 const MAX_VIDEO_UPLOAD_BYTES = 200 * 1024 * 1024;
+const MAX_PROXY_BODY_BYTES = 2 * 1024 * 1024 * 1024;
 const ILLUSTRATION_ACCEPT =
   "image/png,image/jpeg,image/webp,image/gif,video/mp4,video/quicktime,video/webm,video/x-m4v";
 const ILLUSTRATION_VIDEO_TYPES = new Set([
@@ -582,6 +583,17 @@ export default function AdminIllustrations() {
     const normalizedTitle = title.trim();
     if (!normalizedTitle) {
       setNotice({ type: "error", text: "삽화 제목을 입력해주세요." });
+      return;
+    }
+
+    const totalBytes =
+      files.reduce((sum, file) => sum + file.size, 0) +
+      (createRepresentativeFile?.size ?? 0);
+    if (totalBytes > MAX_PROXY_BODY_BYTES) {
+      setNotice({
+        type: "error",
+        text: "한 번에 올리는 파일 총 용량이 2GB를 넘었습니다. 나눠서 등록해주세요.",
+      });
       return;
     }
 
