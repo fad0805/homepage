@@ -1401,6 +1401,10 @@
     font-style: normal;
   }
 
+  &--time input {
+    width: 7.1rem;
+  }
+
   small {
     color: var(--admin-muted);
     font-size: 0.62rem;

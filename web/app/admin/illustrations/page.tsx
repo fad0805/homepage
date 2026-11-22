@@ -127,6 +127,26 @@ function startMax(candidate: VideoCandidateBase, seconds: number) {
   return Math.max(0, Math.floor(candidate.duration - seconds));
 }
 
+function formatClock(totalSeconds: number) {
+  const safe = Math.max(0, Math.floor(totalSeconds));
+  const hours = Math.floor(safe / 3600);
+  const minutes = Math.floor((safe % 3600) / 60);
+  const seconds = safe % 60;
+  return [hours, minutes, seconds]
+    .map((value) => String(value).padStart(2, "0"))
+    .join(":");
+}
+
+function parseClock(value: string) {
+  const parts = value.split(":").map(Number);
+  if (parts.length < 2 || parts.length > 3) return null;
+  if (parts.some((part) => !Number.isFinite(part) || part < 0)) return null;
+  const [hours, minutes, seconds] =
+    parts.length === 2 ? [0, parts[0], parts[1]] : parts;
+  if (minutes > 59 || seconds > 59) return null;
+  return hours * 3600 + minutes * 60 + seconds;
+}
+
 function trimDefault(candidate: VideoCandidateBase) {
   if (candidate.duration === null) return MAX_VIDEO_SECONDS;
   return Math.min(
@@ -2352,7 +2372,7 @@ export default function AdminIllustrations() {
                           {(candidate.file.size / (1024 * 1024)).toFixed(1)}MB
                         </span>
                         <span className="admin-illustrations-trim-modal__range">
-                          선택 {start}초 ~ {end}초
+                          선택 {formatClock(start)} ~ {formatClock(end)}
                         </span>
                       </div>
                       <div className="admin-illustrations-trim-modal__player">
@@ -2389,22 +2409,23 @@ export default function AdminIllustrations() {
                         </span>
                       </div>
                       <div className="admin-illustrations-trim-modal__inputs">
-                        <label className="admin-illustrations-trim-modal__input">
+                        <label className="admin-illustrations-trim-modal__input admin-illustrations-trim-modal__input--time">
                           <span>시작</span>
                           <input
-                            type="number"
-                            min={0}
-                            max={startMax(candidate, seconds)}
+                            type="time"
+                            min="00:00:00"
+                            max={formatClock(startMax(candidate, seconds))}
                             step={1}
-                            value={start}
+                            value={formatClock(start)}
                             onChange={(event) => {
-                              const value = Number(event.target.value);
-                              const clamped = Number.isFinite(value)
-                                ? Math.min(
-                                    Math.max(Math.round(value), 0),
-                                    startMax(candidate, seconds),
-                                  )
-                                : 0;
+                              const parsed = parseClock(event.target.value);
+                              const clamped =
+                                parsed === null
+                                  ? 0
+                                  : Math.min(
+                                      Math.max(parsed, 0),
+                                      startMax(candidate, seconds),
+                                    );
                               setVideoTrimStarts((current) => {
                                 const next = [...current];
                                 next[index] = clamped;
@@ -2412,8 +2433,9 @@ export default function AdminIllustrations() {
                               });
                             }}
                           />
-                          <em>초</em>
-                          <small>최대 {startMax(candidate, seconds)}초</small>
+                          <small>
+                            최대 {formatClock(startMax(candidate, seconds))}
+                          </small>
                         </label>
                         <label className="admin-illustrations-trim-modal__input">
                           <span>길이</span>
