@@ -234,6 +234,9 @@ export default function AdminIllustrations() {
     useState<VideoTrimRequest | null>(null);
   const [videoTrimStarts, setVideoTrimStarts] = useState<number[]>([]);
   const [videoTrimSeconds, setVideoTrimSeconds] = useState<number[]>([]);
+  const [trimPreviewPlaying, setTrimPreviewPlaying] = useState<number | null>(
+    null,
+  );
   const [inspectingVideos, setInspectingVideos] = useState(false);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -293,6 +296,7 @@ export default function AdminIllustrations() {
   const createRepresentativeInputRef = useRef<HTMLInputElement>(null);
   const modalRepresentativeInputRef = useRef<HTMLInputElement>(null);
   const handledEditParamRef = useRef(false);
+  const trimVideoRefs = useRef<(HTMLVideoElement | null)[]>([]);
   const today = todayDateInputValue();
 
   useEffect(() => {
@@ -424,6 +428,8 @@ export default function AdminIllustrations() {
       ...video,
       previewUrl: URL.createObjectURL(video.file),
     }));
+    trimVideoRefs.current = [];
+    setTrimPreviewPlaying(null);
     setVideoTrimRequest({ target, files: media, videos: candidates });
     setVideoTrimStarts(candidates.map(() => 0));
     setVideoTrimSeconds(candidates.map(trimDefault));
@@ -935,6 +941,18 @@ export default function AdminIllustrations() {
       void uploadEditingFiles(request.files, ranges);
     }
     setVideoTrimRequest(null);
+  };
+
+  const playTrimRange = (index: number) => {
+    trimVideoRefs.current.forEach((video, otherIndex) => {
+      if (video && otherIndex !== index) video.pause();
+    });
+    const video = trimVideoRefs.current[index];
+    if (!video) return;
+
+    const start = videoTrimStarts[index] ?? 0;
+    video.currentTime = start;
+    void video.play().catch(() => undefined);
   };
 
   const removeImageFromEditing = async (
@@ -2257,7 +2275,7 @@ export default function AdminIllustrations() {
 
             <div className="admin-modal-body">
               <p className="admin-illustrations-trim-modal__hint">
-                미리보기에서 재생할 구간을 고르면 해당 부분만 움직이는 WebP로 저장됩니다. 최대 {MAX_VIDEO_SECONDS}초까지 선택할 수 있습니다.
+                시작과 길이를 움직인 뒤 `구간 재생`을 누르면 선택한 부분만 미리보기에서 재생됩니다. 해당 구간이 움직이는 WebP로 저장됩니다. 최대 {MAX_VIDEO_SECONDS}초까지 선택할 수 있습니다.
               </p>
               <div className="admin-illustrations-trim-modal__list">
                 {videoTrimRequest.videos.map((candidate, index) => {
@@ -2270,6 +2288,9 @@ export default function AdminIllustrations() {
                       key={`${candidate.file.name}-${candidate.file.size}-${index}`}
                     >
                       <video
+                        ref={(element) => {
+                          trimVideoRefs.current[index] = element;
+                        }}
                         key={`${candidate.previewUrl}-${start}-${end}`}
                         className="admin-illustrations-trim-modal__preview"
                         src={`${candidate.previewUrl}#t=${start},${end}`}
@@ -2277,6 +2298,37 @@ export default function AdminIllustrations() {
                         muted
                         playsInline
                         preload="metadata"
+                        onLoadedMetadata={(event) => {
+                          event.currentTarget.currentTime = start;
+                        }}
+                        onPlay={(event) => {
+                          const video = event.currentTarget;
+                          if (
+                            video.currentTime < start ||
+                            video.currentTime >= end
+                          ) {
+                            video.currentTime = start;
+                          }
+                          setTrimPreviewPlaying(index);
+                        }}
+                        onTimeUpdate={(event) => {
+                          const video = event.currentTarget;
+                          if (video.currentTime >= end - 0.05) {
+                            video.pause();
+                            video.currentTime = start;
+                          }
+                        }}
+                        onPause={() =>
+                          setTrimPreviewPlaying((current) =>
+                            current === index ? null : current,
+                          )
+                        }
+                        onEnded={(event) => {
+                          event.currentTarget.currentTime = start;
+                          setTrimPreviewPlaying((current) =>
+                            current === index ? null : current,
+                          );
+                        }}
                       />
                       <div className="admin-illustrations-trim-modal__head">
                         <span className="admin-illustrations-trim-modal__name">
@@ -2289,6 +2341,18 @@ export default function AdminIllustrations() {
                           {" · "}
                           {(candidate.file.size / (1024 * 1024)).toFixed(1)}MB
                         </span>
+                        <span className="admin-illustrations-trim-modal__range">
+                          선택 {start}초 ~ {end}초
+                        </span>
+                        <button
+                          type="button"
+                          className="admin-button admin-illustrations-trim-modal__play"
+                          onClick={() => playTrimRange(index)}
+                        >
+                          {trimPreviewPlaying === index
+                            ? "다시 재생"
+                            : "구간 재생"}
+                        </button>
                       </div>
                       <div className="admin-illustrations-trim-modal__control">
                         <span>시작</span>

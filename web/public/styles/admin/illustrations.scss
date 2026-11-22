@@ -1295,8 +1295,23 @@
 .admin-illustrations-trim-modal__head {
   display: flex;
   flex-wrap: wrap;
-  align-items: baseline;
+  align-items: center;
   gap: 0.4rem;
+}
+
+.admin-illustrations-trim-modal__range {
+  padding: 0.1rem 0.4rem;
+  border: 1px solid var(--admin-border);
+  border-radius: 999px;
+  color: var(--title-color);
+  font-size: 0.7rem;
+  background: var(--admin-card-bg);
+}
+
+.admin-illustrations-trim-modal__play {
+  margin-left: auto;
+  padding: 0.25rem 0.6rem;
+  font-size: 0.72rem;
 }
 
 .admin-illustrations-trim-modal__name {
