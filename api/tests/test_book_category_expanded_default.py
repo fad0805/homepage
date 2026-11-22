@@ -38,14 +38,23 @@ class BookCategoryExpandedDefaultTests(unittest.TestCase):
     def test_create_persists_expanded_default(self) -> None:
         category = create_book_category(
             self.db,
-            BookCategoryCreate(name="펼치는 카테고리", expanded_by_default=True),
+            BookCategoryCreate(
+                name="펼치는 카테고리",
+                visible=False,
+                protected=True,
+                expanded_by_default=True,
+            ),
             self.owner.id,
         )
 
         self.assertTrue(category["expanded_by_default"])
+        self.assertFalse(category["visible"])
+        self.assertTrue(category["protected"])
 
         categories = get_all_book_categories(self.db, self.owner.id)
         self.assertTrue(categories[0]["expanded_by_default"])
+        self.assertFalse(categories[0]["visible"])
+        self.assertTrue(categories[0]["protected"])
 
     def test_update_can_collapse_previously_expanded_category(self) -> None:
         category = create_book_category(

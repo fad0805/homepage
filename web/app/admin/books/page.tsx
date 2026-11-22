@@ -65,6 +65,7 @@ interface ChapterItem {
   view_count: number;
 }
 
+type CategoryVisibility = "public" | "private" | "protected";
 type Notice = { type: "success" | "error"; text: string };
 
 const BOOK_TYPE = "book";
@@ -513,6 +514,10 @@ export default function AdminBooks() {
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
   const [categoryModalOpen, setCategoryModalOpen] = useState(false);
   const [categoryName, setCategoryName] = useState("");
+  const [categoryVisibility, setCategoryVisibility] =
+    useState<CategoryVisibility>("public");
+  const [categoryExpandedByDefault, setCategoryExpandedByDefault] =
+    useState(false);
   const [editingCategoryId, setEditingCategoryId] = useState<number | null>(
     null,
   );
@@ -733,12 +738,16 @@ export default function AdminBooks() {
 
   const openCategoryModal = () => {
     setCategoryName("");
+    setCategoryVisibility("public");
+    setCategoryExpandedByDefault(false);
     setEditingCategoryId(null);
     setCategoryModalOpen(true);
   };
 
   const resetCategoryForm = () => {
     setCategoryName("");
+    setCategoryVisibility("public");
+    setCategoryExpandedByDefault(false);
     setEditingCategoryId(null);
   };
 
@@ -789,7 +798,12 @@ export default function AdminBooks() {
           "/api/books/categories",
           {
             method: "POST",
-            body: JSON.stringify({ name }),
+            body: JSON.stringify({
+              name,
+              visible: categoryVisibility !== "private",
+              protected: categoryVisibility === "protected",
+              expanded_by_default: categoryExpandedByDefault,
+            }),
           },
         );
         setCategories((prev) => [...prev, created]);
@@ -1262,6 +1276,47 @@ export default function AdminBooks() {
                   autoFocus
                 />
               </label>
+              {editingCategoryId === null ? (
+                <>
+                  <label className="admin-field">
+                    <span>공개 설정</span>
+                    <select
+                      value={categoryVisibility}
+                      onChange={(event) =>
+                        setCategoryVisibility(
+                          event.target.value as CategoryVisibility,
+                        )
+                      }
+                    >
+                      <option value="public">공개</option>
+                      <option value="private">비공개</option>
+                      <option value="protected">보호</option>
+                    </select>
+                  </label>
+                  <label className="admin-field">
+                    <span>목차 기본 상태</span>
+                    <select
+                      value={
+                        categoryExpandedByDefault ? "expanded" : "collapsed"
+                      }
+                      onChange={(event) =>
+                        setCategoryExpandedByDefault(
+                          event.target.value === "expanded",
+                        )
+                      }
+                    >
+                      <option value="collapsed">접어두기</option>
+                      <option value="expanded">펼쳐두기</option>
+                    </select>
+                  </label>
+                  {categoryVisibility === "protected" ? (
+                    <p className="admin-books-hint">
+                      보호 카테고리는 추가한 뒤 카테고리 관리에서 열람 코드를
+                      발급해주세요.
+                    </p>
+                  ) : null}
+                </>
+              ) : null}
             </form>
             <div className="admin-modal-footer">
               <button
