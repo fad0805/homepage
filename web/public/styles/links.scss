@@ -116,7 +116,8 @@
 }
 
 .links-category-banner:hover .links-category-banner__overlay,
-.links-category-banner:focus-visible .links-category-banner__overlay {
+.links-category-banner:focus-visible .links-category-banner__overlay,
+.links-category-banner__overlay.is-copied {
   opacity: 1;
 }
 

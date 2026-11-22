@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 interface LinksCategoryBannerProps {
   url: string;
@@ -12,12 +12,31 @@ export function LinksCategoryBanner({
   name,
 }: LinksCategoryBannerProps) {
   const [copied, setCopied] = useState(false);
+  const copiedTimerRef = useRef<number | null>(null);
+
+  useEffect(
+    () => () => {
+      if (copiedTimerRef.current !== null) {
+        window.clearTimeout(copiedTimerRef.current);
+      }
+    },
+    [],
+  );
 
   const copyBannerUrl = async () => {
     try {
-      await navigator.clipboard.writeText(url);
+      const copyUrl = url.startsWith("/uploads")
+        ? new URL(url, window.location.origin).toString()
+        : url;
+      await navigator.clipboard.writeText(copyUrl);
       setCopied(true);
-      window.setTimeout(() => setCopied(false), 2000);
+      if (copiedTimerRef.current !== null) {
+        window.clearTimeout(copiedTimerRef.current);
+      }
+      copiedTimerRef.current = window.setTimeout(() => {
+        setCopied(false);
+        copiedTimerRef.current = null;
+      }, 2000);
     } catch {
       setCopied(false);
     }
@@ -35,8 +54,13 @@ export function LinksCategoryBanner({
       <span className="links-category-banner__image">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={url} alt="banner" />
-        <span className="links-category-banner__overlay" aria-hidden="true">
-          클릭하기
+        <span
+          className={`links-category-banner__overlay${
+            copied ? " is-copied" : ""
+          }`}
+          aria-hidden="true"
+        >
+          {copied ? "복사됨" : "클릭하기"}
         </span>
       </span>
     </button>
