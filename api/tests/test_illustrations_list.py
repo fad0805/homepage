@@ -8,6 +8,7 @@ from sqlalchemy.pool import StaticPool
 
 from crud.illustrations import (
     _utc_boundary,
+    create_illustration_group,
     get_all_illustrations,
     get_visible_illustrations,
 )
@@ -58,6 +59,29 @@ class IllustrationListTests(unittest.TestCase):
         )
         self.db.add(image)
         return image
+
+    def test_create_group_accepts_initial_visibility(self) -> None:
+        protected = create_illustration_group(
+            self.db,
+            user_id=self.owner.id,
+            title="보호 삽화",
+            uploads=["/uploads/illustrations/protected.png"],
+            visible=True,
+            protected=True,
+        )
+        private = create_illustration_group(
+            self.db,
+            user_id=self.owner.id,
+            title="비공개 삽화",
+            uploads=["/uploads/illustrations/private.png"],
+            visible=False,
+            protected=True,
+        )
+
+        self.assertTrue(protected["visible"])
+        self.assertTrue(protected["protected"])
+        self.assertFalse(private["visible"])
+        self.assertFalse(private["protected"])
 
     def test_tag_filter_matches_exact_tag(self) -> None:
         first = self._illustration("첫 번째")

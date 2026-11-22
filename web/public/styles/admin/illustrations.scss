@@ -947,6 +947,12 @@
   flex-wrap: wrap;
 }
 
+.admin-illustrations-create-visibility-hint {
+  flex-basis: 100%;
+  color: var(--admin-muted);
+  font-size: 0.66rem;
+}
+
 .admin-illustrations-modal__visible {
   display: flex;
   align-items: center;

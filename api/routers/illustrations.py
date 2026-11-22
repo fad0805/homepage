@@ -197,6 +197,8 @@ async def upload_illustrations(
     taken_at: date | None = Form(default=None),
     representative_index: int = Form(default=0),
     illustration_id: int | None = Form(default=None),
+    visible: bool = Form(default=True),
+    protected: bool = Form(default=False),
     video_ranges: str | None = Form(default=None),
     db: Session = Depends(get_db),
     user=Depends(require_auth),
@@ -277,6 +279,8 @@ async def upload_illustrations(
                 uploads=uploaded,
                 taken_at=taken_at,
                 representative_index=representative_index,
+                visible=visible,
+                protected=protected,
             )
 
         return append_illustration_images(

@@ -28,6 +28,7 @@ import type {
 import "@/public/styles/admin/illustrations.scss";
 
 type Notice = { type: "success" | "error"; text: string };
+type IllustrationVisibility = "public" | "protected" | "private";
 
 interface Preview {
   file: File;
@@ -238,6 +239,8 @@ export default function AdminIllustrations() {
   const [description, setDescription] = useState("");
   const [tagsInput, setTagsInput] = useState("");
   const [takenAt, setTakenAt] = useState("");
+  const [createVisibility, setCreateVisibility] =
+    useState<IllustrationVisibility>("public");
   const [createRepresentativeFile, setCreateRepresentativeFile] =
     useState<File | null>(null);
   const [createRepresentativePreview, setCreateRepresentativePreview] =
@@ -595,6 +598,14 @@ export default function AdminIllustrations() {
         if (takenAt) {
           formData.append("taken_at", takenAt);
         }
+        formData.append(
+          "visible",
+          String(createVisibility !== "private"),
+        );
+        formData.append(
+          "protected",
+          String(createVisibility === "protected"),
+        );
         if (groupId !== null) {
           formData.append("illustration_id", String(groupId));
         }
@@ -639,6 +650,7 @@ export default function AdminIllustrations() {
       setTitle("");
       setDescription("");
       setTagsInput("");
+      setCreateVisibility("public");
       setCreateRepresentativeFile(null);
       setCreateRepresentativePreview(null);
       setNotice(
@@ -1554,6 +1566,28 @@ export default function AdminIllustrations() {
           />
           <small>선택한 사진 전체에 같은 촬영 일자를 기록합니다.</small>
         </label>
+
+        <div className="admin-illustrations-modal__access">
+          <label className="admin-illustrations-modal__visible">
+            <span>공개 설정</span>
+            <select
+              value={createVisibility}
+              onChange={(event) =>
+                setCreateVisibility(
+                  event.target.value as IllustrationVisibility,
+                )
+              }
+              disabled={uploading}
+            >
+              <option value="public">공개</option>
+              <option value="protected">보호</option>
+              <option value="private">비공개</option>
+            </select>
+          </label>
+          <small className="admin-illustrations-create-visibility-hint">
+            보호는 열람 코드를 입력한 사람만 볼 수 있습니다.
+          </small>
+        </div>
 
         {previews.length > 0 ? (
           <div className="admin-illustrations-upload__actions">

@@ -594,6 +594,8 @@ def create_illustration_group(
     tags: list[str] | None = None,
     taken_at: date | None = None,
     representative_index: int = 0,
+    visible: bool = True,
+    protected: bool = False,
 ):
     """Create one illustration group from a batch of images."""
     group = Illustration(
@@ -602,7 +604,9 @@ def create_illustration_group(
         description=description,
         tags=_clean_tags(tags),
         taken_at=taken_at,
-        visible=True,
+        visible=visible,
+        # A private illustration never asks for an access code.
+        protected=bool(visible and protected),
         order=_next_illustration_order(db),
         images=_build_images(uploads),
     )
