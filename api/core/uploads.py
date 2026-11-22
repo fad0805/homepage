@@ -66,8 +66,9 @@ VIDEO_MAX_EDGE = max(2, int(os.getenv("VIDEO_MAX_EDGE", "640")))
 # Illustration uploads are split into small sequential chunks so no single
 # request has to be buffered in full by the proxy or held in API memory.
 MAX_BULK_ILLUSTRATIONS = 1
-# One 200MB clip plus a 50MB representative image, with multipart overhead.
-MAX_BULK_REQUEST_BYTES = 280 * 1024 * 1024
+# The browser trims clips to 10 seconds before upload, so one file plus the
+# cropped 1024px representative image stays below the 60MB proxy body limit.
+MAX_BULK_REQUEST_BYTES = 60 * 1024 * 1024
 MAX_VIDEOS_PER_ILLUSTRATION = 5
 
 

@@ -20,9 +20,9 @@ const securityHeaders = [
 const nextConfig: NextConfig = {
   poweredByHeader: false,
   experimental: {
-    // Large illustration batches bypass this limit through the streaming
-    // /api/illustrations/bulk route handler.
-    middlewareClientMaxBodySize: "100mb",
+    // Illustration uploads are one small file per request through the
+    // streaming /api/illustrations/bulk route handler.
+    middlewareClientMaxBodySize: "60mb",
     // Next.js rewrites time out after 30s by default. A large Scrivener
     // import can take longer than that even though the API still succeeds.
     proxyTimeout: 5 * 60 * 1000,

@@ -4,9 +4,8 @@ import { NextResponse, type NextRequest } from "next/server";
  * Stream illustration uploads straight to the API.
  *
  * The generic `/api/*` rewrite buffers the request body in Next.js, which
- * truncates large video uploads. This route forwards the raw stream instead,
- * so the 100MB middleware limit is irrelevant for single-file illustration
- * uploads.
+ * truncates large uploads. This route forwards the raw stream instead, so
+ * each trimmed single-file request stays under the 60MB proxy limit.
  */
 export const runtime = "nodejs";
 

@@ -36,5 +36,8 @@ class IllustrationUploadLimitTests(unittest.TestCase):
             )
         self.assertEqual(raised.exception.status_code, 413)
 
+    def test_request_cap_matches_proxy_body_limit(self) -> None:
+        self.assertEqual(MAX_BULK_REQUEST_BYTES, 60 * 1024 * 1024)
+
     def test_video_cap_is_five_per_illustration(self) -> None:
         self.assertEqual(MAX_VIDEOS_PER_ILLUSTRATION, 5)

@@ -330,7 +330,7 @@ async def upload_illustrations(
 ):
     """Register one chunk of an illustration upload.
 
-    The UI splits a large selection into requests of at most three files.
+    The UI sends one file per request, trimming videos to 10 seconds first.
     ``illustration_id`` is the append path used for later chunks and the edit
     dialog; new groups return ``202`` with a `processing` row.
     """
