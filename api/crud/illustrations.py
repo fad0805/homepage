@@ -630,50 +630,6 @@ def _next_illustration_order(db: Session) -> int:
     return 0 if minimum is None else minimum - 1
 
 
-def create_illustration_group(
-    db: Session,
-    user_id: int,
-    title: str,
-    uploads: list[str],
-    description: str | None = None,
-    tags: list[str] | None = None,
-    taken_at: date | None = None,
-    representative_index: int = 0,
-    visible: bool = True,
-    protected: bool = False,
-):
-    """Create one illustration group from a batch of images."""
-    group = Illustration(
-        user_id=user_id,
-        title=title,
-        description=description,
-        tags=_clean_tags(tags),
-        taken_at=taken_at,
-        visible=visible,
-        # A private illustration never asks for an access code.
-        protected=bool(visible and protected),
-        order=_next_illustration_order(db),
-        images=_build_images(uploads),
-    )
-    try:
-        db.add(group)
-        db.flush()
-
-        images = group.images or []
-        if images:
-            index = min(max(representative_index, 0), len(images) - 1)
-            group.representative_image_id = images[index].id
-
-        sync_illustration_tags(db, group)
-        db.commit()
-    except Exception:
-        db.rollback()
-        raise
-
-    maybe_notify_illustration(db, group)
-    return _serialize_detail(_get_illustration_or_404(db, group.id))
-
-
 def create_pending_illustration_group(
     db: Session,
     *,

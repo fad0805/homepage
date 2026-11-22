@@ -12,7 +12,6 @@ from core.mastodon import maybe_notify_illustration
 from crud.illustrations import (
     _utc_boundary,
     bulk_delete_illustrations,
-    create_illustration_group,
     create_pending_illustration_group,
     delete_illustration,
     finish_illustration_upload,
@@ -70,20 +69,27 @@ class IllustrationListTests(unittest.TestCase):
         self.db.add(image)
         return image
 
-    def test_create_group_accepts_initial_visibility(self) -> None:
-        protected = create_illustration_group(
+    def _create_group(self, title: str, uploads: list[str], **kwargs):
+        pending = create_pending_illustration_group(
             self.db,
             user_id=self.owner.id,
-            title="보호 삽화",
-            uploads=["/uploads/illustrations/protected.png"],
+            title=title,
+            **kwargs,
+        )
+        return finish_illustration_upload(
+            self.db, pending["id"], uploads
+        )
+
+    def test_create_group_accepts_initial_visibility(self) -> None:
+        protected = self._create_group(
+            "보호 삽화",
+            ["/uploads/illustrations/protected.png"],
             visible=True,
             protected=True,
         )
-        private = create_illustration_group(
-            self.db,
-            user_id=self.owner.id,
-            title="비공개 삽화",
-            uploads=["/uploads/illustrations/private.png"],
+        private = self._create_group(
+            "비공개 삽화",
+            ["/uploads/illustrations/private.png"],
             visible=False,
             protected=True,
         )
@@ -200,12 +206,7 @@ class IllustrationListTests(unittest.TestCase):
         )
 
     def test_ready_row_without_image_is_admin_only(self) -> None:
-        empty = create_illustration_group(
-            self.db,
-            user_id=self.owner.id,
-            title="이미지 없는 삽화",
-            uploads=[],
-        )
+        empty = self._create_group("이미지 없는 삽화", [])
         self.assertEqual(empty["upload_status"], "ready")
 
         admin_rows, _ = get_all_illustrations(
