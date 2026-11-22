@@ -69,10 +69,6 @@ export default async function Links() {
         ) : (
           grouped.map((group) => (
             <div key={group.category.id}>
-              <div className="links-section">
-                <p>{group.category.name}</p>
-              </div>
-
               {group.category.is_special ? (
                 <div className="links-category-intro">
                   {group.category.banner_url ? (
