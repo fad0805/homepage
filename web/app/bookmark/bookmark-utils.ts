@@ -52,6 +52,16 @@ export function startOfPeriod(value: string, type: BookmarkPeriodType) {
   return dateKey(date);
 }
 
+export function isPastPeriod(
+  value: string,
+  type: BookmarkPeriodType,
+) {
+  return (
+    shiftPeriod(startOfPeriod(value, type), type, 1) <=
+    todayDateInputValue()
+  );
+}
+
 export function shiftPeriod(
   value: string,
   type: BookmarkPeriodType,

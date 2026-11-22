@@ -2,6 +2,8 @@ import unittest
 from datetime import date, timedelta
 from unittest.mock import patch
 
+from fastapi import HTTPException
+
 from crud.bookmark.history import get_routine_history
 from crud.bookmark.periods import get_period
 from crud.bookmark.routines import set_routine_check, update_routine
@@ -11,7 +13,7 @@ from crud.bookmark.statistics import (
     _upsert_routine_monthly_stat,
     get_statistics,
 )
-from models.bookmark import BookmarkRoutineMonthlyStat
+from models.bookmark import BookmarkRoutineCheck, BookmarkRoutineMonthlyStat
 from schemas.bookmark import (
     BookmarkRoutineCheckUpdate,
     BookmarkRoutineUpdate,
@@ -23,6 +25,38 @@ class BookmarkStatisticsTests(
     BookmarkDatabaseTestCase,
     unittest.TestCase,
 ):
+    def setUp(self) -> None:
+        super().setUp()
+        today_patch = patch(
+            "crud.bookmark.routines._kst_today",
+            return_value=date(2026, 3, 17),
+        )
+        today_patch.start()
+        self.addCleanup(today_patch.stop)
+
+    def test_set_routine_check_rejects_past_period(self) -> None:
+        routine = self.make_routine(
+            frequency="daily",
+            tracking_mode="date",
+            start_date=date(2026, 3, 1),
+        )
+        with self.assertRaises(HTTPException) as error:
+            set_routine_check(
+                self.db,
+                routine.id,
+                BookmarkRoutineCheckUpdate(
+                    period_type="day",
+                    period_start=date(2026, 3, 16),
+                    count=1,
+                ),
+                routine.user_id,
+            )
+        self.assertEqual(error.exception.status_code, 400)
+        self.assertEqual(
+            self.db.query(BookmarkRoutineCheck).count(),
+            0,
+        )
+
     def test_monthly_date_due_before_start_is_not_counted(self) -> None:
         routine = self.make_routine(
             frequency="monthly",
@@ -173,7 +207,7 @@ class BookmarkStatisticsTests(
                 routine.id,
                 BookmarkRoutineCheckUpdate(
                     period_type="week",
-                    period_start=date(2026, 3, 2),
+                    period_start=date(2026, 3, 16),
                     count=count,
                 ),
                 routine.user_id,
@@ -210,7 +244,7 @@ class BookmarkStatisticsTests(
             routine.id,
             BookmarkRoutineCheckUpdate(
                 period_type="week",
-                period_start=date(2026, 3, 2),
+                period_start=date(2026, 3, 16),
                 count=1,
             ),
             routine.user_id,
@@ -221,7 +255,7 @@ class BookmarkStatisticsTests(
             routine.id,
             BookmarkRoutineCheckUpdate(
                 period_type="week",
-                period_start=date(2026, 3, 2),
+                period_start=date(2026, 3, 16),
                 count=1,
                 manual_done=True,
             ),
@@ -245,7 +279,7 @@ class BookmarkStatisticsTests(
         bucket = next(
             item
             for item in entry["buckets"]
-            if item["period_start"] == date(2026, 3, 2)
+            if item["period_start"] == date(2026, 3, 16)
         )
         self.assertEqual(bucket["completed_count"], 3)
         self.assertEqual(bucket["expected_count"], 3)
@@ -255,7 +289,7 @@ class BookmarkStatisticsTests(
             routine.id,
             BookmarkRoutineCheckUpdate(
                 period_type="week",
-                period_start=date(2026, 3, 2),
+                period_start=date(2026, 3, 16),
                 count=1,
                 manual_done=False,
             ),

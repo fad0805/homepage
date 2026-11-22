@@ -272,6 +272,11 @@ def set_routine_check(
             detail="루틴 기록 방식과 기간 단위가 맞지 않습니다.",
         )
     period_end = _period_end(payload.period_type, payload.period_start)
+    if period_end < _kst_today():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="지난 기간의 루틴 기록은 변경할 수 없습니다.",
+        )
     if period_end < routine.start_date:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

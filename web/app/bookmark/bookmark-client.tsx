@@ -90,6 +90,7 @@ import {
   historyDayTitle,
   historyMonthLabel,
   historyQuarterLabel,
+  isPastPeriod,
   monthCalendarDays,
   monthLabel,
   pad2,
@@ -545,6 +546,13 @@ export default function BookmarkClient({ username }: { username: string }) {
       const isCount = isCountRoutine(routine);
       const isStopped = Boolean(routine.end_date);
       const allDone = isRoutineDone(routine);
+      const isPast = isCount
+        ? isPastPeriod(routine.period_start, routine.period_type)
+        : routine.occurrences
+            .filter((occurrence) => occurrence.done === allDone)
+            .some((occurrence) =>
+              isPastPeriod(occurrence.date, "day"),
+            );
       return (
         <SortableRoutineItem
           key={routine.id}
@@ -573,6 +581,7 @@ export default function BookmarkClient({ username }: { username: string }) {
                 checked={allDone}
                 disabled={
                   isStopped ||
+                  isPast ||
                   (!isCount && routine.occurrences.length === 0)
                 }
                 aria-label={`${routine.title} 완료`}
@@ -586,6 +595,8 @@ export default function BookmarkClient({ username }: { username: string }) {
               </span>
               {isStopped ? (
                 <span className="bookmark-routine-status">중단됨</span>
+              ) : isPast ? (
+                <span className="bookmark-routine-status">지난 기간</span>
               ) : null}
               <p className="bookmark-item-schedule">
                 {routineScheduleLabel(routine)}
@@ -602,7 +613,7 @@ export default function BookmarkClient({ username }: { username: string }) {
                     type="button"
                     className="bookmark-count-button"
                     aria-label="1회 줄이기"
-                    disabled={routine.completed_count <= 0}
+                    disabled={isPast || routine.completed_count <= 0}
                     onClick={(event) => {
                       event.stopPropagation();
                       void setRoutineCount(
@@ -624,6 +635,7 @@ export default function BookmarkClient({ username }: { username: string }) {
                     className="bookmark-count-button"
                     aria-label="1회 추가"
                     disabled={
+                      isPast ||
                       routine.completed_count >= routine.target_count
                     }
                     onClick={(event) => {
