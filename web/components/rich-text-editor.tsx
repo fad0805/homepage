@@ -626,6 +626,12 @@ export function RichTextEditor({
     /^#[0-9a-f]{6}$/i.test(activeHighlightColor)
       ? activeHighlightColor
       : "#f5e27a";
+  const activeParagraphBackground = editor?.getAttributes("paragraph").background;
+  const paragraphBackground =
+    typeof activeParagraphBackground === "string" &&
+    /^#[0-9a-f]{6}$/i.test(activeParagraphBackground)
+      ? activeParagraphBackground
+      : "#e6e6e6";
   const imageAttrs = editor?.getAttributes("image") ?? {};
   const imageAlign: "left" | "center" | "right" =
     imageAttrs.align === "left" || imageAttrs.align === "right"
@@ -1008,6 +1014,42 @@ export function RichTextEditor({
                 disabled={!editor}
                 title="형광 초기화"
                 aria-label="형광 초기화"
+              >
+                ×
+              </button>
+            </div>
+          ) : null}
+          {enableHighlight ? (
+            <div className="admin-editor__highlight">
+              <span>줄 배경</span>
+              <input
+                type="color"
+                value={paragraphBackground}
+                disabled={!editor}
+                aria-label="문단 배경색"
+                onChange={(event) =>
+                  editor
+                    ?.chain()
+                    .focus()
+                    .updateAttributes("paragraph", {
+                      background: event.target.value,
+                    })
+                    .run()
+                }
+              />
+              <button
+                type="button"
+                className="admin-editor__color-reset"
+                onClick={() =>
+                  editor
+                    ?.chain()
+                    .focus()
+                    .updateAttributes("paragraph", { background: null })
+                    .run()
+                }
+                disabled={!editor}
+                title="줄 배경 초기화"
+                aria-label="줄 배경 초기화"
               >
                 ×
               </button>

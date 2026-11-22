@@ -1342,6 +1342,38 @@ class ManuscriptTests(unittest.TestCase):
             "Highlighted</mark>Plain</p>",
         )
 
+    def test_import_scrivener_uses_paragraph_background_for_full_line(self) -> None:
+        manifest = """<?xml version="1.0" encoding="UTF-8"?>
+<ScrivenerProject Version="2.0">
+  <ProjectProperties><ProjectTitle>줄 배경 원고</ProjectTitle></ProjectProperties>
+  <Binder>
+    <BinderItem UUID="DRAFT" Type="DraftFolder">
+      <Title>Draft</Title>
+      <Children>
+        <BinderItem UUID="T1" Type="Text"><Title>1장</Title></BinderItem>
+      </Children>
+    </BinderItem>
+  </Binder>
+</ScrivenerProject>"""
+        rtf = (
+            "{\\rtf1\\ansi\\ansicpg1252\\uc0"
+            "{\\colortbl;\\red230\\green230\\blue230;}"
+            "\\pard\\cb1 Full line\\par}"
+        )
+        buffer = BytesIO()
+        with ZipFile(buffer, "w") as archive:
+            archive.writestr("line-bg.scrivx", manifest)
+            archive.writestr("Files/Data/T1/content.rtf", rtf)
+
+        result = crud.import_scrivener(
+            self.db, self.owner.id, buffer.getvalue()
+        )
+        tree = crud.get_tree(self.db, result["project_id"], self.owner.id)
+        body = crud.get_node(self.db, tree[0]["id"], self.owner.id)["body"]
+        self.assertEqual(
+            body, '<p style="background-color: #e6e6e6">Full line</p>'
+        )
+
     def test_import_scrivener_keeps_children_under_documents(self) -> None:
         manifest = """<?xml version="1.0" encoding="UTF-8"?>
 <ScrivenerProject Version="2.0">
@@ -1844,6 +1876,25 @@ class ManuscriptTests(unittest.TestCase):
                 if name.endswith("/content.rtf")
             )
         self.assertIn(b"\\highlight", rtf)
+        self.assertIn(b"\\red230\\green230\\blue230", rtf)
+
+    def test_export_scrivener_preserves_paragraph_background(self) -> None:
+        project = self._project()
+        self._node(
+            project,
+            "줄 배경",
+            body='<p style="background-color: #e6e6e6">전체 줄</p>',
+        )
+        self.db.commit()
+
+        data, _ = crud.export_scrivener(self.db, project.id, self.owner.id)
+        with ZipFile(BytesIO(data)) as archive:
+            rtf = next(
+                archive.read(name)
+                for name in archive.namelist()
+                if name.endswith("/content.rtf")
+            )
+        self.assertIn(b"\\cb", rtf)
         self.assertIn(b"\\red230\\green230\\blue230", rtf)
 
     def test_export_scrivener_embeds_body_images(self) -> None:

@@ -143,6 +143,7 @@ class _ExportParagraph:
     indent_left: int = 0
     indent_right: int = 0
     indent_first: int = 0
+    background: str | None = None
 
 
 def _local(tag: str) -> str:
@@ -226,8 +227,10 @@ def _prepare_rtf(
     return "".join(pieces), images, sizes
 
 
-def _render_rtf_segment(content: str, style: _RtfStyle) -> str:
-    if style.highlight:
+def _render_rtf_segment(
+    content: str, style: _RtfStyle, *, ignore_highlight: bool = False
+) -> str:
+    if style.highlight and not ignore_highlight:
         content = (
             f'<mark style="background-color: {style.highlight}; color: inherit">'
             f"{content}</mark>"
@@ -257,6 +260,7 @@ def _render_rtf_paragraph(
     indent_first: int = 0,
     tag: str = "p",
     caption: bool = False,
+    background: str | None = None,
 ) -> str:
     styles: list[str] = []
     if align in {"center", "right", "justify"}:
@@ -267,6 +271,8 @@ def _render_rtf_paragraph(
         styles.append(f"padding-right: {indent_right}px")
     if indent_first:
         styles.append(f"text-indent: {indent_first}px")
+    if background:
+        styles.append(f"background-color: {background}")
     style = f' style="{"; ".join(styles)}"' if styles else ""
     if caption:
         content = f"<em>{content}</em>"
@@ -368,7 +374,7 @@ def _rtf_to_html_with_images(
         tuple[_RtfStyle, str, bool, tuple[int, int, int], int | None, int | None]
     ] = []
     skip = False
-    paragraphs: list[tuple[str, str, int, int, int, str, bool]] = []
+    paragraphs: list[tuple[str, str, int, int, int, str, bool, str | None]] = []
     segments: list[tuple[str, _RtfStyle]] = []
     scr_heading: int | None = None
     scr_paragraph_style: int | None = None
@@ -385,8 +391,15 @@ def _rtf_to_html_with_images(
     def flush(force: bool = False) -> None:
         if not segments and not force:
             return
+        background: str | None = None
+        if segments:
+            first = segments[0][1].highlight
+            if first and all(part_style.highlight == first for _, part_style in segments):
+                background = first
         content = "".join(
-            _render_rtf_segment(part, part_style)
+            _render_rtf_segment(
+                part, part_style, ignore_highlight=background is not None
+            )
             for part, part_style in segments
         )
         tag = "h2" if scr_heading == 1 else "h3" if scr_heading else "p"
@@ -403,6 +416,7 @@ def _rtf_to_html_with_images(
                 indent_first,
                 tag,
                 caption,
+                background,
             )
         )
         segments.clear()
@@ -665,8 +679,18 @@ def _rtf_to_html_with_images(
             indent_first=first,
             tag=tag,
             caption=caption,
+            background=background,
         )
-        for paragraph_align, content, left, right, first, tag, caption in paragraphs
+        for (
+            paragraph_align,
+            content,
+            left,
+            right,
+            first,
+            tag,
+            caption,
+            background,
+        ) in paragraphs
     )
     return html, images, image_sizes
 
@@ -950,6 +974,7 @@ class _RtfBodyParser(HTMLParser):
                 styles.get("padding-right") or styles.get("margin-right")
             ),
             indent_first=_parse_signed_px(styles.get("text-indent")),
+            background=_parse_css_color(styles.get("background-color")),
         )
         self._paragraph_open = True
         controls = ["\\pard"]
@@ -970,12 +995,16 @@ class _RtfBodyParser(HTMLParser):
         controls.append(
             f"\\fs{round(SCRIVENER_DEFAULT_PT * 2)}\\cf0\\b0\\i0\\ulnone\\strike0 "
         )
+        if self._paragraph.background:
+            controls.append(
+                f"\\cb{self._color_number(self._paragraph.background)} "
+            )
         self.parts.append("".join(controls))
-        self._style = _RtfStyle()
-        self._emitted_style = _RtfStyle()
+        self._style = _RtfStyle(highlight=self._paragraph.background)
+        self._emitted_style = replace(self._style)
         if tag in {"h1", "h2", "h3", "h4", "h5", "h6"}:
             size = {"h1": 24, "h2": 20, "h3": 16}.get(tag, 13)
-            self._style = _RtfStyle(bold=True, size=size)
+            self._style = replace(self._style, bold=True, size=size)
 
     def _close_paragraph(self) -> None:
         if not self._paragraph_open:

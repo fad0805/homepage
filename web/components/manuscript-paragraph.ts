@@ -65,6 +65,15 @@ export const ManuscriptParagraph = Paragraph.extend({
           return value ? { style: `text-indent: ${value}` } : {};
         },
       },
+      background: {
+        default: null,
+        parseHTML: (element: HTMLElement) =>
+          element.style.backgroundColor || null,
+        renderHTML: (attributes: Record<string, unknown>) => {
+          const value = styleValue(attributes, "background");
+          return value ? { style: `background-color: ${value}` } : {};
+        },
+      },
     };
   },
 });
