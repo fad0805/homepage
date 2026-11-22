@@ -36,6 +36,7 @@ interface SiteShellProps {
   colorOverrides: ColorOverrides;
   siteTitle: string;
   siteSubtitle: string;
+  copyrightName: string;
   children: ReactNode;
 }
 
@@ -88,6 +89,7 @@ export function SiteShell({
   colorOverrides,
   siteTitle,
   siteSubtitle,
+  copyrightName,
   children,
 }: SiteShellProps) {
   const pathname = usePathname();
@@ -315,7 +317,7 @@ export function SiteShell({
             <div id="content">{children}</div>
           </main>
           <footer>
-            <FooterShortcut />
+            <FooterShortcut copyrightName={copyrightName} />
           </footer>
         </div>
       </div>
@@ -339,7 +341,7 @@ export function SiteShell({
                 <Navbar />
               </div>
               <footer className="site-bottom-footer">
-                <FooterShortcut />
+                <FooterShortcut copyrightName={copyrightName} />
               </footer>
             </div>
           </div>
@@ -431,7 +433,7 @@ export function SiteShell({
         <div id="content">{children}</div>
       </main>
       <footer>
-        <FooterShortcut />
+        <FooterShortcut copyrightName={copyrightName} />
       </footer>
     </div>
   );

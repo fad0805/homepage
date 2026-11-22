@@ -54,6 +54,7 @@ def put_index_page(
         content_html=payload.content_html,
         title=payload.title,
         subtitle=payload.subtitle,
+        copyright_name=payload.copyright_name,
     )
 
 

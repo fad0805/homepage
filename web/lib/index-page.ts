@@ -1,4 +1,5 @@
 import {
+  DEFAULT_COPYRIGHT_NAME,
   DEFAULT_INDEX_HTML,
   DEFAULT_INDEX_SUBTITLE,
   DEFAULT_INDEX_TITLE,
@@ -8,12 +9,14 @@ import { serverApiFetch } from "@/lib/server-api";
 export interface IntegratedIndexPage {
   title: string;
   subtitle: string;
+  copyright_name: string;
   content_html: string;
 }
 
 const FALLBACK: IntegratedIndexPage = {
   title: DEFAULT_INDEX_TITLE,
   subtitle: DEFAULT_INDEX_SUBTITLE,
+  copyright_name: DEFAULT_COPYRIGHT_NAME,
   content_html: DEFAULT_INDEX_HTML,
 };
 
@@ -27,6 +30,7 @@ export async function getIntegratedIndexPage(): Promise<IntegratedIndexPage> {
     return {
       title: page.title ?? FALLBACK.title,
       subtitle: page.subtitle ?? FALLBACK.subtitle,
+      copyright_name: page.copyright_name ?? FALLBACK.copyright_name,
       content_html: page.content_html ?? FALLBACK.content_html,
     };
   } catch (error) {

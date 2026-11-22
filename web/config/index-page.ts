@@ -1,5 +1,6 @@
 export const DEFAULT_INDEX_TITLE = "어디에도 없는 섬";
 export const DEFAULT_INDEX_SUBTITLE = "Missing Island";
+export const DEFAULT_COPYRIGHT_NAME = "Rimien Siarte";
 
 export const DEFAULT_INDEX_HTML =
   "<p>Missing Island · Story Archive</p>" +

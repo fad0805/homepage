@@ -14,7 +14,11 @@ import { isAuthenticated } from "@/components/authentication";
 const LONG_PRESS_MS = 700;
 const MOVE_TOLERANCE_PX = 10;
 
-export function FooterShortcut() {
+export function FooterShortcut({
+  copyrightName,
+}: {
+  copyrightName: string;
+}) {
   const router = useRouter();
   const pathname = usePathname();
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -65,6 +69,8 @@ export function FooterShortcut() {
     event.preventDefault();
   };
 
+  const name = copyrightName.trim();
+
   return (
     <span
       className="footer-shortcut"
@@ -75,7 +81,7 @@ export function FooterShortcut() {
       onPointerLeave={clearPress}
       onContextMenu={handleContextMenu}
     >
-      © Rimien Siarte. All rights reserved. No external use permitted.
+      {`©${name ? ` ${name}.` : ""} All rights reserved. No external use permitted.`}
     </span>
   );
 }

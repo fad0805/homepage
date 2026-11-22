@@ -3,9 +3,11 @@ from sqlalchemy.orm import Session
 
 from core.html_sanitizer import sanitize_index_html
 from core.index_page import (
+    DEFAULT_COPYRIGHT_NAME,
     DEFAULT_INDEX_BODY_HTML,
     DEFAULT_INDEX_SUBTITLE,
     DEFAULT_INDEX_TITLE,
+    MAX_COPYRIGHT_NAME_LENGTH,
     MAX_SUBTITLE_LENGTH,
     MAX_TITLE_LENGTH,
     clean_index_text,
@@ -24,6 +26,11 @@ def _serialize(page: IndexPage | None, scope: str, user_id: int | None) -> dict:
         "subtitle": (
             page.subtitle if page is not None and page.subtitle is not None
             else DEFAULT_INDEX_SUBTITLE
+        ),
+        "copyright_name": (
+            page.copyright_name
+            if page is not None and page.copyright_name is not None
+            else DEFAULT_COPYRIGHT_NAME
         ),
         "content_html": sanitize_index_html(
             page.content_html if page else DEFAULT_INDEX_BODY_HTML
@@ -67,6 +74,7 @@ def get_index_page(
         user_id=user_id,
         title=integrated.title,
         subtitle=integrated.subtitle,
+        copyright_name=integrated.copyright_name,
         content_html=integrated.content_html,
     )
     db.add(page)
@@ -110,6 +118,7 @@ def update_index_page(
     content_html: str,
     title: str | None = None,
     subtitle: str | None = None,
+    copyright_name: str | None = None,
 ) -> dict:
     page = get_index_page(db, scope=scope, user_id=user_id)
     safe_html = sanitize_index_html(content_html)
@@ -121,6 +130,10 @@ def update_index_page(
         None if subtitle is None
         else clean_index_text(subtitle, MAX_SUBTITLE_LENGTH)
     )
+    clean_copyright_name = (
+        None if copyright_name is None
+        else clean_index_text(copyright_name, MAX_COPYRIGHT_NAME_LENGTH)
+    )
 
     if page is None:
         page = IndexPage(
@@ -128,6 +141,7 @@ def update_index_page(
             user_id=user_id if scope == "author" else None,
             title=clean_title,
             subtitle=clean_subtitle,
+            copyright_name=clean_copyright_name,
             content_html=safe_html,
         )
         db.add(page)
@@ -136,6 +150,8 @@ def update_index_page(
             page.title = clean_title
         if subtitle is not None:
             page.subtitle = clean_subtitle
+        if copyright_name is not None:
+            page.copyright_name = clean_copyright_name
         page.content_html = safe_html
     db.commit()
     db.refresh(page)

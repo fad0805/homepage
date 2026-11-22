@@ -255,7 +255,7 @@ TRACKED: dict[type, _Tracked] = {
         "index",
         _index_title,
         _owner_from_actor_or_user,
-        frozenset({"title", "subtitle", "content_html"}),
+        frozenset({"title", "subtitle", "copyright_name", "content_html"}),
         html_fields=frozenset({"content_html"}),
         skip_create=True,
     ),

@@ -21,6 +21,7 @@ class IndexPage(Base):
     # An empty string is an intentional choice to hide the field.
     title = Column(String(120), nullable=True)
     subtitle = Column(String(160), nullable=True)
+    copyright_name = Column(String(120), nullable=True)
     content_html = Column(Text, nullable=False, default="", server_default="")
     created_at = Column(DateTime, default=func.now(), nullable=False)
     updated_at = Column(

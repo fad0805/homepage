@@ -94,6 +94,7 @@ export default async function RootLayout({
   const index = await getIntegratedIndexPage();
   const siteTitle = index.title || DEFAULT_INDEX_TITLE;
   const siteSubtitle = index.subtitle;
+  const copyrightName = index.copyright_name;
 
   let layoutKey: LayoutKey = DEFAULT_LAYOUT;
   let sidePosition: SidePosition = DEFAULT_SIDE_POSITION;
@@ -226,6 +227,7 @@ export default async function RootLayout({
                 colorOverrides={colorOverrides}
                 siteTitle={siteTitle}
                 siteSubtitle={siteSubtitle}
+                copyrightName={copyrightName}
               >
                 {children}
               </SiteShell>
