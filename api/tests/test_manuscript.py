@@ -1271,6 +1271,42 @@ class ManuscriptTests(unittest.TestCase):
             .deleted_at
         )
 
+    def test_import_scrivener_converts_style_markers_to_html(self) -> None:
+        manifest = """<?xml version="1.0" encoding="UTF-8"?>
+<ScrivenerProject Version="2.0">
+  <ProjectProperties><ProjectTitle>스타일 원고</ProjectTitle></ProjectProperties>
+  <Binder>
+    <BinderItem UUID="DRAFT" Type="DraftFolder">
+      <Title>Draft</Title>
+      <Children>
+        <BinderItem UUID="T1" Type="Text"><Title>1장</Title></BinderItem>
+      </Children>
+    </BinderItem>
+  </Binder>
+</ScrivenerProject>"""
+        rtf = (
+            "{\\rtf1\\ansi\\ansicpg1252\\uc0"
+            "<$ScrKeepWithNext><$Scr_H::1><$Scr_Ps::0>Heading\\par"
+            "<!$Scr_H::1><!$Scr_Ps::0>- Body\\par"
+            "<$Scr_Ps::1>Caption\\par<!$Scr_Ps::1>}"
+        )
+        buffer = BytesIO()
+        with ZipFile(buffer, "w") as archive:
+            archive.writestr("styled.scrivx", manifest)
+            archive.writestr("Files/Data/T1/content.rtf", rtf)
+
+        result = crud.import_scrivener(
+            self.db, self.owner.id, buffer.getvalue()
+        )
+        tree = crud.get_tree(self.db, result["project_id"], self.owner.id)
+        body = crud.get_node(self.db, tree[0]["id"], self.owner.id)["body"]
+        self.assertEqual(
+            body,
+            "<h2>Heading</h2><p>- Body</p>"
+            '<p style="text-align: center"><em>Caption</em></p>',
+        )
+        self.assertNotIn("$Scr", body)
+
     def test_import_scrivener_keeps_children_under_documents(self) -> None:
         manifest = """<?xml version="1.0" encoding="UTF-8"?>
 <ScrivenerProject Version="2.0">

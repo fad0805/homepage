@@ -96,6 +96,11 @@ RTF_SYMBOLS = {
 # Explicit sizes other than 13pt are preserved exactly in both directions.
 SCRIVENER_DEFAULT_PT = 13.0
 
+# Scrivener stores some paragraph styles as literal marker text inside RTF.
+# They are meant to be consumed by Scrivener on import and should never reach
+# the editor as visible characters.
+SCRIVENER_STYLE_TOKEN_RE = re.compile(r"<(!?)\$Scr([A-Za-z_]+)(?:::(\d+))?>")
+
 
 @dataclass
 class ScrivenerNode:
@@ -244,6 +249,8 @@ def _render_rtf_paragraph(
     indent_left: int = 0,
     indent_right: int = 0,
     indent_first: int = 0,
+    tag: str = "p",
+    caption: bool = False,
 ) -> str:
     styles: list[str] = []
     if align in {"center", "right", "justify"}:
@@ -255,7 +262,9 @@ def _render_rtf_paragraph(
     if indent_first:
         styles.append(f"text-indent: {indent_first}px")
     style = f' style="{"; ".join(styles)}"' if styles else ""
-    return f"<p{style}>{content}</p>"
+    if caption:
+        content = f"<em>{content}</em>"
+    return f"<{tag}{style}>{content}</{tag}>"
 
 
 def _parse_rtf_color_table(raw: str) -> list[str | None]:
@@ -349,10 +358,14 @@ def _rtf_to_html_with_images(
     indent_left = 0
     indent_right = 0
     indent_first = 0
-    stack: list[tuple[_RtfStyle, str, bool, tuple[int, int, int]]] = []
+    stack: list[
+        tuple[_RtfStyle, str, bool, tuple[int, int, int], int | None, int | None]
+    ] = []
     skip = False
-    paragraphs: list[tuple[str, str, int, int, int]] = []
+    paragraphs: list[tuple[str, str, int, int, int, str, bool]] = []
     segments: list[tuple[str, _RtfStyle]] = []
+    scr_heading: int | None = None
+    scr_paragraph_style: int | None = None
 
     def append(html: str, text_style: _RtfStyle | None = None) -> None:
         if not html:
@@ -370,8 +383,21 @@ def _rtf_to_html_with_images(
             _render_rtf_segment(part, part_style)
             for part, part_style in segments
         )
+        tag = "h2" if scr_heading == 1 else "h3" if scr_heading else "p"
+        caption = scr_paragraph_style not in (None, 0)
+        paragraph_align = (
+            "center" if caption and align == "left" else align
+        )
         paragraphs.append(
-            (align, content, indent_left, indent_right, indent_first)
+            (
+                paragraph_align,
+                content,
+                indent_left,
+                indent_right,
+                indent_first,
+                tag,
+                caption,
+            )
         )
         segments.clear()
 
@@ -410,6 +436,8 @@ def _rtf_to_html_with_images(
                     align,
                     skip,
                     (indent_left, indent_right, indent_first),
+                    scr_heading,
+                    scr_paragraph_style,
                 )
             )
             if skip_group:
@@ -418,13 +446,39 @@ def _rtf_to_html_with_images(
             continue
         if char == "}":
             if stack:
-                style, align, skip, indents = stack.pop()
+                (
+                    style,
+                    align,
+                    skip,
+                    indents,
+                    scr_heading,
+                    scr_paragraph_style,
+                ) = stack.pop()
                 indent_left, indent_right, indent_first = indents
             index += 1
             continue
         if skip:
             index += 1
             continue
+        if char == "<":
+            token = SCRIVENER_STYLE_TOKEN_RE.match(raw, index)
+            if token:
+                closing = token.group(1) == "!"
+                name = token.group(2).lstrip("_")
+                param = token.group(3)
+                if name in {"H", "Ps"} and segments:
+                    # A marker between text and its paragraph break still
+                    # belongs to the paragraph already being built.
+                    flush()
+                if name == "H":
+                    if closing:
+                        scr_heading = None
+                    else:
+                        scr_heading = max(1, min(int(param or "1"), 3))
+                elif name == "Ps":
+                    scr_paragraph_style = None if closing else int(param or "0")
+                index = token.end()
+                continue
         if char == "\\":
             if index + 1 >= len(raw):
                 index += 1
@@ -589,8 +643,10 @@ def _rtf_to_html_with_images(
             indent_left=left,
             indent_right=right,
             indent_first=first,
+            tag=tag,
+            caption=caption,
         )
-        for paragraph_align, content, left, right, first in paragraphs
+        for paragraph_align, content, left, right, first, tag, caption in paragraphs
     )
     return html, images, image_sizes
 
