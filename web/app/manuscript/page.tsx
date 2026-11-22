@@ -722,6 +722,33 @@ export default function ManuscriptWorkspace() {
     }
   };
 
+  const convertToDocument = async () => {
+    if (!selected || selected.node_type !== "folder") return;
+    if (!(await flushAutosave())) return;
+    try {
+      const node = await apiFetch<ManuscriptNode>(
+        `/api/manuscript/nodes/${selected.id}/convert-to-document`,
+        { method: "POST" },
+      );
+      setSelected(node);
+      setForm({
+        subtitle: node.subtitle ?? "",
+        synopsis: node.synopsis ?? "",
+        notes: node.notes ?? "",
+        body: normalizeManuscriptHtml(node.body ?? ""),
+      });
+      setDirty(false);
+      setScrivenings(null);
+      setScrivCombinedHtml("");
+      setScrivDirty(false);
+      saveViewRef.current.folderActive = false;
+      if (projectId) await loadTree(projectId);
+      notify("문서로 변환했습니다.");
+    } catch (error) {
+      notify((error as Error).message, "error");
+    }
+  };
+
   const moveNode = async (
     id: number,
     parentId: number | null,
@@ -1395,6 +1422,16 @@ export default function ManuscriptWorkspace() {
                   <button type="button" className="ms-button--danger" onClick={deleteSelected}>
                     삭제
                   </button>
+                  {selected.node_type === "folder" ? (
+                    <button
+                      type="button"
+                      className="ms-button"
+                      disabled={saving || autoSaving}
+                      onClick={() => void convertToDocument()}
+                    >
+                      문서로 변환
+                    </button>
+                  ) : null}
                   <div className="ms-inspector__actions-right">
                     {selected.node_type === "chapter" ? (
                     <button

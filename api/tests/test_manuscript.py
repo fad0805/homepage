@@ -434,6 +434,24 @@ class ManuscriptTests(unittest.TestCase):
         self.assertIsNone(items[folder_id]["parent_id"])
         self.assertEqual(items[child_id]["parent_id"], folder_id)
 
+    def test_convert_folder_to_document_keeps_children(self) -> None:
+        project = self._project()
+        folder_id = self._node(project, "폴더", node_type="folder").id
+        child_id = self._node(project, "하위 문서", parent_id=folder_id).id
+
+        converted = crud.convert_folder_to_document(
+            self.db, folder_id, self.owner.id
+        )
+
+        self.assertEqual(converted["node_type"], "chapter")
+        self.assertEqual(converted["body"], "<p></p>")
+        self.assertEqual(converted["char_count_plain"], 0)
+        tree = crud.get_tree(self.db, project.id, self.owner.id)
+        self.assertEqual(tree[1]["id"], child_id)
+        self.assertEqual(tree[1]["parent_id"], folder_id)
+        with self.assertRaises(HTTPException):
+            crud.convert_folder_to_document(self.db, folder_id, self.owner.id)
+
     def test_scrivenings_can_read_deleted_folder(self) -> None:
         project = self._project()
         folder_id = self._node(project, "폴더", node_type="folder").id

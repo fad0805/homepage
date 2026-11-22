@@ -172,6 +172,15 @@ def patch_node(
     return crud.update_node(db, node_id, payload, user.id)
 
 
+@router.post("/nodes/{node_id}/convert-to-document")
+def post_convert_to_document(
+    node_id: int,
+    db: Session = Depends(get_db),
+    user=Depends(require_auth),
+):
+    return crud.convert_folder_to_document(db, node_id, user.id)
+
+
 @router.post("/nodes/{node_id}/save-combined")
 def post_save_combined(
     node_id: int,

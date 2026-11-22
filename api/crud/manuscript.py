@@ -436,6 +436,31 @@ def update_node(
     return get_node(db, node.id, user_id)
 
 
+def convert_folder_to_document(
+    db: Session,
+    node_id: int,
+    user_id: int,
+) -> dict:
+    """Turn a folder into an editable document while keeping its children."""
+    node = _get_node_or_404(db, node_id, user_id)
+    if node.node_type != "folder":
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "폴더만 문서로 변환할 수 있습니다.")
+
+    body = node.body
+    with_spaces, plain = count_characters(body)
+    if plain == 0:
+        body = "<p></p>"
+        with_spaces, plain = count_characters(body)
+
+    node.node_type = "chapter"
+    node.body = body
+    node.char_count_with_spaces = with_spaces
+    node.char_count_plain = plain
+    db.commit()
+    db.refresh(node)
+    return get_node(db, node.id, user_id)
+
+
 def save_combined(
     db: Session,
     folder_id: int,
