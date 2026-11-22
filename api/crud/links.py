@@ -123,7 +123,13 @@ def get_all_links(
     query = (
         db.query(Link)
         .join(Category, Link.category == Category.id)
-        .order_by(Category.order, Category.id, Link.order, Link.id)
+        .order_by(
+            Category.is_special.desc(),
+            Category.order,
+            Category.id,
+            Link.order,
+            Link.id,
+        )
     )
     if user_id is not None:
         query = query.filter(Link.user_id == user_id)
@@ -323,7 +329,7 @@ def get_all_link_categories(db: Session, user_id: int):
     categories = (
         db.query(Category)
         .filter(Category.user_id == user_id)
-        .order_by(Category.order, Category.id)
+        .order_by(Category.is_special.desc(), Category.order, Category.id)
         .all()
     )
     return [_serialize_category(category) for category in categories]
@@ -440,28 +446,31 @@ def reorder_link_categories(
     Persist the order of the signed-in author's categories.
     """
     ids = [item.id for item in payload.items]
-    categories = {
-        category.id: category
-        for category in (
-            db.query(Category)
-            .filter(
-                Category.id.in_(ids),
-                Category.user_id == user_id,
-            )
-            .all()
-        )
-    }
+    categories = (
+        db.query(Category).filter(Category.user_id == user_id).all()
+    )
+    categories_by_id = {category.id: category for category in categories}
 
-    missing = set(ids) - set(categories)
+    missing = set(ids) - set(categories_by_id)
     if missing:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Does not exist link's category: {sorted(missing)}",
         )
 
+    requested_orders = {item.id: item.order for item in payload.items}
+    ordered = sorted(
+        categories,
+        key=lambda category: (
+            not category.is_special,
+            requested_orders.get(category.id, category.order),
+            category.id,
+        ),
+    )
+
     try:
-        for item in payload.items:
-            categories[item.id].order = item.order
+        for index, category in enumerate(ordered):
+            category.order = index
         db.commit()
     except Exception:
         db.rollback()

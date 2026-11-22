@@ -6,6 +6,7 @@ from sqlalchemy import (
     Text,
     DateTime,
     ForeignKey,
+    Index,
     func,
 )
 from sqlalchemy.orm import relationship
@@ -31,6 +32,16 @@ class Category(Base):
         Boolean, nullable=False, default=False, server_default="0"
     )
     order = Column(Integer, nullable=False, default=0, server_default="0")
+
+    __table_args__ = (
+        Index(
+            "ux_links_categories_one_special_per_user",
+            "user_id",
+            unique=True,
+            postgresql_where=is_special.is_(True),
+            sqlite_where=is_special.is_(True),
+        ),
+    )
 
     links = relationship("Link", back_populates="category_relation")
     user = relationship(User)
