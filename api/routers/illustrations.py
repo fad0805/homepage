@@ -259,18 +259,11 @@ def read_illustrations(
         "page_size": max(1, min(page_size, 50)),
         "granted_illustrations": grants.illustrations,
     }
-    if current_user is not None and is_admin(current_user):
-        illustrations, total = get_visible_illustrations(
-            db,
-            include_hidden=True,
-            **common,
-        )
-    else:
-        illustrations, total = get_visible_illustrations(
-            db,
-            viewer_user_id=current_user.id if current_user else None,
-            **common,
-        )
+    illustrations, total = get_visible_illustrations(
+        db,
+        viewer_user_id=current_user.id if current_user else None,
+        **common,
+    )
     response.headers["X-Total-Count"] = str(total)
     return illustrations
 
@@ -583,24 +576,17 @@ def read_illustration(
             illustration_id,
             owner_user_id=current_user.id,
             include_hidden=True,
+            include_unpublished=True,
             granted_illustrations=grants.illustrations,
             viewer_user_id=current_user.id,
         )
 
-    if current_user is not None and is_admin(current_user):
-        illustration = get_visible_illustration(
-            db,
-            illustration_id,
-            include_hidden=True,
-        )
-    else:
-        illustration = get_visible_illustration(
-            db,
-            illustration_id,
-            include_hidden=current_user is not None,
-            granted_illustrations=grants.illustrations,
-            viewer_user_id=current_user.id if current_user else None,
-        )
+    illustration = get_visible_illustration(
+        db,
+        illustration_id,
+        granted_illustrations=grants.illustrations,
+        viewer_user_id=current_user.id if current_user else None,
+    )
     if illustration.get("user_id") != get_default_author_id(db):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

@@ -1,12 +1,14 @@
 # ruff: noqa: DTZ001
 import unittest
 from datetime import date, datetime
+from unittest.mock import patch
 
 from fastapi import HTTPException
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
+from core.mastodon import maybe_notify_illustration
 from crud.illustrations import (
     _utc_boundary,
     bulk_delete_illustrations,
@@ -15,6 +17,7 @@ from crud.illustrations import (
     delete_illustration,
     finish_illustration_upload,
     get_all_illustrations,
+    get_visible_illustration,
     get_visible_illustrations,
     update_illustration,
 )
@@ -120,6 +123,54 @@ class IllustrationListTests(unittest.TestCase):
         )
         self.assertEqual([row["title"] for row in public_rows], ["업로드 중인 삽화"])
         self.assertEqual(public_total, 1)
+
+    def test_pending_upload_stays_out_of_public_view_for_owner(self) -> None:
+        pending = create_pending_illustration_group(
+            self.db,
+            user_id=self.owner.id,
+            title="업로드 중인 삽화",
+        )
+
+        for viewer in (None, self.owner.id):
+            for include_hidden in (False, True):
+                rows, total = get_visible_illustrations(
+                    self.db,
+                    author_user_id=self.owner.id,
+                    viewer_user_id=viewer,
+                    include_hidden=include_hidden,
+                )
+                self.assertEqual(rows, [])
+                self.assertEqual(total, 0)
+
+        with self.assertRaises(HTTPException):
+            get_visible_illustration(
+                self.db,
+                pending["id"],
+                viewer_user_id=self.owner.id,
+                include_hidden=True,
+            )
+
+    def test_notification_skips_unfinished_illustrations(self) -> None:
+        pending = create_pending_illustration_group(
+            self.db,
+            user_id=self.owner.id,
+            title="업로드 중인 삽화",
+        )
+        pending_row = (
+            self.db.query(Illustration)
+            .filter(Illustration.id == pending["id"])
+            .first()
+        )
+        empty = self._illustration("이미지 없는 삽화")
+
+        with patch(
+            "core.mastodon.list_active_notification_profiles"
+        ) as profiles:
+            self.assertFalse(
+                maybe_notify_illustration(self.db, pending_row)
+            )
+            self.assertFalse(maybe_notify_illustration(self.db, empty))
+            profiles.assert_not_called()
 
     def test_processing_row_rejects_mutations(self) -> None:
         pending = create_pending_illustration_group(

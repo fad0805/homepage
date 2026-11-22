@@ -252,6 +252,7 @@ def _list_query(
     date_from: date | None,
     date_to: date | None,
     include_undated: bool,
+    include_unpublished: bool = False,
 ):
     illustrations_query = db.query(Illustration)
     if author_user_id is not None:
@@ -271,7 +272,7 @@ def _list_query(
                 Illustration.user_id == viewer_user_id,
             )
         )
-    if not include_hidden:
+    if not include_unpublished:
         illustrations_query = illustrations_query.filter(
             _ready_upload_filter(),
             _has_image_filter(),
@@ -391,6 +392,7 @@ def get_visible_illustrations(
     include_undated: bool = True,
     page: int = 1,
     page_size: int = 12,
+    include_unpublished: bool = False,
 ) -> tuple[list[dict], int]:
     """Return one page of visible groups plus the total matching count."""
     illustrations_query = _list_query(
@@ -405,6 +407,7 @@ def get_visible_illustrations(
         date_from=date_from,
         date_to=date_to,
         include_undated=include_undated,
+        include_unpublished=include_unpublished,
     )
     total = illustrations_query.count()
     illustrations = (
@@ -437,10 +440,11 @@ def get_visible_illustration(
     granted_illustrations: frozenset[int] = frozenset(),
     viewer_user_id: int | None = None,
     owner_user_id: int | None = None,
+    include_unpublished: bool = False,
 ):
     """Return one illustration, masking its images while it stays locked."""
     query = _group_query(db).filter(Illustration.id == illustration_id)
-    if not include_hidden and owner_user_id is None:
+    if not include_unpublished:
         query = query.filter(_ready_upload_filter(), _has_image_filter())
     if owner_user_id is not None:
         query = query.filter(Illustration.user_id == owner_user_id)
@@ -502,6 +506,7 @@ def get_all_illustrations(
         date_from=None,
         date_to=None,
         include_undated=True,
+        include_unpublished=True,
     )
     total = illustrations_query.count()
     illustrations = (
@@ -533,6 +538,7 @@ def get_popular_illustrations(
         date_from=None,
         date_to=None,
         include_undated=True,
+        include_unpublished=True,
     )
     illustrations = (
         illustrations_query.order_by(None)
@@ -568,6 +574,7 @@ def get_illustration_stats(
         date_from=None,
         date_to=None,
         include_undated=True,
+        include_unpublished=True,
     )
     count = illustrations_query.order_by(None).count()
     visible = (

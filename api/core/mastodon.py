@@ -1248,6 +1248,13 @@ def maybe_notify_illustration(
     illustration: Illustration,
 ) -> bool:
     """Post an illustration notification to every matching profile."""
+    if getattr(illustration, "upload_status", None) == "processing":
+        return False
+    if not illustration.representative_url and not (
+        illustration.images or []
+    ):
+        return False
+
     delivered = _delivered_profiles(db, "illustration", illustration.id)
 
     if illustration.mastodon_status_id and not delivered:
