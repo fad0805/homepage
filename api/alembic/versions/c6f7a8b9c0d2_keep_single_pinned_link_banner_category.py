@@ -22,13 +22,13 @@ def upgrade() -> None:
     op.execute(
         """
         UPDATE "links-categories"
-        SET is_special = 0
-        WHERE is_special = 1
+        SET is_special = false
+        WHERE is_special = true
           AND EXISTS (
             SELECT 1
             FROM "links-categories" AS other
             WHERE other.user_id = "links-categories".user_id
-              AND other.is_special = 1
+              AND other.is_special = true
               AND (
                 other."order" < "links-categories"."order"
                 OR (
@@ -40,7 +40,7 @@ def upgrade() -> None:
         """
     )
     op.execute(
-        """UPDATE "links-categories" SET "order" = 0 WHERE is_special = 1"""
+        """UPDATE "links-categories" SET "order" = 0 WHERE is_special = true"""
     )
     op.create_index(
         "ux_links_categories_one_special_per_user",
