@@ -235,17 +235,6 @@ export function PlannerTaskModal({
                       }))
                     }
                   />
-                  <span
-                    className={`planner-form-hint${
-                      form.deadlineDays < 1 || form.deadlineDays > 14
-                        ? " is-error"
-                        : ""
-                    }`}
-                  >
-                    {form.deadlineDays < 1 || form.deadlineDays > 14
-                      ? "마감 기간이 1~14일 범위를 벗어났습니다. 수정 후 저장해주세요."
-                      : "14일을 넘기면 저장할 수 없습니다."}
-                  </span>
                 </label>
               ) : (
                 <label>
