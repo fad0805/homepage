@@ -296,7 +296,8 @@
   border: 1px solid rgba(0, 0, 0, 0.16);
   border-radius: 0.45rem;
   color: var(--title-color);
-  font-size: 0.78rem;
+  font-family: inherit;
+  font-size: 0.76rem;
   text-align: center;
   text-decoration: none;
 
@@ -323,7 +324,7 @@
 .illustrations-pagination__ellipsis {
   padding: 0 0.2rem;
   color: var(--input-text);
-  font-size: 0.78rem;
+  font-size: 0.76rem;
   opacity: 0.5;
 }
 
