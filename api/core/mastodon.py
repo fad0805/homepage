@@ -7,7 +7,7 @@ from io import BytesIO
 from urllib.parse import urlparse
 
 import httpx
-from PIL import Image, ImageOps
+from PIL import Image, ImageOps, ImageSequence
 from sqlalchemy.orm import Session
 
 from core.uploads import open_uploaded_file
@@ -34,6 +34,11 @@ NOTIFY_TAG_MODES = {"any", "all"}
 MAX_NOTIFY_TAGS = 10
 SOCIAL_IMAGE_MAX_DIMENSION = 2048
 SOCIAL_IMAGE_MAX_BYTES = 7 * 1024 * 1024
+# Mastodon flattens animated WebP to its first frame, but converts animated
+# GIFs to gifv. Cap the GIF preview so a long clip cannot bloat the upload.
+SOCIAL_GIF_MAX_EDGE = 640
+SOCIAL_GIF_MAX_FRAMES = 120
+SOCIAL_GIF_COLORS = 128
 
 # Delivery rows only prevent duplicate posts for a short window. The content
 # row's mastodon_status_id remains the permanent "already announced" marker.
@@ -937,6 +942,104 @@ def _prepare_social_image(
         return payload, content_type or "application/octet-stream"
 
 
+def _webp_frame_durations(payload: bytes) -> list[int]:
+    """Read per-frame durations from an extended (animated) WebP container.
+
+    Pillow does not expose WebP frame durations while iterating, so read the
+    ANMF chunks directly to keep the GIF's playback speed the same.
+    """
+    durations: list[int] = []
+    position = 12  # RIFF header (fourcc, size, 'WEBP')
+    while position + 8 <= len(payload):
+        chunk = payload[position : position + 4]
+        size = int.from_bytes(payload[position + 4 : position + 8], "little")
+        data = position + 8
+        if chunk == b"ANMF" and size >= 16:
+            # X, Y, width-1 and height-1 are 24-bit each, then duration.
+            durations.append(
+                int.from_bytes(payload[data + 12 : data + 15], "little")
+            )
+        position = data + size + (size & 1)
+    return durations
+
+
+def _animated_webp_to_gif(payload: bytes) -> bytes | None:
+    """Convert an animated WebP to GIF for Mastodon.
+
+    Mastodon's media processing still turns animated WebP into a still image,
+    while animated GIFs become gifv and keep playing. Returns ``None`` when
+    the source is not animated or cannot be decoded, leaving the original
+    bytes untouched.
+    """
+    try:
+        with Image.open(BytesIO(payload)) as source:
+            if source.format != "WEBP" or not getattr(
+                source, "is_animated", False
+            ):
+                return None
+            loop = int(source.info.get("loop", 0) or 0)
+            webp_durations = _webp_frame_durations(payload)
+            frames: list[Image.Image] = []
+            durations: list[int] = []
+            for index, frame in enumerate(ImageSequence.Iterator(source)):
+                if len(frames) >= SOCIAL_GIF_MAX_FRAMES:
+                    break
+                rgba = frame.convert("RGBA")
+                rgba.thumbnail((SOCIAL_GIF_MAX_EDGE, SOCIAL_GIF_MAX_EDGE))
+                flat = Image.new("RGB", rgba.size, "white")
+                flat.paste(rgba, mask=rgba.getchannel("A"))
+                frames.append(flat)
+                duration = (
+                    webp_durations[index]
+                    if index < len(webp_durations)
+                    else 100
+                )
+                durations.append(max(20, duration))
+            if len(frames) < 2:
+                return None
+    except Exception as error:
+        logger.warning("Could not read animated WebP for Mastodon: %s", error)
+        return None
+
+    best: bytes | None = None
+    for scale in (1.0, 0.75, 0.5):
+        for step in (1, 2, 3):
+            indexes = list(range(0, len(frames), step))
+            palette_frames: list[Image.Image] = []
+            for index in indexes:
+                frame = frames[index]
+                if scale != 1.0:
+                    frame = frame.resize(
+                        (
+                            max(1, round(frame.width * scale)),
+                            max(1, round(frame.height * scale)),
+                        ),
+                        Image.Resampling.LANCZOS,
+                    )
+                palette_frames.append(
+                    frame.quantize(
+                        colors=SOCIAL_GIF_COLORS,
+                        method=Image.Quantize.FASTOCTREE,
+                    )
+                )
+            output = BytesIO()
+            palette_frames[0].save(
+                output,
+                format="GIF",
+                save_all=True,
+                append_images=palette_frames[1:],
+                duration=[sum(durations[i : i + step]) for i in indexes],
+                loop=loop,
+                optimize=True,
+            )
+            result = output.getvalue()
+            if best is None or len(result) < len(best):
+                best = result
+            if len(result) <= SOCIAL_IMAGE_MAX_BYTES:
+                return result
+    return best
+
+
 def _read_media_file(url: str) -> tuple[str, bytes, str] | None:
     """Read and optimize a stored upload for social media attachment."""
     try:
@@ -997,6 +1100,12 @@ def _upload_mastodon_media(
     if media is None:
         return None
     filename, payload, content_type = media
+    if content_type == "image/webp":
+        gif = _animated_webp_to_gif(payload)
+        if gif is not None:
+            payload = gif
+            content_type = "image/gif"
+            filename = f"{os.path.splitext(filename)[0]}.gif"
     try:
         return _upload_mastodon_media_bytes(
             settings,

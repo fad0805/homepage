@@ -14,6 +14,21 @@ def _image_bytes() -> bytes:
     return buffer.getvalue()
 
 
+def _animated_webp_bytes(count: int = 3) -> bytes:
+    colors = [(220, 60, 60), (60, 200, 80), (70, 90, 230)]
+    frames = [Image.new("RGB", (24, 24), colors[i % len(colors)]) for i in range(count)]
+    buffer = BytesIO()
+    frames[0].save(
+        buffer,
+        format="WEBP",
+        save_all=True,
+        append_images=frames[1:],
+        duration=80,
+        loop=0,
+    )
+    return buffer.getvalue()
+
+
 class _FakeResponse:
     status_code = 200
 
@@ -209,6 +224,70 @@ class MastodonMediaTests(unittest.TestCase):
             self.assertLessEqual(
                 max(result.size), mastodon.SOCIAL_IMAGE_MAX_DIMENSION
             )
+
+    def test_animated_webp_is_converted_to_gif_for_mastodon(self) -> None:
+        settings = SimpleNamespace(
+            instance_url="https://mastodon.social",
+            access_token="token",
+        )
+        webp = _animated_webp_bytes()
+        with (
+            patch.object(mastodon, "open_uploaded_file") as opened,
+            patch.object(
+                mastodon, "_request", return_value=_FakeResponse()
+            ) as request,
+        ):
+            opened.return_value.__enter__.return_value = (
+                BytesIO(webp),
+                "image/webp",
+                len(webp),
+            )
+            media_id = mastodon._upload_mastodon_media(
+                settings, "/uploads/motion.webp", "움직이는 삽화"
+            )
+
+        self.assertEqual(media_id, "media-1")
+        file_field = request.call_args.kwargs["files"]["file"]
+        self.assertEqual(file_field[0], "motion.gif")
+        self.assertEqual(file_field[2], "image/gif")
+        with Image.open(BytesIO(file_field[1])) as gif:
+            self.assertGreaterEqual(gif.n_frames, 2)
+            self.assertEqual(gif.format, "GIF")
+            self.assertEqual(gif.info.get("loop"), 0)
+            self.assertEqual(gif.info.get("duration"), 80)
+
+    def test_misskey_keeps_animated_webp(self) -> None:
+        settings = SimpleNamespace(
+            instance_url="https://misskey.example",
+            access_token="token",
+        )
+        webp = _animated_webp_bytes()
+        with (
+            patch.object(
+                mastodon,
+                "_read_media_file",
+                return_value=("motion.webp", webp, "image/webp"),
+            ),
+            patch.object(
+                mastodon,
+                "_upload_misskey_media_bytes",
+                return_value="file-1",
+            ) as upload,
+        ):
+            result = mastodon._upload_misskey_media(
+                settings, "/uploads/motion.webp"
+            )
+
+        self.assertEqual(result, "file-1")
+        args = upload.call_args.args
+        self.assertEqual(args[1], "motion.webp")
+        self.assertEqual(args[2], webp)
+        self.assertEqual(args[3], "image/webp")
+
+    def test_static_webp_is_not_converted_to_gif(self) -> None:
+        buffer = BytesIO()
+        Image.new("RGB", (24, 24), "white").save(buffer, format="WEBP")
+        self.assertIsNone(mastodon._animated_webp_to_gif(buffer.getvalue()))
 
     def test_representative_url_prefers_dedicated_image(self) -> None:
         image = SimpleNamespace(id=7, url="/uploads/7.jpg")
