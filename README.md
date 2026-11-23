@@ -30,7 +30,7 @@
 | **Database** | PostgreSQL 14 |
 | **Auth** | JWT access/refresh token, httpOnly cookie, bcrypt |
 | **Storage** | 로컬 `/uploads` 또는 S3 호환 오브젝트 스토리지 |
-| **Infra** | Docker Compose |
+| **Infra** | Docker Compose, GitHub Actions, GHCR |
 | **Tests** | Python `unittest` + in-memory SQLite |
 
 ## 아키텍처
@@ -85,9 +85,44 @@ docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
 ```bash
 cp .env.production.sample .env.production
 # .env.production 값 채우기
+```
 
+메모리 사용을 줄이려면 서버에서 바로 빌드하지 말고 아래
+"GitHub Actions 빌드 (권장)" 방식을 사용하세요. 직접 빌드할 경우:
+
+```bash
 docker compose up --build -d
 ```
+
+### GitHub Actions 빌드 (권장)
+
+서버에서 `docker compose build`를 돌리면 메모리가 부족할 수 있으므로,
+Actions에서 이미지를 만들어 GHCR에 올리는 방식을 권장합니다.
+
+- `main` 푸시 또는 수동 실행 시 `.github/workflows/build-images.yml`이
+  `ghcr.io/fad0805/homepage/{web,api}` 이미지를 발행합니다.
+- PR에서는 이미지를 빌드만 하고 푸시하지 않습니다.
+- 이미지 태그는 `latest`, 브랜치명, `sha-<커밋>`이 붙습니다.
+
+서버에서는 최초 한 번 GHCR 로그인이 필요합니다(`read:packages` 권한 토큰).
+
+```bash
+echo "$CR_PAT" | docker login ghcr.io -u <github-username> --password-stdin
+
+# docker-compose.ci.yml이 빌드 대신 GHCR 이미지를 지정합니다.
+docker compose -f docker-compose.yml -f docker-compose.ci.yml pull
+docker compose -f docker-compose.yml -f docker-compose.ci.yml up -d
+```
+
+특정 커밋 이미지로 고정하려면 `IMAGE_TAG`를 지정합니다.
+
+```bash
+IMAGE_TAG=sha-abc1234 docker compose -f docker-compose.yml -f docker-compose.ci.yml pull
+IMAGE_TAG=sha-abc1234 docker compose -f docker-compose.yml -f docker-compose.ci.yml up -d
+```
+
+다른 저장소를 포크했다면 `IMAGE_PREFIX`로 이미지 경로를 바꿀 수 있습니다.
+`.env.production`과 DB/업로드 볼륨은 그대로 사용합니다.
 
 ### 서버 스크립트
 
@@ -284,8 +319,10 @@ API 컨테이너는 시작 시 `api/entrypoint.sh`에서 `alembic upgrade head`�
 │   ├── lib/                     # API·인증·날짜·테마 유틸
 │   └── public/styles/           # SCSS 스타일
 ├── bin/                         # 개발/운영 서버 스크립트
+├── .github/workflows/           # 이미지 빌드·발행 GitHub Actions
 ├── docker-compose.yml           # 운영 Docker Compose
 ├── docker-compose.dev.yml       # 개발 Docker Compose
+├── docker-compose.ci.yml        # GHCR 이미지 사용 오버라이드
 └── .env.development             # 개발 환경 변수
 ```
 

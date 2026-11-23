@@ -1,0 +1,13 @@
+# Use the images published by .github/workflows/build-images.yml instead of
+# building on the server. Apply on top of docker-compose.yml:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.ci.yml pull
+#   docker compose -f docker-compose.yml -f docker-compose.ci.yml up -d
+#
+# IMAGE_TAG can be pinned to a specific workflow tag (for example sha-abc1234).
+services:
+  api:
+    image: ${IMAGE_PREFIX:-ghcr.io/fad0805/homepage}/api:${IMAGE_TAG:-latest}
+
+  web:
+    image: ${IMAGE_PREFIX:-ghcr.io/fad0805/homepage}/web:${IMAGE_TAG:-latest}
