@@ -38,7 +38,7 @@ function parsePage(value: string | string[] | undefined) {
 }
 
 function parseSort(value: string | string[] | undefined): SortKey {
-  return firstParam(value) === "created" ? "created" : "taken";
+  return firstParam(value) === "taken" ? "taken" : "created";
 }
 
 function parseFilter(value: string | string[] | undefined): SortKey {
@@ -83,7 +83,7 @@ function pageHref(
   q: string | null = null,
 ) {
   const params = new URLSearchParams();
-  if (sort !== "taken") params.set("sort", sort);
+  if (sort !== "created") params.set("sort", sort);
   if (filterBasis !== "taken") params.set("filter", filterBasis);
   if (from) params.set("from", from);
   if (to) params.set("to", to);
@@ -133,7 +133,7 @@ export default async function IllustrationsPage({
   try {
     const apiParams = new URLSearchParams();
     if (q) apiParams.set("q", q);
-    if (sort !== "taken") apiParams.set("sort", sort);
+    if (sort !== "created") apiParams.set("sort", sort);
     if (filterBasis !== "taken") apiParams.set("filter", filterBasis);
     if (from) apiParams.set("from", from);
     if (to) apiParams.set("to", to);
@@ -173,7 +173,7 @@ export default async function IllustrationsPage({
               method="get"
               action="/illustrations"
             >
-              {sort !== "taken" ? (
+              {sort !== "created" ? (
                 <input type="hidden" name="sort" value={sort} />
               ) : null}
               {q ? <input type="hidden" name="q" value={q} /> : null}

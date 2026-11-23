@@ -298,9 +298,20 @@ class IllustrationListTests(unittest.TestCase):
         self.assertEqual(items[0]["title"], "최신 것")
         self.assertEqual(items[2]["title"], "날짜 없음")
 
+        items, _ = get_visible_illustrations(
+            self.db,
+            author_user_id=self.owner.id,
+        )
+        self.assertEqual([item["title"] for item in items], [
+            "오래된 것",
+            "날짜 없음",
+            "최신 것",
+        ])
+
         items, total = get_visible_illustrations(
             self.db,
             author_user_id=self.owner.id,
+            sort="taken",
             filter_basis="taken",
             date_from=date(2026, 1, 2),
             date_to=date(2026, 1, 3),

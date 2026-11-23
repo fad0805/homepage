@@ -390,7 +390,7 @@ def read_illustrations(
     response: Response,
     q: str | None = None,
     tag: str | None = None,
-    sort: str = "taken",
+    sort: str = "created",
     filter_basis: str = Query("taken", alias="filter"),
     from_: date | None = Query(None, alias="from"),
     to: date | None = None,

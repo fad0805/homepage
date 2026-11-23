@@ -99,7 +99,7 @@ export function IllustrationSearch({
         : null;
 
     const params = new URLSearchParams();
-    if (sort !== "taken") params.set("sort", sort);
+    if (sort !== "created") params.set("sort", sort);
     if (formFilter !== "taken") params.set("filter", formFilter);
 
     if (effectiveFrom) params.set("from", effectiveFrom);

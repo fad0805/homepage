@@ -386,7 +386,7 @@ def get_visible_illustrations(
     *,
     author_user_id: int | None = None,
     granted_illustrations: frozenset[int] = frozenset(),
-    sort: str = "taken",
+    sort: str = "created",
     filter_basis: str = "taken",
     date_from: date | None = None,
     date_to: date | None = None,
