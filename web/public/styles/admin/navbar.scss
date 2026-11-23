@@ -17,7 +17,7 @@
   );
 }
 
-div#content>div>nav {
+div#content > .admin-layout > nav {
   @include horizontal-scroll-fade();
 
   display: flex;
