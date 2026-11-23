@@ -63,6 +63,7 @@ class _Tracked:
     image_fields: frozenset[str] = frozenset()
     skip_create: bool = False
     track_updates: bool = True
+    finalize_only: bool = False
     occurred_at: Callable[[Any], datetime | None] | None = None
 
 
@@ -200,6 +201,7 @@ TRACKED: dict[type, _Tracked] = {
         ),
         image_fields=frozenset({"representative_image_id", "representative_url"}),
         track_updates=False,
+        finalize_only=True,
     ),
     Character: _Tracked(
         "character",
@@ -544,6 +546,33 @@ def _event_owner(obj: Any, tracked: _Tracked) -> int | None:
         return None
 
 
+def _should_record_illustration_history(obj: Any) -> bool:
+    """Skip pending rows and video-failure privatization, not private saves."""
+    if not isinstance(obj, Illustration):
+        return True
+    return getattr(obj, "upload_status", "ready") not in (
+        "processing",
+        "video_failed",
+    )
+
+
+def queue_illustration_history(
+    session: Session,
+    obj: Any,
+    *,
+    action: str = "created",
+    changes: list[dict] | None = None,
+) -> None:
+    """Record an illustration's history once its upload is finalized."""
+    tracked = _meta_for(obj)
+    if tracked is None or not tracked.finalize_only:
+        return
+    if not _should_record_illustration_history(obj):
+        return
+    pending = session.info.setdefault("planner_audit_pending", [])
+    _queue(pending, obj, tracked, action, changes)
+
+
 def _queue(
     pending: list[dict],
     obj: Any,
@@ -653,6 +682,8 @@ def _before_flush(session: Session, flush_context, instances) -> None:
         if tracked is not None:
             if _is_child_of_deleted(obj, deleted_objects):
                 continue
+            if not _should_record_illustration_history(obj):
+                continue
             _queue(pending, obj, tracked, "deleted", None)
             continue
 
@@ -690,6 +721,8 @@ def _after_flush(session: Session, flush_context) -> None:
         tracked = _meta_for(obj)
         if tracked is not None:
             if tracked.skip_create:
+                continue
+            if not _should_record_illustration_history(obj):
                 continue
             _queue(pending, obj, tracked, "created", None)
             continue

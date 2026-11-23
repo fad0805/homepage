@@ -23,6 +23,7 @@ from fastapi import (
 )
 from sqlalchemy.orm import Session
 
+from core.audit import queue_illustration_history
 from core.mastodon import maybe_notify_illustration
 from core.uploads import (
     ALLOWED_CONTENT_TYPES,
@@ -312,11 +313,14 @@ def _process_staged_upload(
                 illustration_id,
                 gallery_urls,
                 representative_url,
+                queue_history=False,
             )
             if video_failed:
                 group.visible = False
                 group.protected = False
                 group.upload_status = "video_failed"
+            else:
+                queue_illustration_history(db, group)
             db.commit()
             db.refresh(group)
             committed = True

@@ -77,6 +77,7 @@ interface StageFilesOptions {
   protected?: boolean;
   representativeFile?: File | null;
   onChunk?: (file: File, index: number, total: number) => void;
+  onFileComplete?: (file: File) => void;
 }
 
 /**
@@ -144,6 +145,7 @@ async function stageFiles(options: StageFilesOptions): Promise<string> {
         body: formData,
       });
     }
+    options.onFileComplete?.(file);
   }
   return sessionId;
 }
@@ -364,6 +366,9 @@ export default function AdminIllustrations() {
   } | null>(null);
   const [uploadProgressOpen, setUploadProgressOpen] = useState(false);
   const [uploadFiles, setUploadFiles] = useState<File[]>([]);
+  const [uploadThumbnails, setUploadThumbnails] = useState<
+    { file: File; url: string }[]
+  >([]);
   const [uploadModalStatus, setUploadModalStatus] = useState<
     "running" | "success" | "error"
   >("running");
@@ -523,6 +528,43 @@ export default function AdminIllustrations() {
       });
     }
   }, [items]);
+
+  useEffect(() => {
+    if (!uploading) return;
+
+    const warnBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    const blockLinkNavigation = (event: MouseEvent) => {
+      if (event.defaultPrevented || event.button !== 0) return;
+      if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
+        return;
+      }
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+      const anchor = target.closest("a[href]");
+      if (!anchor) return;
+      event.preventDefault();
+      event.stopPropagation();
+    };
+
+    window.addEventListener("beforeunload", warnBeforeUnload);
+    document.addEventListener("click", blockLinkNavigation, true);
+    return () => {
+      window.removeEventListener("beforeunload", warnBeforeUnload);
+      document.removeEventListener("click", blockLinkNavigation, true);
+    };
+  }, [uploading]);
+
+  useEffect(() => {
+    if (uploadProgressOpen || uploadThumbnails.length === 0) return;
+    const urls = uploadThumbnails.map((thumbnail) => thumbnail.url);
+    setUploadThumbnails([]);
+    return () => {
+      urls.forEach((url) => URL.revokeObjectURL(url));
+    };
+  }, [uploadProgressOpen, uploadThumbnails]);
 
   useEffect(() => {
     const next = files.map((file) => ({
@@ -811,6 +853,21 @@ export default function AdminIllustrations() {
       return;
     }
 
+    setUploading(true);
+    setUploadFiles([...files]);
+    setUploadThumbnails(
+      files.map((file) => ({ file, url: URL.createObjectURL(file) })),
+    );
+    setSentFiles(new Set());
+    setSendingFile(null);
+    setSendingChunk(null);
+    setUploadModalStatus("running");
+    setUploadProgressOpen(true);
+    setNotice({
+      type: "success",
+      text: `${uploadedCount}개의 파일을 등록하고 있습니다...`,
+    });
+
     try {
       const sessionId = await stageFiles({
         files,
@@ -827,9 +884,14 @@ export default function AdminIllustrations() {
           setSendingFile(file);
           setSendingChunk({ file, index, total });
         },
+        onFileComplete: (file) => {
+          setSentFiles((previous) => new Set(previous).add(file));
+          setSendingFile(null);
+          setSendingChunk(null);
+        },
       });
+      setSendingFile(null);
       setSendingChunk(null);
-      setSentFiles(new Set(files));
       setNotice({
         type: "success",
         text: "모든 파일을 받았습니다. 서버에서 처리하는 중입니다...",
@@ -1862,9 +1924,10 @@ export default function AdminIllustrations() {
             </button>
             <button
               type="button"
-              className="admin-button primary"
+              className={`admin-button primary${uploading ? " is-uploading" : ""}`}
               onClick={() => void handleUpload()}
               disabled={uploading || !title.trim()}
+              aria-busy={uploading}
             >
               {uploading
                 ? "등록 중..."
@@ -2246,31 +2309,62 @@ export default function AdminIllustrations() {
               ) : null}
               {uploadModalStatus === "success" ? (
                 <p className="admin-illustrations-upload-modal__message is-success">
-                  모든 파일을 서버에 전송했습니다.
+                  {uploading
+                    ? "모든 파일을 서버에 전송했습니다. 삽화를 등록하고 있습니다..."
+                    : "삽화를 등록했습니다."}
                 </p>
               ) : null}
               <ol className="admin-illustrations-upload-modal__list">
                 {uploadFiles.map((file, index) => {
                   const sent = sentFiles.has(file);
                   const sending = sendingFile === file;
+                  const activeChunk = sendingChunk?.file === file
+                    ? sendingChunk
+                    : null;
+                  const previewUrl = uploadThumbnails.find(
+                    (thumbnail) => thumbnail.file === file,
+                  )?.url;
+                  const isImage = file.type.startsWith("image/");
                   return (
                     <li
                       key={`${file.name}-${index}`}
                       className={`admin-illustrations-upload-modal__row${
                         sent ? " is-sent" : ""
                       }${sending ? " is-sending" : ""}`}
+                      aria-busy={sending}
                     >
+                      <span className="admin-illustrations-upload-modal__thumb">
+                        {isImage && previewUrl ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={previewUrl} alt="" />
+                        ) : (
+                          <span>
+                            {file.type.startsWith("video/") ? "영상" : "파일"}
+                          </span>
+                        )}
+                      </span>
                       <span className="admin-illustrations-upload-modal__index">
                         {index + 1}
                       </span>
                       <span className="admin-illustrations-upload-modal__name">
                         {file.name}
                       </span>
+                      {activeChunk ? (
+                        <span className="admin-illustrations-upload-modal__progress">
+                          <span
+                            style={{
+                              width: `${Math.round(
+                                (activeChunk.index / activeChunk.total) * 100,
+                              )}%`,
+                            }}
+                          />
+                        </span>
+                      ) : null}
                       <span className="admin-illustrations-upload-modal__state">
                         {sent
                           ? "서버 전송 완료"
-                          : sendingChunk?.file === file
-                            ? `전송 중 (${sendingChunk.index}/${sendingChunk.total})`
+                          : activeChunk
+                            ? `전송 중 (${activeChunk.index}/${activeChunk.total})`
                             : sending
                               ? "전송 중"
                               : "전송 대기"}
@@ -2287,7 +2381,7 @@ export default function AdminIllustrations() {
                 disabled={uploading}
                 onClick={() => setUploadProgressOpen(false)}
               >
-                {uploading ? "업로드 중..." : "닫기"}
+                {uploading ? "등록 중..." : "닫기"}
               </button>
             </footer>
           </div>

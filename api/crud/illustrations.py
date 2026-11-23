@@ -5,6 +5,7 @@ from fastapi import HTTPException, status
 from sqlalchemy import false, func, or_
 from sqlalchemy.orm import Session, selectinload
 
+from core.audit import queue_illustration_history
 from core.mastodon import maybe_notify_illustration
 from core.search import like_pattern, search_tokens
 from core.uploads import delete_replaced_upload, delete_uploaded_file
@@ -671,6 +672,8 @@ def finish_illustration_upload(
     illustration_id: int,
     uploads: list[str],
     representative_url: str | None = None,
+    *,
+    queue_history: bool = True,
 ):
     """Attach background-saved files and publish the illustration row."""
     group = _get_illustration_or_404(db, illustration_id)
@@ -682,6 +685,8 @@ def finish_illustration_upload(
     elif group.representative_image_id is None and images:
         group.representative_image_id = images[0].id
     group.upload_status = "ready"
+    if queue_history:
+        queue_illustration_history(db, group)
 
     try:
         db.commit()
@@ -793,9 +798,28 @@ def update_illustration(
 
     db.flush()
     sync_illustration_tags(db, illustration)
+    became_public = not was_visible and illustration.visible is not False
+    visibility_changed = (
+        "visible" in data
+        and (illustration.visible is not False) != was_visible
+    )
+    if visibility_changed:
+        queue_illustration_history(
+            db,
+            illustration,
+            action="updated",
+            changes=[
+                {
+                    "field": "visible",
+                    "kind": "changed",
+                    "before": was_visible,
+                    "after": illustration.visible is not False,
+                }
+            ],
+        )
     db.commit()
     db.refresh(illustration)
-    if not was_visible and illustration.visible is not False:
+    if became_public:
         maybe_notify_illustration(db, illustration)
     if replaced_representative_url:
         delete_uploaded_file(replaced_representative_url)
@@ -941,6 +965,7 @@ def bulk_update_illustrations(
         _ensure_editable(illustration)
 
     became_visible: list[Illustration] = []
+    visibility_changes: list[tuple[Illustration, bool, bool]] = []
     for illustration in illustrations:
         was_visible = illustration.visible is not False
         if "visible" in data and data["visible"] is not None:
@@ -951,13 +976,30 @@ def bulk_update_illustrations(
             illustration.taken_at = data["taken_at"]
         if "tags" in data and data["tags"] is not None:
             illustration.tags = _clean_tags(data["tags"])
-        if not was_visible and illustration.visible is not False:
+        now_visible = illustration.visible is not False
+        if was_visible != now_visible:
+            visibility_changes.append((illustration, was_visible, now_visible))
+        if not was_visible and now_visible:
             became_visible.append(illustration)
 
     db.flush()
     if "tags" in data:
         for illustration in illustrations:
             sync_illustration_tags(db, illustration)
+    for illustration, was_visible, now_visible in visibility_changes:
+        queue_illustration_history(
+            db,
+            illustration,
+            action="updated",
+            changes=[
+                {
+                    "field": "visible",
+                    "kind": "changed",
+                    "before": was_visible,
+                    "after": now_visible,
+                }
+            ],
+        )
     db.commit()
     for illustration in became_visible:
         maybe_notify_illustration(db, illustration)
