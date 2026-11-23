@@ -157,13 +157,69 @@
   font-size: 0.9rem;
   line-height: 1.5;
   overflow-wrap: anywhere;
-  white-space: pre-wrap;
 
   a {
     color: var(--title-color);
     text-decoration: underline;
     text-underline-offset: 2px;
     overflow-wrap: anywhere;
+  }
+}
+
+.memo-content-line {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+
+  + .memo-content-line {
+    margin-top: 0.15rem;
+  }
+}
+
+.memo-content-list {
+  margin: 0;
+  padding-left: 0;
+  list-style: disc;
+  list-style-position: inside;
+
+  li {
+    overflow-wrap: anywhere;
+
+    + li {
+      margin-top: 0.12rem;
+    }
+
+    &.is-check {
+      margin-left: 0;
+      list-style: none;
+    }
+  }
+}
+
+.memo-content-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.4rem;
+
+  input {
+    flex: none;
+    margin: 0.18rem 0 0;
+    accent-color: var(--theme-main);
+    cursor: pointer;
+
+    &:disabled {
+      cursor: default;
+    }
+  }
+
+  span {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+
+  &.is-done span {
+    text-decoration: line-through;
+    opacity: 0.55;
   }
 }
 
@@ -238,11 +294,20 @@
   color: #e08a8a;
 }
 
+.memo-hint,
 .memo-status,
 .memo-error {
   margin: 0.7rem 0 0;
   padding: 0 0.15rem;
   font-size: 0.82rem;
+}
+
+.memo-hint {
+  color: color-mix(in srgb, var(--foreground) 55%, transparent);
+}
+
+[data-theme='dark'] .memo-hint {
+  color: color-mix(in srgb, var(--foreground) 55%, transparent);
 }
 
 .memo-status {

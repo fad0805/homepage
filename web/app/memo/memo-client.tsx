@@ -1,23 +1,20 @@
 "use client";
 
 import {
-  Fragment,
   FormEvent,
   KeyboardEvent,
   useEffect,
   useMemo,
   useRef,
   useState,
-  type ReactNode,
 } from "react";
 
 import { Pagination } from "@/components/pagination";
 import { apiFetch } from "@/lib/api";
 import { formatDateTime } from "@/lib/datetime";
-import {
-  parseInlineMarkdown,
-  type InlineMarkdownNode,
-} from "@/lib/inline-markdown";
+import { toggleNoteCheckLine } from "@/lib/note-markdown";
+
+import { MemoContent } from "./memo-content";
 
 import "@/public/styles/memo.scss";
 
@@ -49,36 +46,6 @@ function resizeTextarea(element: HTMLTextAreaElement | null) {
     element.scrollHeight > maxHeight ? "auto" : "hidden";
 }
 
-function renderInlineNodes(nodes: InlineMarkdownNode[]): ReactNode[] {
-  return nodes.map((node, index) => {
-    switch (node.kind) {
-      case "link":
-        return (
-          <a
-            key={`${node.href}-${index}`}
-            href={node.href}
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            {node.text}
-          </a>
-        );
-      case "strong":
-        return (
-          <strong key={index}>
-            {renderInlineNodes(node.children)}
-          </strong>
-        );
-      case "em":
-        return <em key={index}>{renderInlineNodes(node.children)}</em>;
-      case "del":
-        return <del key={index}>{renderInlineNodes(node.children)}</del>;
-      default:
-        return <Fragment key={index}>{node.text}</Fragment>;
-    }
-  });
-}
-
 export default function MemoClient({ username }: { username: string }) {
   const [memos, setMemos] = useState<Memo[]>([]);
   const [newContent, setNewContent] = useState("");
@@ -92,6 +59,8 @@ export default function MemoClient({ username }: { username: string }) {
   const [savingId, setSavingId] = useState<number | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [pinningId, setPinningId] = useState<number | null>(null);
+  const [checkSavingId, setCheckSavingId] = useState<number | null>(null);
+  const checkSavingRef = useRef<number | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -122,7 +91,12 @@ export default function MemoClient({ username }: { username: string }) {
     if (loading) return;
 
     const refresh = () => {
-      if (document.visibilityState === "hidden") return;
+      if (
+        document.visibilityState === "hidden" ||
+        checkSavingRef.current !== null
+      ) {
+        return;
+      }
 
       apiFetch<Memo[]>("/api/memos", { cache: "no-store" })
         .then((data) => setMemos(sortMemos(data)))
@@ -283,6 +257,52 @@ export default function MemoClient({ username }: { username: string }) {
     }
   };
 
+  const handleToggleMemoCheck = async (
+    memo: Memo,
+    lineIndex: number,
+  ) => {
+    if (checkSavingRef.current !== null) return;
+
+    const content = toggleNoteCheckLine(memo.content, lineIndex);
+    if (content === null) return;
+
+    const previous = memo.content;
+    checkSavingRef.current = memo.id;
+    setCheckSavingId(memo.id);
+    setError(null);
+    setMemos((items) =>
+      sortMemos(
+        items.map((item) => (item.id === memo.id ? { ...item, content } : item)),
+      ),
+    );
+
+    try {
+      const data = await apiFetch<Memo>(`/api/memos/${memo.id}`, {
+        method: "PUT",
+        body: JSON.stringify({ content }),
+      });
+      setMemos((items) =>
+        sortMemos(items.map((item) => (item.id === memo.id ? data : item))),
+      );
+    } catch (reason) {
+      setMemos((items) =>
+        sortMemos(
+          items.map((item) =>
+            item.id === memo.id ? { ...item, content: previous } : item,
+          ),
+        ),
+      );
+      setError(
+        reason instanceof Error
+          ? reason.message
+          : "주석을 수정하지 못했습니다.",
+      );
+    } finally {
+      checkSavingRef.current = null;
+      setCheckSavingId(null);
+    }
+  };
+
   const handleDelete = async (memo: Memo) => {
     if (
       deletingId !== null ||
@@ -351,9 +371,13 @@ export default function MemoClient({ username }: { username: string }) {
         </form>
       ) : (
         <div className={`memo-row${memo.pinned ? " is-pinned" : ""}`}>
-          <p className="memo-content" title={memo.content}>
-            {renderInlineNodes(parseInlineMarkdown(memo.content))}
-          </p>
+          <MemoContent
+            content={memo.content}
+            disabled={checkSavingId !== null}
+            onToggleCheck={(lineIndex) =>
+              handleToggleMemoCheck(memo, lineIndex)
+            }
+          />
           <div className="memo-meta">
             <div className="memo-item-actions">
               <button
@@ -442,6 +466,10 @@ export default function MemoClient({ username }: { username: string }) {
                 </button>
               </div>
             </form>
+            <p className="memo-hint">
+              `- 목록`, `- [ ] 체크` 형식을 지원합니다. 체크하면 바로
+              저장됩니다.
+            </p>
             {error ? <p className="memo-error">{error}</p> : null}
             {memos.length === 0 ? (
               <>

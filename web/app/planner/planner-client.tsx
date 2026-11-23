@@ -23,6 +23,7 @@ import {
   formatDateTime,
   todayDateInputValue,
 } from "@/lib/datetime";
+import { toggleNoteCheckLine } from "@/lib/note-markdown";
 
 import "@/public/styles/planner.scss";
 
@@ -52,10 +53,7 @@ import { PlannerSpecialModal } from "./planner-special-modal";
 import { PlannerTaskDetailModal } from "./planner-task-detail-modal";
 import { PlannerTaskModal } from "./planner-task-modal";
 import { MagnifierIcon } from "./planner-icons";
-import {
-  NOTE_CHECK_LINE_RE,
-  PlannerNoteContent,
-} from "./planner-note-content";
+import { PlannerNoteContent } from "./planner-note-content";
 import {
   ACTION_LABELS,
   DEFAULT_TASK_COLOR,
@@ -1178,15 +1176,8 @@ export default function PlannerClient({ username }: { username: string }) {
     ) {
       return;
     }
-    const lines = task.notes.split(/\r?\n/);
-    const line = lines[lineIndex];
-    if (line === undefined) return;
-    const match = line.match(NOTE_CHECK_LINE_RE);
-    if (!match) return;
-
-    const checked = (match[2] || "").toLowerCase() === "x";
-    lines[lineIndex] = `${match[1]}${checked ? " " : "x"}${match[3]}${match[4]}`;
-    const notes = lines.join("\n");
+    const notes = toggleNoteCheckLine(task.notes, lineIndex);
+    if (notes === null) return;
     const previous = task.notes;
     setNoteSavingId(task.id);
     setError(null);

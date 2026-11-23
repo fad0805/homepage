@@ -1,53 +1,6 @@
 // Checklist-aware rendering for planner notes.
 
-export const NOTE_CHECK_LINE_RE =
-  /^(\s*(?:[-*]\s+)?\[)([ xX]?)(\]\s*)(.*)$/;
-
-export interface PlannerNoteItem {
-  index: number;
-  text: string;
-  checkbox: boolean;
-  checked: boolean;
-}
-
-export type PlannerNoteBlock =
-  | { type: "list"; items: PlannerNoteItem[] }
-  | { type: "paragraph"; index: number; text: string };
-
-export function parseNoteBlocks(notes: string): PlannerNoteBlock[] {
-  const blocks: PlannerNoteBlock[] = [];
-  let list: PlannerNoteItem[] = [];
-  const flushList = () => {
-    if (list.length > 0) {
-      blocks.push({ type: "list", items: list });
-      list = [];
-    }
-  };
-
-  notes.split(/\r?\n/).forEach((line, index) => {
-    const bullet = line.match(/^\s*[-*]\s+(.*)$/);
-    const content = bullet ? bullet[1] : line;
-    const check = content.match(/^\[([ xX]?)\]\s*(.*)$/);
-    if (bullet || check) {
-      list.push({
-        index,
-        text: check ? check[2] : (bullet?.[1] ?? ""),
-        checkbox: Boolean(check),
-        checked: check
-          ? check[1].toLowerCase() === "x"
-          : false,
-      });
-      return;
-    }
-
-    flushList();
-    if (line.trim()) {
-      blocks.push({ type: "paragraph", index, text: line });
-    }
-  });
-  flushList();
-  return blocks;
-}
+import { parseNoteBlocks } from "@/lib/note-markdown";
 
 export function PlannerNoteContent({
   notes,
