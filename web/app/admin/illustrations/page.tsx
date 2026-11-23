@@ -178,22 +178,6 @@ async function waitForAppendImages(id: number, expected: number) {
   throw new Error("영상 처리가 완료되지 않았습니다.");
 }
 
-async function waitForIllustrationReady(id: number) {
-  const deadline = Date.now() + 10 * 60 * 1000;
-  while (Date.now() < deadline) {
-    try {
-      const detail = await apiFetch<IllustrationDetailItem>(
-        `/api/illustrations/${id}?mine=true`,
-      );
-      if (detail.upload_status !== "processing") return detail;
-    } catch {
-      throw new Error("삽화 이미지 업로드에 실패해 등록이 취소되었습니다.");
-    }
-    await new Promise((resolve) => window.setTimeout(resolve, 1000));
-  }
-  throw new Error("이미지 업로드가 완료되지 않았습니다.");
-}
-
 interface VideoRange {
   start: number;
   seconds: number;
@@ -450,6 +434,7 @@ export default function AdminIllustrations() {
   const handledEditParamRef = useRef(false);
   const trimVideoRefs = useRef<(HTMLVideoElement | null)[]>([]);
   const backgroundUploadIdsRef = useRef<Set<number>>(new Set());
+  const backgroundUploadCountsRef = useRef<Map<number, number>>(new Map());
   const today = todayDateInputValue();
 
   useEffect(() => {
@@ -512,12 +497,19 @@ export default function AdminIllustrations() {
   useEffect(() => {
     const remaining = new Set<number>();
     let failed = 0;
+    let videoFailed = 0;
+    let finishedCount = 0;
     backgroundUploadIdsRef.current.forEach((id) => {
       const item = items.find((candidate) => candidate.id === id);
       if (!item) {
         failed += 1;
+        backgroundUploadCountsRef.current.delete(id);
       } else if (item.upload_status === "processing") {
         remaining.add(id);
+      } else {
+        finishedCount += backgroundUploadCountsRef.current.get(id) ?? 0;
+        if (item.upload_status === "video_failed") videoFailed += 1;
+        backgroundUploadCountsRef.current.delete(id);
       }
     });
     backgroundUploadIdsRef.current = remaining;
@@ -525,6 +517,16 @@ export default function AdminIllustrations() {
       setNotice({
         type: "error",
         text: `${failed}개의 삽화 업로드에 실패해 등록이 취소되었습니다.`,
+      });
+    } else if (videoFailed > 0) {
+      setNotice({
+        type: "error",
+        text: "영상 변환에 실패해 비공개로 저장했습니다. 영상을 다시 추가하거나 이 상태로 수정할 수 있습니다.",
+      });
+    } else if (finishedCount > 0) {
+      setNotice({
+        type: "success",
+        text: `${finishedCount}개의 파일로 삽화를 등록했습니다.`,
       });
     }
   }, [items]);
@@ -901,23 +903,15 @@ export default function AdminIllustrations() {
         throw new Error("삽화 등록을 시작하지 못했습니다.");
       }
       backgroundUploadIdsRef.current.add(finalized.id);
+      backgroundUploadCountsRef.current.set(finalized.id, uploadedCount);
       upsertItem(finalized);
-      const ready = await waitForIllustrationReady(finalized.id);
-      upsertItem(ready);
-      setUploadModalStatus(
-        ready.upload_status === "video_failed" ? "error" : "success",
-      );
-      setNotice(
-        ready.upload_status === "video_failed"
-          ? {
-              type: "error",
-              text: "영상 변환에 실패해 비공개로 저장했습니다. 영상을 다시 추가하거나 이 상태로 수정할 수 있습니다.",
-            }
-          : {
-              type: "success",
-              text: `${uploadedCount}개의 파일로 삽화를 등록했습니다.`,
-            },
-      );
+      setUploadModalStatus("success");
+      setUploadProgressOpen(false);
+      setUploading(false);
+      setNotice({
+        type: "success",
+        text: `${uploadedCount}개의 파일을 받았습니다. 목록에 추가했고 남은 처리는 백그라운드에서 진행됩니다.`,
+      });
       setFiles([]);
       setVideoRangesByFile(new Map());
       setTitle("");
