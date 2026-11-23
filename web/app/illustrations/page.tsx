@@ -42,7 +42,7 @@ function parseSort(value: string | string[] | undefined): SortKey {
 }
 
 function parseFilter(value: string | string[] | undefined): SortKey {
-  return firstParam(value) === "created" ? "created" : "taken";
+  return firstParam(value) === "taken" ? "taken" : "created";
 }
 
 function parseDateParam(value: string | string[] | undefined) {
@@ -84,7 +84,7 @@ function pageHref(
 ) {
   const params = new URLSearchParams();
   if (sort !== "created") params.set("sort", sort);
-  if (filterBasis !== "taken") params.set("filter", filterBasis);
+  if (filterBasis !== "created") params.set("filter", filterBasis);
   if (from) params.set("from", from);
   if (to) params.set("to", to);
   if (q) params.set("q", q);
@@ -134,7 +134,7 @@ export default async function IllustrationsPage({
     const apiParams = new URLSearchParams();
     if (q) apiParams.set("q", q);
     if (sort !== "created") apiParams.set("sort", sort);
-    if (filterBasis !== "taken") apiParams.set("filter", filterBasis);
+    if (filterBasis !== "created") apiParams.set("filter", filterBasis);
     if (from) apiParams.set("from", from);
     if (to) apiParams.set("to", to);
     apiParams.set("include_undated", from ? "false" : "true");
@@ -181,8 +181,8 @@ export default async function IllustrationsPage({
                 <label className="illustrations-filter__basis">
                   <span>범위</span>
                   <select name="filter" defaultValue={filterBasis}>
-                    <option value="taken">촬영일</option>
                     <option value="created">등록일</option>
+                    <option value="taken">촬영일</option>
                   </select>
                 </label>
                 <label>

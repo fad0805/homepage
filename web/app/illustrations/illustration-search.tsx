@@ -100,7 +100,7 @@ export function IllustrationSearch({
 
     const params = new URLSearchParams();
     if (sort !== "created") params.set("sort", sort);
-    if (formFilter !== "taken") params.set("filter", formFilter);
+    if (formFilter !== "created") params.set("filter", formFilter);
 
     if (effectiveFrom) params.set("from", effectiveFrom);
     if (effectiveTo) params.set("to", effectiveTo);

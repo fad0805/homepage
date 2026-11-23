@@ -363,6 +363,30 @@ class IllustrationListTests(unittest.TestCase):
             "최신 것",
         ])
 
+    def test_date_filter_defaults_to_created(self) -> None:
+        created_in_range = self._illustration(
+            "등록일 해당",
+            taken_at=date(2026, 1, 1),
+            created_at=datetime(2026, 1, 3),
+        )
+        self._image(created_in_range, "/images/created-in-range.jpg")
+        taken_in_range = self._illustration(
+            "촬영일만 해당",
+            taken_at=date(2026, 1, 3),
+            created_at=datetime(2026, 1, 1),
+        )
+        self._image(taken_in_range, "/images/taken-in-range.jpg")
+        self.db.commit()
+
+        items, total = get_visible_illustrations(
+            self.db,
+            author_user_id=self.owner.id,
+            date_from=date(2026, 1, 2),
+            date_to=date(2026, 1, 3),
+        )
+        self.assertEqual(total, 1)
+        self.assertEqual(items[0]["title"], "등록일 해당")
+
     def test_created_date_filter_uses_kst_calendar_days(self) -> None:
         # 2026-01-02 00:00 KST is 2026-01-01 15:00 UTC.
         next_day = self._illustration(
