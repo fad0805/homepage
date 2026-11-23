@@ -165,34 +165,29 @@ def _week_group_date(week_start: date) -> date:
     return week_start + timedelta(days=3)
 
 
-def _rating_parent_start(level: str, period_start: date) -> date:
-    if level == "day":
-        return _week_start(period_start)
-    if level == "week":
-        return _month_start(_week_group_date(period_start))
-    if level == "month":
-        return _quarter_start(period_start)
-    return _year_start(period_start)
-
-
 def build_derived_ratings(
     ratings: list[BookmarkRating],
 ) -> dict[tuple[str, date], tuple[int, float]]:
-    """Derive larger-period ratings by averaging the level below them."""
+    """Average the daily ratings that fall inside each period.
+
+    Larger periods are never averaged from smaller period averages: a month
+    with 20 rated days and one with 2 rated days contribute 20 and 2 values to
+    the quarter, not one value each.
+    """
     grouped: dict[str, dict[date, list[float]]] = {
         level: {} for level in RATING_LEVELS
     }
     for rating in ratings:
-        grouped["day"].setdefault(rating.period_start, []).append(
-            float(rating.rating)
-        )
-
-    for index, level in enumerate(RATING_LEVELS[1:], start=1):
-        child_level = RATING_LEVELS[index - 1]
-        for period_start, values in grouped[child_level].items():
-            average = sum(values) / len(values)
-            parent_start = _rating_parent_start(child_level, period_start)
-            grouped[level].setdefault(parent_start, []).append(average)
+        day = rating.period_start
+        value = float(rating.rating)
+        for level, period_start in (
+            ("day", day),
+            ("week", _week_start(day)),
+            ("month", _month_start(day)),
+            ("quarter", _quarter_start(day)),
+            ("year", _year_start(day)),
+        ):
+            grouped[level].setdefault(period_start, []).append(value)
 
     derived: dict[tuple[str, date], tuple[int, float]] = {}
     for level in RATING_LEVELS:

@@ -109,9 +109,9 @@ class BookmarkJournalTreeTests(
         year = tree["years"][0]
         self.assertEqual(year["goal"].content, "연간 목표")
         self.assertEqual(year["goal_count"], 5)
-        # Direct week/year ratings are no longer accepted; only daily ratings
-        # feed the hierarchy (2 and 5 -> 3.5 for every larger period).
-        self.assertEqual(year["rating_count"], 1)
+        # Direct week/year ratings are no longer accepted; every larger
+        # period averages its own daily ratings (2 and 5 -> 3.5).
+        self.assertEqual(year["rating_count"], 2)
         self.assertEqual(year["average_rating"], 3.5)
         self.assertEqual(year["rating"]["rating"], 4)
 
@@ -253,7 +253,7 @@ class BookmarkJournalTreeTests(
         self.assertEqual(day["goal"].wake_time, time(7, 5))
         self.assertEqual(day["goal"].mood_tag_id, tag.id)
 
-    def test_larger_ratings_average_one_level_below(self):
+    def test_larger_ratings_average_all_days_in_the_period(self):
         self.add_record("day", date(2026, 1, 5), rating=1)
         self.add_record("day", date(2026, 1, 6), rating=3)
         self.add_record("day", date(2026, 2, 2), rating=5)
@@ -265,15 +265,18 @@ class BookmarkJournalTreeTests(
         )
 
         year = tree["years"][0]
-        self.assertEqual(year["average_rating"], 3.5)
-        self.assertEqual(year["rating_count"], 1)
+        self.assertEqual(year["average_rating"], 3)
+        self.assertEqual(year["rating_count"], 3)
         quarter = year["children"][0]
-        self.assertEqual(quarter["average_rating"], 3.5)
+        self.assertEqual(quarter["average_rating"], 3)
+        self.assertEqual(quarter["rating_count"], 3)
         months = {
             month["label"]: month for month in quarter["children"]
         }
         self.assertEqual(months["2026년 1월"]["average_rating"], 2)
+        self.assertEqual(months["2026년 1월"]["rating_count"], 2)
         self.assertEqual(months["2026년 2월"]["average_rating"], 5)
+        self.assertEqual(months["2026년 2월"]["rating_count"], 1)
         january_week = months["2026년 1월"]["children"][0]
         self.assertEqual(january_week["average_rating"], 2)
         self.assertEqual(january_week["rating_count"], 2)
