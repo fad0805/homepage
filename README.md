@@ -147,7 +147,7 @@ python3 -m unittest discover -s tests -v
 
 | 변수 | 필수 | 설명 |
 |------|------|------|
-| `SECRET_KEY` | 운영 필수 | JWT 서명 비밀키 (개발은 `.env.development`의 고정 키 사용, 없으면 자동 생성) |
+| `SECRET_KEY` | 운영 필수 | JWT 서명 비밀키 (배포·인스턴스 간 동일 값 유지, 개발은 자동 생성) |
 | `ACCESS_TOKEN_EXPIRE_MINUTES` | 선택 | access 토큰 만료 시간(분, 기본 30) |
 | `REFRESH_TOKEN_EXPIRE_DAYS` | 선택 | refresh 토큰/로그인 유지 기간(일, 기본 30) |
 | `REFRESH_TOKEN_GRACE_SECONDS` | 선택 | refresh 토큰 회전 후 이전 토큰 허용 시간(초, 기본 60) |

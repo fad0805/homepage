@@ -12,13 +12,13 @@ from core.config import ENVIRONMENT, AUTH_COOKIE_MAX_AGE
 from core.rate_limit import FailureRateLimiter
 from core.security import (
     create_access_token,
-    create_refresh_token,
     decode_access_token,
     decode_refresh_token,
     hash_refresh_token,
     verify_password,
 )
 from routers.utils import (
+    create_session_refresh_token,
     get_client_ip,
     get_current_user_from_token,
     get_optional_user,
@@ -201,8 +201,10 @@ async def signin(
         access_token = create_access_token(
             data={"sub": username, "sid": session.id}
         )
-        refresh_token = create_refresh_token(
-            data={"sub": username, "sid": session.id}
+        refresh_token = create_session_refresh_token(
+            session.id,
+            username,
+            session.expires_at,
         )
         session.refresh_token_hash = hash_refresh_token(refresh_token)
         db.commit()
@@ -445,8 +447,10 @@ def update_my_password(
         access_token = create_access_token(
             data={"sub": user.username, "sid": session.id}
         )
-        refresh_token = create_refresh_token(
-            data={"sub": user.username, "sid": session.id}
+        refresh_token = create_session_refresh_token(
+            session.id,
+            user.username,
+            session.expires_at,
         )
         session.refresh_token_hash = hash_refresh_token(refresh_token)
         db.commit()

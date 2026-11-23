@@ -1,3 +1,4 @@
+import hashlib
 import hmac
 import os
 from dataclasses import dataclass
@@ -33,6 +34,25 @@ from crud.users import (
 )
 from db.session import get_db
 from models.users import User, UserSession
+
+
+def _refresh_token_jti(session_id: int, expires_at: datetime) -> str:
+    """Derive a stable jti from the session and its expiry."""
+    raw = f"{session_id}:{expires_at.isoformat()}".encode()
+    return hashlib.sha256(raw).hexdigest()[:16]
+
+
+def create_session_refresh_token(
+    session_id: int,
+    username: str,
+    expires_at: datetime,
+) -> str:
+    """Create the one refresh token that is valid for this session expiry."""
+    return create_refresh_token(
+        data={"sub": username, "sid": session_id},
+        expires_at=expires_at,
+        jti=_refresh_token_jti(session_id, expires_at),
+    )
 
 
 def get_default_author_id(db: Session) -> int | None:
@@ -210,10 +230,11 @@ def _find_refresh_session(
 def _refresh_auth_cookies(
     response: Response,
     new_access_token: str,
-    new_refresh_token: str,
+    new_refresh_token: str | None = None,
 ) -> None:
     _set_auth_cookie(response, "access_token", new_access_token)
-    _set_auth_cookie(response, "refresh_token", new_refresh_token)
+    if new_refresh_token is not None:
+        _set_auth_cookie(response, "refresh_token", new_refresh_token)
 
 
 def _rotate_session_token(
@@ -231,10 +252,13 @@ def _rotate_session_token(
         if is_refresh_token_hash(current_stored)
         else hash_refresh_token(current_stored)
     )
-    new_refresh_token = create_refresh_token(
-        data={"sub": username, "sid": session.id}
-    )
     now = datetime.utcnow()
+    new_expires_at = now + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
+    new_refresh_token = create_session_refresh_token(
+        session.id,
+        username,
+        new_expires_at,
+    )
     rotated = (
         db.query(UserSession)
         .filter(
@@ -249,8 +273,7 @@ def _rotate_session_token(
                 ),
                 UserSession.refresh_token_rotated_at: now,
                 UserSession.last_used_at: now,
-                UserSession.expires_at: now
-                + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS),
+                UserSession.expires_at: new_expires_at,
             },
             synchronize_session=False,
         )
@@ -322,20 +345,27 @@ def refresh_access_token(
         # not be able to sign out the current browser/device.
         raise credentials_exception
 
-    # A delayed tab may still present the previous token. Either way, issue a
-    # new token because only its digest is stored and the old plaintext token
-    # cannot be returned again.
-    new_refresh_token = _rotate_session_token(db, session, username)
-    if new_refresh_token:
-        return username, new_access_token, new_refresh_token
-
-    # A concurrent refresh won the database update. Check the fresh row once
-    # more so a still-valid grace token can retry the rotation.
-    db.refresh(session)
-    if _rotated_token_is_in_grace(session, refresh_token):
+    if current_matches:
         new_refresh_token = _rotate_session_token(db, session, username)
         if new_refresh_token:
             return username, new_access_token, new_refresh_token
+
+    # A delayed tab may present the previous token, or a concurrent refresh may
+    # have won the rotation. Rebuild the token that is current now so every
+    # response writes the same cookie value instead of starting a new rotation
+    # chain that depends on response arrival order.
+    db.refresh(session)
+    if current_matches or _rotated_token_is_in_grace(session, refresh_token):
+        current_refresh_token = create_session_refresh_token(
+            session.id, username, session.expires_at
+        )
+        if _token_matches(session.refresh_token_hash, current_refresh_token):
+            return username, new_access_token, current_refresh_token
+
+    # Legacy sessions with a random jti cannot be rebuilt. Leave the refresh
+    # cookie untouched so the winning response's cookie is not overwritten.
+    if current_matches or previous_matches:
+        return username, new_access_token, None
 
     raise credentials_exception
 

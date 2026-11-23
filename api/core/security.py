@@ -76,19 +76,30 @@ def decode_access_token(token: str):
     return payload
 
 
-def create_refresh_token(data: dict, expires_delta: Optional[timedelta] = None):
+def create_refresh_token(
+    data: dict,
+    expires_delta: Optional[timedelta] = None,
+    *,
+    expires_at: Optional[datetime] = None,
+    jti: Optional[str] = None,
+):
+    """Create a refresh token, optionally with a reproducible identity.
+
+    Sessions pass an explicit expiry and jti so a request that loses a
+    concurrent rotation can recreate the winning token instead of issuing yet
+    another one and clobbering the browser cookie.
+    """
     to_encode = data.copy()
-    if expires_delta:
+    if expires_at is not None:
+        expire = expires_at
+    elif expires_delta is not None:
         expire = datetime.utcnow() + expires_delta
     else:
         expire = datetime.utcnow() + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
     to_encode.update({
         "exp": expire,
         "type": "refresh",
-        # Make every rotated token unique even when two refreshes happen in
-        # the same second. Without this, identical JWT payloads produce the
-        # same token and rotation does not actually change the cookie value.
-        "jti": secrets.token_hex(4),
+        "jti": jti or secrets.token_hex(4),
     })
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
