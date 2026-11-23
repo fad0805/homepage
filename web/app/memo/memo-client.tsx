@@ -466,10 +466,6 @@ export default function MemoClient({ username }: { username: string }) {
                 </button>
               </div>
             </form>
-            <p className="memo-hint">
-              `- 목록`, `- [ ] 체크` 형식을 지원합니다. 체크하면 바로
-              저장됩니다.
-            </p>
             {error ? <p className="memo-error">{error}</p> : null}
             {memos.length === 0 ? (
               <>
