@@ -99,6 +99,39 @@ class IllustrationListTests(unittest.TestCase):
         self.assertFalse(private["visible"])
         self.assertFalse(private["protected"])
 
+    def test_owner_can_open_private_illustration_from_public_view(self) -> None:
+        private = self._create_group(
+            "비공개 삽화",
+            ["/uploads/illustrations/private.png"],
+            visible=False,
+        )
+
+        anonymous_rows, anonymous_total = get_visible_illustrations(
+            self.db,
+            author_user_id=self.owner.id,
+        )
+        owner_rows, owner_total = get_visible_illustrations(
+            self.db,
+            author_user_id=self.owner.id,
+            viewer_user_id=self.owner.id,
+        )
+        self.assertEqual(anonymous_rows, [])
+        self.assertEqual(anonymous_total, 0)
+        self.assertEqual([row["id"] for row in owner_rows], [private["id"]])
+        self.assertEqual(owner_total, 1)
+
+        detail = get_visible_illustration(
+            self.db,
+            private["id"],
+            viewer_user_id=self.owner.id,
+        )
+        self.assertEqual(detail["title"], "비공개 삽화")
+        self.assertFalse(detail["locked"])
+
+        with self.assertRaises(HTTPException) as raised:
+            get_visible_illustration(self.db, private["id"])
+        self.assertEqual(raised.exception.status_code, 404)
+
     def test_pending_upload_is_admin_only_until_finished(self) -> None:
         pending = create_pending_illustration_group(
             self.db,

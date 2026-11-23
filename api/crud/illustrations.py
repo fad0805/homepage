@@ -450,7 +450,17 @@ def get_visible_illustration(
     if owner_user_id is not None:
         query = query.filter(Illustration.user_id == owner_user_id)
     elif not include_hidden:
-        query = query.filter(Illustration.visible.is_(True))
+        if viewer_user_id is None:
+            query = query.filter(Illustration.visible.is_(True))
+        else:
+            # Match the list query: an owner can open their own private
+            # illustration from the public view.
+            query = query.filter(
+                or_(
+                    Illustration.visible.is_(True),
+                    Illustration.user_id == viewer_user_id,
+                )
+            )
     elif viewer_user_id is not None:
         query = query.filter(
             or_(
