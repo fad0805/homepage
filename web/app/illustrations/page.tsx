@@ -227,16 +227,16 @@ export default async function IllustrationsPage({
             <nav className="illustrations-sort" aria-label="삽화 정렬">
               <span>정렬</span>
               <Link
-                className={sort === "taken" ? "is-active" : ""}
-                href={pageHref(1, "taken", filterBasis, from, to, q)}
-              >
-                촬영일
-              </Link>
-              <Link
                 className={sort === "created" ? "is-active" : ""}
                 href={pageHref(1, "created", filterBasis, from, to, q)}
               >
                 등록일
+              </Link>
+              <Link
+                className={sort === "taken" ? "is-active" : ""}
+                href={pageHref(1, "taken", filterBasis, from, to, q)}
+              >
+                촬영일
               </Link>
             </nav>
           </div>
