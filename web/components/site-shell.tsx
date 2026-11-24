@@ -304,12 +304,10 @@ export function SiteShell({
             </button>
           </div>
           <Navbar />
-          {!sideRight ? (
-            <div className="site-sidebar__theme">
-              <FloatingSearch variant="sidebar" />
-              <ThemeToggle variant="sidebar" />
-            </div>
-          ) : null}
+          <div className="site-sidebar__theme">
+            <ThemeToggle variant="sidebar" />
+            <FloatingSearch variant="sidebar" />
+          </div>
         </aside>
 
         <div className="site-main-column">
