@@ -50,17 +50,11 @@ function removeChild(unit: PMNode, childIndex: number): PMNode | null {
   return unit.type.create(unit.attrs, children);
 }
 
-/** Keep a dragged image in a row, splitting into a second row at four images. */
+/** Keep a dragged image in the same row no matter how many images it holds. */
 function insertIntoRow(unit: PMNode, childIndex: number, image: PMNode) {
   const children = [...unit.children];
   children.splice(childIndex, 0, image);
-  if (children.length <= 3) {
-    return [unit.type.create(unit.attrs, children)];
-  }
-  return [
-    unit.type.create(unit.attrs, children.slice(0, 3)),
-    unit.type.create(unit.attrs, children.slice(3)),
-  ];
+  return [unit.type.create(unit.attrs, children)];
 }
 
 function findDraggedImagePos(view: EditorView, event: DragEvent) {

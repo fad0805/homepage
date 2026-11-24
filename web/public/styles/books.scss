@@ -983,6 +983,7 @@ button.chapter-nearby__item {
   margin-top: 1.2rem;
   color: var(--input-text);
   min-width: 0;
+  overflow-x: auto;
   overflow-wrap: anywhere;
   word-break: break-word;
 
@@ -1148,6 +1149,9 @@ button.chapter-nearby__item {
 
   [data-image-row] {
     display: flex;
+    flex-wrap: nowrap;
+    width: max-content;
+    min-width: 100%;
     align-items: flex-end;
     justify-content: center;
     gap: 0.75rem;
@@ -1163,10 +1167,8 @@ button.chapter-nearby__item {
     }
 
     img {
-      flex: 1 1 0;
-      min-width: 0;
-      max-width: 33.333%;
-      width: auto !important;
+      flex: 0 0 auto;
+      max-width: none;
       max-height: none;
       height: auto;
       margin: 0 !important;
