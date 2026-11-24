@@ -100,17 +100,6 @@
   display: none;
 }
 
-body:has(.floating-search:not(.floating-search--sidebar))
-  .theme-toggle:not(.theme-toggle--sidebar):not(.theme-toggle--drawer) {
-  bottom: calc(1.25rem + 2.75rem + 0.5rem);
-}
-
-html[data-appearance='collapsible']
-  body:has(.floating-search:not(.floating-search--sidebar))
-  .theme-toggle:not(.theme-toggle--sidebar):not(.theme-toggle--drawer) {
-  bottom: calc(1rem + env(safe-area-inset-bottom, 0px) + 3.25rem);
-}
-
 body:has(#container.site-layout--side)
   .floating-search:not(.floating-search--sidebar):not(.floating-search--drawer) {
   display: none;

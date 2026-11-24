@@ -924,38 +924,65 @@ html:has(#container.site-layout--side) {
   }
 }
 
-html[data-appearance='collapsible'] .theme-toggle {
-  right: auto;
-  bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
-  left: calc(1rem + env(safe-area-inset-left, 0px));
-  border-color: color-mix(in srgb, var(--theme-main) 50%, transparent);
-  background: color-mix(in srgb, var(--theme-sub) 38%, transparent);
+html[data-appearance='collapsible'] {
+  --floating-surface: var(--subtheme);
+  --floating-hover: color-mix(in srgb, var(--theme-sub) 38%, var(--subtheme));
+  --floating-border: color-mix(in srgb, var(--theme-main) 50%, transparent);
+  --floating-shadow: 0 0.45rem 1.1rem rgba(0, 0, 0, 0.1);
+}
+
+html[data-theme='dark'][data-appearance='collapsible'] {
+  --floating-border: rgba(255, 255, 255, 0.16);
+  --floating-shadow: 0 0.45rem 1.1rem rgba(0, 0, 0, 0.38);
+}
+
+html[data-appearance='collapsible'] .theme-toggle,
+html[data-appearance='collapsible'] .floating-search__button,
+html[data-appearance='collapsible'] .floating-search__popover {
+  background: var(--floating-surface);
+}
+
+html[data-appearance='collapsible'] .theme-toggle,
+html[data-appearance='collapsible'] .floating-search__button {
+  border-color: var(--floating-border);
   color: var(--title-color);
-  box-shadow: 0 0.45rem 1.1rem rgba(0, 0, 0, 0.1);
+  box-shadow: var(--floating-shadow);
 
   &:hover {
     filter: none;
-    background: color-mix(in srgb, var(--theme-sub) 58%, transparent);
-  }
-
-  [data-theme='dark'] & {
-    border-color: rgba(255, 255, 255, 0.16);
-    background: rgba(255, 255, 255, 0.07);
-    color: var(--foreground);
-    box-shadow: 0 0.45rem 1.1rem rgba(0, 0, 0, 0.38);
-
-    &:hover {
-      background: rgba(255, 255, 255, 0.12);
-    }
+    background: var(--floating-hover);
   }
 }
 
+/* Search sits left of the theme toggle at the bottom-right corner. */
+html[data-appearance='collapsible'] .floating-search {
+  right: calc(1.25rem + 2.75rem + 0.5rem);
+}
+
 @media (max-width: $breakpoint-md) {
+  html[data-appearance='collapsible'] {
+    --floating-surface: var(--background);
+    --floating-hover: color-mix(in srgb, var(--theme-sub) 28%, var(--background));
+  }
+
   html[data-appearance='collapsible'] .theme-toggle {
-    top: calc(1rem + env(safe-area-inset-top, 0px));
-    right: calc(1rem + env(safe-area-inset-right, 0px));
+    top: calc(0.25rem + env(safe-area-inset-top, 0px));
+    right: calc(0.25rem + env(safe-area-inset-right, 0px));
     bottom: auto;
     left: auto;
+  }
+
+  html[data-appearance='collapsible'] .floating-search {
+    top: calc(0.25rem + env(safe-area-inset-top, 0px));
+    right: calc(0.25rem + env(safe-area-inset-right, 0px) + 2.75rem + 0.5rem);
+    bottom: auto;
+  }
+
+  html[data-appearance='collapsible'] .floating-search__popover {
+    top: calc(0.25rem + env(safe-area-inset-top, 0px) + 2.75rem + 0.5rem);
+    right: calc(0.25rem + env(safe-area-inset-right, 0px) + 2.75rem + 0.5rem);
+    bottom: auto;
+    left: calc(0.25rem + env(safe-area-inset-left, 0px));
   }
 }
 
