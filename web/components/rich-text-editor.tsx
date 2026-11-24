@@ -1,8 +1,10 @@
 "use client";
 
 import {
+  forwardRef,
   useCallback,
   useEffect,
+  useImperativeHandle,
   useRef,
   useState,
   type CSSProperties,
@@ -88,6 +90,14 @@ interface RichTextEditorProps {
   onEditorReady?: (editor: Editor | null) => void;
   /** Reset the editor scroll position when the displayed document changes. */
   scrollResetKey?: string | number | null;
+  /** Keep images local until the caller saves the document. */
+  deferImageUpload?: boolean;
+}
+
+export interface RichTextEditorHandle {
+  /** Upload locally inserted images and return HTML with permanent URLs. */
+  resolveImages: (html: string) => Promise<string>;
+  hasPendingImages: () => boolean;
 }
 
 function ToolbarButton({
@@ -253,20 +263,27 @@ function ToolbarRow({
   );
 }
 
-export function RichTextEditor({
-  value,
-  onChange,
-  placeholder = "내용을 입력해주세요.",
-  uploadUrl,
-  onNotice,
-  compact = false,
-  enableFontSize = false,
-  enableHighlight = false,
-  variant = "default",
-  readOnly = false,
-  onEditorReady,
-  scrollResetKey,
-}: RichTextEditorProps) {
+export const RichTextEditor = forwardRef<
+  RichTextEditorHandle,
+  RichTextEditorProps
+>(function RichTextEditor(
+  {
+    value,
+    onChange,
+    placeholder = "내용을 입력해주세요.",
+    uploadUrl,
+    onNotice,
+    compact = false,
+    enableFontSize = false,
+    enableHighlight = false,
+    variant = "default",
+    readOnly = false,
+    onEditorReady,
+    scrollResetKey,
+    deferImageUpload = false,
+  },
+  ref,
+) {
   // All editors expose logical Scrivener sizes. Only the manuscript workspace
   // keeps those values in the document and scales them with CSS; every other
   // editor stores the reduced size directly so the public HTML matches.
@@ -278,6 +295,8 @@ export function RichTextEditor({
   const contentRef = useRef<HTMLDivElement | null>(null);
   const imageInputRef = useRef<HTMLInputElement | null>(null);
   const pasteImageRef = useRef<(files: File[]) => void>(() => {});
+  // Blob URL -> original file. Populated only when deferImageUpload is set.
+  const pendingImagesRef = useRef<Map<string, File>>(new Map());
   const [uploadingImage, setUploadingImage] = useState(false);
   const [loadingPagePreview, setLoadingPagePreview] = useState(false);
   const [htmlMode, setHtmlMode] = useState(false);
@@ -290,6 +309,14 @@ export function RichTextEditor({
   useEffect(() => {
     onNoticeRef.current = onNotice;
   }, [onNotice]);
+
+  useEffect(
+    () => () => {
+      pendingImagesRef.current.forEach((_, url) => URL.revokeObjectURL(url));
+      pendingImagesRef.current.clear();
+    },
+    [],
+  );
 
   const notify = useCallback((notice: EditorNotice) => {
     onNoticeRef.current?.(notice);
@@ -506,8 +533,8 @@ export function RichTextEditor({
     }
   }, [editor, notify]);
 
-  const uploadImage = useCallback(
-    async (file: File): Promise<ImageAttrs | null> => {
+  const buildImageAttrs = useCallback(
+    async (file: File, src: string): Promise<ImageAttrs | null> => {
       if (!editor) return null;
 
       if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
@@ -526,13 +553,6 @@ export function RichTextEditor({
       }
 
       try {
-        const body = new FormData();
-        body.append("file", file);
-        const uploaded = await apiFetch<{ url: string }>(uploadUrl, {
-          method: "POST",
-          body,
-        });
-
         const size = await new Promise<{ width: number; height: number }>(
           (resolve, reject) => {
             const image = new Image();
@@ -543,7 +563,7 @@ export function RichTextEditor({
               });
             image.onerror = () =>
               reject(new Error("이미지를 불러오지 못했습니다."));
-            image.src = uploaded.url;
+            image.src = src;
           },
         );
 
@@ -560,7 +580,7 @@ export function RichTextEditor({
         width = Math.min(width, containerWidth);
 
         return {
-          src: uploaded.url,
+          src,
           alt: file.name || "붙여넣은 이미지",
           width: Math.round(width),
           align: "center",
@@ -572,12 +592,50 @@ export function RichTextEditor({
           text:
             error instanceof Error
               ? error.message
+              : "이미지를 불러오지 못했습니다.",
+        });
+        return null;
+      }
+    },
+    [editor, notify],
+  );
+
+  const uploadImage = useCallback(
+    async (file: File): Promise<ImageAttrs | null> => {
+      try {
+        const body = new FormData();
+        body.append("file", file);
+        const uploaded = await apiFetch<{ url: string }>(uploadUrl, {
+          method: "POST",
+          body,
+        });
+        return buildImageAttrs(file, uploaded.url);
+      } catch (error) {
+        notify({
+          type: "error",
+          text:
+            error instanceof Error
+              ? error.message
               : "이미지를 업로드하지 못했습니다.",
         });
         return null;
       }
     },
-    [editor, notify, uploadUrl],
+    [buildImageAttrs, notify, uploadUrl],
+  );
+
+  const addPendingImage = useCallback(
+    async (file: File): Promise<ImageAttrs | null> => {
+      const src = URL.createObjectURL(file);
+      const attrs = await buildImageAttrs(file, src);
+      if (!attrs) {
+        URL.revokeObjectURL(src);
+        return null;
+      }
+      pendingImagesRef.current.set(src, file);
+      return attrs;
+    },
+    [buildImageAttrs],
   );
 
   const insertImages = useCallback(
@@ -634,12 +692,13 @@ export function RichTextEditor({
     async (files: File[]) => {
       if (!editor || files.length === 0) return;
 
-      setUploadingImage(true);
+      const prepare = deferImageUpload ? addPendingImage : uploadImage;
+      if (!deferImageUpload) setUploadingImage(true);
       let inserted = 0;
       let row: ImageAttrs[] = [];
       try {
         for (const file of files) {
-          const image = await uploadImage(file);
+          const image = await prepare(file);
           if (!image) continue;
           inserted += 1;
           row.push(image);
@@ -659,10 +718,17 @@ export function RichTextEditor({
           });
         }
       } finally {
-        setUploadingImage(false);
+        if (!deferImageUpload) setUploadingImage(false);
       }
     },
-    [editor, insertImages, notify, uploadImage],
+    [
+      addPendingImage,
+      deferImageUpload,
+      editor,
+      insertImages,
+      notify,
+      uploadImage,
+    ],
   );
 
   useEffect(() => {
@@ -670,6 +736,94 @@ export function RichTextEditor({
       void uploadAndInsertImages(files);
     };
   }, [uploadAndInsertImages]);
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      hasPendingImages: () => pendingImagesRef.current.size > 0,
+      resolveImages: async (html: string) => {
+        const pending = pendingImagesRef.current;
+        const blobSources = Array.from(
+          html.matchAll(/<img\b[^>]*\bsrc="(blob:[^"]+)"/gi),
+          (match) => match[1],
+        );
+        const stale = blobSources.find((src) => !pending.has(src));
+        if (stale) {
+          const message = "임시 이미지를 다시 추가해주세요.";
+          notify({ type: "error", text: message });
+          throw new Error(message);
+        }
+        const entries = Array.from(pending.entries()).filter(([url]) =>
+          blobSources.includes(url),
+        );
+        if (entries.length === 0) {
+          pending.forEach((_, url) => URL.revokeObjectURL(url));
+          pending.clear();
+          return html;
+        }
+
+        // Upload in parallel: save time should not grow with the image count.
+        const replacements = new Map<string, string>();
+        await Promise.all(
+          entries.map(async ([blobUrl, file]) => {
+            try {
+              const body = new FormData();
+              body.append("file", file);
+              const uploaded = await apiFetch<{ url: string }>(uploadUrl, {
+                method: "POST",
+                body,
+              });
+              replacements.set(blobUrl, uploaded.url);
+            } catch (error) {
+              notify({
+                type: "error",
+                text:
+                  error instanceof Error
+                    ? error.message
+                    : "이미지를 업로드하지 못했습니다.",
+              });
+              throw error;
+            }
+          }),
+        );
+
+        let resolved = html;
+        replacements.forEach((url, blobUrl) => {
+          resolved = resolved.split(blobUrl).join(url);
+        });
+
+        if (editor) {
+          const updates: Array<{ pos: number; attrs: Record<string, unknown> }> =
+            [];
+          editor.state.doc.descendants((node, pos) => {
+            const src = node.attrs.src;
+            if (
+              node.type.name === "image" &&
+              typeof src === "string" &&
+              replacements.has(src)
+            ) {
+              updates.push({
+                pos,
+                attrs: { ...node.attrs, src: replacements.get(src) },
+              });
+            }
+          });
+          if (updates.length > 0) {
+            const tr = editor.state.tr;
+            updates.forEach(({ pos, attrs }) => {
+              tr.setNodeMarkup(pos, undefined, attrs);
+            });
+            editor.view.dispatch(tr);
+          }
+        }
+
+        pending.forEach((_, url) => URL.revokeObjectURL(url));
+        pending.clear();
+        return resolved;
+      },
+    }),
+    [editor, notify, uploadUrl],
+  );
 
   const handleImageFile = useCallback(
     async (event: ChangeEvent<HTMLInputElement>) => {
@@ -1332,4 +1486,4 @@ export function RichTextEditor({
       </div>
     </div>
   );
-}
+});

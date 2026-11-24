@@ -10,7 +10,10 @@ import {
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 
-import { RichTextEditor } from "@/components/rich-text-editor";
+import {
+  RichTextEditor,
+  type RichTextEditorHandle,
+} from "@/components/rich-text-editor";
 import { TagInput } from "@/components/tag-input";
 import { TocManager } from "@/components/toc-manager";
 import { CHAPTER_PREVIEW_STORAGE_KEY } from "@/app/books/types";
@@ -159,6 +162,7 @@ export default function AdminChapterEdit() {
   const [notice, setNotice] = useState<Notice | null>(null);
 
   const noticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const editorRef = useRef<RichTextEditorHandle | null>(null);
   const lastSavedSignatureRef = useRef<string | null>(null);
   const draftSaveInFlightRef = useRef(false);
   const draftSavePromiseRef = useRef<Promise<void> | null>(null);
@@ -534,22 +538,30 @@ export default function AdminChapterEdit() {
       if (draftSaveInFlightRef.current) {
         return draftSavePromiseRef.current ?? Promise.resolve();
       }
-
-      const signature = getDraftSignature({
-        title,
-        subtitle,
-        body,
-        tagsInput,
-        visible,
-        pinned,
-        publishedAt,
-        targetBookId,
-      });
+      // Autosave would persist blob URLs that only live in this tab.
+      if (!showSuccessNotice && editorRef.current?.hasPendingImages()) {
+        return Promise.resolve();
+      }
 
       draftSaveInFlightRef.current = true;
       setDraftSaving(true);
       const task = (async () => {
         try {
+          let draftBody = body;
+          if (editorRef.current?.hasPendingImages()) {
+            draftBody = await editorRef.current.resolveImages(body);
+            setBody(draftBody);
+          }
+          const signature = getDraftSignature({
+            title,
+            subtitle,
+            body: draftBody,
+            tagsInput,
+            visible,
+            pinned,
+            publishedAt,
+            targetBookId,
+          });
           const draft = await apiFetch<ChapterDraft>(
             `/api/chapter-drafts/${encodeURIComponent(draftKey)}`,
             {
@@ -557,7 +569,7 @@ export default function AdminChapterEdit() {
               body: JSON.stringify({
                 title,
                 subtitle: subtitle || null,
-                body: body || null,
+                body: draftBody || null,
                 tags: parseTags(tagsInput),
                 visible,
                 pinned,
@@ -715,26 +727,30 @@ export default function AdminChapterEdit() {
       return;
     }
 
-    const plainBody = body.replace(/<[^>]*>/g, "").trim();
-    const nextBody = plainBody || /<img\b/i.test(body) ? body : null;
-    const publishedAtValue = toUtcDateTime(publishedAt);
-
-    const sourceBookId = chapter?.book_id ?? bookId;
-    const nextBookId = Number.isFinite(targetBookId) ? targetBookId : bookId;
-    const targetOrders = allChapters
-      .filter(
-        (item) => item.book_id === nextBookId && item.id !== chapter?.id,
-      )
-      .map((item) => item.order);
-    const order =
-      isNew || nextBookId !== sourceBookId
-        ? targetOrders.length > 0
-          ? Math.max(...targetOrders) + 1
-          : 0
-        : chapter?.order ?? 0;
-
     setSaving(true);
     try {
+      const resolvedBody = await (editorRef.current?.resolveImages(body) ??
+        Promise.resolve(body));
+      setBody(resolvedBody);
+      const plainBody = resolvedBody.replace(/<[^>]*>/g, "").trim();
+      const nextBody =
+        plainBody || /<img\b/i.test(resolvedBody) ? resolvedBody : null;
+      const publishedAtValue = toUtcDateTime(publishedAt);
+
+      const sourceBookId = chapter?.book_id ?? bookId;
+      const nextBookId = Number.isFinite(targetBookId) ? targetBookId : bookId;
+      const targetOrders = allChapters
+        .filter(
+          (item) => item.book_id === nextBookId && item.id !== chapter?.id,
+        )
+        .map((item) => item.order);
+      const order =
+        isNew || nextBookId !== sourceBookId
+          ? targetOrders.length > 0
+            ? Math.max(...targetOrders) + 1
+            : 0
+          : chapter?.order ?? 0;
+
       if (isNew) {
         const created = await apiFetch<ChapterItem>("/api/chapters", {
           method: "POST",
@@ -1021,6 +1037,7 @@ export default function AdminChapterEdit() {
               <div className="admin-field">
                 <span>본문</span>
                 <RichTextEditor
+                  ref={editorRef}
                   value={body}
                   onChange={setBody}
                   placeholder="챕터 본문을 입력해주세요."
@@ -1029,6 +1046,7 @@ export default function AdminChapterEdit() {
                   enableFontSize
                   enableHighlight
                   variant="chapter"
+                  deferImageUpload
                 />
               </div>
               <label className="admin-field">
