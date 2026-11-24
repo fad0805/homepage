@@ -388,20 +388,21 @@
 .author-image-row {
   display: flex;
   flex-wrap: nowrap;
-  width: max-content;
-  min-width: 100%;
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
   align-items: flex-end;
-  justify-content: center;
+  justify-content: safe center;
   gap: 0.75rem;
   margin: 1.2rem 0;
   clear: both;
 
   &[data-align='left'] {
-    justify-content: flex-start;
+    justify-content: safe flex-start;
   }
 
   &[data-align='right'] {
-    justify-content: flex-end;
+    justify-content: safe flex-end;
   }
 }
 
@@ -462,7 +463,6 @@
   min-height: 22rem;
   max-height: 32rem;
   overflow-y: auto;
-  overflow-x: auto;
   padding: 0.9rem 1rem;
   cursor: text;
 
