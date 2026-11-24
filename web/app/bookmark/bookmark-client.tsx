@@ -6,6 +6,7 @@ import {
   useEffect,
   useRef,
   useState,
+  type KeyboardEvent as ReactKeyboardEvent,
 } from "react";
 import {
   DndContext,
@@ -515,16 +516,24 @@ export default function BookmarkClient({ username }: { username: string }) {
         key: "date",
         label: `${MODE_LABELS.date} 루틴`,
         items: dateRoutines,
+        sortable: true,
       },
       {
         key: "count",
         label: `${MODE_LABELS.count} 루틴`,
-        items: countRoutines,
+        items: [...countRoutines].sort(
+          (a, b) =>
+            b.completed_count - a.completed_count ||
+            a.position - b.position ||
+            a.id - b.id,
+        ),
+        sortable: false,
       },
       {
         key: "done",
         label: "완료",
         items: doneRoutines,
+        sortable: true,
       },
     ]
       .map((group) => ({
@@ -542,7 +551,10 @@ export default function BookmarkClient({ username }: { username: string }) {
       setSectionCollapsed(section.key, !isSectionCollapsed(section));
     };
 
-    const renderRoutineItem = (routine: BookmarkRoutine) => {
+    const renderRoutineItem = (
+      routine: BookmarkRoutine,
+      sortable = true,
+    ) => {
       const isCount = isCountRoutine(routine);
       const isStopped = Boolean(routine.end_date);
       const allDone = isRoutineDone(routine);
@@ -553,143 +565,177 @@ export default function BookmarkClient({ username }: { username: string }) {
             .some((occurrence) =>
               isPastPeriod(occurrence.date, "day"),
             );
-      return (
-        <SortableRoutineItem
-          key={routine.id}
-          id={routine.id}
-          title={routine.title}
-          disabled={routineOrderSaving}
-          className={`bookmark-item is-clickable${
-            allDone ? " is-done" : ""
-          }`}
-          onClick={() => openEditRoutine(routine)}
-          onKeyDown={(event) => {
-            if (
-              event.target === event.currentTarget &&
-              (event.key === "Enter" || event.key === " ")
-            ) {
-              event.preventDefault();
-              openEditRoutine(routine);
-            }
-          }}
-        >
-          <div className="bookmark-item-main">
-            <div className="bookmark-routine-heading">
-              <input
-                type="checkbox"
-                className="bookmark-routine-check"
-                checked={allDone}
-                disabled={
-                  isStopped ||
-                  isPast ||
-                  (!isCount && routine.occurrences.length === 0)
-                }
-                aria-label={`${routine.title} 완료`}
-                onClick={(event) => event.stopPropagation()}
-                onChange={() =>
-                  void setRoutineDone(routine, !allDone)
-                }
-              />
-              <span className="bookmark-routine-title">
-                {routine.title}
+      const content = (
+        <div className="bookmark-item-main">
+          <div className="bookmark-routine-heading">
+            <input
+              type="checkbox"
+              className="bookmark-routine-check"
+              checked={allDone}
+              disabled={
+                isStopped ||
+                isPast ||
+                (!isCount && routine.occurrences.length === 0)
+              }
+              aria-label={`${routine.title} 완료`}
+              onClick={(event) => event.stopPropagation()}
+              onChange={() =>
+                void setRoutineDone(routine, !allDone)
+              }
+            />
+            <span className="bookmark-routine-title">
+              {routine.title}
+            </span>
+            {isStopped ? (
+              <span className="bookmark-routine-status">중단됨</span>
+            ) : isPast ? (
+              <span className="bookmark-routine-status">지난 기간</span>
+            ) : null}
+            <p className="bookmark-item-schedule">
+              {routineScheduleLabel(routine)}
+            </p>
+            {routine.next_date ? (
+              <span className="bookmark-routine-next">
+                예정 {periodLabel(routine.next_date, "day")}
               </span>
-              {isStopped ? (
-                <span className="bookmark-routine-status">중단됨</span>
-              ) : isPast ? (
-                <span className="bookmark-routine-status">지난 기간</span>
+            ) : null}
+            {isCount ? (
+            <div className="bookmark-routine-counter">
+              {!isStopped ? (
+                <button
+                  type="button"
+                  className="bookmark-count-button"
+                  aria-label="1회 줄이기"
+                  disabled={isPast || routine.completed_count <= 0}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    void setRoutineCount(
+                      routine,
+                      routine.completed_count - 1,
+                    );
+                  }}
+                >
+                  −
+                </button>
               ) : null}
-              <p className="bookmark-item-schedule">
-                {routineScheduleLabel(routine)}
-              </p>
-              {routine.next_date ? (
-                <span className="bookmark-routine-next">
-                  예정 {periodLabel(routine.next_date, "day")}
-                </span>
-              ) : null}
-              {isCount ? (
-              <div className="bookmark-routine-counter">
-                {!isStopped ? (
-                  <button
-                    type="button"
-                    className="bookmark-count-button"
-                    aria-label="1회 줄이기"
-                    disabled={isPast || routine.completed_count <= 0}
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      void setRoutineCount(
-                        routine,
-                        routine.completed_count - 1,
-                      );
-                    }}
-                  >
-                    −
-                  </button>
-                ) : null}
-                <span className="bookmark-routine-progress">
-                  <strong>{routine.completed_count}</strong>
-                  <span>/ {routine.target_count}회</span>
-                </span>
-                {!isStopped ? (
-                  <button
-                    type="button"
-                    className="bookmark-count-button"
-                    aria-label="1회 추가"
-                    disabled={
-                      isPast ||
-                      routine.completed_count >= routine.target_count
-                    }
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      void setRoutineCount(
-                        routine,
-                        routine.completed_count + 1,
-                      );
-                    }}
-                  >
-                    +
-                  </button>
-                ) : null}
-              </div>
+              <span className="bookmark-routine-progress">
+                <strong>{routine.completed_count}</strong>
+                <span>/ {routine.target_count}회</span>
+              </span>
+              {!isStopped ? (
+                <button
+                  type="button"
+                  className="bookmark-count-button"
+                  aria-label="1회 추가"
+                  disabled={
+                    isPast ||
+                    routine.completed_count >= routine.target_count
+                  }
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    void setRoutineCount(
+                      routine,
+                      routine.completed_count + 1,
+                    );
+                  }}
+                >
+                  +
+                </button>
               ) : null}
             </div>
-
-
-            {routine.notes ? (
-              <BookmarkRoutineNotes
-                notes={routine.notes}
-                disabled={isStopped}
-                onToggle={(index) =>
-                  void toggleRoutineNote(routine, index)
-                }
-              />
             ) : null}
           </div>
-        </SortableRoutineItem>
+
+
+          {routine.notes ? (
+            <BookmarkRoutineNotes
+              notes={routine.notes}
+              disabled={isStopped}
+              onToggle={(index) =>
+                void toggleRoutineNote(routine, index)
+              }
+            />
+          ) : null}
+        </div>
+      );
+      const className = `bookmark-item is-clickable${
+        allDone ? " is-done" : ""
+      }`;
+      const handleClick = () => openEditRoutine(routine);
+      const handleKeyDown = (
+        event: ReactKeyboardEvent<HTMLLIElement>,
+      ) => {
+        if (
+          event.target === event.currentTarget &&
+          (event.key === "Enter" || event.key === " ")
+        ) {
+          event.preventDefault();
+          openEditRoutine(routine);
+        }
+      };
+
+      if (sortable) {
+        return (
+          <SortableRoutineItem
+            key={routine.id}
+            id={routine.id}
+            title={routine.title}
+            disabled={routineOrderSaving}
+            className={className}
+            onClick={handleClick}
+            onKeyDown={handleKeyDown}
+          >
+            {content}
+          </SortableRoutineItem>
+        );
+      }
+
+      return (
+        <li
+          key={routine.id}
+          className={className}
+          role="button"
+          tabIndex={0}
+          aria-label={`${routine.title} 수정`}
+          onClick={handleClick}
+          onKeyDown={handleKeyDown}
+        >
+          {content}
+        </li>
       );
     };
 
     const renderRoutineList = (
       key: string,
       items: BookmarkRoutine[],
-    ) => (
-      <DndContext
-        key={key}
-        sensors={dndSensors}
-        collisionDetection={closestCenter}
-        onDragEnd={(event) => handleRoutineDragEnd(items, event)}
-      >
-        <SortableContext
-          items={items.map((routine) => routine.id)}
-          strategy={verticalListSortingStrategy}
+      sortable = true,
+    ) =>
+      sortable ? (
+        <DndContext
+          key={key}
+          sensors={dndSensors}
+          collisionDetection={closestCenter}
+          onDragEnd={(event) => handleRoutineDragEnd(items, event)}
         >
-          <ul className="bookmark-item-list">
-            {items.map(renderRoutineItem)}
-          </ul>
-        </SortableContext>
-      </DndContext>
-    );
+          <SortableContext
+            items={items.map((routine) => routine.id)}
+            strategy={verticalListSortingStrategy}
+          >
+            <ul className="bookmark-item-list">
+              {items.map((routine) => renderRoutineItem(routine, true))}
+            </ul>
+          </SortableContext>
+        </DndContext>
+      ) : (
+        <ul className="bookmark-item-list" key={key}>
+          {items.map((routine) => renderRoutineItem(routine, false))}
+        </ul>
+      );
 
-    const renderCategorySection = (section: RoutineSection) => {
+    const renderCategorySection = (
+      section: RoutineSection,
+      sortable: boolean,
+    ) => {
       const collapsed = isSectionCollapsed(section);
       const panelId = `bookmark-routine-section-${section.key}`;
 
@@ -722,7 +768,11 @@ export default function BookmarkClient({ username }: { username: string }) {
           </header>
 
           <div id={panelId} hidden={collapsed}>
-            {renderRoutineList(`${section.key}-list`, section.items)}
+            {renderRoutineList(
+              `${section.key}-list`,
+              section.items,
+              sortable,
+            )}
           </div>
         </section>
       );
@@ -769,7 +819,9 @@ export default function BookmarkClient({ username }: { username: string }) {
               </header>
               <div id={panelId} hidden={collapsed}>
                 <div className="bookmark-routine-kind-body">
-                  {group.sections.map(renderCategorySection)}
+                  {group.sections.map((section) =>
+                    renderCategorySection(section, group.sortable),
+                  )}
                 </div>
               </div>
             </section>
