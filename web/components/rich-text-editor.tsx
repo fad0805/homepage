@@ -71,9 +71,20 @@ function removeImageTagWithSrc(html: string, src: string) {
 }
 
 function getInsertionPosition(state: EditorState) {
-  const { selection } = state;
+  const { selection, doc } = state;
   // A selected image would otherwise be replaced by insertContent.
-  return selection instanceof NodeSelection ? selection.to : selection.from;
+  const position = selection instanceof NodeSelection ? selection.to : selection.from;
+  const resolved = doc.resolve(Math.max(0, Math.min(position, doc.content.size)));
+
+  // New uploads are always standalone blocks. When the selected image lives in
+  // a row, inserting at the selection would append them to that row instead.
+  for (let depth = resolved.depth; depth > 0; depth -= 1) {
+    if (resolved.node(depth).type.name === "imageRow") {
+      return resolved.after(depth);
+    }
+  }
+
+  return position;
 }
 
 const FONT_SIZE_OPTIONS = [

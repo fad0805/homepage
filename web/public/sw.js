@@ -1,6 +1,6 @@
 /* Service worker for the installable "Missing Island" web app. */
 
-const CACHE_NAME = "missing-island-static-v1";
+const CACHE_NAME = "missing-island-static-v2";
 const MAX_STATIC_ENTRIES = 150;
 
 const BYPASS_PREFIXES = ["/api/", "/uploads/", "/revalidate"];
@@ -58,7 +58,7 @@ self.addEventListener("fetch", (event) => {
     STATIC_PREFIXES.some((prefix) => url.pathname.startsWith(prefix));
 
   if (isStatic) {
-    event.respondWith(cacheFirst(request));
+    event.respondWith(networkFirstWithCache(request));
   }
 });
 
@@ -70,11 +70,8 @@ async function networkFirst(request) {
   }
 }
 
-async function cacheFirst(request) {
+async function networkFirstWithCache(request) {
   const cache = await caches.open(CACHE_NAME);
-  const cached = await cache.match(request);
-
-  if (cached) return cached;
 
   try {
     const response = await fetch(request);
@@ -86,6 +83,8 @@ async function cacheFirst(request) {
 
     return response;
   } catch {
+    const cached = await cache.match(request);
+    if (cached) return cached;
     return new Response("", { status: 504, statusText: "Offline" });
   }
 }
