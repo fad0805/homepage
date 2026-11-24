@@ -391,29 +391,6 @@ export const RichTextEditor = forwardRef<
     immediatelyRender: false,
     shouldRerenderOnTransaction: true,
     editorProps: {
-      handleDOMEvents: {
-        // ProseMirror's built-in dragstart still supplies the standard
-        // clipboard payload browsers need to start a drag. The image origin is
-        // also remembered in memory, so a move is detected even if the custom
-        // dataTransfer type is cleared.
-        dragstart: (view, event) =>
-          markImageDragStart(view, event as DragEvent),
-        dragend: () => {
-          endImageDrag();
-          return false;
-        },
-        dragover: (_view, event) => {
-          const drag = event as DragEvent;
-          const hasCustomType = Array.from(
-            drag.dataTransfer?.types ?? [],
-          ).includes(AUTHOR_IMAGE_DRAG_MIME);
-          if (!hasCustomType && !isImageDragActive()) return false;
-          drag.preventDefault();
-          if (drag.dataTransfer) drag.dataTransfer.dropEffect = "move";
-          return true;
-        },
-      },
-      handleDrop: (view, event) => moveDraggedImage(view, event as DragEvent),
       handlePaste: (view, event) => {
         const clipboard = event.clipboardData;
         if (!clipboard) return false;
@@ -462,6 +439,44 @@ export const RichTextEditor = forwardRef<
   useEffect(() => {
     if (contentRef.current) contentRef.current.scrollTop = 0;
   }, [scrollResetKey]);
+
+  // Handle image drags directly on the editor DOM in the capture phase so the
+  // move takes precedence over ProseMirror's block drop handling.
+  useEffect(() => {
+    if (!editor) return;
+    const dom = editor.view.dom;
+
+    const onDragStart = (event: DragEvent) => {
+      markImageDragStart(editor.view, event);
+    };
+    const onDragEnd = () => {
+      endImageDrag();
+    };
+    const onDragOver = (event: DragEvent) => {
+      const hasCustomType = Array.from(
+        event.dataTransfer?.types ?? [],
+      ).includes(AUTHOR_IMAGE_DRAG_MIME);
+      if (!hasCustomType && !isImageDragActive()) return;
+      event.preventDefault();
+      if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
+    };
+    const onDrop = (event: DragEvent) => {
+      if (!moveDraggedImage(editor.view, event)) return;
+      event.preventDefault();
+      event.stopPropagation();
+    };
+
+    dom.addEventListener("dragstart", onDragStart, true);
+    dom.addEventListener("dragend", onDragEnd, true);
+    dom.addEventListener("dragover", onDragOver, true);
+    dom.addEventListener("drop", onDrop, true);
+    return () => {
+      dom.removeEventListener("dragstart", onDragStart, true);
+      dom.removeEventListener("dragend", onDragEnd, true);
+      dom.removeEventListener("dragover", onDragOver, true);
+      dom.removeEventListener("drop", onDrop, true);
+    };
+  }, [editor]);
 
   const toggleHtmlMode = useCallback(() => {
     if (!editor) return;
