@@ -19,6 +19,7 @@ import TextAlign from "@tiptap/extension-text-align";
 import { Color, FontSize, TextStyle } from "@tiptap/extension-text-style";
 
 import { AuthorImage } from "@/components/author-image";
+import { AuthorImageRow } from "@/components/author-image-row";
 import { ManuscriptParagraph } from "@/components/manuscript-paragraph";
 import { ManuscriptTab } from "@/components/manuscript-tab";
 import { PagePreview } from "@/components/page-preview";
@@ -36,6 +37,14 @@ const ALLOWED_IMAGE_TYPES = [
   "image/webp",
   "image/gif",
 ];
+
+interface ImageAttrs {
+  src: string;
+  alt: string;
+  width: number;
+  align: "center";
+  wrap: false;
+}
 
 export type EditorNotice = { type: "success" | "error"; text: string };
 
@@ -311,6 +320,7 @@ export function RichTextEditor({
         inline: false,
         allowBase64: false,
       }),
+      AuthorImageRow,
       PagePreview,
       Placeholder.configure({ placeholder }),
     ],
@@ -496,23 +506,23 @@ export function RichTextEditor({
     }
   }, [editor, notify]);
 
-  const insertImageFile = useCallback(
-    async (file: File): Promise<boolean> => {
-      if (!editor) return false;
+  const uploadImage = useCallback(
+    async (file: File): Promise<ImageAttrs | null> => {
+      if (!editor) return null;
 
       if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
         notify({
           type: "error",
           text: "PNG / JPEG / WEBP / GIF 이미지만 업로드할 수 있습니다.",
         });
-        return false;
+        return null;
       }
       if (file.size > MAX_IMAGE_SIZE) {
         notify({
           type: "error",
           text: "이미지는 50MB 이하만 업로드할 수 있습니다.",
         });
-        return false;
+        return null;
       }
 
       try {
@@ -549,36 +559,13 @@ export function RichTextEditor({
         }
         width = Math.min(width, containerWidth);
 
-        editor
-          .chain()
-          .focus()
-          .insertContent({
-            type: "image",
-            attrs: {
-              src: uploaded.url,
-              alt: file.name || "붙여넣은 이미지",
-              width: Math.round(width),
-              align: "center",
-              wrap: false,
-            },
-          })
-          .run();
-
-        // Select the image we just inserted so its alignment and text-wrap
-        // controls appear immediately in the editor.
-        const inserted = { pos: -1 };
-        editor.state.doc.descendants((node, pos) => {
-          if (node.type.name === "image" && node.attrs.src === uploaded.url) {
-            inserted.pos = pos;
-            return false;
-          }
-          return true;
-        });
-        if (inserted.pos >= 0) {
-          editor.chain().focus().setNodeSelection(inserted.pos).run();
-        }
-
-        return true;
+        return {
+          src: uploaded.url,
+          alt: file.name || "붙여넣은 이미지",
+          width: Math.round(width),
+          align: "center",
+          wrap: false,
+        };
       } catch (error) {
         notify({
           type: "error",
@@ -587,10 +574,60 @@ export function RichTextEditor({
               ? error.message
               : "이미지를 업로드하지 못했습니다.",
         });
-        return false;
+        return null;
       }
     },
     [editor, notify, uploadUrl],
+  );
+
+  const insertImages = useCallback(
+    (images: ImageAttrs[]) => {
+      if (!editor || images.length === 0) return;
+
+      if (images.length === 1) {
+        editor
+          .chain()
+          .focus()
+          .insertContent({ type: "image", attrs: images[0] })
+          .run();
+      } else {
+        // Fit up to three images side by side inside the editor width.
+        const gap = 12;
+        const available =
+          (editor.view.dom.clientWidth || 800) - gap * (images.length - 1);
+        const columnWidth = Math.max(
+          80,
+          Math.floor(available / images.length),
+        );
+        editor
+          .chain()
+          .focus()
+          .insertContent({
+            type: "imageRow",
+            content: images.map((image) => ({
+              type: "image",
+              attrs: { ...image, width: Math.min(image.width, columnWidth) },
+            })),
+          })
+          .run();
+      }
+
+      // Select the last inserted image so its alignment and text-wrap
+      // controls appear immediately in the editor.
+      const last = images[images.length - 1];
+      let position = -1;
+      editor.state.doc.descendants((node, pos) => {
+        if (node.type.name === "image" && node.attrs.src === last.src) {
+          position = pos;
+          return false;
+        }
+        return true;
+      });
+      if (position >= 0) {
+        editor.chain().focus().setNodeSelection(position).run();
+      }
+    },
+    [editor],
   );
 
   const uploadAndInsertImages = useCallback(
@@ -599,10 +636,20 @@ export function RichTextEditor({
 
       setUploadingImage(true);
       let inserted = 0;
+      let row: ImageAttrs[] = [];
       try {
         for (const file of files) {
-          if (await insertImageFile(file)) inserted += 1;
+          const image = await uploadImage(file);
+          if (!image) continue;
+          inserted += 1;
+          row.push(image);
+          if (row.length === 3) {
+            insertImages(row);
+            row = [];
+          }
         }
+        if (row.length > 0) insertImages(row);
+
         if (inserted === 1 && files.length === 1) {
           notify({ type: "success", text: "이미지를 추가했습니다." });
         } else if (inserted > 0) {
@@ -615,7 +662,7 @@ export function RichTextEditor({
         setUploadingImage(false);
       }
     },
-    [editor, insertImageFile, notify],
+    [editor, insertImages, notify, uploadImage],
   );
 
   useEffect(() => {
@@ -1104,6 +1151,7 @@ export function RichTextEditor({
           <ToolbarButton
             onClick={() => imageInputRef.current?.click()}
             disabled={!editor || uploadingImage}
+            title="여러 이미지를 한 번에 넣을 수 있습니다"
           >
             {uploadingImage ? "업로드 중..." : "이미지"}
           </ToolbarButton>
@@ -1111,6 +1159,7 @@ export function RichTextEditor({
             ref={imageInputRef}
             type="file"
             accept="image/png,image/jpeg,image/webp,image/gif"
+            multiple
             hidden
             onChange={handleImageFile}
           />
