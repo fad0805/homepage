@@ -1046,7 +1046,6 @@ export default function AdminChapterEdit() {
                   enableFontSize
                   enableHighlight
                   variant="chapter"
-                  deferImageUpload
                 />
               </div>
               <label className="admin-field">

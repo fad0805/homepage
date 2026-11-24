@@ -7,6 +7,24 @@ export const AuthorImageRow = Node.create({
   content: "image{1,3}",
   defining: true,
 
+  addAttributes() {
+    return {
+      align: {
+        default: "center",
+        parseHTML: (element) => {
+          const value = element.getAttribute("data-align");
+          return value === "left" || value === "right" ? value : "center";
+        },
+        renderHTML: (attributes) => ({
+          "data-align":
+            attributes.align === "left" || attributes.align === "right"
+              ? attributes.align
+              : "center",
+        }),
+      },
+    };
+  },
+
   parseHTML() {
     return [{ tag: "div[data-image-row]" }];
   },

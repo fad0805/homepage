@@ -14,6 +14,8 @@ import {
 import { createPortal } from "react-dom";
 import { EditorContent, useEditor } from "@tiptap/react";
 import type { Editor } from "@tiptap/core";
+import type { Node as PMNode } from "@tiptap/pm/model";
+import { NodeSelection, type EditorState } from "@tiptap/pm/state";
 import StarterKit from "@tiptap/starter-kit";
 import Highlight from "@tiptap/extension-highlight";
 import Placeholder from "@tiptap/extension-placeholder";
@@ -27,6 +29,13 @@ import { ManuscriptTab } from "@/components/manuscript-tab";
 import { PagePreview } from "@/components/page-preview";
 import { AUTHOR_IMAGE_MAX_HEIGHT_REM } from "@/config/author";
 import { apiFetch } from "@/lib/api";
+import {
+  AUTHOR_IMAGE_DRAG_MIME,
+  endImageDrag,
+  isImageDragActive,
+  markImageDragStart,
+  moveDraggedImage,
+} from "@/lib/author-image-arrange";
 import { findLinkTokens } from "@/lib/linkify";
 import { useHorizontalScrollFade } from "@/lib/use-horizontal-scroll-fade";
 
@@ -49,6 +58,23 @@ interface ImageAttrs {
 }
 
 export type EditorNotice = { type: "success" | "error"; text: string };
+
+function escapeRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function removeImageTagWithSrc(html: string, src: string) {
+  return html.replace(
+    new RegExp(`<img\\b[^>]*\\bsrc="${escapeRegExp(src)}"[^>]*>`, "gi"),
+    "",
+  );
+}
+
+function getInsertionPosition(state: EditorState) {
+  const { selection } = state;
+  // A selected image would otherwise be replaced by insertContent.
+  return selection instanceof NodeSelection ? selection.to : selection.from;
+}
 
 const FONT_SIZE_OPTIONS = [
   "10",
@@ -90,13 +116,12 @@ interface RichTextEditorProps {
   onEditorReady?: (editor: Editor | null) => void;
   /** Reset the editor scroll position when the displayed document changes. */
   scrollResetKey?: string | number | null;
-  /** Keep images local until the caller saves the document. */
-  deferImageUpload?: boolean;
 }
 
 export interface RichTextEditorHandle {
-  /** Upload locally inserted images and return HTML with permanent URLs. */
+  /** Wait for in-flight image uploads and return HTML with permanent URLs. */
   resolveImages: (html: string) => Promise<string>;
+  /** Whether image uploads started on insert are still in flight. */
   hasPendingImages: () => boolean;
 }
 
@@ -280,7 +305,6 @@ export const RichTextEditor = forwardRef<
     readOnly = false,
     onEditorReady,
     scrollResetKey,
-    deferImageUpload = false,
   },
   ref,
 ) {
@@ -294,9 +318,18 @@ export const RichTextEditor = forwardRef<
   const onNoticeRef = useRef(onNotice);
   const contentRef = useRef<HTMLDivElement | null>(null);
   const imageInputRef = useRef<HTMLInputElement | null>(null);
-  const pasteImageRef = useRef<(files: File[]) => void>(() => {});
-  // Blob URL -> original file. Populated only when deferImageUpload is set.
-  const pendingImagesRef = useRef<Map<string, File>>(new Map());
+  const pasteImageRef = useRef<
+    (files: File[], position: number | undefined) => void
+  >(() => {});
+  // Blob URL -> upload promise. Previews are inserted immediately; uploads
+  // start right away and the map is used to keep autosave from racing them.
+  const pendingUploadsRef = useRef<Map<string, Promise<string | null>>>(
+    new Map(),
+  );
+  // Blob URL -> final URL, kept so a save that captures stale state can still
+  // replace a preview that has already finished uploading.
+  const resolvedUploadsRef = useRef<Map<string, string>>(new Map());
+  const failedUploadsRef = useRef<Set<string>>(new Set());
   const [uploadingImage, setUploadingImage] = useState(false);
   const [loadingPagePreview, setLoadingPagePreview] = useState(false);
   const [htmlMode, setHtmlMode] = useState(false);
@@ -312,8 +345,10 @@ export const RichTextEditor = forwardRef<
 
   useEffect(
     () => () => {
-      pendingImagesRef.current.forEach((_, url) => URL.revokeObjectURL(url));
-      pendingImagesRef.current.clear();
+      pendingUploadsRef.current.forEach((_, url) => URL.revokeObjectURL(url));
+      pendingUploadsRef.current.clear();
+      resolvedUploadsRef.current.clear();
+      failedUploadsRef.current.clear();
     },
     [],
   );
@@ -356,7 +391,30 @@ export const RichTextEditor = forwardRef<
     immediatelyRender: false,
     shouldRerenderOnTransaction: true,
     editorProps: {
-      handlePaste: (_view, event) => {
+      handleDOMEvents: {
+        // ProseMirror's built-in dragstart still supplies the standard
+        // clipboard payload browsers need to start a drag. The image origin is
+        // also remembered in memory, so a move is detected even if the custom
+        // dataTransfer type is cleared.
+        dragstart: (view, event) =>
+          markImageDragStart(view, event as DragEvent),
+        dragend: () => {
+          endImageDrag();
+          return false;
+        },
+        dragover: (_view, event) => {
+          const drag = event as DragEvent;
+          const hasCustomType = Array.from(
+            drag.dataTransfer?.types ?? [],
+          ).includes(AUTHOR_IMAGE_DRAG_MIME);
+          if (!hasCustomType && !isImageDragActive()) return false;
+          drag.preventDefault();
+          if (drag.dataTransfer) drag.dataTransfer.dropEffect = "move";
+          return true;
+        },
+      },
+      handleDrop: (view, event) => moveDraggedImage(view, event as DragEvent),
+      handlePaste: (view, event) => {
         const clipboard = event.clipboardData;
         if (!clipboard) return false;
         const files = Array.from(clipboard.files ?? []).filter((file) =>
@@ -372,7 +430,7 @@ export const RichTextEditor = forwardRef<
         }
         if (files.length === 0) return false;
         event.preventDefault();
-        pasteImageRef.current(files);
+        pasteImageRef.current(files, getInsertionPosition(view.state));
         return true;
       },
     },
@@ -600,238 +658,239 @@ export const RichTextEditor = forwardRef<
     [editor, notify],
   );
 
-  const uploadImage = useCallback(
-    async (file: File): Promise<ImageAttrs | null> => {
-      try {
-        const body = new FormData();
-        body.append("file", file);
-        const uploaded = await apiFetch<{ url: string }>(uploadUrl, {
-          method: "POST",
-          body,
-        });
-        return buildImageAttrs(file, uploaded.url);
-      } catch (error) {
-        notify({
-          type: "error",
-          text:
-            error instanceof Error
-              ? error.message
-              : "이미지를 업로드하지 못했습니다.",
-        });
-        return null;
-      }
+  const uploadFile = useCallback(
+    async (file: File): Promise<string> => {
+      const body = new FormData();
+      body.append("file", file);
+      const uploaded = await apiFetch<{ url: string }>(uploadUrl, {
+        method: "POST",
+        body,
+      });
+      return uploaded.url;
     },
-    [buildImageAttrs, notify, uploadUrl],
+    [uploadUrl],
   );
 
-  const addPendingImage = useCallback(
-    async (file: File): Promise<ImageAttrs | null> => {
-      const src = URL.createObjectURL(file);
-      const attrs = await buildImageAttrs(file, src);
-      if (!attrs) {
-        URL.revokeObjectURL(src);
-        return null;
-      }
-      pendingImagesRef.current.set(src, file);
-      return attrs;
-    },
-    [buildImageAttrs],
-  );
-
-  const insertImages = useCallback(
-    (images: ImageAttrs[]) => {
-      if (!editor || images.length === 0) return;
-
-      if (images.length === 1) {
-        editor
-          .chain()
-          .focus()
-          .insertContent({ type: "image", attrs: images[0] })
-          .run();
-      } else {
-        // Fit up to three images side by side inside the editor width.
-        const gap = 12;
-        const available =
-          (editor.view.dom.clientWidth || 800) - gap * (images.length - 1);
-        const columnWidth = Math.max(
-          80,
-          Math.floor(available / images.length),
-        );
-        editor
-          .chain()
-          .focus()
-          .insertContent({
-            type: "imageRow",
-            content: images.map((image) => ({
-              type: "image",
-              attrs: { ...image, width: Math.min(image.width, columnWidth) },
-            })),
-          })
-          .run();
-      }
-
-      // Select the last inserted image so its alignment and text-wrap
-      // controls appear immediately in the editor.
-      const last = images[images.length - 1];
-      let position = -1;
+  const updateImageNode = useCallback(
+    (blobUrl: string, finalUrl: string) => {
+      if (!editor) return;
+      const found: Array<{ pos: number; node: PMNode }> = [];
       editor.state.doc.descendants((node, pos) => {
-        if (node.type.name === "image" && node.attrs.src === last.src) {
-          position = pos;
+        if (node.type.name === "image" && node.attrs.src === blobUrl) {
+          found.push({ pos, node });
           return false;
         }
         return true;
       });
-      if (position >= 0) {
-        editor.chain().focus().setNodeSelection(position).run();
+      const target = found[0];
+      if (!target) return;
+
+      const tr = editor.state.tr;
+      tr.setNodeMarkup(target.pos, undefined, {
+        ...target.node.attrs,
+        src: finalUrl,
+        uploading: false,
+      });
+      editor.view.dispatch(tr);
+    },
+    [editor],
+  );
+
+  const removeImageNode = useCallback(
+    (blobUrl: string) => {
+      if (!editor) return;
+      const found: Array<{ pos: number; node: PMNode }> = [];
+      editor.state.doc.descendants((node, pos) => {
+        if (node.type.name === "image" && node.attrs.src === blobUrl) {
+          found.push({ pos, node });
+          return false;
+        }
+        return true;
+      });
+      const target = found[0];
+      if (!target) return;
+
+      const tr = editor.state.tr;
+      tr.delete(target.pos, target.pos + target.node.nodeSize);
+      editor.view.dispatch(tr);
+    },
+    [editor],
+  );
+
+  const startImageUpload = useCallback(
+    (file: File, blobUrl: string): Promise<string | null> => {
+      const task = (async () => {
+        try {
+          const finalUrl = await uploadFile(file);
+          resolvedUploadsRef.current.set(blobUrl, finalUrl);
+          updateImageNode(blobUrl, finalUrl);
+          URL.revokeObjectURL(blobUrl);
+          return finalUrl;
+        } catch (error) {
+          failedUploadsRef.current.add(blobUrl);
+          removeImageNode(blobUrl);
+          URL.revokeObjectURL(blobUrl);
+          notify({
+            type: "error",
+            text:
+              error instanceof Error
+                ? error.message
+                : "이미지를 업로드하지 못했습니다.",
+          });
+          return null;
+        } finally {
+          pendingUploadsRef.current.delete(blobUrl);
+        }
+      })();
+      pendingUploadsRef.current.set(blobUrl, task);
+      return task;
+    },
+    [notify, removeImageNode, updateImageNode, uploadFile],
+  );
+
+  const insertPreviewImages = useCallback(
+    (images: ImageAttrs[], position: number) => {
+      if (!editor || images.length === 0) return;
+
+      const insertAt = Math.max(
+        0,
+        Math.min(position, editor.state.doc.content.size),
+      );
+      // Stacked standalone previews show exactly where the images will land.
+      // Using insertContentAt with an explicit position avoids replacing the
+      // currently selected image.
+      editor
+        .chain()
+        .focus()
+        .insertContentAt(
+          insertAt,
+          images.map((image) => ({
+            type: "image",
+            attrs: { ...image, uploading: true },
+          })),
+        )
+        .run();
+
+      // Select the last preview so its alignment controls appear.
+      const last = images[images.length - 1];
+      let lastPosition = -1;
+      editor.state.doc.descendants((node, pos) => {
+        if (node.type.name === "image" && node.attrs.src === last.src) {
+          lastPosition = pos;
+          return false;
+        }
+        return true;
+      });
+      if (lastPosition >= 0) {
+        editor.chain().focus().setNodeSelection(lastPosition).run();
       }
     },
     [editor],
   );
 
   const uploadAndInsertImages = useCallback(
-    async (files: File[]) => {
+    async (files: File[], position?: number) => {
       if (!editor || files.length === 0) return;
 
-      const prepare = deferImageUpload ? addPendingImage : uploadImage;
-      if (!deferImageUpload) setUploadingImage(true);
-      let inserted = 0;
-      let row: ImageAttrs[] = [];
+      const insertAt = position ?? getInsertionPosition(editor.state);
+      setUploadingImage(true);
       try {
-        for (const file of files) {
-          const image = await prepare(file);
-          if (!image) continue;
-          inserted += 1;
-          row.push(image);
-          if (row.length === 3) {
-            insertImages(row);
-            row = [];
-          }
-        }
-        if (row.length > 0) insertImages(row);
+        const previews = await Promise.all(
+          files.map(async (file) => {
+            const src = URL.createObjectURL(file);
+            const attrs = await buildImageAttrs(file, src);
+            if (!attrs) {
+              URL.revokeObjectURL(src);
+              return null;
+            }
+            return { file, attrs };
+          }),
+        );
+        const ready = previews.filter(
+          (preview): preview is { file: File; attrs: ImageAttrs } =>
+            preview !== null,
+        );
+        if (ready.length === 0) return;
 
-        if (inserted === 1 && files.length === 1) {
+        insertPreviewImages(
+          ready.map((preview) => preview.attrs),
+          insertAt,
+        );
+        const tasks = ready.map((preview) =>
+          startImageUpload(preview.file, preview.attrs.src),
+        );
+
+        if (ready.length === 1 && files.length === 1) {
           notify({ type: "success", text: "이미지를 추가했습니다." });
-        } else if (inserted > 0) {
+        } else {
           notify({
             type: "success",
-            text: `이미지 ${inserted}장을 추가했습니다.`,
+            text: `이미지 ${ready.length}장을 추가했습니다.`,
           });
         }
+        await Promise.all(tasks);
       } finally {
-        if (!deferImageUpload) setUploadingImage(false);
+        if (pendingUploadsRef.current.size === 0) setUploadingImage(false);
       }
     },
     [
-      addPendingImage,
-      deferImageUpload,
+      buildImageAttrs,
       editor,
-      insertImages,
+      insertPreviewImages,
       notify,
-      uploadImage,
+      startImageUpload,
     ],
   );
 
   useEffect(() => {
-    pasteImageRef.current = (files) => {
-      void uploadAndInsertImages(files);
+    pasteImageRef.current = (files, position) => {
+      void uploadAndInsertImages(files, position);
     };
   }, [uploadAndInsertImages]);
 
   useImperativeHandle(
     ref,
     () => ({
-      hasPendingImages: () => pendingImagesRef.current.size > 0,
+      hasPendingImages: () => pendingUploadsRef.current.size > 0,
       resolveImages: async (html: string) => {
-        const pending = pendingImagesRef.current;
+        await Promise.all(Array.from(pendingUploadsRef.current.values()));
         const blobSources = Array.from(
-          html.matchAll(/<img\b[^>]*\bsrc="(blob:[^"]+)"/gi),
-          (match) => match[1],
+          new Set(
+            Array.from(
+              html.matchAll(/<img\b[^>]*\bsrc="(blob:[^"]+)"/gi),
+              (match) => match[1],
+            ),
+          ),
         );
-        const stale = blobSources.find((src) => !pending.has(src));
-        if (stale) {
-          const message = "임시 이미지를 다시 추가해주세요.";
-          notify({ type: "error", text: message });
-          throw new Error(message);
-        }
-        const entries = Array.from(pending.entries()).filter(([url]) =>
-          blobSources.includes(url),
-        );
-        if (entries.length === 0) {
-          pending.forEach((_, url) => URL.revokeObjectURL(url));
-          pending.clear();
-          return html;
-        }
-
-        // Upload in parallel: save time should not grow with the image count.
-        const replacements = new Map<string, string>();
-        await Promise.all(
-          entries.map(async ([blobUrl, file]) => {
-            try {
-              const body = new FormData();
-              body.append("file", file);
-              const uploaded = await apiFetch<{ url: string }>(uploadUrl, {
-                method: "POST",
-                body,
-              });
-              replacements.set(blobUrl, uploaded.url);
-            } catch (error) {
-              notify({
-                type: "error",
-                text:
-                  error instanceof Error
-                    ? error.message
-                    : "이미지를 업로드하지 못했습니다.",
-              });
-              throw error;
-            }
-          }),
-        );
-
         let resolved = html;
-        replacements.forEach((url, blobUrl) => {
-          resolved = resolved.split(blobUrl).join(url);
-        });
-
-        if (editor) {
-          const updates: Array<{ pos: number; attrs: Record<string, unknown> }> =
-            [];
-          editor.state.doc.descendants((node, pos) => {
-            const src = node.attrs.src;
-            if (
-              node.type.name === "image" &&
-              typeof src === "string" &&
-              replacements.has(src)
-            ) {
-              updates.push({
-                pos,
-                attrs: { ...node.attrs, src: replacements.get(src) },
-              });
-            }
-          });
-          if (updates.length > 0) {
-            const tr = editor.state.tr;
-            updates.forEach(({ pos, attrs }) => {
-              tr.setNodeMarkup(pos, undefined, attrs);
-            });
-            editor.view.dispatch(tr);
+        for (const blobUrl of blobSources) {
+          const finalUrl =
+            resolvedUploadsRef.current.get(blobUrl) ??
+            (await pendingUploadsRef.current.get(blobUrl));
+          if (finalUrl) {
+            resolved = resolved.split(blobUrl).join(finalUrl);
+          } else if (failedUploadsRef.current.has(blobUrl)) {
+            resolved = removeImageTagWithSrc(resolved, blobUrl);
+          } else {
+            const message = "임시 이미지를 다시 추가해주세요.";
+            notify({ type: "error", text: message });
+            throw new Error(message);
           }
         }
-
-        pending.forEach((_, url) => URL.revokeObjectURL(url));
-        pending.clear();
         return resolved;
       },
     }),
-    [editor, notify, uploadUrl],
+    [notify],
   );
 
   const handleImageFile = useCallback(
     async (event: ChangeEvent<HTMLInputElement>) => {
+      const position = editor ? getInsertionPosition(editor.state) : undefined;
       const files = Array.from(event.target.files ?? []);
       event.target.value = "";
-      await uploadAndInsertImages(files);
+      await uploadAndInsertImages(files, position);
     },
-    [uploadAndInsertImages],
+    [editor, uploadAndInsertImages],
   );
 
   const activeColor = editor?.getAttributes("textStyle").color;
@@ -852,11 +911,50 @@ export const RichTextEditor = forwardRef<
       ? activeParagraphBackground
       : "#e6e6e6";
   const imageAttrs = editor?.getAttributes("image") ?? {};
+  const selectedImageRow =
+    editor?.isActive("image") && editor
+      ? (() => {
+          const $from = editor.state.selection.$from;
+          for (let depth = $from.depth; depth > 0; depth -= 1) {
+            if ($from.node(depth).type.name === "imageRow") {
+              return { pos: $from.before(depth), node: $from.node(depth) };
+            }
+          }
+          return null;
+        })()
+      : null;
+  const rowAlign = selectedImageRow?.node.attrs.align;
   const imageAlign: "left" | "center" | "right" =
-    imageAttrs.align === "left" || imageAttrs.align === "right"
-      ? imageAttrs.align
-      : "center";
-  const imageWrap = Boolean(imageAttrs.wrap) && imageAlign !== "center";
+    rowAlign === "left" || rowAlign === "right"
+      ? rowAlign
+      : imageAttrs.align === "left" || imageAttrs.align === "right"
+        ? imageAttrs.align
+        : "center";
+  const imageWrap =
+    !selectedImageRow && Boolean(imageAttrs.wrap) && imageAlign !== "center";
+  const setImageAlign = useCallback(
+    (align: "left" | "center" | "right") => {
+      if (!editor) return;
+      if (selectedImageRow) {
+        const tr = editor.state.tr;
+        tr.setNodeMarkup(selectedImageRow.pos, undefined, {
+          ...selectedImageRow.node.attrs,
+          align,
+        });
+        editor.view.dispatch(tr);
+        return;
+      }
+      editor
+        .chain()
+        .focus()
+        .updateAttributes("image", {
+          align,
+          wrap: align === "center" ? false : imageWrap,
+        })
+        .run();
+    },
+    [editor, imageWrap, selectedImageRow],
+  );
   const setImageWrap = useCallback(
     (nextWrap: boolean) => {
       if (!editor) return;
@@ -918,45 +1016,21 @@ export const RichTextEditor = forwardRef<
   const alignMenuItems: ToolbarMenuItem[] = isImageSelected
     ? [
         {
-          label: "왼쪽 정렬",
+          label: selectedImageRow ? "줄 왼쪽 정렬" : "왼쪽 정렬",
           active: imageAlign === "left",
-          onSelect: () =>
-            editor
-              ?.chain()
-              .focus()
-              .updateAttributes("image", {
-                align: "left",
-                wrap: imageWrap,
-              })
-              .run(),
+          onSelect: () => setImageAlign("left"),
         },
         {
-          label: "가운데 정렬",
+          label: selectedImageRow ? "줄 가운데 정렬" : "가운데 정렬",
           active: imageAlign === "center",
-          onSelect: () =>
-            editor
-              ?.chain()
-              .focus()
-              .updateAttributes("image", {
-                align: "center",
-                wrap: false,
-              })
-              .run(),
+          onSelect: () => setImageAlign("center"),
         },
         {
-          label: "오른쪽 정렬",
+          label: selectedImageRow ? "줄 오른쪽 정렬" : "오른쪽 정렬",
           active: imageAlign === "right",
-          onSelect: () =>
-            editor
-              ?.chain()
-              .focus()
-              .updateAttributes("image", {
-                align: "right",
-                wrap: imageWrap,
-              })
-              .run(),
+          onSelect: () => setImageAlign("right"),
         },
-        ...(imageAlign === "center"
+        ...(selectedImageRow || imageAlign === "center"
           ? []
           : [
               {
@@ -1321,67 +1395,48 @@ export const RichTextEditor = forwardRef<
       </div>
       {editor?.isActive("image") ? (
         <div className="admin-editor__image-controls">
-          <span className="admin-editor__image-label">이미지 정렬</span>
+          <span className="admin-editor__image-label">
+            {selectedImageRow ? "줄 정렬" : "이미지 정렬"}
+          </span>
           <ToolbarButton
-            onClick={() =>
-              editor
-                .chain()
-                .focus()
-                .updateAttributes("image", {
-                  align: "left",
-                  wrap: imageWrap,
-                })
-                .run()
-            }
+            onClick={() => setImageAlign("left")}
             active={imageAlign === "left"}
           >
             왼쪽
           </ToolbarButton>
           <ToolbarButton
-            onClick={() =>
-              editor
-                .chain()
-                .focus()
-                .updateAttributes("image", {
-                  align: "center",
-                  wrap: false,
-                })
-                .run()
-            }
+            onClick={() => setImageAlign("center")}
             active={imageAlign === "center"}
           >
             가운데
           </ToolbarButton>
           <ToolbarButton
-            onClick={() =>
-              editor
-                .chain()
-                .focus()
-                .updateAttributes("image", {
-                  align: "right",
-                  wrap: imageWrap,
-                })
-                .run()
-            }
+            onClick={() => setImageAlign("right")}
             active={imageAlign === "right"}
           >
             오른쪽
           </ToolbarButton>
-          <label
-            className="admin-editor__image-wrap"
-            title="왼쪽/오른쪽 정렬에서 이미지 옆에 글씨를 배치합니다. 이미지가 넓으면 글씨가 들어갈 공간을 확보하기 위해 자동으로 줄어듭니다."
-          >
-            <input
-              type="checkbox"
-              checked={imageWrap}
-              disabled={imageAlign === "center"}
-              onChange={(event) => setImageWrap(event.target.checked)}
-            />
-            글씨를 옆에 배치
-          </label>
-          {imageWidth ? (
-            <span className="admin-editor__image-size">{imageWidth}px</span>
-          ) : null}
+          {selectedImageRow ? null : (
+            <>
+              <label
+                className="admin-editor__image-wrap"
+                title="왼쪽/오른쪽 정렬에서 이미지 옆에 글씨를 배치합니다. 이미지가 넓으면 글씨가 들어갈 공간을 확보하기 위해 자동으로 줄어듭니다."
+              >
+                <input
+                  type="checkbox"
+                  checked={imageWrap}
+                  disabled={imageAlign === "center"}
+                  onChange={(event) => setImageWrap(event.target.checked)}
+                />
+                글씨를 옆에 배치
+              </label>
+              {imageWidth ? (
+                <span className="admin-editor__image-size">
+                  {imageWidth}px
+                </span>
+              ) : null}
+            </>
+          )}
         </div>
       ) : null}
       {editor?.isActive("pagePreview") ? (

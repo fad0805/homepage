@@ -25,7 +25,7 @@ function getMaxImageHeight() {
 }
 
 function AuthorImageView({ node, updateAttributes, selected }: NodeViewProps) {
-  const { src, alt, title, width, height, align, wrap } = node.attrs;
+  const { src, alt, title, width, height, align, wrap, uploading } = node.attrs;
   const imgRef = useRef<HTMLImageElement>(null);
   const [resizing, setResizing] = useState(false);
 
@@ -105,14 +105,16 @@ function AuthorImageView({ node, updateAttributes, selected }: NodeViewProps) {
           ? "1.2rem auto 1.2rem 0"
           : "1.2rem 0 1.2rem auto",
     position: "relative",
-    borderRadius: "0.7rem",
+    borderRadius: "0.25rem",
     outline: selected ? "2px solid var(--title-color)" : "none",
     outlineOffset: "2px",
   };
 
   return (
     <NodeViewWrapper
-      className={`author-image-node${resizing ? " is-resizing" : ""}`}
+      className={`author-image-node${resizing ? " is-resizing" : ""}${
+        uploading ? " is-uploading" : ""
+      }`}
       style={style}
       data-align={effectiveAlign}
       data-wrap={effectiveWrap ? "true" : "false"}
@@ -140,9 +142,12 @@ function AuthorImageView({ node, updateAttributes, selected }: NodeViewProps) {
                 : `${AUTHOR_IMAGE_MAX_HEIGHT_REM}rem`,
             maxWidth: "100%",
             objectFit: "contain",
-            borderRadius: "0.7rem",
+            borderRadius: "0.25rem",
           }}
         />
+        {uploading ? (
+          <span className="author-image-node__uploading">업로드 중…</span>
+        ) : null}
         <span
           className="author-image-node__handle"
           onPointerDown={startResize}
@@ -208,9 +213,27 @@ export const AuthorImage = Image.extend({
           "data-wrap": attributes.wrap ? "true" : "false",
         }),
       },
+      // Transient state for a local preview that is still uploading. It is
+      // never serialized into the saved HTML.
+      uploading: {
+        default: false,
+        parseHTML: () => false,
+        renderHTML: () => ({}),
+      },
     };
   },
   addNodeView() {
-    return ReactNodeViewRenderer(AuthorImageView);
+    // Tiptap's default stopEvent prevents dragstart on draggable node views
+    // unless a data-drag-handle is used. The whole image is the drag handle
+    // here, so let drag events through to ProseMirror and the browser.
+    return ReactNodeViewRenderer(AuthorImageView, {
+      stopEvent: ({ event }) => {
+        if (event.type === "dragstart") return false;
+        const target = event.target as HTMLElement | null;
+        return Boolean(
+          target?.closest("input, button, select, textarea, [contenteditable=true]"),
+        );
+      },
+    });
   },
 });
