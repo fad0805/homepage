@@ -462,8 +462,9 @@ export const RichTextEditor = forwardRef<
     };
     const onDrop = (event: DragEvent) => {
       if (!moveDraggedImage(editor.view, event)) return;
+      // Prevent ProseMirror's block insertion, but let the event reach
+      // dropcursor so it clears the insertion line right away.
       event.preventDefault();
-      event.stopPropagation();
     };
 
     dom.addEventListener("dragstart", onDragStart, true);
