@@ -1011,7 +1011,7 @@ html[data-appearance='drawer'] .floating-search:not(.floating-search--drawer) {
   height: 2.25rem;
   border: 1px solid rgba(255, 255, 255, 0.16);
   background: rgba(255, 255, 255, 0.07);
-  color: $white;
+  color: var(--theme-main);
   box-shadow: none;
 }
 
@@ -1020,14 +1020,14 @@ html[data-appearance='drawer'] .floating-search:not(.floating-search--drawer) {
   background: rgba(255, 255, 255, 0.12);
 }
 
-.site-drawer .floating-search--drawer {
+.site-drawer .floating-search__button.floating-search--drawer {
   display: inline-flex;
   position: static;
   width: 2.25rem;
   height: 2.25rem;
   border-color: rgba(255, 255, 255, 0.16);
   background: rgba(255, 255, 255, 0.07);
-  color: $white;
+  color: var(--theme-main);
   box-shadow: none;
 
   &:hover {
@@ -1036,10 +1036,12 @@ html[data-appearance='drawer'] .floating-search:not(.floating-search--drawer) {
   }
 }
 
-[data-theme='dark'] .site-drawer .floating-search--drawer {
+[data-theme='dark']
+  .site-drawer
+  .floating-search__button.floating-search--drawer {
   border-color: rgba(255, 255, 255, 0.16);
   background: rgba(255, 255, 255, 0.07);
-  color: $white;
+  color: var(--theme-main);
   box-shadow: none;
 }
 
