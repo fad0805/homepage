@@ -12,6 +12,7 @@ from core import audit as _planner_audit  # noqa: F401 - registers history hooks
 from core.bookmark_retention import bookmark_retention_loop
 from core.chapter_draft_cleanup import chapter_draft_cleanup_loop
 from core.config import API_DOCS_ENABLED, ENVIRONMENT
+from core.image_cleanup import image_cleanup_loop
 from core.manuscript_trash_cleanup import manuscript_trash_cleanup_loop
 from core.mastodon import mastodon_publish_loop
 from core.tag_cleanup import tag_cleanup_loop
@@ -63,6 +64,7 @@ async def lifespan(app:FastAPI):
         chapter_draft_cleanup_loop()
     )
     manuscript_trash_task = asyncio.create_task(manuscript_trash_cleanup_loop())
+    image_cleanup_task = asyncio.create_task(image_cleanup_loop())
     try:
         yield
     finally:
@@ -71,6 +73,7 @@ async def lifespan(app:FastAPI):
         tag_cleanup_task.cancel()
         chapter_draft_cleanup_task.cancel()
         manuscript_trash_task.cancel()
+        image_cleanup_task.cancel()
         with suppress(asyncio.CancelledError):
             await mastodon_task
         with suppress(asyncio.CancelledError):
@@ -81,6 +84,8 @@ async def lifespan(app:FastAPI):
             await chapter_draft_cleanup_task
         with suppress(asyncio.CancelledError):
             await manuscript_trash_task
+        with suppress(asyncio.CancelledError):
+            await image_cleanup_task
 
 app = FastAPI(
     lifespan=lifespan,

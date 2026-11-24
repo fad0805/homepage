@@ -7,6 +7,7 @@ import tempfile
 import time
 import uuid
 from contextlib import contextmanager
+from datetime import datetime, timezone
 from io import BytesIO
 from pathlib import Path
 from typing import Any
@@ -226,6 +227,34 @@ def _build_key(folder: str, extension: str, name: str | None = None) -> str:
     filename = (name or "").strip("/\\") or uuid.uuid4().hex
     parts.append(f"{filename}{extension}")
     return "/".join(parts)
+
+
+def iter_uploaded_files(folder: str):
+    """Yield ``(object key, last modified)`` for files stored in ``folder``.
+
+    Works with both the local uploads directory and object storage so cleanup
+    jobs do not need to know which backend is active.
+    """
+    folder = folder.strip("/\\")
+    if _s3_is_configured():
+        prefix = _build_key(folder, "")
+        client = _get_s3_client()
+        paginator = client.get_paginator("list_objects_v2")
+        for page in paginator.paginate(Bucket=S3_BUCKET, Prefix=prefix):
+            for obj in page.get("Contents", []):
+                yield obj["Key"], obj.get("LastModified")
+        return
+
+    target = (UPLOAD_DIR.resolve() / folder).resolve()
+    if not target.is_dir():
+        return
+    for path in target.rglob("*"):
+        if not path.is_file():
+            continue
+        relative = path.relative_to(target).as_posix()
+        key = _build_key(folder, "", name=relative)
+        modified = datetime.fromtimestamp(path.stat().st_mtime, tz=timezone.utc)
+        yield key, modified
 
 
 def _local_path_from_url(url: str) -> Path | None:
