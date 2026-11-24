@@ -268,7 +268,7 @@ export function RichTextEditor({
   const onNoticeRef = useRef(onNotice);
   const contentRef = useRef<HTMLDivElement | null>(null);
   const imageInputRef = useRef<HTMLInputElement | null>(null);
-  const pasteImageRef = useRef<(file: File) => void>(() => {});
+  const pasteImageRef = useRef<(files: File[]) => void>(() => {});
   const [uploadingImage, setUploadingImage] = useState(false);
   const [loadingPagePreview, setLoadingPagePreview] = useState(false);
   const [htmlMode, setHtmlMode] = useState(false);
@@ -322,24 +322,20 @@ export function RichTextEditor({
       handlePaste: (_view, event) => {
         const clipboard = event.clipboardData;
         if (!clipboard) return false;
-        const files = Array.from(clipboard.files ?? []);
-        let image = files.find((file) =>
+        const files = Array.from(clipboard.files ?? []).filter((file) =>
           file.type.startsWith("image/"),
         );
-        if (!image) {
+        if (files.length === 0) {
           for (const item of Array.from(clipboard.items ?? [])) {
-            if (
-              item.kind === "file" &&
-              item.type.startsWith("image/")
-            ) {
-              image = item.getAsFile() ?? undefined;
-              if (image) break;
+            if (item.kind === "file" && item.type.startsWith("image/")) {
+              const file = item.getAsFile();
+              if (file) files.push(file);
             }
           }
         }
-        if (!image) return false;
+        if (files.length === 0) return false;
         event.preventDefault();
-        pasteImageRef.current(image);
+        pasteImageRef.current(files);
         return true;
       },
     },
@@ -500,26 +496,25 @@ export function RichTextEditor({
     }
   }, [editor, notify]);
 
-  const uploadAndInsertImage = useCallback(
-    async (file: File) => {
-      if (!editor) return;
+  const insertImageFile = useCallback(
+    async (file: File): Promise<boolean> => {
+      if (!editor) return false;
 
       if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
         notify({
           type: "error",
           text: "PNG / JPEG / WEBP / GIF 이미지만 업로드할 수 있습니다.",
         });
-        return;
+        return false;
       }
       if (file.size > MAX_IMAGE_SIZE) {
         notify({
           type: "error",
           text: "이미지는 50MB 이하만 업로드할 수 있습니다.",
         });
-        return;
+        return false;
       }
 
-      setUploadingImage(true);
       try {
         const body = new FormData();
         body.append("file", file);
@@ -583,7 +578,7 @@ export function RichTextEditor({
           editor.chain().focus().setNodeSelection(inserted.pos).run();
         }
 
-        notify({ type: "success", text: "이미지를 추가했습니다." });
+        return true;
       } catch (error) {
         notify({
           type: "error",
@@ -592,27 +587,50 @@ export function RichTextEditor({
               ? error.message
               : "이미지를 업로드하지 못했습니다.",
         });
-      } finally {
-        setUploadingImage(false);
+        return false;
       }
     },
     [editor, notify, uploadUrl],
   );
 
+  const uploadAndInsertImages = useCallback(
+    async (files: File[]) => {
+      if (!editor || files.length === 0) return;
+
+      setUploadingImage(true);
+      let inserted = 0;
+      try {
+        for (const file of files) {
+          if (await insertImageFile(file)) inserted += 1;
+        }
+        if (inserted === 1 && files.length === 1) {
+          notify({ type: "success", text: "이미지를 추가했습니다." });
+        } else if (inserted > 0) {
+          notify({
+            type: "success",
+            text: `이미지 ${inserted}장을 추가했습니다.`,
+          });
+        }
+      } finally {
+        setUploadingImage(false);
+      }
+    },
+    [editor, insertImageFile, notify],
+  );
+
   useEffect(() => {
-    pasteImageRef.current = (file) => {
-      void uploadAndInsertImage(file);
+    pasteImageRef.current = (files) => {
+      void uploadAndInsertImages(files);
     };
-  }, [uploadAndInsertImage]);
+  }, [uploadAndInsertImages]);
 
   const handleImageFile = useCallback(
     async (event: ChangeEvent<HTMLInputElement>) => {
-      const file = event.target.files?.[0];
+      const files = Array.from(event.target.files ?? []);
       event.target.value = "";
-      if (!file) return;
-      await uploadAndInsertImage(file);
+      await uploadAndInsertImages(files);
     },
-    [uploadAndInsertImage],
+    [uploadAndInsertImages],
   );
 
   const activeColor = editor?.getAttributes("textStyle").color;
