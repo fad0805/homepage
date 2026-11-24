@@ -100,6 +100,13 @@
   display: none;
 }
 
+/* Keep the theme toggle above the search button outside the bottom menu layout. */
+html:not([data-appearance='collapsible'])
+  body:has(.floating-search:not(.floating-search--sidebar))
+  .theme-toggle:not(.theme-toggle--sidebar):not(.theme-toggle--drawer) {
+  bottom: calc(1.25rem + 2.75rem + 0.5rem);
+}
+
 body:has(#container.site-layout--side)
   .floating-search:not(.floating-search--sidebar):not(.floating-search--drawer) {
   display: none;
