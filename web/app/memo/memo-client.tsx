@@ -232,6 +232,14 @@ export default function MemoClient({ username }: { username: string }) {
 
   const handleTogglePin = async (memo: Memo) => {
     if (pinningId !== null) return;
+    if (
+      memo.pinned &&
+      !window.confirm(
+        "고정을 해제하면 이 주석은 24시간 뒤 사라집니다. 정말 해제할까요?",
+      )
+    ) {
+      return;
+    }
 
     setPinningId(memo.id);
     setError(null);
