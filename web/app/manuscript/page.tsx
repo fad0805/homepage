@@ -304,6 +304,156 @@ function splitCombinedHtml(html: string): string[] {
   return segments;
 }
 
+function htmlNodeText(node: globalThis.Node): string {
+  if (node.nodeType === globalThis.Node.TEXT_NODE) {
+    return node.textContent ?? "";
+  }
+  if (node.nodeType !== globalThis.Node.ELEMENT_NODE) return "";
+  const tag = (node as HTMLElement).tagName.toLowerCase();
+  if (tag === "script" || tag === "style" || tag === "hr") return "";
+  return Array.from(node.childNodes).map(htmlNodeText).join("");
+}
+
+function leadingBodyText(html: string | null): string {
+  if (!html || typeof DOMParser === "undefined") return "";
+  const parsed = new DOMParser().parseFromString(html, "text/html");
+  // A contiguous non-space token survives HTML parsing and inline marks, so
+  // it can be located inside a paragraph that lost its separator.
+  const match = htmlNodeText(parsed.body).match(/\S{2,}/);
+  return match ? match[0].slice(0, 30) : "";
+}
+
+const SPLITTABLE_BLOCKS = new Set([
+  "P",
+  "H1",
+  "H2",
+  "H3",
+  "H4",
+  "H5",
+  "H6",
+  "BLOCKQUOTE",
+  "DIV",
+]);
+
+/**
+ * Split a paragraph at the document's leading text so content before the
+ * boundary stays with the previous document instead of moving forward.
+ */
+function splitBlockAtAnchor(
+  doc: Document,
+  block: globalThis.Node,
+  anchor: string,
+): boolean {
+  if (block.nodeType !== globalThis.Node.ELEMENT_NODE) return false;
+  const element = block as HTMLElement;
+  if (!SPLITTABLE_BLOCKS.has(element.tagName)) return false;
+  const walker = doc.createTreeWalker(element, globalThis.NodeFilter.SHOW_TEXT);
+  let textNode = walker.nextNode() as Text | null;
+  while (textNode) {
+    const index = textNode.data.indexOf(anchor);
+    if (index === 0) return false;
+    if (index > 0) {
+      const range = doc.createRange();
+      range.setStart(element, 0);
+      range.setEnd(textNode, index);
+      const before = element.cloneNode(false) as HTMLElement;
+      before.appendChild(range.extractContents());
+      const parent = element.parentNode;
+      if (!parent) return false;
+      parent.insertBefore(before, element);
+      parent.insertBefore(doc.createElement("hr"), element);
+      return true;
+    }
+    textNode = walker.nextNode() as Text | null;
+  }
+  return false;
+}
+
+/** Rebuild missing <hr> boundaries using the original per-document bodies. */
+function repairCombinedSeparators(
+  html: string,
+  docs: ScrivDoc[],
+): string | null {
+  if (
+    typeof DOMParser === "undefined" ||
+    typeof document === "undefined" ||
+    docs.length < 2
+  ) {
+    return null;
+  }
+  const parsed = new DOMParser().parseFromString(html || "", "text/html");
+  const nodes = Array.from(parsed.body.childNodes);
+  const existing = nodes.filter(
+    (node) => (node as HTMLElement).tagName === "HR",
+  ).length;
+  const missing = docs.length - 1 - existing;
+  if (missing <= 0) return null;
+
+  const boundaries = new Set(
+    nodes.flatMap((node, index) =>
+      (node as HTMLElement).tagName === "HR" ? [index] : [],
+    ),
+  );
+  const hasBoundaryBefore = (index: number) => {
+    for (let cursor = index - 1; cursor >= 0; cursor -= 1) {
+      const node = nodes[cursor];
+      if ((node as HTMLElement).tagName === "HR") return true;
+      if (htmlNodeText(node).trim()) return false;
+    }
+    return false;
+  };
+  const insertSeparator = (index: number) => {
+    if (boundaries.has(index)) return false;
+    parsed.body.insertBefore(document.createElement("hr"), nodes[index]);
+    boundaries.add(index);
+    return true;
+  };
+
+  let inserted = 0;
+  let searchFrom = 0;
+  for (
+    let docIndex = 1;
+    docIndex < docs.length && inserted < missing;
+    docIndex += 1
+  ) {
+    const anchor = leadingBodyText(docs[docIndex].body);
+    if (!anchor) continue;
+    for (let index = searchFrom; index < nodes.length; index += 1) {
+      if (!htmlNodeText(nodes[index]).includes(anchor)) continue;
+      if (!hasBoundaryBefore(index)) {
+        if (splitBlockAtAnchor(parsed, nodes[index], anchor)) {
+          boundaries.add(index);
+          inserted += 1;
+        } else if (insertSeparator(index)) {
+          inserted += 1;
+        }
+      }
+      searchFrom = index + 1;
+      break;
+    }
+  }
+
+  // If edited text no longer matches, split the widest remaining section so
+  // every document still ends up with its own body.
+  while (inserted < missing) {
+    const sorted = [-1, ...boundaries, nodes.length].sort((a, b) => a - b);
+    let widestStart = -1;
+    let widest = 0;
+    for (let index = 0; index < sorted.length - 1; index += 1) {
+      const span = sorted[index + 1] - sorted[index] - 1;
+      if (span > widest) {
+        widest = span;
+        widestStart = sorted[index];
+      }
+    }
+    if (widest < 1) break;
+    if (!insertSeparator(widestStart + 1 + Math.floor(widest / 2))) break;
+    inserted += 1;
+  }
+
+  return inserted > 0 ? parsed.body.innerHTML : null;
+}
+
 export default function ManuscriptWorkspace() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [projectId, setProjectId] = useState<number | null>(null);
@@ -926,13 +1076,24 @@ export default function ManuscriptWorkspace() {
     const docs = scrivenings;
     // An empty folder has no bodies to split. Keep it empty and only save its
     // metadata so the editor can stay disabled until a document is added.
-    const bodies = docs.length === 0 ? [] : splitCombinedHtml(scrivCombinedHtml);
+    let combinedHtml = scrivCombinedHtml;
+    let bodies = docs.length === 0 ? [] : splitCombinedHtml(combinedHtml);
+    if (bodies.length < docs.length) {
+      const repaired = repairCombinedSeparators(combinedHtml, docs);
+      if (repaired) {
+        combinedHtml = repaired;
+        editorRef.current?.commands.setContent(repaired, { emitUpdate: false });
+        setScrivCombinedHtml(repaired);
+        bodies = splitCombinedHtml(repaired);
+        if (!silent) notify("구분선을 자동으로 복구했습니다.");
+      }
+    }
     if (bodies.length !== docs.length) {
       const message = `구분선이 ${docs.length - 1}개여야 합니다. 지금은 ${bodies.length - 1}개입니다.`;
       markSaveFailed(message, silent);
       return false;
     }
-    const signature = folderSignature(folderId, scrivCombinedHtml, form);
+    const signature = folderSignature(folderId, combinedHtml, form);
     const bodiesById = Object.fromEntries(
       bodies.map((body, index) => [
         docs[index].id,
@@ -1418,6 +1579,7 @@ export default function ManuscriptWorkspace() {
               uploadUrl="/api/chapters/upload"
               onEditorReady={handleEditorReady}
               scrollResetKey={editorScrollKey}
+              protectSeparators
               onNotice={(editorNotice: EditorNotice) =>
                 notify(editorNotice.text, editorNotice.type)
               }

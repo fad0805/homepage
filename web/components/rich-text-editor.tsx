@@ -5,6 +5,7 @@ import {
   useCallback,
   useEffect,
   useImperativeHandle,
+  useMemo,
   useRef,
   useState,
   type CSSProperties,
@@ -13,10 +14,17 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { EditorContent, useEditor } from "@tiptap/react";
-import type { Editor } from "@tiptap/core";
+import { Extension, type Editor } from "@tiptap/core";
 import type { Node as PMNode } from "@tiptap/pm/model";
-import { NodeSelection, type EditorState } from "@tiptap/pm/state";
+import {
+  NodeSelection,
+  Plugin,
+  TextSelection,
+  type EditorState,
+} from "@tiptap/pm/state";
+import type { EditorView } from "@tiptap/pm/view";
 import StarterKit from "@tiptap/starter-kit";
+import HorizontalRule from "@tiptap/extension-horizontal-rule";
 import Highlight from "@tiptap/extension-highlight";
 import Placeholder from "@tiptap/extension-placeholder";
 import TextAlign from "@tiptap/extension-text-align";
@@ -106,6 +114,131 @@ function storedFontSize(logicalPt: string, offset: number): string {
   return `${Math.max(1, Number(logicalPt) + offset)}pt`;
 }
 
+/** Block Backspace/Delete from eating a document separator in combined view. */
+function isSeparatorDeletionKeydown(
+  view: EditorView,
+  event: KeyboardEvent,
+): boolean {
+  if (event.key !== "Backspace" && event.key !== "Delete") return false;
+
+  const { state } = view;
+  const { selection } = state;
+  if (
+    selection instanceof NodeSelection &&
+    selection.node.type.name === "horizontalRule"
+  ) {
+    return true;
+  }
+  if (!selection.empty) {
+    // A range that spans a separator would delete it with the selected text.
+    let containsSeparator = false;
+    state.doc.nodesBetween(selection.from, selection.to, (node) => {
+      if (node.type.name === "horizontalRule") {
+        containsSeparator = true;
+        return false;
+      }
+      return true;
+    });
+    return containsSeparator;
+  }
+  if (!selection.$from.parent.isTextblock) return false;
+
+  const { $from } = selection;
+  const backward = event.key === "Backspace" && $from.parentOffset === 0;
+  const forward =
+    event.key === "Delete" &&
+    $from.parentOffset === $from.parent.content.size;
+  if (!backward && !forward) return false;
+
+  for (let depth = $from.depth; depth > 0; depth -= 1) {
+    const sibling = $from.node(depth).maybeChild(
+      $from.index(depth) + (backward ? -1 : 1),
+    );
+    if (sibling?.type.name === "horizontalRule") return true;
+  }
+  return false;
+}
+
+/**
+ * Arrow up/down should never leave the caret on a separator. Skip consecutive
+ * separators and land on the next/previous text line instead.
+ */
+function moveAcrossSeparator(
+  view: EditorView,
+  event: KeyboardEvent,
+): boolean {
+  if (event.key !== "ArrowUp" && event.key !== "ArrowDown") return false;
+  const { state } = view;
+  const { selection } = state;
+  if (!selection.empty) return false;
+
+  const { $from } = selection;
+  const depth = $from.depth;
+  if (depth === 0 || !$from.parent.isTextblock) return false;
+
+  const down = event.key === "ArrowDown";
+  if (!view.endOfTextblock(down ? "down" : "up", state)) return false;
+
+  const parent = $from.node(depth - 1);
+  const index = $from.index(depth - 1);
+  const step = down ? 1 : -1;
+  if (parent.maybeChild(index + step)?.type.name !== "horizontalRule") {
+    return false;
+  }
+
+  let pos = down ? $from.after(depth) : $from.before(depth);
+  let neighborIndex = index + step;
+  let neighbor = parent.maybeChild(neighborIndex);
+  while (neighbor?.type.name === "horizontalRule") {
+    pos += down ? neighbor.nodeSize : -neighbor.nodeSize;
+    neighborIndex += step;
+    neighbor = parent.maybeChild(neighborIndex);
+  }
+  if (!neighbor) return false;
+
+  const target = down
+    ? TextSelection.near(state.doc.resolve(pos + 1), 1)
+    : TextSelection.near(state.doc.resolve(pos - 1), -1);
+  view.dispatch(state.tr.setSelection(target).scrollIntoView());
+  return true;
+}
+
+function countHorizontalRules(doc: PMNode): number {
+  let count = 0;
+  doc.descendants((node) => {
+    if (node.type.name === "horizontalRule") count += 1;
+  });
+  return count;
+}
+
+/**
+ * Reject any edit that would remove a document separator. This covers every
+ * route (keys, cut, drag, paste, select-all/delete, native DOM edits) rather
+ * than only Backspace/Delete.
+ */
+function createSeparatorGuard(
+  isEnabled: () => boolean,
+  isLoadingContent: () => boolean,
+) {
+  return Extension.create({
+    name: "separatorGuard",
+    addProseMirrorPlugins() {
+      return [
+        new Plugin({
+          filterTransaction: (transaction, state) => {
+            if (!isEnabled() || isLoadingContent()) return true;
+            if (!transaction.docChanged) return true;
+            return (
+              countHorizontalRules(transaction.doc) >=
+              countHorizontalRules(state.doc)
+            );
+          },
+        }),
+      ];
+    },
+  });
+}
+
 interface RichTextEditorProps {
   value: string;
   onChange: (html: string) => void;
@@ -127,6 +260,8 @@ interface RichTextEditorProps {
   onEditorReady?: (editor: Editor | null) => void;
   /** Reset the editor scroll position when the displayed document changes. */
   scrollResetKey?: string | number | null;
+  /** Never let Backspace/Delete remove the <hr> separators between documents. */
+  protectSeparators?: boolean;
 }
 
 export interface RichTextEditorHandle {
@@ -316,6 +451,7 @@ export const RichTextEditor = forwardRef<
     readOnly = false,
     onEditorReady,
     scrollResetKey,
+    protectSeparators = false,
   },
   ref,
 ) {
@@ -327,6 +463,22 @@ export const RichTextEditor = forwardRef<
 
   const onChangeRef = useRef(onChange);
   const onNoticeRef = useRef(onNotice);
+  const protectSeparatorsRef = useRef(protectSeparators);
+  const loadingContentRef = useRef(false);
+  const separatorGuard = useMemo(
+    () =>
+      createSeparatorGuard(
+        () => protectSeparatorsRef.current,
+        () => loadingContentRef.current,
+      ),
+    [],
+  );
+  // A separator is a hard boundary in the combined view, so it cannot be
+  // selected or dragged out of the document.
+  const horizontalRuleExtension = useMemo(
+    () => HorizontalRule.extend({ selectable: !protectSeparators }),
+    [protectSeparators],
+  );
   const contentRef = useRef<HTMLDivElement | null>(null);
   const imageInputRef = useRef<HTMLInputElement | null>(null);
   const pasteImageRef = useRef<
@@ -354,6 +506,10 @@ export const RichTextEditor = forwardRef<
     onNoticeRef.current = onNotice;
   }, [onNotice]);
 
+  useEffect(() => {
+    protectSeparatorsRef.current = protectSeparators;
+  }, [protectSeparators]);
+
   useEffect(
     () => () => {
       pendingUploadsRef.current.forEach((_, url) => URL.revokeObjectURL(url));
@@ -373,6 +529,7 @@ export const RichTextEditor = forwardRef<
       StarterKit.configure({
         paragraph: false,
         heading: { levels: [2, 3] },
+        horizontalRule: false,
         link: {
           openOnClick: false,
           autolink: true,
@@ -380,6 +537,8 @@ export const RichTextEditor = forwardRef<
           defaultProtocol: "https",
         },
       }),
+      horizontalRuleExtension,
+      separatorGuard,
       ManuscriptParagraph,
       ManuscriptTab,
       TextStyle,
@@ -402,6 +561,23 @@ export const RichTextEditor = forwardRef<
     immediatelyRender: false,
     shouldRerenderOnTransaction: true,
     editorProps: {
+      handleDOMEvents: {
+        keydown: (view, event) => {
+          if (!protectSeparatorsRef.current) return false;
+          const keyEvent = event as KeyboardEvent;
+          if (isSeparatorDeletionKeydown(view, keyEvent)) {
+            // Returning true only skips ProseMirror; the browser would still
+            // delete the contenteditable selection, so stop the native edit.
+            event.preventDefault();
+            return true;
+          }
+          if (moveAcrossSeparator(view, keyEvent)) {
+            event.preventDefault();
+            return true;
+          }
+          return false;
+        },
+      },
       handlePaste: (view, event) => {
         const clipboard = event.clipboardData;
         if (!clipboard) return false;
@@ -430,7 +606,12 @@ export const RichTextEditor = forwardRef<
   useEffect(() => {
     if (!editor || htmlMode) return;
     if (value !== editor.getHTML()) {
-      editor.commands.setContent(value || "<p></p>");
+      loadingContentRef.current = true;
+      try {
+        editor.commands.setContent(value || "<p></p>");
+      } finally {
+        loadingContentRef.current = false;
+      }
     }
     onEditorReady?.(editor);
   }, [editor, htmlMode, value, onEditorReady]);
