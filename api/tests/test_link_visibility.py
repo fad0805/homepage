@@ -10,6 +10,7 @@ from sqlalchemy.pool import StaticPool
 
 from crud.links import (
     delete_link,
+    delete_link_category,
     get_all_links,
     get_link,
     set_link_visibility,
@@ -114,6 +115,17 @@ class LinkVisibilityTests(unittest.TestCase):
             include_hidden=True,
         )
         self.assertEqual([link["id"] for link in remaining], [self.hidden.id])
+
+    def test_admin_can_delete_an_empty_link_category(self) -> None:
+        empty = Category(user_id=self.author.id, name="빈 카테고리", order=1)
+        self.db.add(empty)
+        self.db.commit()
+        self.db.refresh(empty)
+
+        self.assertTrue(delete_link_category(self.db, empty.id, None))
+        self.assertIsNone(
+            self.db.query(Category).filter(Category.id == empty.id).first()
+        )
 
 
 if __name__ == "__main__":

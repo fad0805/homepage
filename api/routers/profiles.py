@@ -21,6 +21,7 @@ from .utils import (
     get_default_author_id,
     get_optional_user,
     is_admin,
+    owner_or_admin_delete_scope,
     require_admin,
     require_auth,
 )
@@ -154,11 +155,9 @@ def remove_profile(
     db: Session = Depends(get_db),
     user=Depends(require_auth),
 ):
-    """
-    Delete a profile. Administrators may delete any author's profile.
-    """
+    """Delete a profile. Admins may delete any author's profile."""
     return delete_profile(
         db,
         profile_id,
-        None if is_admin(user) else user.id,
+        owner_or_admin_delete_scope(user),
     )

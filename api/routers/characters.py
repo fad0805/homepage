@@ -39,6 +39,7 @@ from .utils import (
     get_default_author_id,
     get_optional_user,
     is_admin,
+    owner_or_admin_delete_scope,
     require_admin,
     require_auth,
 )
@@ -103,10 +104,12 @@ def remove_location(
     db: Session = Depends(get_db),
     user=Depends(require_auth),
 ):
-    """
-    Delete one of the signed-in author's locations.
-    """
-    return delete_location(db, location_id, user.id)
+    """Delete a location. Admins may delete any author's location."""
+    return delete_location(
+        db,
+        location_id,
+        owner_or_admin_delete_scope(user),
+    )
 
 
 # Characters
@@ -333,11 +336,9 @@ def remove_character(
     db: Session = Depends(get_db),
     user=Depends(require_auth),
 ):
-    """
-    Delete a character. Administrators may delete any author's character.
-    """
+    """Delete a character. Admins may delete any author's character."""
     return delete_character(
         db,
         character_id,
-        None if is_admin(user) else user.id,
+        owner_or_admin_delete_scope(user),
     )

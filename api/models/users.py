@@ -9,7 +9,8 @@ class User(Base):
     id = Column(Integer, primary_key=True, index=True)
     username = Column(String(50), unique=True, index=True, nullable=False)
     hashed_password = Column(String(128), nullable=False)
-    # "admin" can manage every user's content; "user" is limited to its own.
+    # "admin" can moderate public visibility and delete any content; editing
+    # content remains limited to its owner. "user" is limited to its own rows.
     role = Column(
         String(20),
         nullable=False,

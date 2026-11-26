@@ -773,12 +773,22 @@ def update_location(
 def delete_location(
     db: Session,
     location_id: int,
-    user_id: int,
+    owner_user_id: int | None,
 ):
+    """Delete a character location.
+
+    ``owner_user_id=None`` is reserved for administrator deletion and skips
+    the owner filter.
     """
-    Delete one of the signed-in author's locations.
-    """
-    location = _get_location_or_404(db, location_id, user_id)
+    query = db.query(Location).filter(Location.id == location_id)
+    if owner_user_id is not None:
+        query = query.filter(Location.user_id == owner_user_id)
+    location = query.first()
+    if not location:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Does not exist location",
+        )
 
     character_count = (
         db.query(Character).filter(Character.location_id == location_id).count()

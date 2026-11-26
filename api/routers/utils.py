@@ -549,12 +549,26 @@ async def require_auth(
 
 
 def is_admin(user) -> bool:
-    """True when the signed-in user can manage every user's content."""
+    """True when the signed-in user has global moderation rights.
+
+    Administrators may hide/restore any user's public content and delete any
+    user's content. They do not gain general edit rights over another user's
+    content: update endpoints remain scoped to the signed-in owner.
+    """
     return getattr(user, "role", None) == "admin"
 
 
+def owner_or_admin_delete_scope(user) -> int | None:
+    """Return the owner filter for a delete endpoint.
+
+    Regular users are limited to their own rows. Administrators pass ``None``
+    so the delete query intentionally skips the owner filter.
+    """
+    return None if is_admin(user) else user.id
+
+
 async def require_admin(user=Depends(require_auth)):
-    """Dependency for global management endpoints."""
+    """Dependency for global moderation and visibility endpoints."""
     if not is_admin(user):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,

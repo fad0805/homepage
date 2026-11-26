@@ -10,6 +10,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from crud.characters import (
+    delete_location,
     get_character,
     get_public_characters,
     set_character_visibility,
@@ -149,6 +150,17 @@ class CharacterVisibilityTests(unittest.TestCase):
         self.assertIn(self.private.id, related_ids)
         self.assertNotIn(self.invisible.id, related_ids)
         self.assertNotIn(self.admin_hidden.id, related_ids)
+
+    def test_admin_can_delete_an_empty_location(self) -> None:
+        empty = Location(user_id=self.user.id, name="빈 장소", order=1)
+        self.db.add(empty)
+        self.db.commit()
+        self.db.refresh(empty)
+
+        self.assertTrue(delete_location(self.db, empty.id, None))
+        self.assertIsNone(
+            self.db.query(Location).filter(Location.id == empty.id).first()
+        )
 
 
 if __name__ == "__main__":

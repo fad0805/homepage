@@ -437,12 +437,22 @@ def update_link_category(
 def delete_link_category(
     db: Session,
     category_id: int,
-    user_id: int,
+    owner_user_id: int | None,
 ):
+    """Delete a link category.
+
+    ``owner_user_id=None`` is reserved for administrator deletion and skips
+    the owner filter.
     """
-    Delete one of the signed-in author's categories.
-    """
-    category = _get_link_category_or_404(db, category_id, user_id)
+    query = db.query(Category).filter(Category.id == category_id)
+    if owner_user_id is not None:
+        query = query.filter(Category.user_id == owner_user_id)
+    category = query.first()
+    if not category:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Does not exist link's category",
+        )
 
     link_count = db.query(Link).filter(Link.category == category_id).count()
     if link_count > 0:

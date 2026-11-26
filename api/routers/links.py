@@ -31,6 +31,7 @@ from .utils import (
     get_default_author_id,
     get_optional_user,
     is_admin,
+    owner_or_admin_delete_scope,
     require_admin,
     require_auth,
 )
@@ -108,10 +109,12 @@ def remove_link_category(
     db: Session = Depends(get_db),
     user=Depends(require_auth),
 ):
-    """
-    Delete one of the signed-in author's link categories.
-    """
-    return delete_link_category(db, category_id, user.id)
+    """Delete a category. Admins may delete any author's category."""
+    return delete_link_category(
+        db,
+        category_id,
+        owner_or_admin_delete_scope(user),
+    )
 
 
 # Links
@@ -260,11 +263,9 @@ def remove_link(
     db: Session = Depends(get_db),
     user=Depends(require_auth),
 ):
-    """
-    Delete one of the user's links.
-    """
+    """Delete a link. Admins may delete any author's link."""
     return delete_link(
         db,
         link_id,
-        None if is_admin(user) else user.id,
+        owner_or_admin_delete_scope(user),
     )

@@ -31,6 +31,7 @@ from .utils import (
     get_gallery_grants,
     get_optional_user,
     is_admin,
+    owner_or_admin_delete_scope,
     require_admin,
     require_auth,
 )
@@ -173,10 +174,11 @@ def remove_book_category(
     db: Session = Depends(get_db),
     user=Depends(require_auth),
 ):
+    """Delete a category. Admins may delete any author's category."""
     return delete_book_category(
         db,
         category_id,
-        None if is_admin(user) else user.id,
+        owner_or_admin_delete_scope(user),
     )
 
 
@@ -247,8 +249,9 @@ def remove_book(
     db: Session = Depends(get_db),
     user=Depends(require_auth),
 ):
+    """Delete a book. Admins may delete any author's book."""
     return delete_book(
         db,
         book_id,
-        None if is_admin(user) else user.id,
+        owner_or_admin_delete_scope(user),
     )
