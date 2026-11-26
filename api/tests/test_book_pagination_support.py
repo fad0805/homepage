@@ -235,6 +235,46 @@ class BookChapterPaginationSupportTests(unittest.TestCase):
             any("LIMIT" in statement and "OFFSET" in statement for statement in statements)
         )
 
+    def test_my_books_uses_only_the_logged_in_owner(self) -> None:
+        other = User(username="other-author", hashed_password="x")
+        self.db.add(other)
+        self.db.flush()
+        other_book = Book(
+            user_id=other.id,
+            title="다른 작성자의 책",
+            tags=[],
+            order=2,
+        )
+        self.db.add(other_book)
+        self.db.commit()
+
+        request = Request(
+            {
+                "type": "http",
+                "http_version": "1.1",
+                "method": "GET",
+                "scheme": "http",
+                "path": "/books",
+                "raw_path": b"/books",
+                "query_string": b"mine=true",
+                "headers": [],
+                "client": ("test", 123),
+                "server": ("test", 80),
+            }
+        )
+        response = Response()
+
+        books = get_books(
+            request,
+            response,
+            mine=True,
+            db=self.db,
+            current_user=other,
+        )
+
+        self.assertEqual([book["id"] for book in books], [other_book.id])
+        self.assertEqual(response.headers["x-total-count"], "1")
+
     def test_book_search_query_does_not_read_chapters(self) -> None:
         statements: list[str] = []
 

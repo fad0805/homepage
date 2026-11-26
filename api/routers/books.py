@@ -64,8 +64,13 @@ def get_books(
                 detail="Not authenticated",
             )
         filters.update(include_hidden=True, owner_user_id=current_user.id)
+        # "My books" is scoped only to the logged-in owner. Applying the
+        # public default-author filter as well would return nothing for
+        # accounts other than the default author.
+        author_id = None
     elif current_user is not None and is_admin(current_user):
         filters.update(include_hidden=True, is_admin=True)
+        author_id = get_default_author_id(db)
     else:
         grants = get_gallery_grants(request, db)
         filters.update(
@@ -75,9 +80,9 @@ def get_books(
             granted_books=grants.books,
             granted_categories=grants.categories,
         )
+        author_id = get_default_author_id(db)
 
-    author_id = get_default_author_id(db)
-    if author_id is None:
+    if author_id is None and not mine:
         books, total = [], 0
     else:
         books, total = get_books_page(
