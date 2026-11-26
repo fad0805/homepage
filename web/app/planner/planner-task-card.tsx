@@ -42,7 +42,7 @@ export function PlannerTaskCard({
       >
         <div className="planner-task-main">
           <div className="planner-task-title-row">
-            {task.status === "active" ? (
+            {task.status !== "trashed" ? (
               <input
                 type="checkbox"
                 className="planner-task-check"
@@ -63,7 +63,7 @@ export function PlannerTaskCard({
           {task.notes ? (
             <div
               className={`planner-task-notes${
-                task.status === "active" ? " has-check" : ""
+                task.status !== "trashed" ? " has-check" : ""
               }`}
             >
               <PlannerNoteContent
