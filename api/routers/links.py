@@ -16,10 +16,12 @@ from crud.links import (
     delete_link_category,
     reorder_links,
     reorder_link_categories,
+    set_link_visibility,
 )
 from schemas.links import (
     LinkCreate,
     LinkUpdate,
+    LinkVisibilityUpdate,
     Category,
     ReorderRequest,
     CategoryReorderRequest,
@@ -29,6 +31,7 @@ from .utils import (
     get_default_author_id,
     get_optional_user,
     is_admin,
+    require_admin,
     require_auth,
 )
 
@@ -128,11 +131,19 @@ def get_links(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Not authenticated",
             )
-        return get_all_links(db, user_id=current_user.id)
+        return get_all_links(
+            db,
+            user_id=current_user.id,
+            include_hidden=True,
+        )
     author_id = get_default_author_id(db)
     if author_id is None:
         return []
-    return get_all_links(db, user_id=author_id)
+    return get_all_links(
+        db,
+        user_id=author_id,
+        include_hidden=current_user is not None and is_admin(current_user),
+    )
 
 
 @router.post("/")
@@ -213,6 +224,21 @@ def get_link_detail(
             detail="Does not exist link",
         )
     return link
+
+
+@router.put("/{link_id}/visibility")
+def update_link_visibility(
+    link_id: int,
+    payload: LinkVisibilityUpdate,
+    db: Session = Depends(get_db),
+    _=Depends(require_admin),
+):
+    """Hide or restore a link in public lists without editing it."""
+    return set_link_visibility(
+        db,
+        link_id,
+        hidden=payload.hidden,
+    )
 
 
 @router.put("/{link_id}")

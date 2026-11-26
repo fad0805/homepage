@@ -24,6 +24,7 @@ def _serialize_link(link: Link) -> dict:
         "url": link.url,
         "order": link.order,
         "description": link.description,
+        "hidden_by_admin": bool(link.hidden_by_admin),
         "created_at": link.created_at,
         "updated_at": link.updated_at,
         "category": {
@@ -116,6 +117,8 @@ def get_all_links(
     db: Session,
     user_id: int | None = None,
     owner: str | None = None,
+    *,
+    include_hidden: bool = False,
 ):
     """
     Get all links, or only one author's links.
@@ -135,6 +138,8 @@ def get_all_links(
         query = query.filter(Link.user_id == user_id)
     elif owner is not None:
         query = query.filter(Link.owner == owner)
+    if not include_hidden:
+        query = query.filter(Link.hidden_by_admin.is_(False))
     return [_serialize_link(link) for link in query.all()]
 
 
@@ -241,6 +246,26 @@ def update_link(
         if not still_used:
             delete_replaced_upload(old_banner_url, link.banner_url)
 
+    return _serialize_link(link)
+
+
+def set_link_visibility(
+    db: Session,
+    link_id: int,
+    *,
+    hidden: bool,
+):
+    """Administrator-only public visibility toggle without editing content."""
+    link = db.query(Link).filter(Link.id == link_id).first()
+    if not link:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Does not exist link",
+        )
+
+    link.hidden_by_admin = hidden
+    db.commit()
+    db.refresh(link)
     return _serialize_link(link)
 
 

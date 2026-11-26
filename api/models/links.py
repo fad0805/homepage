@@ -62,6 +62,12 @@ class Link(Base):
     banner_url = Column(ImageUrl(255), nullable=True)
     category = Column(Integer, ForeignKey("links-categories.id"), nullable=False, index=True)
     description = Column(String(255), nullable=True)
+    hidden_by_admin = Column(
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default="false",
+    )
     created_at = Column(DateTime, default=func.now())
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
     order = Column(Integer, nullable=False, default=0, server_default="0")

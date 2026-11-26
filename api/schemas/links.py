@@ -58,6 +58,12 @@ class CategoryReorderRequest(BaseModel):
     items: list[CategoryReorderItem] = Field(default_factory=list)
 
 
+class LinkVisibilityUpdate(BaseModel):
+    """Administrator-only public visibility toggle."""
+
+    hidden: bool
+
+
 class UploadResponse(BaseModel):
     """Result of a banner upload."""
     url: str
