@@ -11,6 +11,8 @@ export interface IntegratedIndexPage {
   subtitle: string;
   copyright_name: string;
   favicon_url: string | null;
+  favicon_192_url: string | null;
+  favicon_maskable_url: string | null;
   content_html: string;
 }
 
@@ -19,6 +21,8 @@ const FALLBACK: IntegratedIndexPage = {
   subtitle: DEFAULT_INDEX_SUBTITLE,
   copyright_name: DEFAULT_COPYRIGHT_NAME,
   favicon_url: null,
+  favicon_192_url: null,
+  favicon_maskable_url: null,
   content_html: DEFAULT_INDEX_HTML,
 };
 
@@ -34,6 +38,10 @@ export async function getIntegratedIndexPage(): Promise<IntegratedIndexPage> {
       subtitle: page.subtitle ?? FALLBACK.subtitle,
       copyright_name: page.copyright_name ?? FALLBACK.copyright_name,
       favicon_url: page.favicon_url ?? FALLBACK.favicon_url,
+      favicon_192_url:
+        page.favicon_192_url ?? FALLBACK.favicon_192_url,
+      favicon_maskable_url:
+        page.favicon_maskable_url ?? FALLBACK.favicon_maskable_url,
       content_html: page.content_html ?? FALLBACK.content_html,
     };
   } catch (error) {

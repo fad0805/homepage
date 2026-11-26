@@ -46,6 +46,8 @@ class IndexPageTests(unittest.TestCase):
         self.assertEqual(page["subtitle"], DEFAULT_INDEX_SUBTITLE)
         self.assertEqual(page["copyright_name"], DEFAULT_COPYRIGHT_NAME)
         self.assertIsNone(page["favicon_url"])
+        self.assertIsNone(page["favicon_192_url"])
+        self.assertIsNone(page["favicon_maskable_url"])
         self.assertEqual(page["content_html"], DEFAULT_INDEX_BODY_HTML)
         self.assertIn("Missing Island · Story Archive", page["content_html"])
 
@@ -58,6 +60,8 @@ class IndexPageTests(unittest.TestCase):
             subtitle="<em>새 부제</em>",
             copyright_name="<strong>새 <br> 이름</strong>",
             favicon_url="/uploads/index/favicon.png",
+            favicon_192_url="/uploads/index/favicon-192.png",
+            favicon_maskable_url="/uploads/index/favicon-maskable.png",
             content_html="<p>본문<script>alert(1)</script></p>",
         )
 
@@ -65,6 +69,14 @@ class IndexPageTests(unittest.TestCase):
         self.assertEqual(page["subtitle"], "새 부제")
         self.assertEqual(page["copyright_name"], "새 이름")
         self.assertEqual(page["favicon_url"], "/uploads/index/favicon.png")
+        self.assertEqual(
+            page["favicon_192_url"],
+            "/uploads/index/favicon-192.png",
+        )
+        self.assertEqual(
+            page["favicon_maskable_url"],
+            "/uploads/index/favicon-maskable.png",
+        )
         self.assertIn("본문", page["content_html"])
         self.assertNotIn("<script", page["content_html"])
 
@@ -104,6 +116,8 @@ class IndexPageTests(unittest.TestCase):
             scope="integrated",
             user_id=None,
             favicon_url="/uploads/index/favicon.png",
+            favicon_192_url="/uploads/index/favicon-192.png",
+            favicon_maskable_url="/uploads/index/favicon-maskable.png",
             content_html="<p>본문</p>",
         )
         page = update_index_page(
@@ -111,10 +125,14 @@ class IndexPageTests(unittest.TestCase):
             scope="integrated",
             user_id=None,
             favicon_url="",
+            favicon_192_url="",
+            favicon_maskable_url="",
             content_html="<p>본문</p>",
         )
 
         self.assertIsNone(page["favicon_url"])
+        self.assertIsNone(page["favicon_192_url"])
+        self.assertIsNone(page["favicon_maskable_url"])
 
     def test_empty_heading_is_an_intentional_clear(self) -> None:
         page = update_index_page(
@@ -139,6 +157,9 @@ class IndexPageTests(unittest.TestCase):
             title="통합 제목",
             subtitle="통합 부제",
             copyright_name="통합 이름",
+            favicon_url="/uploads/index/favicon.png",
+            favicon_192_url="/uploads/index/favicon-192.png",
+            favicon_maskable_url="/uploads/index/favicon-maskable.png",
             content_html="<p>통합 본문</p>",
         )
         author_page = get_index_page_read(
@@ -150,6 +171,14 @@ class IndexPageTests(unittest.TestCase):
         self.assertEqual(author_page["title"], "통합 제목")
         self.assertEqual(author_page["subtitle"], "통합 부제")
         self.assertEqual(author_page["copyright_name"], "통합 이름")
+        self.assertEqual(
+            author_page["favicon_192_url"],
+            "/uploads/index/favicon-192.png",
+        )
+        self.assertEqual(
+            author_page["favicon_maskable_url"],
+            "/uploads/index/favicon-maskable.png",
+        )
         self.assertIn("통합 본문", author_page["content_html"])
 
     def test_clean_index_text_collapses_markup(self) -> None:

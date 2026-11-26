@@ -25,6 +25,10 @@ class IndexPage(Base):
     copyright_name = Column(String(120), nullable=True)
     # Browser tab icon. NULL keeps the bundled default favicon.
     favicon_url = Column(ImageUrl(1000), nullable=True)
+    # 192px PWA icon a browser can request separately from the 512px one.
+    favicon_192_url = Column(ImageUrl(1000), nullable=True)
+    # PWA icon with the safe area required by maskable icons.
+    favicon_maskable_url = Column(ImageUrl(1000), nullable=True)
     content_html = Column(Text, nullable=False, default="", server_default="")
     created_at = Column(DateTime, default=func.now(), nullable=False)
     updated_at = Column(

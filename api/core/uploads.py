@@ -915,6 +915,104 @@ def save_uploaded_bytes(
     return _save_to_local(content, extension, folder, name)
 
 
+FAVICON_SIZE = 512
+FAVICON_SMALL_SIZE = 192
+# A maskable icon may be cropped to a circle covering 80% of its width. Fit
+# the whole source icon inside that circle so no artwork is clipped.
+MASKABLE_SAFE_RATIO = 0.8
+
+
+def _favicon_background(image: Image.Image) -> tuple[int, int, int, int]:
+    """Pick an opaque background colour from the source icon's corners."""
+    rgba = image.convert("RGBA")
+    width, height = rgba.size
+    corners = [
+        rgba.getpixel((0, 0)),
+        rgba.getpixel((width - 1, 0)),
+        rgba.getpixel((0, height - 1)),
+        rgba.getpixel((width - 1, height - 1)),
+    ]
+    opaque = [pixel for pixel in corners if pixel[3] > 0]
+    if not opaque:
+        return (190, 219, 187, 255)
+    return (
+        sum(pixel[0] for pixel in opaque) // len(opaque),
+        sum(pixel[1] for pixel in opaque) // len(opaque),
+        sum(pixel[2] for pixel in opaque) // len(opaque),
+        255,
+    )
+
+
+def _png_bytes(image: Image.Image) -> bytes:
+    output = BytesIO()
+    image.save(output, format="PNG", optimize=True)
+    return output.getvalue()
+
+
+async def save_favicon_variants(
+    file: UploadFile,
+    folder: str = "index",
+) -> tuple[str, str, str]:
+    """Save small, large and maskable icons derived from one favicon."""
+    content = await _read_upload(file)
+    try:
+        with Image.open(BytesIO(content)) as image:
+            image.load()
+            if image.format not in _IMAGE_FORMATS:
+                raise ValueError(f"Unsupported image format: {image.format}")
+            source = ImageOps.exif_transpose(image).convert("RGBA")
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.warning("Rejected a favicon that could not be decoded: %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+            detail="이미지 파일을 읽을 수 없습니다.",
+        ) from exc
+
+    small = ImageOps.fit(
+        source,
+        (FAVICON_SMALL_SIZE, FAVICON_SMALL_SIZE),
+        method=Image.Resampling.LANCZOS,
+    )
+    standard = ImageOps.fit(
+        source,
+        (FAVICON_SIZE, FAVICON_SIZE),
+        method=Image.Resampling.LANCZOS,
+    )
+    inner_size = round(
+        FAVICON_SIZE * MASKABLE_SAFE_RATIO / (2 ** 0.5)
+    )
+    inner = standard.resize(
+        (inner_size, inner_size),
+        Image.Resampling.LANCZOS,
+    )
+    maskable = Image.new(
+        "RGBA",
+        (FAVICON_SIZE, FAVICON_SIZE),
+        _favicon_background(source),
+    )
+    offset = (FAVICON_SIZE - inner_size) // 2
+    maskable.alpha_composite(inner, (offset, offset))
+
+    small_key = save_uploaded_bytes(
+        _png_bytes(small),
+        "image/png",
+        folder,
+    )
+    standard_key = save_uploaded_bytes(
+        _png_bytes(standard),
+        "image/png",
+        folder,
+    )
+    maskable_key = save_uploaded_bytes(
+        _png_bytes(maskable),
+        "image/png",
+        folder,
+    )
+    return standard_key, small_key, maskable_key
+
+
 async def save_banner(
     file: UploadFile,
     folder: str = "banners",

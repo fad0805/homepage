@@ -1,7 +1,8 @@
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from sqlalchemy.orm import Session
 
-from core.uploads import save_banner
+from core.image_urls import public_url
+from core.uploads import save_banner, save_favicon_variants
 from crud.index_page import (
     get_index_page_read,
     update_index_page,
@@ -56,6 +57,8 @@ def put_index_page(
         subtitle=payload.subtitle,
         copyright_name=payload.copyright_name,
         favicon_url=payload.favicon_url,
+        favicon_192_url=payload.favicon_192_url,
+        favicon_maskable_url=payload.favicon_maskable_url,
     )
 
 
@@ -67,3 +70,20 @@ async def upload_index_image(
     """Upload an image used inside the main index content."""
     url = await save_banner(file, folder="index")
     return {"url": url}
+
+
+@router.post("/favicon")
+async def upload_index_favicon(
+    file: UploadFile = File(...),
+    _=Depends(require_auth),
+):
+    """Upload a favicon and derive its PWA icon variants."""
+    standard_key, small_key, maskable_key = await save_favicon_variants(
+        file,
+        folder="index",
+    )
+    return {
+        "favicon_url": public_url(standard_key),
+        "favicon_192_url": public_url(small_key),
+        "favicon_maskable_url": public_url(maskable_key),
+    }

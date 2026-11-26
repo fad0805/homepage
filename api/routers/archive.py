@@ -935,6 +935,8 @@ def _index_page_data(
             "subtitle": page.subtitle,
             "copyright_name": page.copyright_name,
             "favicon_url": page.favicon_url,
+            "favicon_192_url": page.favicon_192_url,
+            "favicon_maskable_url": page.favicon_maskable_url,
             "content_html": page.content_html,
             "created_at": _iso(page.created_at),
             "updated_at": _iso(page.updated_at),

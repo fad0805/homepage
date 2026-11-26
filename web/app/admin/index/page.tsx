@@ -27,6 +27,8 @@ interface IndexPage {
   subtitle: string;
   copyright_name: string;
   favicon_url: string | null;
+  favicon_192_url: string | null;
+  favicon_maskable_url: string | null;
   content_html: string;
 }
 
@@ -60,6 +62,10 @@ export default function AdminIndex() {
   const [copyrightName, setCopyrightName] = useState("");
   const [content, setContent] = useState("");
   const [faviconUrl, setFaviconUrl] = useState<string | null>(null);
+  const [favicon192Url, setFavicon192Url] = useState<string | null>(null);
+  const [faviconMaskableUrl, setFaviconMaskableUrl] = useState<
+    string | null
+  >(null);
   const [faviconPreview, setFaviconPreview] = useState<string | null>(null);
   const [faviconFile, setFaviconFile] = useState<File | null>(null);
   const [faviconFileName, setFaviconFileName] = useState("");
@@ -86,6 +92,8 @@ export default function AdminIndex() {
       setCopyrightName(data.copyright_name);
       setContent(data.content_html);
       setFaviconUrl(data.favicon_url);
+      setFavicon192Url(data.favicon_192_url);
+      setFaviconMaskableUrl(data.favicon_maskable_url);
       setFaviconPreview(data.favicon_url);
       setFaviconFile(null);
       setFaviconFileName("");
@@ -109,14 +117,14 @@ export default function AdminIndex() {
   const uploadFavicon = useCallback(async (file: File) => {
     const body = new FormData();
     body.append("file", file);
-    const uploaded = await apiFetch<{ url: string }>(
-      "/api/index-page/upload",
-      {
-        method: "POST",
-        body,
-      },
-    );
-    return uploaded.url;
+    return apiFetch<{
+      favicon_url: string;
+      favicon_192_url: string;
+      favicon_maskable_url: string;
+    }>("/api/index-page/favicon", {
+      method: "POST",
+      body,
+    });
   }, []);
 
   const closeCropModal = useCallback(() => {
@@ -176,6 +184,8 @@ export default function AdminIndex() {
 
   const resetFavicon = () => {
     setFaviconUrl(null);
+    setFavicon192Url(null);
+    setFaviconMaskableUrl(null);
     setFaviconPreview(null);
     setFaviconFile(null);
     setFaviconFileName("");
@@ -187,8 +197,13 @@ export default function AdminIndex() {
     setNotice(null);
     try {
       let nextFaviconUrl = faviconUrl;
+      let nextFavicon192Url = favicon192Url;
+      let nextMaskableUrl = faviconMaskableUrl;
       if (faviconFile) {
-        nextFaviconUrl = await uploadFavicon(faviconFile);
+        const uploaded = await uploadFavicon(faviconFile);
+        nextFaviconUrl = uploaded.favicon_url;
+        nextFavicon192Url = uploaded.favicon_192_url;
+        nextMaskableUrl = uploaded.favicon_maskable_url;
       }
 
       const updated = await apiFetch<IndexPage>("/api/index-page", {
@@ -199,6 +214,8 @@ export default function AdminIndex() {
           subtitle,
           copyright_name: copyrightName,
           favicon_url: nextFaviconUrl ?? "",
+          favicon_192_url: nextFavicon192Url ?? "",
+          favicon_maskable_url: nextMaskableUrl ?? "",
           content_html: content,
         }),
       });
@@ -207,6 +224,8 @@ export default function AdminIndex() {
       setCopyrightName(updated.copyright_name);
       setContent(updated.content_html);
       setFaviconUrl(updated.favicon_url);
+      setFavicon192Url(updated.favicon_192_url);
+      setFaviconMaskableUrl(updated.favicon_maskable_url);
       setFaviconPreview(updated.favicon_url);
       setFaviconFile(null);
       setFaviconFileName("");
@@ -295,9 +314,13 @@ export default function AdminIndex() {
                 ) : null}
                 <span className="admin-field-hint">
                   이미지를 선택하면 정사각형(1:1)으로 자릅니다.
-                  512×512px PNG로 저장됩니다.
+                  192×192, 512×512 PWA 아이콘과 안전 영역을 확보한
+                  마스커블 아이콘을 서버에서 각각 생성합니다.
                 </span>
-                {faviconPreview || faviconUrl ? (
+                {faviconPreview ||
+                faviconUrl ||
+                favicon192Url ||
+                faviconMaskableUrl ? (
                   <button
                     type="button"
                     className="admin-button"

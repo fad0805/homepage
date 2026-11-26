@@ -34,6 +34,10 @@ def _serialize(page: IndexPage | None, scope: str, user_id: int | None) -> dict:
             else DEFAULT_COPYRIGHT_NAME
         ),
         "favicon_url": page.favicon_url if page is not None else None,
+        "favicon_192_url": page.favicon_192_url if page is not None else None,
+        "favicon_maskable_url": (
+            page.favicon_maskable_url if page is not None else None
+        ),
         "content_html": sanitize_index_html(
             page.content_html if page else DEFAULT_INDEX_BODY_HTML
         ),
@@ -78,6 +82,8 @@ def get_index_page(
         subtitle=integrated.subtitle,
         copyright_name=integrated.copyright_name,
         favicon_url=integrated.favicon_url,
+        favicon_192_url=integrated.favicon_192_url,
+        favicon_maskable_url=integrated.favicon_maskable_url,
         content_html=integrated.content_html,
     )
     db.add(page)
@@ -123,6 +129,8 @@ def update_index_page(
     subtitle: str | None = None,
     copyright_name: str | None = None,
     favicon_url: str | None = None,
+    favicon_192_url: str | None = None,
+    favicon_maskable_url: str | None = None,
 ) -> dict:
     page = get_index_page(db, scope=scope, user_id=user_id)
     safe_html = sanitize_index_html(content_html)
@@ -143,6 +151,22 @@ def update_index_page(
         if favicon_url is None
         else clean_index_text(favicon_url, MAX_FAVICON_URL_LENGTH) or None
     )
+    clean_favicon_192_url = (
+        None
+        if favicon_192_url is None
+        else clean_index_text(
+            favicon_192_url, MAX_FAVICON_URL_LENGTH
+        )
+        or None
+    )
+    clean_favicon_maskable_url = (
+        None
+        if favicon_maskable_url is None
+        else clean_index_text(
+            favicon_maskable_url, MAX_FAVICON_URL_LENGTH
+        )
+        or None
+    )
 
     if page is None:
         page = IndexPage(
@@ -152,6 +176,8 @@ def update_index_page(
             subtitle=clean_subtitle,
             copyright_name=clean_copyright_name,
             favicon_url=clean_favicon_url,
+            favicon_192_url=clean_favicon_192_url,
+            favicon_maskable_url=clean_favicon_maskable_url,
             content_html=safe_html,
         )
         db.add(page)
@@ -164,6 +190,10 @@ def update_index_page(
             page.copyright_name = clean_copyright_name
         if favicon_url is not None:
             page.favicon_url = clean_favicon_url
+        if favicon_192_url is not None:
+            page.favicon_192_url = clean_favicon_192_url
+        if favicon_maskable_url is not None:
+            page.favicon_maskable_url = clean_favicon_maskable_url
         page.content_html = safe_html
     db.commit()
     db.refresh(page)

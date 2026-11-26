@@ -43,34 +43,32 @@ const DEFAULT_ICONS: ManifestIcons = [
 export default async function manifest(): Promise<MetadataRoute.Manifest> {
   const index = await getIntegratedIndexPage();
   const title = index.title || DEFAULT_INDEX_TITLE;
-  const icons: ManifestIcons = index.favicon_url
-    ? [
-        {
-          src: index.favicon_url,
-          sizes: "192x192",
-          type: "image/png",
-          purpose: "any",
-        },
-        {
-          src: index.favicon_url,
-          sizes: "512x512",
-          type: "image/png",
-          purpose: "any",
-        },
-        {
-          src: index.favicon_url,
-          sizes: "192x192",
-          type: "image/png",
-          purpose: "maskable",
-        },
-        {
-          src: index.favicon_url,
-          sizes: "512x512",
-          type: "image/png",
-          purpose: "maskable",
-        },
-      ]
-    : DEFAULT_ICONS;
+  const smallUrl = index.favicon_192_url ?? index.favicon_url;
+  const maskableUrl =
+    index.favicon_maskable_url ?? index.favicon_url;
+  const icons: ManifestIcons =
+    index.favicon_url && smallUrl && maskableUrl
+      ? [
+          {
+            src: smallUrl,
+            sizes: "192x192",
+            type: "image/png",
+            purpose: "any",
+          },
+          {
+            src: index.favicon_url,
+            sizes: "512x512",
+            type: "image/png",
+            purpose: "any",
+          },
+          {
+            src: maskableUrl,
+            sizes: "512x512",
+            type: "image/png",
+            purpose: "maskable",
+          },
+        ]
+      : DEFAULT_ICONS;
 
   return {
     id: "/",
