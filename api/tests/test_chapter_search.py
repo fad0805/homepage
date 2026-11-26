@@ -586,11 +586,17 @@ class ChapterSearchTests(unittest.TestCase):
         select_clause = re.split(
             r"\bfrom\b", chapter_selects[0].lower(), maxsplit=1
         )[0]
-        for column in ("id", "user_id", "title", "protected"):
+        for column in (
+            "id",
+            "user_id",
+            "title",
+            "protected",
+            "category_id",
+        ):
             self.assertIn(f"books.{column}", select_clause)
+        self.assertIn("book_categories.protected", select_clause)
         for column in (
             "description",
-            "category_id",
             "tags",
             "visible",
             "created_at",

@@ -103,6 +103,7 @@ def get_chapters(
                 include_hidden=current_user is not None,
                 granted_chapters=grants.chapters,
                 granted_books=grants.books,
+                granted_categories=grants.categories,
                 viewer_user_id=current_user.id if current_user else None,
             )
 
@@ -224,6 +225,7 @@ def get_chapter_detail(
             include_hidden=current_user is not None,
             granted_chapters=grants.chapters,
             granted_books=grants.books,
+            granted_categories=grants.categories,
             viewer_user_id=current_user.id if current_user else None,
             include_body=include_body,
         )

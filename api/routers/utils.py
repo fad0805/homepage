@@ -94,6 +94,7 @@ class GalleryGrants:
     illustrations: frozenset[int] = frozenset()
     chapters: frozenset[int] = frozenset()
     books: frozenset[int] = frozenset()
+    categories: frozenset[int] = frozenset()
 
 
 def get_gallery_grants(request: Request, db: Session) -> GalleryGrants:
@@ -134,6 +135,11 @@ def get_gallery_grants(request: Request, db: Session) -> GalleryGrants:
             grant.book_id
             for grant in grants
             if grant.book_id is not None
+        ),
+        categories=frozenset(
+            grant.category_id
+            for grant in grants
+            if grant.category_id is not None
         ),
     )
 

@@ -415,6 +415,7 @@ def _build_book_query(
     author_user_id: int | None = None,
     granted_chapters: frozenset[int] = frozenset(),
     granted_books: frozenset[int] = frozenset(),
+    granted_categories: frozenset[int] = frozenset(),
     include_chapter_matches: bool = False,
     query: str | None = None,
     tag: str | None = None,
@@ -461,6 +462,7 @@ def _build_book_query(
                 include_hidden=include_hidden,
                 granted_chapters=granted_chapters,
                 granted_books=granted_books,
+                granted_categories=granted_categories,
                 viewer_user_id=viewer_user_id,
                 owner_user_id=owner_user_id,
                 author_user_id=author_user_id,
@@ -508,6 +510,7 @@ def _get_books_page(
     author_user_id: int | None = None,
     granted_chapters: frozenset[int] = frozenset(),
     granted_books: frozenset[int] = frozenset(),
+    granted_categories: frozenset[int] = frozenset(),
     include_chapter_matches: bool = False,
     query: str | None = None,
     tag: str | None = None,
@@ -521,6 +524,7 @@ def _get_books_page(
         author_user_id=author_user_id,
         granted_chapters=granted_chapters,
         granted_books=granted_books,
+        granted_categories=granted_categories,
         include_chapter_matches=include_chapter_matches,
         query=query,
         tag=tag,
@@ -553,6 +557,7 @@ def get_all_books(
     is_admin: bool = False,
     granted_chapters: frozenset[int] = frozenset(),
     granted_books: frozenset[int] = frozenset(),
+    granted_categories: frozenset[int] = frozenset(),
     include_chapter_matches: bool = False,
     query: str | None = None,
     tag: str | None = None,
@@ -568,6 +573,7 @@ def get_all_books(
         author_user_id=None,
         granted_chapters=granted_chapters,
         granted_books=granted_books,
+        granted_categories=granted_categories,
         include_chapter_matches=include_chapter_matches,
         query=query,
         tag=tag,
@@ -587,6 +593,7 @@ def get_books_page(
     author_user_id: int | None,
     granted_chapters: frozenset[int] = frozenset(),
     granted_books: frozenset[int] = frozenset(),
+    granted_categories: frozenset[int] = frozenset(),
     include_chapter_matches: bool = False,
     query: str | None = None,
     tag: str | None = None,
@@ -603,6 +610,7 @@ def get_books_page(
         author_user_id=author_user_id,
         granted_chapters=granted_chapters,
         granted_books=granted_books,
+        granted_categories=granted_categories,
         include_chapter_matches=include_chapter_matches,
         query=query,
         tag=tag,
@@ -742,11 +750,24 @@ def _chapter_is_locked(
     chapter: Chapter,
     granted_chapters: frozenset[int],
     granted_books: frozenset[int],
+    granted_categories: frozenset[int] = frozenset(),
 ) -> bool:
-    """Mirror the web UI rule: a book grant unlocks every chapter in it."""
+    """Check every protection level independently.
+
+    A code for a parent (category or book) opens its unprotected children, but
+    never bypasses a code that was set on the child itself.
+    """
     book = chapter.book
-    if book is not None and book.protected:
-        return chapter.book_id not in granted_books
+    if book is not None:
+        category = book.category_relation
+        if (
+            category is not None
+            and category.protected
+            and category.id not in granted_categories
+        ):
+            return True
+        if book.protected and chapter.book_id not in granted_books:
+            return True
     return bool(chapter.protected) and chapter.id not in granted_chapters
 
 
@@ -756,6 +777,7 @@ def _build_chapter_query(
     include_hidden: bool = False,
     granted_chapters: frozenset[int] = frozenset(),
     granted_books: frozenset[int] = frozenset(),
+    granted_categories: frozenset[int] = frozenset(),
     viewer_user_id: int | None = None,
     owner_user_id: int | None = None,
     author_user_id: int | None = None,
@@ -786,12 +808,15 @@ def _build_chapter_query(
         # plus owner/protected to resolve locks. Loading the whole book row here
         # would read columns the chapter list never uses.
         chapters_query = chapters_query.options(
-            contains_eager(Chapter.book).load_only(
+            contains_eager(Chapter.book)
+            .load_only(
                 Book.id,
                 Book.title,
                 Book.user_id,
                 Book.protected,
+                Book.category_id,
             )
+            .contains_eager(Book.category_relation)
         )
         if not include_body:
             chapters_query = chapters_query.options(
@@ -882,17 +907,22 @@ def _build_chapter_query(
     # they are allowed to open.
     body_unrestricted = owner_user_id is not None or include_all
     body_access = [
-        and_(Book.protected.is_(False), Chapter.protected.is_(False)),
-    ]
-    if granted_books:
-        body_access.append(Book.id.in_(granted_books))
-    if granted_chapters:
-        body_access.append(
-            and_(
+        and_(
+            or_(
+                BookCategory.id.is_(None),
+                BookCategory.protected.is_(False),
+                BookCategory.id.in_(granted_categories),
+            ),
+            or_(
                 Book.protected.is_(False),
+                Book.id.in_(granted_books),
+            ),
+            or_(
+                Chapter.protected.is_(False),
                 Chapter.id.in_(granted_chapters),
-            )
-        )
+            ),
+        ),
+    ]
     if viewer_user_id is not None:
         body_access.extend(
             [
@@ -945,6 +975,7 @@ def _serialize_chapter_rows(
     include_hidden: bool = False,
     granted_chapters: frozenset[int] = frozenset(),
     granted_books: frozenset[int] = frozenset(),
+    granted_categories: frozenset[int] = frozenset(),
     viewer_user_id: int | None = None,
     owner_user_id: int | None = None,
     include_body: bool = True,
@@ -977,7 +1008,12 @@ def _serialize_chapter_rows(
         locked = (
             False
             if unlocked
-            else _chapter_is_locked(chapter, granted_chapters, granted_books)
+            else _chapter_is_locked(
+                chapter,
+                granted_chapters,
+                granted_books,
+                granted_categories,
+            )
         )
         result.append(
             _serialize_chapter(
@@ -995,6 +1031,7 @@ def get_all_chapters(
     include_hidden: bool = False,
     granted_chapters: frozenset[int] = frozenset(),
     granted_books: frozenset[int] = frozenset(),
+    granted_categories: frozenset[int] = frozenset(),
     viewer_user_id: int | None = None,
     owner_user_id: int | None = None,
     author_user_id: int | None = None,
@@ -1010,6 +1047,7 @@ def get_all_chapters(
         include_hidden=include_hidden,
         granted_chapters=granted_chapters,
         granted_books=granted_books,
+        granted_categories=granted_categories,
         viewer_user_id=viewer_user_id,
         owner_user_id=owner_user_id,
         author_user_id=author_user_id,
@@ -1025,6 +1063,7 @@ def get_all_chapters(
         include_hidden=include_hidden,
         granted_chapters=granted_chapters,
         granted_books=granted_books,
+        granted_categories=granted_categories,
         viewer_user_id=viewer_user_id,
         owner_user_id=owner_user_id,
         include_body=include_body,
@@ -1040,6 +1079,7 @@ def get_chapters_page(
     include_hidden: bool = False,
     granted_chapters: frozenset[int] = frozenset(),
     granted_books: frozenset[int] = frozenset(),
+    granted_categories: frozenset[int] = frozenset(),
     viewer_user_id: int | None = None,
     owner_user_id: int | None = None,
     author_user_id: int | None = None,
@@ -1059,6 +1099,7 @@ def get_chapters_page(
         include_hidden=include_hidden,
         granted_chapters=granted_chapters,
         granted_books=granted_books,
+        granted_categories=granted_categories,
         viewer_user_id=viewer_user_id,
         owner_user_id=owner_user_id,
         author_user_id=author_user_id,
@@ -1086,6 +1127,7 @@ def get_chapters_page(
             include_hidden=include_hidden,
             granted_chapters=granted_chapters,
             granted_books=granted_books,
+            granted_categories=granted_categories,
             viewer_user_id=viewer_user_id,
             owner_user_id=owner_user_id,
             include_body=include_body,
@@ -1102,6 +1144,7 @@ def get_chapter(
     include_hidden: bool = False,
     granted_chapters: frozenset[int] = frozenset(),
     granted_books: frozenset[int] = frozenset(),
+    granted_categories: frozenset[int] = frozenset(),
     viewer_user_id: int | None = None,
     owner_user_id: int | None = None,
     include_body: bool = True,
@@ -1148,7 +1191,12 @@ def get_chapter(
     locked = (
         False
         if unlocked
-        else _chapter_is_locked(chapter, granted_chapters, granted_books)
+        else _chapter_is_locked(
+            chapter,
+            granted_chapters,
+            granted_books,
+            granted_categories,
+        )
     )
     return _serialize_chapter(chapter, locked=locked, include_body=include_body)
 

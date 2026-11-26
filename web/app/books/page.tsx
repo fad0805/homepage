@@ -139,9 +139,17 @@ export default async function BooksPage({
     }
   }
 
+  const galleryGrantKey = [
+    [...grants.categories].sort((a, b) => a - b).join("-"),
+    [...grants.books].sort((a, b) => a - b).join("-"),
+    [...grants.chapters].sort((a, b) => a - b).join("-"),
+  ].join("|");
+
   return (
     <BooksClient
-      key={`${initialBookId ?? "none"}-${initialChapterId ?? "none"}`}
+      key={`${initialBookId ?? "none"}-${
+        initialChapterId ?? "none"
+      }-${galleryGrantKey}`}
       initialBooks={visibleBooks}
       initialChapters={chapters}
       initialPinnedChapters={pinnedChapters}

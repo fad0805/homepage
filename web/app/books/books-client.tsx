@@ -440,6 +440,7 @@ export default function BooksClient({
   initialIsAdmin = false,
   previewMode = false,
 }: BooksClientProps) {
+  const router = useRouter();
   const { isLoggedIn, isAdmin } = useAuth();
   const books = initialBooks;
   const [chapters, setChapters] = useState<Chapter[]>(initialChapters);
@@ -488,11 +489,13 @@ export default function BooksClient({
       const expanded = new Set<number>();
       for (const book of initialBooks) {
         const category = book.category;
-        if (!category || category.expanded_by_default !== true) continue;
+        if (!category) continue;
+        const isUnlocked = unlocked.has(category.id);
+        if (category.expanded_by_default !== true && !isUnlocked) continue;
         if (
           category.protected &&
           !initialIsAdmin &&
-          !unlocked.has(category.id)
+          !isUnlocked
         ) {
           continue;
         }
@@ -1235,6 +1238,7 @@ export default function BooksClient({
       setExpandedCategories((prev) => new Set(prev).add(categoryId));
       setUnlockCategory(null);
       setCategoryCode("");
+      router.refresh();
     } catch {
       setCategoryCodeError("요청에 실패했습니다. 잠시 후 다시 시도해주세요.");
     } finally {

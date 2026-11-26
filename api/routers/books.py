@@ -69,6 +69,7 @@ def get_books(
             viewer_user_id=current_user.id if current_user else None,
             granted_chapters=grants.chapters,
             granted_books=grants.books,
+            granted_categories=grants.categories,
         )
 
     author_id = get_default_author_id(db)
