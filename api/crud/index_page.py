@@ -1,4 +1,3 @@
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from core.html_sanitizer import sanitize_index_html
@@ -66,35 +65,21 @@ def get_index_page(
     scope: str,
     user_id: int | None = None,
 ) -> IndexPage | None:
-    """Return an index page, copying the integrated seed to a new author."""
-    page = _query_index_page(db, scope=scope, user_id=user_id)
-    if page is not None or scope != "author" or user_id is None:
-        return page
+    """Return the stored index page without creating one as a side effect."""
+    return _query_index_page(db, scope=scope, user_id=user_id)
 
-    integrated = _query_index_page(db, scope="integrated")
-    if integrated is None:
-        return None
 
-    page = IndexPage(
-        scope="author",
-        user_id=user_id,
-        title=integrated.title,
-        subtitle=integrated.subtitle,
-        copyright_name=integrated.copyright_name,
-        favicon_url=integrated.favicon_url,
-        favicon_192_url=integrated.favicon_192_url,
-        favicon_maskable_url=integrated.favicon_maskable_url,
-        content_html=integrated.content_html,
-    )
-    db.add(page)
-    try:
-        db.commit()
-    except IntegrityError:
-        # A concurrent request may have created the row first.
-        db.rollback()
-        return _query_index_page(db, scope=scope, user_id=user_id)
-    db.refresh(page)
-    return page
+def _page_for_read(
+    db: Session,
+    *,
+    scope: str,
+    user_id: int | None = None,
+) -> tuple[IndexPage | None, bool]:
+    """Return a page and whether it is the integrated fallback for a new author."""
+    page = get_index_page(db, scope=scope, user_id=user_id)
+    if page is None and scope == "author":
+        return _query_index_page(db, scope="integrated"), True
+    return page, False
 
 
 def get_index_page_content(
@@ -103,7 +88,7 @@ def get_index_page_content(
     scope: str,
     user_id: int | None = None,
 ) -> str:
-    page = get_index_page(db, scope=scope, user_id=user_id)
+    page, _ = _page_for_read(db, scope=scope, user_id=user_id)
     return sanitize_index_html(
         page.content_html if page else DEFAULT_INDEX_BODY_HTML
     )
@@ -115,8 +100,19 @@ def get_index_page_read(
     scope: str,
     user_id: int | None = None,
 ) -> dict:
-    page = get_index_page(db, scope=scope, user_id=user_id)
-    return _serialize(page, scope, user_id)
+    page, integrated_fallback = _page_for_read(
+        db,
+        scope=scope,
+        user_id=user_id,
+    )
+    data = _serialize(page, scope, user_id)
+    if integrated_fallback:
+        # Text content may use the integrated seed, but branding files belong
+        # to each author and must not leak across /@slug pages.
+        data["favicon_url"] = None
+        data["favicon_192_url"] = None
+        data["favicon_maskable_url"] = None
+    return data
 
 
 def update_index_page(
@@ -133,6 +129,18 @@ def update_index_page(
     favicon_maskable_url: str | None = None,
 ) -> dict:
     page = get_index_page(db, scope=scope, user_id=user_id)
+    if page is None and scope == "author":
+        integrated = _query_index_page(db, scope="integrated")
+        if integrated is not None:
+            # A new author starts from the integrated values, but only for
+            # fields the caller did not send.
+            if title is None:
+                title = integrated.title
+            if subtitle is None:
+                subtitle = integrated.subtitle
+            if copyright_name is None:
+                copyright_name = integrated.copyright_name
+
     safe_html = sanitize_index_html(content_html)
     clean_title = (
         None if title is None

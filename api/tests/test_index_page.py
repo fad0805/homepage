@@ -171,15 +171,89 @@ class IndexPageTests(unittest.TestCase):
         self.assertEqual(author_page["title"], "통합 제목")
         self.assertEqual(author_page["subtitle"], "통합 부제")
         self.assertEqual(author_page["copyright_name"], "통합 이름")
+        self.assertIsNone(author_page["favicon_url"])
+        self.assertIsNone(author_page["favicon_192_url"])
+        self.assertIsNone(author_page["favicon_maskable_url"])
+        self.assertIn("통합 본문", author_page["content_html"])
+
+    def test_author_page_uses_its_own_favicon(self) -> None:
+        update_index_page(
+            self.db,
+            scope="author",
+            user_id=self.author.id,
+            favicon_url="/uploads/index/author.png",
+            favicon_192_url="/uploads/index/author-192.png",
+            favicon_maskable_url="/uploads/index/author-maskable.png",
+            content_html="<p>작가 본문</p>",
+        )
+
+        author_page = get_index_page_read(
+            self.db,
+            scope="author",
+            user_id=self.author.id,
+        )
+
+        self.assertEqual(
+            author_page["favicon_url"],
+            "/uploads/index/author.png",
+        )
         self.assertEqual(
             author_page["favicon_192_url"],
-            "/uploads/index/favicon-192.png",
+            "/uploads/index/author-192.png",
         )
         self.assertEqual(
             author_page["favicon_maskable_url"],
-            "/uploads/index/favicon-maskable.png",
+            "/uploads/index/author-maskable.png",
         )
-        self.assertIn("통합 본문", author_page["content_html"])
+
+    def test_new_author_page_does_not_copy_integrated_favicon(self) -> None:
+        update_index_page(
+            self.db,
+            scope="integrated",
+            user_id=None,
+            title="통합 제목",
+            favicon_url="/uploads/index/integrated.png",
+            favicon_192_url="/uploads/index/integrated-192.png",
+            favicon_maskable_url="/uploads/index/integrated-maskable.png",
+            content_html="<p>통합 본문</p>",
+        )
+
+        author_page = update_index_page(
+            self.db,
+            scope="author",
+            user_id=self.author.id,
+            content_html="<p>작가 본문</p>",
+        )
+
+        self.assertEqual(author_page["title"], "통합 제목")
+        self.assertIsNone(author_page["favicon_url"])
+        self.assertIsNone(author_page["favicon_192_url"])
+        self.assertIsNone(author_page["favicon_maskable_url"])
+
+    def test_author_read_does_not_create_an_index_page(self) -> None:
+        update_index_page(
+            self.db,
+            scope="integrated",
+            user_id=None,
+            title="통합 제목",
+            content_html="<p>통합 본문</p>",
+        )
+
+        page = get_index_page_read(
+            self.db,
+            scope="author",
+            user_id=self.author.id,
+        )
+
+        self.assertEqual(page["title"], "통합 제목")
+        count = self.db.execute(
+            text(
+                "SELECT count(*) FROM index_pages "
+                "WHERE scope = 'author' AND user_id = :user_id"
+            ),
+            {"user_id": self.author.id},
+        ).scalar_one()
+        self.assertEqual(count, 0)
 
     def test_clean_index_text_collapses_markup(self) -> None:
         value = "<p>첫<br><em>둘</em> &amp; 셋</p>"
