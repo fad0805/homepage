@@ -1179,8 +1179,15 @@ def _naive_utc(value: datetime | None) -> datetime | None:
 def _chapter_is_public(chapter: Chapter) -> bool:
     if chapter.visible is False:
         return False
-    if chapter.book is not None and chapter.book.visible is False:
-        return False
+    book = chapter.book
+    if book is not None:
+        if book.visible is False:
+            return False
+        # A chapter inherits its category's visibility. Without this check a
+        # hidden category could still be opened by guessing its chapter URL.
+        category = book.category_relation
+        if category is not None and category.visible is False:
+            return False
     published_at = _naive_utc(chapter.published_at)
     if published_at is None:
         return True
