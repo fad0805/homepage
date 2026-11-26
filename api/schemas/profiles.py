@@ -19,3 +19,9 @@ class ProfileUpdate(ProfileBase):
     title: str | None = None
     profile: str | None = None
     updated_at: datetime = Field(default_factory=datetime.now)
+
+
+class ProfileVisibilityUpdate(BaseModel):
+    """Administrator-only public visibility toggle."""
+
+    hidden: bool

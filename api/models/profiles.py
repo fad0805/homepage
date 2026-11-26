@@ -1,4 +1,5 @@
 from sqlalchemy import (
+    Boolean,
     Column,
     String,
     Integer,
@@ -29,6 +30,13 @@ class Profile(Base):
     title = Column(String(255))
     subtitle = Column(String(255), nullable=True)
     profile = Column(Text)
+    # Administrators can hide a profile from public views without editing it.
+    hidden_by_admin = Column(
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default="false",
+    )
     created_at = Column(DateTime, default=func.now())
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
     user = relationship(User)

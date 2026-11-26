@@ -25,6 +25,7 @@ def _serialize_profile(profile: Profile) -> dict:
         "title": profile.title,
         "subtitle": profile.subtitle,
         "profile": sanitize_index_html(profile.profile),
+        "hidden_by_admin": bool(profile.hidden_by_admin),
     }
 
 
@@ -34,6 +35,7 @@ def get_all_profiles(
     *,
     user_id: int | None = None,
     exclude_user_id: int | None = None,
+    include_hidden: bool = False,
 ):
     """
     Get all profiles, one author's profiles, or every other author's profiles.
@@ -45,22 +47,27 @@ def get_all_profiles(
         query = query.filter(Profile.user_id == user_id)
     if exclude_user_id is not None:
         query = query.filter(Profile.user_id != exclude_user_id)
+    if not include_hidden:
+        query = query.filter(Profile.hidden_by_admin.is_(False))
     profiles = query.order_by(Profile.id.asc()).all()
     return [_serialize_profile(profile) for profile in profiles]
 
 
-def get_profile(db: Session, profile_id: int):
+def get_profile(
+    db: Session,
+    profile_id: int,
+    *,
+    include_hidden: bool = True,
+):
     """
     Get profile from database.
     """
-    profile = (
-        db.query(Profile)
-        .options(
-            joinedload(Profile.user).joinedload(User.author_settings)
-        )
-        .filter(Profile.id == profile_id)
-        .first()
-    )
+    query = db.query(Profile).options(
+        joinedload(Profile.user).joinedload(User.author_settings)
+    ).filter(Profile.id == profile_id)
+    if not include_hidden:
+        query = query.filter(Profile.hidden_by_admin.is_(False))
+    profile = query.first()
     if not profile:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -145,6 +152,33 @@ def update_profile(
     for key, value in data.items():
         setattr(profile, key, value)
 
+    db.commit()
+    db.refresh(profile)
+    return _serialize_profile(profile)
+
+
+def set_profile_visibility(
+    db: Session,
+    profile_id: int,
+    *,
+    hidden: bool,
+):
+    """Administrator-only public visibility toggle without editing content."""
+    profile = (
+        db.query(Profile)
+        .options(
+            joinedload(Profile.user).joinedload(User.author_settings)
+        )
+        .filter(Profile.id == profile_id)
+        .first()
+    )
+    if not profile:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Profile not found",
+        )
+
+    profile.hidden_by_admin = hidden
     db.commit()
     db.refresh(profile)
     return _serialize_profile(profile)

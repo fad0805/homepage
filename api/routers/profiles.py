@@ -9,9 +9,14 @@ from crud.profiles import (
     delete_profile,
     get_all_profiles,
     get_profile,
+    set_profile_visibility,
     update_profile,
 )
-from schemas.profiles import ProfileCreate, ProfileUpdate
+from schemas.profiles import (
+    ProfileCreate,
+    ProfileUpdate,
+    ProfileVisibilityUpdate,
+)
 from .utils import (
     get_default_author_id,
     get_optional_user,
@@ -39,7 +44,11 @@ def get_other_profiles(
     user=Depends(require_admin),
 ):
     """Return other authors' profiles for the admin read-only browser."""
-    return get_all_profiles(db, exclude_user_id=user.id)
+    return get_all_profiles(
+        db,
+        exclude_user_id=user.id,
+        include_hidden=True,
+    )
 
 
 @router.get("/")
@@ -58,25 +67,59 @@ def get_profiles(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Not authenticated",
             )
-        return get_all_profiles(db, user_id=current_user.id)
+        return get_all_profiles(
+            db,
+            user_id=current_user.id,
+            include_hidden=True,
+        )
     author_id = get_default_author_id(db)
     if author_id is None:
         return []
-    return get_all_profiles(db, user_id=author_id)
+    return get_all_profiles(
+        db,
+        user_id=author_id,
+        include_hidden=current_user is not None and is_admin(current_user),
+    )
 
 
 @router.get("/{profile_id}")
-def get_profile_detail(profile_id: int, db: Session = Depends(get_db)):
+def get_profile_detail(
+    profile_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_optional_user),
+):
     """
     Get a single public profile from the default author.
     """
-    profile = get_profile(db, profile_id)
+    can_view_hidden = (
+        current_user is not None and is_admin(current_user)
+    )
+    profile = get_profile(
+        db,
+        profile_id,
+        include_hidden=can_view_hidden,
+    )
     if profile.get("user_id") != get_default_author_id(db):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Profile not found",
         )
     return profile
+
+
+@router.put("/{profile_id}/visibility")
+def update_profile_visibility(
+    profile_id: int,
+    payload: ProfileVisibilityUpdate,
+    db: Session = Depends(get_db),
+    _=Depends(require_admin),
+):
+    """Hide or restore a profile in public views without editing it."""
+    return set_profile_visibility(
+        db,
+        profile_id,
+        hidden=payload.hidden,
+    )
 
 
 @router.post("/")
