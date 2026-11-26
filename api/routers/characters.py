@@ -18,6 +18,7 @@ from crud.characters import (
     get_all_characters,
     get_all_locations,
     get_character,
+    get_public_characters,
     reorder_characters,
     reorder_locations,
     update_character,
@@ -126,7 +127,7 @@ def get_characters(
     author_id = get_default_author_id(db)
     if author_id is None:
         return []
-    return get_all_characters(db, user_id=author_id)
+    return get_public_characters(db, author_id)
 
 
 @router.post("/")

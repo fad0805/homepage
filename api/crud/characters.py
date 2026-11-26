@@ -58,6 +58,28 @@ def _serialize_relationship(relationship: CharacterRelationship) -> dict:
     }
 
 
+def _serialize_character_list_item(character: Character) -> dict:
+    """Return only the fields the public character list renders."""
+    location = character.location_relationship
+    return {
+        "id": character.id,
+        "name": character.name,
+        "thumbnail": character.thumbnail,
+        "location_id": character.location_id,
+        "order_in_location": character.order_in_location,
+        "layout": character.layout or "auto",
+        "location": (
+            {
+                "id": location.id,
+                "name": location.name,
+                "order": location.order,
+            }
+            if location
+            else None
+        ),
+    }
+
+
 def _serialize_character(character: Character) -> dict:
     location = character.location_relationship
     return {
@@ -297,6 +319,27 @@ def _next_location_order(db: Session, user_id: int) -> int:
 
 
 # Character CRUD Operations
+def get_public_characters(db: Session, user_id: int):
+    """Return only visible public-list characters for one author."""
+    characters = (
+        db.query(Character)
+        .outerjoin(Location, Character.location_id == Location.id)
+        .filter(
+            Character.user_id == user_id,
+            Character.is_my_doll.is_(True),
+            Character.visible.isnot(False),
+        )
+        .order_by(
+            Location.order,
+            Location.id,
+            Character.order_in_location,
+            Character.id,
+        )
+        .all()
+    )
+    return [_serialize_character_list_item(character) for character in characters]
+
+
 def get_all_characters(db: Session, user_id: int | None = None):
     """
     Get all characters, or only one author's characters.

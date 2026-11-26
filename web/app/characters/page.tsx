@@ -9,7 +9,6 @@ export const dynamic = "force-dynamic";
 interface CharacterLocation {
   id: number;
   name: string;
-  description: string | null;
   order: number;
 }
 
@@ -20,8 +19,6 @@ interface CharacterItem {
   name: string;
   thumbnail: string | null;
   location_id: number | null;
-  visible: boolean;
-  is_my_doll: boolean | null;
   order_in_location: number | null;
   layout: CharacterLayout | null;
   location: CharacterLocation | null;
@@ -41,10 +38,7 @@ export default async function Characters() {
   }
 
   const visibleCharacters = characters.filter(
-    (character) =>
-      character.visible !== false &&
-      character.is_my_doll === true &&
-      character.location !== null,
+    (character) => character.location !== null,
   );
   const locationsById = new Map<number, CharacterLocation>();
   for (const character of visibleCharacters) {
