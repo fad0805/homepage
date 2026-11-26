@@ -32,6 +32,12 @@ class Character(Base):
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
     visible = Column(Boolean, default=True)
     is_my_doll = Column(Boolean, default=True)
+    hidden_by_admin = Column(
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default="false",
+    )
     order_in_location = Column(Integer, nullable=True)
     layout = Column(
         String,

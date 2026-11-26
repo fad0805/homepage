@@ -21,6 +21,7 @@ from crud.characters import (
     get_public_characters,
     reorder_characters,
     reorder_locations,
+    set_character_visibility,
     update_character,
     update_location,
 )
@@ -28,6 +29,7 @@ from schemas.characters import (
     CharacterCreate,
     CharacterReorderRequest,
     CharacterUpdate,
+    CharacterVisibilityUpdate,
     LocationCreate,
     LocationReorderRequest,
     LocationUpdate,
@@ -37,6 +39,7 @@ from .utils import (
     get_default_author_id,
     get_optional_user,
     is_admin,
+    require_admin,
     require_auth,
 )
 
@@ -272,17 +275,43 @@ async def upload_character_thumbnail(
 
 
 @router.get("/{character_id}")
-def get_character_detail(character_id: int, db: Session = Depends(get_db)):
+def get_character_detail(
+    character_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_optional_user),
+):
     """
     Get a single public character from the default author.
     """
-    character = get_character(db, character_id)
+    can_view_hidden = (
+        current_user is not None and is_admin(current_user)
+    )
+    character = get_character(
+        db,
+        character_id,
+        include_hidden=can_view_hidden,
+    )
     if character.get("user_id") != get_default_author_id(db):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Does not exist character",
         )
     return character
+
+
+@router.put("/{character_id}/visibility")
+def update_character_visibility(
+    character_id: int,
+    payload: CharacterVisibilityUpdate,
+    db: Session = Depends(get_db),
+    _=Depends(require_admin),
+):
+    """Hide or restore a character in public views without editing it."""
+    return set_character_visibility(
+        db,
+        character_id,
+        hidden=payload.hidden,
+    )
 
 
 @router.put("/{character_id}")

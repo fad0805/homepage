@@ -116,6 +116,12 @@ class CharacterReorderRequest(BaseModel):
     items: list[CharacterReorderItem] = Field(default_factory=list)
 
 
+class CharacterVisibilityUpdate(BaseModel):
+    """Administrator-only public visibility toggle."""
+
+    hidden: bool
+
+
 class UploadResponse(BaseModel):
     """Result of a thumbnail upload."""
 

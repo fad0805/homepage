@@ -51,6 +51,7 @@ def _serialize_relationship(relationship: CharacterRelationship) -> dict:
                 "layout": related.layout or "auto",
                 "visible": related.visible,
                 "is_my_doll": related.is_my_doll,
+                "hidden_by_admin": bool(related.hidden_by_admin),
             }
             if related
             else None
@@ -80,7 +81,11 @@ def _serialize_character_list_item(character: Character) -> dict:
     }
 
 
-def _serialize_character(character: Character) -> dict:
+def _serialize_character(
+    character: Character,
+    *,
+    include_hidden: bool = True,
+) -> dict:
     location = character.location_relationship
     return {
         "id": character.id,
@@ -98,6 +103,7 @@ def _serialize_character(character: Character) -> dict:
         "comming_day": character.comming_day,
         "visible": character.visible,
         "is_my_doll": character.is_my_doll,
+        "hidden_by_admin": bool(character.hidden_by_admin),
         "order_in_location": character.order_in_location,
         "layout": character.layout or "auto",
         "created_at": character.created_at,
@@ -109,6 +115,13 @@ def _serialize_character(character: Character) -> dict:
             _serialize_relationship(relationship)
             for relationship in character.outgoing_relationships
             if relationship.related_character
+            and (
+                include_hidden
+                or (
+                    relationship.related_character.visible is not False
+                    and not relationship.related_character.hidden_by_admin
+                )
+            )
         ],
     }
 
@@ -328,6 +341,7 @@ def get_public_characters(db: Session, user_id: int):
             Character.user_id == user_id,
             Character.is_my_doll.is_(True),
             Character.visible.isnot(False),
+            Character.hidden_by_admin.is_(False),
         )
         .order_by(
             Location.order,
@@ -364,7 +378,12 @@ def get_all_characters(db: Session, user_id: int | None = None):
     return [_serialize_character(character) for character in query.all()]
 
 
-def get_character(db: Session, character_id: int):
+def get_character(
+    db: Session,
+    character_id: int,
+    *,
+    include_hidden: bool = False,
+):
     """
     Get a single character.
     """
@@ -389,7 +408,41 @@ def get_character(db: Session, character_id: int):
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Does not exist character",
         )
-    return _serialize_character(character)
+    if character.hidden_by_admin and not include_hidden:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Does not exist character",
+        )
+    return _serialize_character(character, include_hidden=include_hidden)
+
+
+def set_character_visibility(
+    db: Session,
+    character_id: int,
+    *,
+    hidden: bool,
+):
+    """Administrator-only public visibility toggle without editing content."""
+    character = (
+        db.query(Character)
+        .options(
+            selectinload(Character.outgoing_relationships).selectinload(
+                CharacterRelationship.related_character
+            )
+        )
+        .filter(Character.id == character_id)
+        .first()
+    )
+    if not character:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Does not exist character",
+        )
+
+    character.hidden_by_admin = hidden
+    db.commit()
+    db.refresh(character)
+    return _serialize_character(character, include_hidden=True)
 
 
 def create_character(
