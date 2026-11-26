@@ -63,11 +63,19 @@ const BASE_METADATA: Metadata = {
 export async function generateMetadata(): Promise<Metadata> {
   const index = await getIntegratedIndexPage();
   const title = index.title || DEFAULT_INDEX_TITLE;
+  const icons = index.favicon_url
+    ? {
+        icon: [{ url: index.favicon_url, sizes: "any" }],
+        shortcut: [{ url: index.favicon_url, sizes: "any" }],
+        apple: [{ url: index.favicon_url }],
+      }
+    : BASE_METADATA.icons;
 
   return {
     ...BASE_METADATA,
     title,
     applicationName: title,
+    icons,
     appleWebApp: {
       capable: true,
       title,

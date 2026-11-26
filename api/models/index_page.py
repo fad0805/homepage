@@ -2,6 +2,7 @@ from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, Text, func
 from sqlalchemy.orm import relationship
 
 from db.base import Base
+from db.types import ImageUrl
 
 
 class IndexPage(Base):
@@ -22,6 +23,8 @@ class IndexPage(Base):
     title = Column(String(120), nullable=True)
     subtitle = Column(String(160), nullable=True)
     copyright_name = Column(String(120), nullable=True)
+    # Browser tab icon. NULL keeps the bundled default favicon.
+    favicon_url = Column(ImageUrl(1000), nullable=True)
     content_html = Column(Text, nullable=False, default="", server_default="")
     created_at = Column(DateTime, default=func.now(), nullable=False)
     updated_at = Column(

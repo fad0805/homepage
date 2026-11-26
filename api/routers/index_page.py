@@ -55,6 +55,7 @@ def put_index_page(
         title=payload.title,
         subtitle=payload.subtitle,
         copyright_name=payload.copyright_name,
+        favicon_url=payload.favicon_url,
     )
 
 

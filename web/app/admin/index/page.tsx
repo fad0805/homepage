@@ -3,10 +3,17 @@
 import {
   useCallback,
   useEffect,
+  useRef,
   useState,
+  type ChangeEvent,
   type FormEvent,
 } from "react";
 
+import {
+  ImageCropModal,
+  type CropStageConfig,
+  type CroppedImageResult,
+} from "@/components/image-crop-modal";
 import { RichTextEditor } from "@/components/rich-text-editor";
 import { apiFetch } from "@/lib/api";
 
@@ -19,19 +26,56 @@ interface IndexPage {
   title: string;
   subtitle: string;
   copyright_name: string;
+  favicon_url: string | null;
   content_html: string;
 }
 
+interface CropRequest {
+  src: string;
+  fileName: string;
+}
+
 type Notice = { type: "success" | "error"; text: string };
+
+const MAX_IMAGE_SIZE = 50 * 1024 * 1024;
+const ALLOWED_IMAGE_TYPES = [
+  "image/png",
+  "image/jpeg",
+  "image/webp",
+  "image/gif",
+];
+
+const FAVICON_CROP_STAGE: CropStageConfig = {
+  key: "favicon",
+  aspect: 1,
+  outputWidth: 512,
+  title: "이미지 자르기 · 파비콘",
+  hint: "브라우저 탭에 표시할 정사각형 이미지를 자릅니다. 512×512px PNG로 저장됩니다.",
+  fileSuffix: "favicon",
+};
 
 export default function AdminIndex() {
   const [title, setTitle] = useState("");
   const [subtitle, setSubtitle] = useState("");
   const [copyrightName, setCopyrightName] = useState("");
   const [content, setContent] = useState("");
+  const [faviconUrl, setFaviconUrl] = useState<string | null>(null);
+  const [faviconPreview, setFaviconPreview] = useState<string | null>(null);
+  const [faviconFile, setFaviconFile] = useState<File | null>(null);
+  const [faviconFileName, setFaviconFileName] = useState("");
+  const [cropRequest, setCropRequest] = useState<CropRequest | null>(null);
+  const objectUrls = useRef<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState<Notice | null>(null);
+
+  useEffect(() => {
+    const urls = objectUrls.current;
+    return () => {
+      urls.forEach((url) => URL.revokeObjectURL(url));
+      urls.clear();
+    };
+  }, []);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -41,6 +85,10 @@ export default function AdminIndex() {
       setSubtitle(data.subtitle);
       setCopyrightName(data.copyright_name);
       setContent(data.content_html);
+      setFaviconUrl(data.favicon_url);
+      setFaviconPreview(data.favicon_url);
+      setFaviconFile(null);
+      setFaviconFileName("");
     } catch (error) {
       setNotice({
         type: "error",
@@ -58,11 +106,91 @@ export default function AdminIndex() {
     void load();
   }, [load]);
 
+  const uploadFavicon = useCallback(async (file: File) => {
+    const body = new FormData();
+    body.append("file", file);
+    const uploaded = await apiFetch<{ url: string }>(
+      "/api/index-page/upload",
+      {
+        method: "POST",
+        body,
+      },
+    );
+    return uploaded.url;
+  }, []);
+
+  const closeCropModal = useCallback(() => {
+    if (cropRequest) {
+      URL.revokeObjectURL(cropRequest.src);
+      objectUrls.current.delete(cropRequest.src);
+    }
+    setCropRequest(null);
+  }, [cropRequest]);
+
+  const handleFaviconChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+
+    if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
+      setNotice({
+        type: "error",
+        text: "PNG / JPEG / WEBP / GIF 이미지만 업로드할 수 있습니다.",
+      });
+      return;
+    }
+    if (file.size > MAX_IMAGE_SIZE) {
+      setNotice({
+        type: "error",
+        text: "이미지는 50MB 이하만 업로드할 수 있습니다.",
+      });
+      return;
+    }
+
+    const objectUrl = URL.createObjectURL(file);
+    objectUrls.current.add(objectUrl);
+    setCropRequest({ src: objectUrl, fileName: file.name });
+  };
+
+  const handleFaviconCropComplete = useCallback(
+    (results: CroppedImageResult[]) => {
+      const favicon = results.find((result) => result.stage === "favicon");
+      if (!favicon) {
+        setNotice({
+          type: "error",
+          text: "이미지 크롭 결과를 찾지 못했습니다.",
+        });
+        closeCropModal();
+        return;
+      }
+
+      const preview = URL.createObjectURL(favicon.file);
+      objectUrls.current.add(preview);
+      setFaviconFile(favicon.file);
+      setFaviconPreview(preview);
+      setFaviconFileName(favicon.file.name);
+      closeCropModal();
+    },
+    [closeCropModal],
+  );
+
+  const resetFavicon = () => {
+    setFaviconUrl(null);
+    setFaviconPreview(null);
+    setFaviconFile(null);
+    setFaviconFileName("");
+  };
+
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setSaving(true);
     setNotice(null);
     try {
+      let nextFaviconUrl = faviconUrl;
+      if (faviconFile) {
+        nextFaviconUrl = await uploadFavicon(faviconFile);
+      }
+
       const updated = await apiFetch<IndexPage>("/api/index-page", {
         method: "PUT",
         body: JSON.stringify({
@@ -70,6 +198,7 @@ export default function AdminIndex() {
           title,
           subtitle,
           copyright_name: copyrightName,
+          favicon_url: nextFaviconUrl ?? "",
           content_html: content,
         }),
       });
@@ -77,6 +206,10 @@ export default function AdminIndex() {
       setSubtitle(updated.subtitle);
       setCopyrightName(updated.copyright_name);
       setContent(updated.content_html);
+      setFaviconUrl(updated.favicon_url);
+      setFaviconPreview(updated.favicon_url);
+      setFaviconFile(null);
+      setFaviconFileName("");
       setNotice({ type: "success", text: "인덱스 페이지를 저장했습니다." });
     } catch (error) {
       setNotice({
@@ -97,9 +230,9 @@ export default function AdminIndex() {
         <div>
           <h1>인덱스 관리</h1>
           <p className="admin-author-hint">
-            화면 상단에 표시할 사이트 제목·부제, 푸터 카피라이트 이름, 메인
-            인덱스(/) 내용을 편집합니다. 제목은 브라우저 탭 이름으로도
-            사용됩니다.
+            화면 상단에 표시할 사이트 제목·부제, 브라우저 탭 파비콘, 푸터
+            카피라이트 이름, 메인 인덱스(/) 내용을 편집합니다. 제목은
+            브라우저 탭 이름으로도 사용됩니다.
           </p>
         </div>
       </header>
@@ -140,6 +273,44 @@ export default function AdminIndex() {
           </div>
 
           <div className="admin-field">
+            <span>브라우저 탭 파비콘</span>
+            <div className="admin-favicon-field">
+              <div className="admin-favicon-preview">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={faviconPreview ?? faviconUrl ?? "/favicon.ico"}
+                  alt="파비콘 미리보기"
+                />
+              </div>
+              <div className="admin-favicon-controls">
+                <input
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp,image/gif"
+                  onChange={handleFaviconChange}
+                />
+                {faviconFileName ? (
+                  <span className="admin-banner-filename">
+                    {faviconFileName}
+                  </span>
+                ) : null}
+                <span className="admin-field-hint">
+                  이미지를 선택하면 정사각형(1:1)으로 자릅니다.
+                  512×512px PNG로 저장됩니다.
+                </span>
+                {faviconPreview || faviconUrl ? (
+                  <button
+                    type="button"
+                    className="admin-button"
+                    onClick={resetFavicon}
+                  >
+                    기본 파비콘 사용
+                  </button>
+                ) : null}
+              </div>
+            </div>
+          </div>
+
+          <div className="admin-field">
             <span>인덱스 내용</span>
             <RichTextEditor
               value={content}
@@ -177,6 +348,16 @@ export default function AdminIndex() {
           </div>
         </form>
       )}
+
+      {cropRequest ? (
+        <ImageCropModal
+          imageSrc={cropRequest.src}
+          fileName={cropRequest.fileName}
+          stages={[FAVICON_CROP_STAGE]}
+          onClose={closeCropModal}
+          onComplete={handleFaviconCropComplete}
+        />
+      ) : null}
     </div>
   );
 }

@@ -8,6 +8,7 @@ from core.index_page import (
     DEFAULT_INDEX_SUBTITLE,
     DEFAULT_INDEX_TITLE,
     MAX_COPYRIGHT_NAME_LENGTH,
+    MAX_FAVICON_URL_LENGTH,
     MAX_SUBTITLE_LENGTH,
     MAX_TITLE_LENGTH,
     clean_index_text,
@@ -32,6 +33,7 @@ def _serialize(page: IndexPage | None, scope: str, user_id: int | None) -> dict:
             if page is not None and page.copyright_name is not None
             else DEFAULT_COPYRIGHT_NAME
         ),
+        "favicon_url": page.favicon_url if page is not None else None,
         "content_html": sanitize_index_html(
             page.content_html if page else DEFAULT_INDEX_BODY_HTML
         ),
@@ -75,6 +77,7 @@ def get_index_page(
         title=integrated.title,
         subtitle=integrated.subtitle,
         copyright_name=integrated.copyright_name,
+        favicon_url=integrated.favicon_url,
         content_html=integrated.content_html,
     )
     db.add(page)
@@ -119,6 +122,7 @@ def update_index_page(
     title: str | None = None,
     subtitle: str | None = None,
     copyright_name: str | None = None,
+    favicon_url: str | None = None,
 ) -> dict:
     page = get_index_page(db, scope=scope, user_id=user_id)
     safe_html = sanitize_index_html(content_html)
@@ -134,6 +138,11 @@ def update_index_page(
         None if copyright_name is None
         else clean_index_text(copyright_name, MAX_COPYRIGHT_NAME_LENGTH)
     )
+    clean_favicon_url = (
+        None
+        if favicon_url is None
+        else clean_index_text(favicon_url, MAX_FAVICON_URL_LENGTH) or None
+    )
 
     if page is None:
         page = IndexPage(
@@ -142,6 +151,7 @@ def update_index_page(
             title=clean_title,
             subtitle=clean_subtitle,
             copyright_name=clean_copyright_name,
+            favicon_url=clean_favicon_url,
             content_html=safe_html,
         )
         db.add(page)
@@ -152,6 +162,8 @@ def update_index_page(
             page.subtitle = clean_subtitle
         if copyright_name is not None:
             page.copyright_name = clean_copyright_name
+        if favicon_url is not None:
+            page.favicon_url = clean_favicon_url
         page.content_html = safe_html
     db.commit()
     db.refresh(page)
