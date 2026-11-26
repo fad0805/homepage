@@ -276,12 +276,45 @@ def update_book_category(
     return _serialize_book_category(category)
 
 
+def set_book_category_visibility(
+    db: Session,
+    category_id: int,
+    *,
+    visible: bool,
+):
+    """Administrator-only public visibility toggle."""
+    category = (
+        db.query(BookCategory)
+        .filter(BookCategory.id == category_id)
+        .first()
+    )
+    if not category:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Does not exist book category",
+        )
+    category.visible = visible
+    db.commit()
+    db.refresh(category)
+    return _serialize_book_category(category)
+
+
 def delete_book_category(
     db: Session,
     category_id: int,
-    user_id: int,
+    user_id: int | None = None,
 ):
-    category = _get_book_category_or_404(db, category_id, user_id)
+    query = db.query(BookCategory).filter(
+        BookCategory.id == category_id
+    )
+    if user_id is not None:
+        query = query.filter(BookCategory.user_id == user_id)
+    category = query.first()
+    if not category:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Does not exist book category",
+        )
     book_count = (
         db.query(Book).filter(Book.category_id == category_id).count()
     )
@@ -666,6 +699,25 @@ def create_book(db: Session, payload: BookCreate, user_id: int):
         _get_book_category_or_404(db, data["category_id"], user_id)
     book = Book(**data)
     db.add(book)
+    db.commit()
+    db.refresh(book)
+    return _serialize_book(book)
+
+
+def set_book_visibility(
+    db: Session,
+    book_id: int,
+    *,
+    visible: bool,
+):
+    """Administrator-only public visibility toggle."""
+    book = db.query(Book).filter(Book.id == book_id).first()
+    if not book:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Does not exist book",
+        )
+    book.visible = visible
     db.commit()
     db.refresh(book)
     return _serialize_book(book)
@@ -1304,6 +1356,31 @@ def _reorder_chapters_by_created_at(db: Session, book_id: int) -> None:
     )
     for index, chapter in enumerate(chapters):
         chapter.order = index
+
+
+def set_chapter_visibility(
+    db: Session,
+    chapter_id: int,
+    *,
+    visible: bool,
+):
+    """Administrator-only public visibility toggle."""
+    chapter = (
+        db.query(Chapter)
+        .options(contains_eager(Chapter.book).load_only(Book.id, Book.title))
+        .join(Book, Chapter.book_id == Book.id)
+        .filter(Chapter.id == chapter_id)
+        .first()
+    )
+    if not chapter:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Does not exist chapter",
+        )
+    chapter.visible = visible
+    db.commit()
+    db.refresh(chapter)
+    return _serialize_chapter(chapter)
 
 
 def update_chapter(

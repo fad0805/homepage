@@ -394,6 +394,7 @@ def get_visible_illustrations(
     page: int = 1,
     page_size: int = 12,
     include_unpublished: bool = False,
+    admin_view: bool = False,
 ) -> tuple[list[dict], int]:
     """Return one page of visible groups plus the total matching count."""
     illustrations_query = _list_query(
@@ -416,7 +417,9 @@ def get_visible_illustrations(
         .limit(page_size)
         .all()
     )
-    is_admin_view = include_hidden and viewer_user_id is None
+    is_admin_view = admin_view or (
+        include_hidden and viewer_user_id is None
+    )
     items = [
         _serialize_list_item(
             illustration,
@@ -442,6 +445,7 @@ def get_visible_illustration(
     viewer_user_id: int | None = None,
     owner_user_id: int | None = None,
     include_unpublished: bool = False,
+    admin_view: bool = False,
 ):
     """Return one illustration, masking its images while it stays locked."""
     query = _group_query(db).filter(Illustration.id == illustration_id)
@@ -475,7 +479,7 @@ def get_visible_illustration(
             detail="삽화를 찾을 수 없습니다.",
         )
 
-    is_admin_view = (
+    is_admin_view = admin_view or (
         include_hidden
         and owner_user_id is None
         and viewer_user_id is None
@@ -836,6 +840,20 @@ def update_illustration(
     return _serialize_detail(
         _get_illustration_or_404(db, illustration_id)
     )
+
+
+def set_illustration_visibility(
+    db: Session,
+    illustration_id: int,
+    *,
+    visible: bool,
+):
+    """Administrator-only public visibility toggle."""
+    illustration = _get_illustration_or_404(db, illustration_id)
+    illustration.visible = visible
+    db.commit()
+    db.refresh(illustration)
+    return _serialize_detail(illustration)
 
 
 def delete_illustration_image(

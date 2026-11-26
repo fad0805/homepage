@@ -11,6 +11,8 @@ from crud.books import (
     get_books_page,
     reorder_book_categories,
     reorder_books,
+    set_book_category_visibility,
+    set_book_visibility,
     update_book,
     update_book_category,
 )
@@ -23,11 +25,13 @@ from schemas.books import (
     BookReorderRequest,
     BookUpdate,
 )
+from schemas.visibility import AdminVisibilityUpdate
 from .utils import (
     get_default_author_id,
     get_gallery_grants,
     get_optional_user,
     is_admin,
+    require_admin,
     require_auth,
 )
 
@@ -143,13 +147,32 @@ def put_book_category(
     return update_book_category(db, category_id, payload, user.id)
 
 
+@router.put("/categories/{category_id}/visibility")
+def update_book_category_visibility(
+    category_id: int,
+    payload: AdminVisibilityUpdate,
+    db: Session = Depends(get_db),
+    _=Depends(require_admin),
+):
+    """Change a category's public setting without editing its content."""
+    return set_book_category_visibility(
+        db,
+        category_id,
+        visible=payload.visible,
+    )
+
+
 @router.delete("/categories/{category_id}")
 def remove_book_category(
     category_id: int,
     db: Session = Depends(get_db),
     user=Depends(require_auth),
 ):
-    return delete_book_category(db, category_id, user.id)
+    return delete_book_category(
+        db,
+        category_id,
+        None if is_admin(user) else user.id,
+    )
 
 
 @router.get("/{book_id}")
@@ -186,6 +209,21 @@ def get_book_detail(
             detail="Does not exist book",
         )
     return book
+
+
+@router.put("/{book_id}/visibility")
+def update_book_visibility(
+    book_id: int,
+    payload: AdminVisibilityUpdate,
+    db: Session = Depends(get_db),
+    _=Depends(require_admin),
+):
+    """Change a book's public setting without editing its content."""
+    return set_book_visibility(
+        db,
+        book_id,
+        visible=payload.visible,
+    )
 
 
 @router.put("/{book_id}")

@@ -23,6 +23,7 @@ from crud.books import (
     register_chapter_view,
     reorder_chapters,
     search_chapters_for_owner,
+    set_chapter_visibility,
     update_chapter,
 )
 from db.session import get_db
@@ -31,6 +32,7 @@ from schemas.books import (
     ChapterReorderRequest,
     ChapterUpdate,
 )
+from schemas.visibility import AdminVisibilityUpdate
 
 from .utils import (
     get_client_ip,
@@ -38,6 +40,7 @@ from .utils import (
     get_gallery_grants,
     get_optional_user,
     is_admin,
+    require_admin,
     require_auth,
 )
 
@@ -235,6 +238,21 @@ def get_chapter_detail(
             detail="Does not exist chapter",
         )
     return chapter
+
+
+@router.put("/{chapter_id}/visibility")
+def update_chapter_visibility(
+    chapter_id: int,
+    payload: AdminVisibilityUpdate,
+    db: Session = Depends(get_db),
+    _=Depends(require_admin),
+):
+    """Change a chapter's public setting without editing its content."""
+    return set_chapter_visibility(
+        db,
+        chapter_id,
+        visible=payload.visible,
+    )
 
 
 @router.put("/{chapter_id}")

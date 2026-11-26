@@ -62,6 +62,7 @@ from crud.illustrations import (
     reorder_illustration_images,
     reorder_illustrations,
     set_illustration_representative,
+    set_illustration_visibility,
     update_illustration,
 )
 from db.session import SessionLocal, get_db
@@ -78,6 +79,7 @@ from schemas.illustrations import (
     IllustrationUpdate,
     today_kst,
 )
+from schemas.visibility import AdminVisibilityUpdate
 
 from .utils import (
     get_client_ip,
@@ -85,6 +87,7 @@ from .utils import (
     get_gallery_grants,
     get_optional_user,
     is_admin,
+    require_admin,
     require_auth,
 )
 
@@ -422,6 +425,7 @@ def read_illustrations(
     illustrations, total = get_visible_illustrations(
         db,
         viewer_user_id=current_user.id if current_user else None,
+        admin_view=current_user is not None and is_admin(current_user),
         **common,
     )
     response.headers["X-Total-Count"] = str(total)
@@ -1055,6 +1059,7 @@ def read_illustration(
         illustration_id,
         granted_illustrations=grants.illustrations,
         viewer_user_id=current_user.id if current_user else None,
+        admin_view=current_user is not None and is_admin(current_user),
     )
     if illustration.get("user_id") != get_default_author_id(db):
         raise HTTPException(
@@ -1062,6 +1067,21 @@ def read_illustration(
             detail="삽화를 찾을 수 없습니다.",
         )
     return illustration
+
+
+@router.put("/{illustration_id}/visibility", response_model=IllustrationDetail)
+def update_illustration_visibility(
+    illustration_id: int,
+    payload: AdminVisibilityUpdate,
+    db: Session = Depends(get_db),
+    _=Depends(require_admin),
+):
+    """Change an illustration's public setting without editing its content."""
+    return set_illustration_visibility(
+        db,
+        illustration_id,
+        visible=payload.visible,
+    )
 
 
 @router.put("/{illustration_id}", response_model=IllustrationDetail)
