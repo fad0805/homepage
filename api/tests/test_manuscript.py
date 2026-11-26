@@ -1986,6 +1986,39 @@ class ManuscriptTests(unittest.TestCase):
             crud.export_scrivener(self.db, project.id, self.owner.id, [99999])
         self.assertEqual(unknown.exception.status_code, 400)
 
+    def test_foreign_manuscripts_are_owner_only(self) -> None:
+        project = self._project()
+        node = self._node(project, "내 원고", body="<p>본문</p>")
+        self.db.commit()
+
+        self.assertEqual(crud.get_projects(self.db, self.other.id), [])
+
+        calls = (
+            lambda: crud.get_tree(self.db, project.id, self.other.id),
+            lambda: crud.get_node(self.db, node.id, self.other.id),
+            lambda: crud.update_node(
+                self.db,
+                node.id,
+                schemas.NodeUpdate(title="남의 수정"),
+                self.other.id,
+            ),
+            lambda: crud.delete_node(self.db, node.id, self.other.id),
+            lambda: crud.export_scrivener(
+                self.db,
+                project.id,
+                self.other.id,
+            ),
+            lambda: crud.delete_project(
+                self.db,
+                project.id,
+                self.other.id,
+            ),
+        )
+        for call in calls:
+            with self.assertRaises(HTTPException) as raised:
+                call()
+            self.assertEqual(raised.exception.status_code, 404)
+
 
 if __name__ == "__main__":
     unittest.main()
