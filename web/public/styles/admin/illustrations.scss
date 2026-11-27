@@ -345,6 +345,15 @@
   }
 }
 
+.admin-illustrations-preview__loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 5.5rem;
+  color: var(--admin-muted);
+  font-size: 0.7rem;
+}
+
 .admin-illustrations-preview__handle {
   position: absolute;
   top: 0.25rem;
@@ -1217,6 +1226,15 @@
     object-fit: cover;
     pointer-events: none;
   }
+}
+
+.admin-illustrations-modal__image-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 5.5rem;
+  color: var(--admin-muted);
+  font-size: 0.68rem;
 }
 
 .admin-illustrations-modal__image-handle {

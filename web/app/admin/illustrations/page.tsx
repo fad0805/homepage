@@ -45,6 +45,9 @@ const LIST_PAGE_SIZE = 12;
 const MAX_VIDEO_SECONDS = 10;
 const MAX_VIDEO_BYTES = 20 * 1024 * 1024;
 const MAX_VIDEO_UPLOAD_BYTES = 200 * 1024 * 1024;
+const PREVIEW_THUMBNAIL_EDGE = 320;
+const UPLOAD_THUMBNAIL_EDGE = 128;
+const THUMBNAIL_BATCH_SIZE = 4;
 const ILLUSTRATION_ACCEPT =
   "image/png,image/jpeg,image/webp,image/gif,video/mp4,video/quicktime,video/webm,video/x-m4v";
 const ILLUSTRATION_VIDEO_TYPES = new Set([
@@ -62,6 +65,89 @@ function isIllustrationFile(file: File) {
 
 function countVideos(files: File[]) {
   return files.filter((file) => ILLUSTRATION_VIDEO_TYPES.has(file.type)).length;
+}
+
+function loadPreviewImage(src: string) {
+  return new Promise<HTMLImageElement>((resolve, reject) => {
+    const image = new Image();
+    image.decoding = "async";
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error("이미지를 읽지 못했습니다."));
+    image.src = src;
+  });
+}
+
+function canvasToBlob(
+  canvas: HTMLCanvasElement,
+  type: string,
+  quality: number,
+) {
+  return new Promise<Blob | null>((resolve) => {
+    canvas.toBlob(resolve, type, quality);
+  });
+}
+
+/** Create a small object URL for the picker UI instead of retaining originals. */
+async function createPreviewUrl(file: File, maxEdge: number) {
+  if (!file.type.startsWith("image/")) {
+    return URL.createObjectURL(file);
+  }
+
+  const sourceUrl = URL.createObjectURL(file);
+  try {
+    const image = await loadPreviewImage(sourceUrl);
+    const width = image.naturalWidth || image.width;
+    const height = image.naturalHeight || image.height;
+    if (!width || !height) throw new Error("이미지 크기를 읽지 못했습니다.");
+
+    const scale = Math.min(1, maxEdge / Math.max(width, height));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.round(width * scale));
+    canvas.height = Math.max(1, Math.round(height * scale));
+    const context = canvas.getContext("2d");
+    if (!context) throw new Error("썸네일을 만들지 못했습니다.");
+    context.drawImage(image, 0, 0, canvas.width, canvas.height);
+
+    const blob =
+      (await canvasToBlob(canvas, "image/webp", 0.82)) ??
+      (await canvasToBlob(canvas, "image/jpeg", 0.82));
+    if (!blob) throw new Error("썸네일을 만들지 못했습니다.");
+
+    URL.revokeObjectURL(sourceUrl);
+    return URL.createObjectURL(blob);
+  } catch {
+    return sourceUrl;
+  }
+}
+
+async function buildPreviewEntries(
+  files: File[],
+  ranges: Map<File, VideoRange>,
+  maxEdge: number,
+  isCancelled: () => boolean,
+) {
+  const entries: Preview[] = [];
+  for (
+    let start = 0;
+    start < files.length;
+    start += THUMBNAIL_BATCH_SIZE
+  ) {
+    if (isCancelled()) break;
+    const batch = files.slice(start, start + THUMBNAIL_BATCH_SIZE);
+    const built = await Promise.all(
+      batch.map(async (file) => ({
+        file,
+        url: await createPreviewUrl(file, maxEdge),
+        range: ranges.get(file),
+      })),
+    );
+    if (isCancelled()) {
+      built.forEach((entry) => URL.revokeObjectURL(entry.url));
+      break;
+    }
+    entries.push(...built);
+  }
+  return entries;
 }
 
 interface StageFilesOptions {
@@ -560,24 +646,61 @@ export default function AdminIllustrations() {
   }, [uploading]);
 
   useEffect(() => {
-    if (uploadProgressOpen || uploadThumbnails.length === 0) return;
-    const urls = uploadThumbnails.map((thumbnail) => thumbnail.url);
-    setUploadThumbnails([]);
+    if (!uploadProgressOpen || uploadFiles.length === 0) return;
+    let cancelled = false;
+    const createdUrls: string[] = [];
+    setUploadThumbnails(
+      uploadFiles.map((file) => ({ file, url: "" })),
+    );
+
+    void buildPreviewEntries(
+      uploadFiles,
+      new Map(),
+      UPLOAD_THUMBNAIL_EDGE,
+      () => cancelled,
+    ).then((entries) => {
+      if (cancelled) {
+        entries.forEach((entry) => URL.revokeObjectURL(entry.url));
+        return;
+      }
+      createdUrls.push(...entries.map((entry) => entry.url));
+      setUploadThumbnails(entries);
+    });
+
     return () => {
-      urls.forEach((url) => URL.revokeObjectURL(url));
+      cancelled = true;
+      createdUrls.forEach((url) => URL.revokeObjectURL(url));
     };
-  }, [uploadProgressOpen, uploadThumbnails]);
+  }, [uploadProgressOpen, uploadFiles]);
 
   useEffect(() => {
-    const next = files.map((file) => ({
-      file,
-      url: URL.createObjectURL(file),
-      range: videoRangesByFile.get(file),
-    }));
-    setPreviews(next);
+    let cancelled = false;
+    const createdUrls: string[] = [];
+    setPreviews(
+      files.map((file) => ({
+        file,
+        url: "",
+        range: videoRangesByFile.get(file),
+      })),
+    );
+
+    void buildPreviewEntries(
+      files,
+      videoRangesByFile,
+      PREVIEW_THUMBNAIL_EDGE,
+      () => cancelled,
+    ).then((entries) => {
+      if (cancelled) {
+        entries.forEach((entry) => URL.revokeObjectURL(entry.url));
+        return;
+      }
+      createdUrls.push(...entries.map((entry) => entry.url));
+      setPreviews(entries);
+    });
 
     return () => {
-      next.forEach((preview) => URL.revokeObjectURL(preview.url));
+      cancelled = true;
+      createdUrls.forEach((url) => URL.revokeObjectURL(url));
     };
   }, [files, videoRangesByFile]);
 
@@ -590,14 +713,33 @@ export default function AdminIllustrations() {
   }, [createRepresentativePreview]);
 
   useEffect(() => {
-    const next = pendingEditFiles.map((file) => ({
-      file,
-      url: URL.createObjectURL(file),
-      range: pendingEditRanges.get(file),
-    }));
-    setPendingEditPreviews(next);
+    let cancelled = false;
+    const createdUrls: string[] = [];
+    setPendingEditPreviews(
+      pendingEditFiles.map((file) => ({
+        file,
+        url: "",
+        range: pendingEditRanges.get(file),
+      })),
+    );
+
+    void buildPreviewEntries(
+      pendingEditFiles,
+      pendingEditRanges,
+      PREVIEW_THUMBNAIL_EDGE,
+      () => cancelled,
+    ).then((entries) => {
+      if (cancelled) {
+        entries.forEach((entry) => URL.revokeObjectURL(entry.url));
+        return;
+      }
+      createdUrls.push(...entries.map((entry) => entry.url));
+      setPendingEditPreviews(entries);
+    });
+
     return () => {
-      next.forEach((preview) => URL.revokeObjectURL(preview.url));
+      cancelled = true;
+      createdUrls.forEach((url) => URL.revokeObjectURL(url));
     };
   }, [pendingEditFiles, pendingEditRanges]);
 
@@ -857,9 +999,6 @@ export default function AdminIllustrations() {
 
     setUploading(true);
     setUploadFiles([...files]);
-    setUploadThumbnails(
-      files.map((file) => ({ file, url: URL.createObjectURL(file) })),
-    );
     setSentFiles(new Set());
     setSendingFile(null);
     setSendingChunk(null);
@@ -1698,7 +1837,7 @@ export default function AdminIllustrations() {
                         ? " is-drag-over"
                         : ""
                     }`}
-                    key={preview.url}
+                    key={`${preview.file.name}-${preview.file.lastModified}-${index}`}
                     draggable={!uploading}
                     onDragStart={(event) => {
                       setDragIndex(index);
@@ -1741,7 +1880,11 @@ export default function AdminIllustrations() {
                     >
                       ⠿
                     </span>
-                    {ILLUSTRATION_VIDEO_TYPES.has(preview.file.type) ? (
+                    {!preview.url ? (
+                      <span className="admin-illustrations-preview__loading">
+                        불러오는 중
+                      </span>
+                    ) : ILLUSTRATION_VIDEO_TYPES.has(preview.file.type) ? (
                       <video
                         key={previewSrc}
                         src={previewSrc}
@@ -2673,18 +2816,24 @@ export default function AdminIllustrations() {
 
                 {pendingEditPreviews.length > 0 ? (
                   <div className="admin-illustrations-modal__image-list">
-                    {pendingEditPreviews.map((preview) => (
+                    {pendingEditPreviews.map((preview, index) => (
                       <div
                         className="admin-illustrations-modal__image is-pending"
-                        key={preview.url}
+                        key={`${preview.file.name}-${preview.file.lastModified}-${index}`}
                       >
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img
-                          src={preview.url}
-                          alt="저장 대기 중인 파일"
-                          loading="lazy"
-                          decoding="async"
-                        />
+                        {preview.url ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={preview.url}
+                            alt="저장 대기 중인 파일"
+                            loading="lazy"
+                            decoding="async"
+                          />
+                        ) : (
+                          <span className="admin-illustrations-modal__image-loading">
+                            불러오는 중
+                          </span>
+                        )}
                         <span className="admin-illustrations-modal__image-order">
                           저장 대기
                         </span>
